@@ -29,6 +29,59 @@ async function snapshot(page, name) {
   await page.screenshot({ path: fileURLToPath(new URL(name + '.png', artifacts)), animations: 'disabled' })
 }
 
+async function checkHeroComposition(page, label) {
+  const foreground = page.locator('[data-hero-foreground]')
+  const geometry = await foreground.evaluate(image => {
+    const rect = image.getBoundingClientRect()
+    const stage = image.parentElement.getBoundingClientRect()
+    return { heightRatio: rect.height / stage.height, aspect: rect.width / rect.height, bottomGap: stage.bottom - rect.bottom }
+  })
+  check(`Foreground stays smaller and bottom-aligned (${label})`, geometry.heightRatio <= 0.73 && Math.abs(geometry.bottomGap) < 1)
+  check(`Foreground retains its original aspect ratio (${label})`, Math.abs(geometry.aspect - 1.5) < 0.01)
+  const clip = await page.locator('#hero h1').boundingBox()
+  const pixels = async () => sharp(await page.screenshot({ clip, animations: 'disabled' })).removeAlpha().raw().toBuffer()
+  const shown = await pixels()
+  let bare
+  try {
+    await foreground.evaluate(image => { image.style.visibility = 'hidden' })
+    bare = await pixels()
+  } finally {
+    await foreground.evaluate(image => { image.style.removeProperty('visibility') })
+  }
+  let ink = 0
+  let visible = 0
+  for (let i = 0; i < bare.length; i += 3) {
+    if (bare[i] > 20 || bare[i + 1] > 20 || bare[i + 2] > 20) continue
+    ink++
+    if (shown[i] <= 26 && shown[i + 1] <= 26 && shown[i + 2] <= 26) visible++
+  }
+  check(`At least 85% of the brand lettering remains visible (${label}, ${Math.round(visible / ink * 100)}%)`, ink > 100 && visible / ink >= 0.85)
+}
+
+async function checkLetterEntrance(page) {
+  const letters = page.locator('#hero h1 span')
+  const timings = await letters.evaluateAll(elements => elements.map(element => {
+    const timing = element.getAnimations()[0]?.effect.getTiming()
+    return { duration: Number(timing?.duration), delay: timing?.delay }
+  }))
+  check('Letters have a readable staggered entrance', timings.every((timing, index) => timing.duration >= 1200 && (index === 0 || timing.delay - timings[index - 1].delay >= 120)))
+  const sample = progress => letters.evaluateAll((elements, progress) => elements.map(element => {
+    const animation = element.getAnimations()[0]
+    const timing = animation.effect.getTiming()
+    animation.pause()
+    animation.currentTime = timing.delay + Number(timing.duration) * progress
+    return element.getBoundingClientRect().top
+  }), progress)
+  try {
+    const early = await sample(0.15)
+    await page.screenshot({ path: fileURLToPath(new URL('desktop-letter-entrance.png', artifacts)), animations: 'allow' })
+    const late = await sample(0.8)
+    check('All three letters visibly rise during the entrance', early.every((top, index) => top - late[index] > 40))
+  } finally {
+    await letters.evaluateAll(elements => elements.forEach(element => element.getAnimations().forEach(animation => animation.finish())))
+  }
+}
+
 async function checkCanvasOcclusion(page, label) {
   const foreground = page.locator('[data-hero-foreground]')
   await foreground.evaluate(image => image.decode())
@@ -88,8 +141,17 @@ try {
   check('No remote template video is embedded', await page.locator('video').count() === 0)
   check('User foreground replaces the old cutout and canvas patch', await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v1.png')) && await page.locator('[data-hero-canvas]').count() === 0)
   await heroCenter.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
+  await checkLetterEntrance(page)
+  await checkHeroComposition(page, 'desktop')
   await checkCanvasOcclusion(page, 'desktop')
   await snapshot(page, 'desktop-hero')
+  await page.evaluate(() => scrollTo(0, innerHeight * 0.1))
+  await settled(page)
+  check('A slight scroll does not immediately fade the brand', await page.locator('#hero h1').locator('..').evaluate(el => Number(getComputedStyle(el).opacity) > 0.99))
+  await page.evaluate(() => scrollTo(0, innerHeight * 0.36))
+  await settled(page)
+  check('The brand fades gradually after its initial hold', await page.locator('#hero h1').locator('..').evaluate(el => Number(getComputedStyle(el).opacity) > 0.45 && Number(getComputedStyle(el).opacity) < 0.8))
+  await snapshot(page, 'desktop-hero-partial-scroll')
   await page.evaluate(() => scrollTo(0, innerHeight * 2))
   await page.waitForFunction(() => document.querySelector('img[alt="旷野中进行绘画与影像记录的 OAO 创作现场"]').parentElement.style.width === '20%')
   check('Five-column hero closes to 20% center', await heroCenter.evaluate(el => el.style.width) === '20%')
@@ -124,13 +186,14 @@ try {
   }
   await snapshot(page, 'desktop-video')
 
-  for (const viewport of [{ width: 1920, height: 1080 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 320, height: 740 }]) {
+  for (const viewport of [{ width: 2560, height: 1440 }, { width: 1920, height: 1080 }, { width: 1366, height: 768 }, { width: 768, height: 1024 }, { width: 390, height: 844 }, { width: 320, height: 740 }]) {
     await page.setViewportSize(viewport)
     await page.evaluate(() => scrollTo(0, 0))
     await settled(page)
     check(`No overflow at ${viewport.width}px`, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     check(`Hero retains photograph to the bottom at ${viewport.width}px`, await page.locator('#hero img[aria-hidden="true"]').first().evaluate(image => image.getBoundingClientRect().bottom >= image.parentElement.getBoundingClientRect().bottom))
     check(`Large brand text fits at ${viewport.width}px`, await page.locator('#hero h1').evaluate(heading => heading.getBoundingClientRect().left >= 0 && heading.getBoundingClientRect().right <= innerWidth))
+    await checkHeroComposition(page, `${viewport.width}px`)
     await snapshot(page, `hero-${viewport.width}`)
     if (viewport.width === 390) {
       await checkCanvasOcclusion(page, 'mobile')

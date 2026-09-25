@@ -67,8 +67,17 @@
 }
 .wordmark { position: absolute; z-index: 1; inset: 96px 0 auto; display: flex; align-items: center; justify-content: center; color: #0a0a0a; pointer-events: none; }
 .wordmark h1 { display: flex; justify-content: center; white-space: nowrap; font-size: 480px; line-height: .8; font-weight: 800; }
-.wordmark span { animation: letter-in 800ms cubic-bezier(.22,.61,.36,1) both; }
-.heroForeground { z-index: 2; object-fit: cover; }
+.wordmark span { animation: letter-in 1200ms cubic-bezier(.22,.61,.36,1) both; }
+.heroForeground {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 0;
+  width: auto;
+  max-width: none;
+  height: 72%;
+  transform: translateX(-50%);
+}
 .heroCaption { position: absolute; z-index: 4; inset: auto 24px 56px; text-align: center; color: white; }
 .heroCaption p { font-size: 36px; font-weight: 400; line-height: 1.5; text-shadow: 0 1px 12px rgb(0 0 0 / 48%); }
 .heroCaption a { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 32px; margin-top: 14px; }
@@ -176,6 +185,7 @@
   .mobileNav a:last-child { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 0; border-top: 1px solid #eee; }
   .wordmark { top: max(100px, calc(44svh - 100px)); }
   .wordmark h1 { font-size: 156px; }
+  .heroForeground { height: 60%; }
   .heroCaption { bottom: 44px; inset-inline: 20px; }
   .heroCaption p { font-size: 23px; line-height: 1.65; }
   .rotatingTitles h2 { font-size: 30px; line-height: 1.5; }
