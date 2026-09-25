@@ -74,7 +74,7 @@
   bottom: 0;
   width: auto;
   max-width: none;
-  height: 72%;
+  height: 66%;
   transform: translateX(-50%);
 }
 .heroCaption { position: absolute; z-index: 4; inset: auto 24px 56px; text-align: center; color: white; }

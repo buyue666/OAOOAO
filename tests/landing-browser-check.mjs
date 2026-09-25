@@ -128,7 +128,7 @@ try {
     return header.dataset.ready === 'true' && Number(style.opacity) > 0.99 && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
   })
   check('Navigation and its backdrop appear without scrolling', await page.evaluate(() => scrollY === 0))
-  check('User brand image appears in header and footer', await page.locator('header img[alt="OAO"], footer img[alt="OAO"]').evaluateAll(images => images.length === 2 && images.every(image => image.getAttribute('src').includes('oao-logo.png'))))
+  check('User brand image appears in header and footer', await page.locator('header img[alt="OAO"], footer img[alt="OAO"]').evaluateAll(images => images.length === 2 && images.every(image => image.getAttribute('src').includes('oao-logo-transparent.png'))))
   const words = await page.locator('main').innerText()
   check('No English copy other than OAO', (words.match(/[A-Za-z]{2,}/g) || []).every(word => word === 'OAO'))
   check('Nine original sections, including footer', await page.locator('main > section, main > footer').count() === 9)
@@ -137,7 +137,7 @@ try {
   const heroCenter = page.locator('img[alt="旷野中进行绘画与影像记录的 OAO 创作现场"]').locator('..')
   check('Hero starts full width', await heroCenter.evaluate(el => el.style.width) === '100%')
   check('No remote template video is embedded', await page.locator('video').count() === 0)
-  check('User foreground replaces the old cutout and canvas patch', await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v1.png')) && await page.locator('[data-hero-canvas]').count() === 0)
+  check('User foreground replaces the old cutout and canvas patch', await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v2.png')) && await page.locator('[data-hero-canvas]').count() === 0)
   await heroCenter.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
   await checkBrandmarkEntrance(page)
   await checkHeroComposition(page, 'desktop')

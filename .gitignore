@@ -28,3 +28,6 @@ tests/artifacts/
 
 # Local acceptance report contains private environment details.
 /COMMERCIAL_READINESS.md
+
+# Temporary local source copied while preparing the cropped transparent logo.
+public/media/brand/oao-logo-transparent-source.png

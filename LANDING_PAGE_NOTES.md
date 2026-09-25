@@ -9,10 +9,10 @@
 - 着陆页入口：`http://127.0.0.1:3310/`；原工作台保留在 `/studio`。
 - 本轮目标是还原模板的结构与滚动编排，并将可见文案改为中文。
 - 视觉关系沿用 Mono 的“大字标 + 主体下沉 + 大面积留白”，但主体改为代表图片、视频和故事创作的旷野绘画片场，不复用 Mono 的建筑题材。
-- 首页蓝天底图来自 `ai-creative-hero-landscape-v1.png`；透明前景使用用户提供的 `D:/下载/task-mugeb8ee4yxqo.png`，原样保存为 `public/media/generated/ai-creative-hero-user-v1.png`，文件字节与 SHA256 均与用户原文件一致，未重绘、未重新抠图。
+- 首页蓝天底图来自 `ai-creative-hero-landscape-v1.png`；当前透明前景使用用户提供的 `D:/下载/task-muhbplx0899j6.png`，原样保存为 `public/media/generated/ai-creative-hero-user-v2.png`，文件字节与 SHA256 均与用户原文件一致，已去除摄影机。
 - 新前景构图与旧底图不同，底图取原图右侧无人物的天空与草地区域并横向铺满，避免重复出现摄影机和人物。黑色 OAO 字标位于蓝天上、用户前景下。已移除旧前景及 `heroCanvasRestore` 画布补丁的页面引用。
 - 导航进入页面 260ms 后开始 700ms 渐显，包含半透明底板；滚动、菜单打开、键盘聚焦都可提前显示。减少动态效果时立即显示。
-- 首屏前景不再使用全屏 `cover` 放大：保持 1536:1024 原始比例，桌面高度为首屏的 72%、手机为 60%，水平居中并贴底。背景品牌层使用与页眉相同的透明 `oao-logo.png`，替换原来的文字 OAO；图标从下方进入并随首屏滚动渐隐，滚动前 8% 保持完整可见，至 32% 渐隐。用户前景图片字节不变。
+- 首屏前景不再使用全屏 `cover` 放大：保持 1536:1024 原始比例，桌面高度为首屏的 66%、手机为 60%，水平居中并贴底。背景品牌层使用用户重新抠出的 `D:/下载/oao纯透明.png`，裁掉外围透明留白后保存为 `public/media/brand/oao-logo-transparent.png`，同时用于页眉、首屏和页脚；图标从下方进入并随首屏滚动渐隐，滚动前 8% 保持完整可见，至 32% 渐隐。用户前景图片字节不变。
 
 ## 文件
 
@@ -21,7 +21,7 @@
 - `app/page.tsx`：首页入口和中文标题、描述。
 - `public/mono/`：原模板的 22 张图片。
 - `public/media/generated/`：OAO 专用首页素材，包括透明胶片主视觉与创作场景图。
-- `public/media/brand/oao-logo.png`：来自用户提供的 `D:/下载/oao-3.jpg`，裁掉留白并转透明；用于顶部导航和页脚。
+- `public/media/brand/oao-logo-transparent.png`：来自用户提供的 `D:/下载/oao纯透明.png`，仅裁掉外围透明留白；用于顶部导航、首屏和页脚。
 - `tests/landing-browser-check.mjs`：只读浏览器回归，不登录、不写后端业务数据。
 - `tests/artifacts/landing-zh/`：验收截图。
 

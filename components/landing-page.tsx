@@ -114,7 +114,7 @@ function Header() {
   return (
     <header ref={ref} className={styles.header} data-ready={ready} data-scrolled={scrolled} data-open={open}>
       <div className={styles.headerRow}>
-        <a href="#hero" className={styles.logo} aria-label="OAO 首页" onClick={() => setOpen(false)}><Image src="/media/brand/oao-logo.png" alt="OAO" width={92} height={22} className={styles.brandLogo} /></a>
+        <a href="#hero" className={styles.logo} aria-label="OAO 首页" onClick={() => setOpen(false)}><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={92} height={22} className={styles.brandLogo} /></a>
         <nav className={styles.desktopNav} aria-label="首页导航">
           {navigation.map((item) => <a key={item.href} href={item.href}>{item.label}</a>)}
         </nav>
@@ -146,7 +146,7 @@ function Hero() {
               <Image src="/media/generated/ai-creative-hero-landscape-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} />
               <div className={styles.wordmark} style={{ opacity: textOpacity }}>
                 <Image
-                  src="/media/brand/oao-logo.png"
+                  src="/media/brand/oao-logo-transparent.png"
                   alt="OAO"
                   data-hero-brandmark
                   width={1409}
@@ -155,7 +155,7 @@ function Hero() {
                   sizes="(max-width: 767px) 86vw, min(78vw, 1120px)"
                 />
               </div>
-              <Image src="/media/generated/ai-creative-hero-user-v1.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} />
+              <Image src="/media/generated/ai-creative-hero-user-v2.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} />
             </div>
           ) : (
             <div key={side} className={styles.heroSides} style={{
@@ -336,7 +336,7 @@ function Footer() {
   ]
   return <footer className={styles.footer}>
     <div className={styles.footerGrid}>
-      <div className={styles.footerBrand}><a href="#hero" aria-label="OAO 首页"><Image src="/media/brand/oao-logo.png" alt="OAO" width={126} height={30} className={styles.footerLogo} /></a><p>把想法变成画面、镜头与故事。<br />为下一次灵感，留一片自由的空间。</p></div>
+      <div className={styles.footerBrand}><a href="#hero" aria-label="OAO 首页"><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={126} height={30} className={styles.footerLogo} /></a><p>把想法变成画面、镜头与故事。<br />为下一次灵感，留一片自由的空间。</p></div>
       {columns.map((column) => <div key={column.title}><h3>{column.title}</h3><ul>{column.items.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></div>)}
     </div>
     <div className={styles.footerBottom}><p>© 2026 OAO。保留所有权利。</p><a href="#hero">返回顶部 <ArrowDown size={14} className={styles.up} /></a></div>
