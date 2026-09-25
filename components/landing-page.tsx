@@ -145,7 +145,15 @@ function Hero() {
             <div key={side} className={styles.heroCenter} style={{ width: (100 - imageProgress * 80) + '%' }}>
               <Image src="/media/generated/ai-creative-hero-landscape-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} />
               <div className={styles.wordmark} style={{ opacity: textOpacity }}>
-                <h1 aria-label="OAO">{'OAO'.split('').map((letter, index) => <span key={index} style={{ animationDelay: 160 + index * 120 + 'ms' }}>{letter}</span>)}</h1>
+                <Image
+                  src="/media/brand/oao-logo.png"
+                  alt="OAO"
+                  data-hero-brandmark
+                  width={1409}
+                  height={335}
+                  preload
+                  sizes="(max-width: 767px) 86vw, min(78vw, 1120px)"
+                />
               </div>
               <Image src="/media/generated/ai-creative-hero-user-v1.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} />
             </div>

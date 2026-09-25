@@ -65,9 +65,8 @@
   transform: scaleX(5);
   transform-origin: right center;
 }
-.wordmark { position: absolute; z-index: 1; inset: 96px 0 auto; display: flex; align-items: center; justify-content: center; color: #0a0a0a; pointer-events: none; }
-.wordmark h1 { display: flex; justify-content: center; white-space: nowrap; font-size: 480px; line-height: .8; font-weight: 800; }
-.wordmark span { animation: letter-in 1200ms cubic-bezier(.22,.61,.36,1) both; }
+.wordmark { position: absolute; z-index: 1; inset: clamp(112px, 15vh, 160px) 0 auto; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.wordmark img { display: block; width: min(78vw, 1120px); height: auto; animation: brandmark-in 1200ms cubic-bezier(.22,.61,.36,1) 160ms both; }
 .heroForeground {
   position: absolute;
   z-index: 2;
@@ -156,18 +155,11 @@
 .footerBottom a { display: inline-flex; align-items: center; gap: 8px; }
 .up { transform: rotate(180deg); }
 
-@keyframes letter-in { from { opacity: 0; transform: translateY(70%); } to { opacity: 1; transform: translateY(0); } }
-
-@media (min-width: 1360px) {
-  .wordmark h1 { font-size: 504px; }
-}
-@media (min-width: 1700px) {
-  .wordmark h1 { font-size: 620px; }
-}
+@keyframes brandmark-in { from { opacity: 0; transform: translateY(42%); } to { opacity: 1; transform: translateY(0); } }
 @media (min-width: 768px) and (max-width: 1199px) {
   .landing { --page-gutter: 48px; }
-  .wordmark { top: 180px; }
-  .wordmark h1 { font-size: 300px; }
+  .wordmark { top: 14vh; }
+  .wordmark img { width: min(78vw, 900px); }
   .rotatingTitles h2, .sceneTitle h2 { font-size: 48px; }
   .sketchGrid { grid-auto-rows: 180px; }
   .aboutText p { font-size: 28px; }
@@ -184,7 +176,7 @@
   .mobileNav a { font-size: 16px; }
   .mobileNav a:last-child { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 0; border-top: 1px solid #eee; }
   .wordmark { top: max(100px, calc(44svh - 100px)); }
-  .wordmark h1 { font-size: 156px; }
+  .wordmark img { width: 86vw; }
   .heroForeground { height: 60%; }
   .heroCaption { bottom: 44px; inset-inline: 20px; }
   .heroCaption p { font-size: 23px; line-height: 1.65; }
@@ -217,10 +209,10 @@
   .footerBottom { align-items: flex-start; gap: 16px; }
 }
 @media (max-width: 379px) {
-  .wordmark h1 { font-size: 144px; }
+  .wordmark img { width: 86vw; }
 }
 @media (max-width: 359px) {
-  .wordmark h1 { font-size: 128px; }
+  .wordmark img { width: 86vw; }
   .heroCaption p { font-size: 20px; }
   .rotatingTitles h2 { font-size: 26px; }
   .sceneTitle h2 { font-size: 24px; }
@@ -231,7 +223,7 @@
   .hero, .philosophyScroll, .technologyScroll { height: auto; }
   .heroStage, .philosophyStage, .technologyStage { position: relative; }
   .philosophyStage { height: 55svh; }
-  .wordmark span { opacity: 1; }
+  .wordmark img { opacity: 1; animation: none; }
   .gallery { height: auto; padding: 32px 16px; }
   .galleryStage { position: relative; height: auto; overflow: visible; padding: 0; }
   .galleryStack { display: grid; gap: 24px; height: auto; }
