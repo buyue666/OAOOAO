@@ -1,0 +1,30 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+
+# Environment variables
+.env*
+!.env.example
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+*.log
+*.tsbuildinfo
+.codex-tmp*
+
+# 验收脚本缓存的登录会话（含会话 Cookie，禁止入库）
+tests/.sessions/
+# 验收夹具的临时备份与 SQL（含本地环境配置快照，禁止入库）
+tests/.fixtures/
+# 验收截图产物
+tests/.artifacts/
+tests/artifacts/
+
+# Local acceptance report contains private environment details.
+/COMMERCIAL_READINESS.md

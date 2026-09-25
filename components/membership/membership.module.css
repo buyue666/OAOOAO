@@ -1,0 +1,963 @@
+/**
+ * 主题与响应式作用域。
+ *
+ * 两个关键点：
+ * ① 变量必须定义在**可复用的作用域类**上，而不是只挂在 `.root`。
+ *    此前实时预览只用了 `.planGrid`，导致 --membership-page / --membership-ink
+ *    为空，卡片背景透明、文字继承后台浅色主题，与真实套餐页不一致。
+ * ② 响应式规则改用**容器查询**，由 `.viewportScope` 的宽度驱动，
+ *    而不是由浏览器窗口宽度驱动。这样后台里 390px 宽的预览框
+ *    会与真实 390px 手机视口得到完全相同的布局，
+ *    而不是「只缩小外框、媒体查询仍按 1440px 生效」。
+ *    真实套餐页同样使用这套规则，因此两者不可能分叉。
+ */
+.themeScope {
+  --membership-page: #000000;
+  --membership-ink: #f5f5f5;
+  --membership-muted: #8d8d8d;
+  --membership-cyan: #20b7d8;
+  --membership-orange: #ff5a0a;
+  background: var(--membership-page);
+  color: var(--membership-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.root {
+  min-height: 100vh;
+  overflow-x: clip;
+  position: relative;
+}
+
+.viewportScope {
+  container-type: inline-size;
+  padding: 18px 24px 96px;
+}
+
+/**
+ * 预览模式：在后台内嵌渲染套餐页时使用。
+ *
+ * 与真实页的差异只有两点，且都是**容器化**所必需：
+ * ① 去掉 `min-height: 100vh`，避免在抽屉里撑出整屏高度；
+ * ② 关闭按钮从 `fixed` 改为 `absolute`，并让作用域自身裁切，
+ *    否则 `.closeButton` 会跑到整个后台窗口右上角（实测 position=absolute
+ *    但父级未裁切时仍溢出到后台窗口边缘）。
+ * 其余主题变量、容器查询、间距规则全部与真实页共用同一份声明。
+ */
+.previewRoot {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.previewRoot .closeButton {
+  position: absolute;
+}
+
+.main {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+}
+
+.closeButton {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--membership-ink) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
+  color: var(--membership-muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.closeButton:hover {
+  border-color: color-mix(in srgb, var(--membership-ink) 38%, transparent);
+  background: color-mix(in srgb, var(--membership-ink) 12%, var(--membership-page));
+  color: var(--membership-ink);
+}
+
+.closeButton svg,
+.pointsRulesButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.closeButton:focus-visible,
+.audienceTabs button:focus-visible,
+.billingSwitch button:focus-visible,
+.pointsRulesButton:focus-visible,
+.tierPills button:focus-visible,
+.installmentButton:focus-visible,
+.moreBenefitsButton:focus-visible,
+.faqItem button:focus-visible,
+.planScroller:focus-visible,
+.tableScroller:focus-visible {
+  outline: 2px solid var(--membership-cyan);
+  outline-offset: 3px;
+}
+
+.campaignBanner {
+  position: relative;
+  width: min(100%, 920px);
+  height: 104px;
+  margin: 0 auto 18px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--membership-ink) 9%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--membership-cyan) 8%, var(--membership-page));
+}
+
+.campaignBanner::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--membership-page) 0%, transparent 62%);
+  content: '';
+  opacity: 0.72;
+}
+
+.campaignBanner img {
+  object-fit: cover;
+}
+
+.campaignCopy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 56%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 28px;
+}
+
+.campaignCopy strong {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.campaignCopy span {
+  color: color-mix(in srgb, var(--membership-ink) 74%, var(--membership-muted));
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.selectorArea {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.audienceTabs {
+  display: flex;
+  justify-content: center;
+  gap: 64px;
+  border-bottom: 1px solid color-mix(in srgb, var(--membership-ink) 12%, transparent);
+}
+
+.audienceTabs button {
+  position: relative;
+  min-width: 92px;
+  height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--membership-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.audienceTabs button[aria-selected='true'] {
+  color: var(--membership-ink);
+}
+
+.audienceTabs button[aria-selected='true']::after {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--membership-ink);
+  content: '';
+}
+
+.billingRow {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 38px;
+}
+
+.billingSwitch {
+  display: flex;
+  align-items: stretch;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--membership-ink) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
+}
+
+.billingSwitch button {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--membership-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.billingSwitch button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--membership-ink) 16%, var(--membership-page));
+  color: var(--membership-ink);
+}
+
+.billingSwitch [data-slot='badge'] {
+  height: 20px;
+  border: 0;
+  background: color-mix(in srgb, var(--membership-orange) 18%, var(--membership-page));
+  color: var(--membership-orange);
+  font-size: 12px;
+}
+
+.pointsRulesButton {
+  position: absolute;
+  right: 0;
+  display: flex;
+  height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--membership-cyan);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--membership-cyan) 8%, var(--membership-page));
+  color: var(--membership-cyan);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.plansSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.planScroller {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: color-mix(in srgb, var(--membership-ink) 20%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.planGrid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(var(--plan-count, 5), minmax(0, 1fr));
+  max-width: calc(var(--plan-count, 5) * 280px);
+  gap: 12px;
+  align-items: start;
+}
+
+.planCard,
+.loadingCard {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--membership-ink) 10%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
+}
+
+/**
+ * 配色（tone）。
+ *
+ * 五个档位必须有**可辨识的差异**：早先 standard/advanced/premium 分别是
+ * ink 的 8% / 10% / 12%，换算后是 #141414 / #191919 / #1d1d1d，
+ * 肉眼几乎无法分辨，运营改配色时以为「预览没反应」（实测确认）。
+ * 现在按「中性 → 冷色 → 暖色」给出明确色相与边框差异。
+ */
+.planCard[data-tone='standard'] {
+  border-color: color-mix(in srgb, var(--membership-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--membership-ink) 14%, var(--membership-page));
+}
+
+.planCard[data-tone='advanced'] {
+  border-color: color-mix(in srgb, var(--membership-ink) 34%, transparent);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--membership-ink) 20%, var(--membership-page)) 0%,
+    color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page)) 62%
+  );
+}
+
+.planCard[data-tone='premium'] {
+  border-color: color-mix(in srgb, var(--membership-cyan) 42%, transparent);
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--membership-cyan) 20%, var(--membership-page)) 0%,
+    color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page)) 68%
+  );
+}
+
+.planCard[data-tone='luxury'] {
+  border-color: color-mix(in srgb, var(--membership-cyan) 75%, var(--membership-page));
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--membership-cyan) 26%, var(--membership-page)) 0%,
+    color-mix(in srgb, var(--membership-cyan) 8%, var(--membership-page)) 70%
+  );
+}
+
+.planCard[data-tone='ultimate'] {
+  border-color: color-mix(in srgb, var(--membership-orange) 72%, var(--membership-page));
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--membership-orange) 24%, var(--membership-page)) 0%,
+    color-mix(in srgb, var(--membership-orange) 7%, var(--membership-page)) 70%
+  );
+}
+
+.promotionStrip {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  background: var(--membership-cyan);
+  color: var(--membership-page);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.planCard[data-tone='ultimate'] .promotionStrip {
+  background: var(--membership-orange);
+}
+
+.planSummary {
+  display: flex;
+  min-height: 356px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 16px 16px;
+}
+
+.planHeading {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.planHeading h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.planHeading [data-slot='badge'] {
+  border: 0;
+  background: color-mix(in srgb, var(--membership-cyan) 20%, var(--membership-page));
+  color: var(--membership-cyan);
+  font-size: 12px;
+}
+
+.planCard[data-tone='ultimate'] .planHeading [data-slot='badge'] {
+  background: color-mix(in srgb, var(--membership-orange) 20%, var(--membership-page));
+  color: var(--membership-orange);
+}
+
+.priceLine {
+  display: flex;
+  min-height: 48px;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.priceLine > span {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.priceLine strong {
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.priceLine small {
+  color: color-mix(in srgb, var(--membership-ink) 80%, var(--membership-muted));
+  font-size: 14px;
+}
+
+.priceLine del {
+  margin-left: 2px;
+  color: var(--membership-muted);
+  font-size: 14px;
+}
+
+/** 折扣标签：由「日常价 / 活动价」计算得出，紧跟在价格后面。 */
+.discountTag {
+  align-self: center;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--membership-cyan) 22%, var(--membership-page));
+  color: var(--membership-cyan);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.planCard[data-tone='ultimate'] .discountTag {
+  background: color-mix(in srgb, var(--membership-orange) 22%, var(--membership-page));
+  color: var(--membership-orange);
+}
+
+/** 单档位标签沿用 tierPills 视觉，但表现为只读状态而不是可点按钮。 */
+.tierPills button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.priceUnavailable {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  color: var(--membership-muted);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.renewalCopy,
+.equivalentCopy,
+.generationSummary {
+  min-height: 21px;
+  color: var(--membership-muted);
+  font-size: 14px;
+}
+
+.creditValue {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.creditValue strong {
+  font-size: 22px;
+}
+
+.creditValue span {
+  color: color-mix(in srgb, var(--membership-ink) 78%, var(--membership-muted));
+}
+
+/**
+ * 档位切换区。
+ *
+ * 列数必须**随档位数量**变化：早先硬编码 `repeat(2, …)`，
+ * 单档位时按钮只占容器 47%（116px / 246px），长档位名被挤在半个格子里换行；
+ * 3 个以上档位时又会挤成两列再折行。
+ * 这里改用 `--tier-count` 由组件按真实档位数注入。
+ */
+.tierPills {
+  display: grid;
+  grid-template-columns: repeat(var(--tier-count, 1), minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
+}
+
+.tierPills button {
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--membership-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  /* 长档位名：优先完整显示（允许换行），极端长度再省略，绝不溢出容器。 */
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.tierPills button[aria-pressed='true'] {
+  background: var(--membership-ink);
+  color: var(--membership-page);
+}
+
+.generationSummary {
+  margin-top: auto;
+}
+
+.purchaseButton {
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  background: var(--membership-ink);
+  color: var(--membership-page);
+  font-weight: 800;
+}
+
+.planCard[data-tone='ultimate'] .purchaseButton {
+  background: var(--membership-orange);
+  color: var(--membership-ink);
+}
+
+.purchaseButton:disabled {
+  background: color-mix(in srgb, var(--membership-ink) 12%, var(--membership-page));
+  color: var(--membership-muted);
+  opacity: 1;
+}
+
+.installmentButton {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--membership-orange);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.installmentButton [data-slot='badge'] {
+  height: 20px;
+  border-color: color-mix(in srgb, var(--membership-orange) 48%, transparent);
+  color: var(--membership-orange);
+  font-size: 12px;
+}
+
+.installmentPlaceholder {
+  min-height: 28px;
+}
+
+.planBenefits {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 16px 22px;
+  border-top: 1px solid color-mix(in srgb, var(--membership-ink) 10%, transparent);
+}
+
+.promotionGroup,
+.benefitGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.benefitGroup {
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--membership-ink) 10%, transparent);
+}
+
+.promotionGroup h3,
+.benefitGroup h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.promotionGroup h3 {
+  color: var(--membership-cyan);
+}
+
+.planCard[data-tone='ultimate'] .promotionGroup h3 {
+  color: var(--membership-orange);
+}
+
+.promotionGroup ul,
+.benefitGroup ul {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  list-style: none;
+}
+
+.promotionGroup li,
+.benefitGroup li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: color-mix(in srgb, var(--membership-ink) 84%, var(--membership-muted));
+  font-size: 14px;
+}
+
+.promotionGroup li {
+  padding: 9px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
+}
+
+.promotionGroup svg,
+.benefitGroup svg,
+.promotionGroup h3 svg,
+.moreBenefitsButton svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.promotionGroup li svg:last-child {
+  margin-left: auto;
+  color: var(--membership-muted);
+}
+
+.moreBenefitsButton {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--membership-ink) 14%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--membership-ink) 9%, var(--membership-page));
+  color: var(--membership-ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.moreBenefitsButton svg {
+  transition: transform 160ms ease;
+}
+
+.moreBenefitsButton svg[data-open='true'] {
+  transform: rotate(180deg);
+}
+
+.demoNotice {
+  color: var(--membership-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.statePanel {
+  display: flex;
+  min-height: 340px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--membership-ink) 12%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
+  color: var(--membership-muted);
+  text-align: center;
+}
+
+.statePanel strong {
+  color: var(--membership-ink);
+  font-size: 18px;
+}
+
+.loadingCard {
+  min-height: 720px;
+  padding: 18px 16px;
+}
+
+.loadingTitle,
+.loadingPrice,
+.loadingButton,
+.loadingBody {
+  background: color-mix(in srgb, var(--membership-ink) 12%, var(--membership-page));
+}
+
+.loadingTitle { width: 50%; height: 24px; }
+.loadingPrice { width: 75%; height: 48px; margin-top: 20px; }
+.loadingButton { width: 100%; height: 38px; margin-top: 180px; border-radius: 999px; }
+.loadingBody { width: 100%; height: 260px; margin-top: 30px; }
+
+.comparisonSection,
+.faqSection {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 78px;
+}
+
+.comparisonSection h2,
+.faqSection h2 {
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.tableScroller {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  scrollbar-color: color-mix(in srgb, var(--membership-ink) 20%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.tableScroller table {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+  background: color-mix(in srgb, var(--membership-ink) 5%, var(--membership-page));
+}
+
+.tableScroller th,
+.tableScroller td {
+  height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--membership-ink) 9%, transparent);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tableScroller thead th {
+  background: color-mix(in srgb, var(--membership-ink) 10%, var(--membership-page));
+  color: var(--membership-muted);
+  font-weight: 700;
+}
+
+.tableScroller tbody tr:not(.tableGroupRow):nth-child(odd) {
+  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
+}
+
+.tableScroller tbody tr:not(.tableGroupRow):nth-child(even) {
+  background: color-mix(in srgb, var(--membership-ink) 13%, var(--membership-page));
+}
+
+.tableScroller tbody th {
+  color: var(--membership-ink);
+  font-weight: 700;
+}
+
+.tableScroller tbody td {
+  color: color-mix(in srgb, var(--membership-ink) 86%, var(--membership-muted));
+}
+
+.tableGroupRow th {
+  height: 40px;
+  background: var(--membership-page);
+  color: var(--membership-muted);
+  font-weight: 700;
+}
+
+.tableNotice {
+  color: var(--membership-muted);
+  font-size: 14px;
+}
+
+.faqSection {
+  width: min(100%, 820px);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.faqList {
+  border-top: 1px solid color-mix(in srgb, var(--membership-ink) 15%, transparent);
+}
+
+.faqItem {
+  border-bottom: 1px solid color-mix(in srgb, var(--membership-ink) 15%, transparent);
+}
+
+.faqItem button {
+  display: flex;
+  width: 100%;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 0;
+  background: transparent;
+  color: var(--membership-ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+}
+
+.faqItem button svg {
+  width: 18px;
+  height: 18px;
+  color: var(--membership-muted);
+  transition: transform 160ms ease;
+}
+
+.faqItem button[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.faqItem p {
+  padding: 0 0 18px;
+  color: var(--membership-muted);
+  line-height: 1.6;
+}
+
+.dialogContent {
+  --membership-page: #000000;
+  --membership-ink: #f5f5f5;
+  --membership-muted: #8d8d8d;
+  border-color: color-mix(in srgb, var(--membership-ink) 16%, transparent);
+  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
+  color: var(--membership-ink);
+}
+
+.dialogSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--membership-ink) 6%, var(--membership-page));
+}
+
+.dialogSummary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.dialogSummary dt {
+  color: var(--membership-muted);
+}
+
+.dialogSummary dd {
+  font-weight: 700;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.policyPlaceholder {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--membership-ink) 12%, transparent);
+  border-radius: 8px;
+  color: var(--membership-muted);
+  line-height: 1.6;
+}
+
+.closedState {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+}
+
+/**
+ * 中屏与手机布局使用**容器查询**（`@container`），宽度来自 `.viewportScope`。
+ *
+ * 这样真实套餐页（容器 = 视口）与后台预览（容器 = 预览框）走的是同一套规则：
+ * 390px 预览框与 390px 真实手机页必然得到一致的列宽、内边距与间距，
+ * 不会出现「预览只缩了外框、媒体查询仍按 1440px 生效」的偏差。
+ */
+@container (max-width: 1100px) {
+  .planGrid {
+    width: max-content;
+    grid-template-columns: repeat(var(--plan-count, 5), 226px);
+    scroll-snap-type: x mandatory;
+  }
+
+  .planCard,
+  .loadingCard {
+    scroll-snap-align: start;
+  }
+}
+
+@container (max-width: 760px) {
+  .viewportScope {
+    padding: 48px 14px 72px;
+  }
+
+  .campaignBanner {
+    height: 112px;
+  }
+
+  .campaignCopy {
+    width: 76%;
+    padding: 0 18px;
+  }
+
+  .campaignCopy strong {
+    font-size: 16px;
+  }
+
+  .campaignCopy span {
+    font-size: 14px;
+  }
+
+  .audienceTabs {
+    gap: 24px;
+  }
+
+  .billingRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .billingSwitch {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .billingSwitch button {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding: 0 12px;
+  }
+
+  .pointsRulesButton {
+    position: static;
+    align-self: flex-end;
+  }
+
+  .planScroller {
+    width: calc(100% + 14px);
+    padding-right: 14px;
+  }
+
+  /* 手机卡宽：min(82cqw, 300px)。用容器单位而非 vw，
+     保证 390px 预览框与 390px 真实手机页得到同样的卡宽。 */
+  .planGrid {
+    grid-template-columns: repeat(var(--plan-count, 5), min(82cqw, 300px));
+  }
+
+  .comparisonSection,
+  .faqSection {
+    margin-top: 56px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .root * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
