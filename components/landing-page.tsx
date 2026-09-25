@@ -143,7 +143,7 @@ function Hero() {
         <div className={styles.heroStrip} style={{ gap: imageProgress * 8 }}>
           {(['left', 'center', 'right'] as const).map((side) => side === 'center' ? (
             <div key={side} className={styles.heroCenter} style={{ width: (100 - imageProgress * 80) + '%' }}>
-              <Image src="/media/generated/ai-creative-hero-landscape-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} />
+              <Image src="/media/generated/ai-creative-hero-background-clean-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} />
               <div className={styles.wordmark} style={{ opacity: textOpacity }}>
                 <Image
                   src="/media/brand/oao-logo-transparent.png"
@@ -155,7 +155,7 @@ function Hero() {
                   sizes="(max-width: 767px) 86vw, min(78vw, 1120px)"
                 />
               </div>
-              <Image src="/media/generated/ai-creative-hero-user-v2.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} />
+              <Image src="/media/generated/ai-creative-hero-user-v3.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} />
             </div>
           ) : (
             <div key={side} className={styles.heroSides} style={{

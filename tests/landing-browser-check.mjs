@@ -137,7 +137,7 @@ try {
   const heroCenter = page.locator('img[alt="旷野中进行绘画与影像记录的 OAO 创作现场"]').locator('..')
   check('Hero starts full width', await heroCenter.evaluate(el => el.style.width) === '100%')
   check('No remote template video is embedded', await page.locator('video').count() === 0)
-  check('User foreground replaces the old cutout and canvas patch', await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v2.png')) && await page.locator('[data-hero-canvas]').count() === 0)
+  check('Clean background and extracted foreground are active', await page.locator('#hero img[aria-hidden="true"]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-background-clean-v1.png')) && await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v3.png')) && await page.locator('[data-hero-canvas]').count() === 0)
   await heroCenter.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
   await checkBrandmarkEntrance(page)
   await checkHeroComposition(page, 'desktop')

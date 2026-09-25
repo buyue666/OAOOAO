@@ -60,10 +60,7 @@
 .heroBackground {
   z-index: 0;
   object-fit: cover;
-  object-position: right center;
-  /* Reuse the empty right edge of the original landscape, without its old subjects. */
-  transform: scaleX(5);
-  transform-origin: right center;
+  object-position: center center;
 }
 .wordmark { position: absolute; z-index: 1; inset: clamp(112px, 15vh, 160px) 0 auto; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .wordmark img { display: block; width: min(78vw, 1120px); height: auto; animation: brandmark-in 1200ms cubic-bezier(.22,.61,.36,1) 160ms both; }
