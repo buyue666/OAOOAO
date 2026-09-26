@@ -1698,6 +1698,19 @@
   transform: translateY(-1px);
 }
 
+/* 渐变玻璃上的状态标签必须有自己的不透明底色；否则浅色主题的
+   success/warning 文字会直接落在动态背景上，像「已就绪」这类状态会消失。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-status-badge {
+  border-color: rgba(235, 255, 252, .3) !important;
+  background: rgba(11, 29, 35, .82) !important;
+  color: #eafbf8 !important;
+}
+.studio-app-shell[data-studio-skin='gradient'] .studio-status-badge[data-tone='accent'] { color: #bff8ea !important; }
+.studio-app-shell[data-studio-skin='gradient'] .studio-status-badge[data-tone='success'] { color: #a7f3c2 !important; }
+.studio-app-shell[data-studio-skin='gradient'] .studio-status-badge[data-tone='warning'] { color: #ffd59f !important; }
+.studio-app-shell[data-studio-skin='gradient'] .studio-status-badge[data-tone='danger'] { color: #ffb7aa !important; }
+.studio-app-shell[data-studio-skin='gradient'] .studio-status-badge[data-tone='muted'] { color: #cad8d8 !important; }
+
 .studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .lg-glass,
 .studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-surface,
 .studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-empty-state {

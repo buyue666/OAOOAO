@@ -93,7 +93,7 @@ export function IconAction({ label, className, children, ...props }: ButtonHTMLA
 
 export function StatusBadge({ children, tone = 'neutral', className, solid = false }: { children: ReactNode; tone?: Tone; className?: string; solid?: boolean }) {
   return (
-    <span data-solid={solid ? 'true' : undefined} className={cn(
+    <span data-tone={tone} data-solid={solid ? 'true' : undefined} className={cn(
       'studio-status-badge inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium leading-5',
       tone === 'accent' && (solid ? 'border-studio-accent/40 bg-card text-studio-accent' : 'border-studio-accent/25 bg-studio-accent/10 text-studio-accent'),
       tone === 'success' && (solid ? 'border-success/40 bg-card text-success' : 'border-success/25 bg-success/10 text-success'),

@@ -115,7 +115,7 @@ export function WorkspaceShell({
       </div>
 
       {/* 移动端吸底提交条：玻璃表面，始终可操作。 */}
-      <div className="lg-glass-bar sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-border px-4 py-3 sm:-mx-5 sm:px-5 xl:hidden">
+      <div className="lg-glass-bar fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border px-4 py-3 shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] text-muted-foreground">预计消耗</p>
           <p className="text-sm font-semibold tabular-nums text-studio-accent">{credits} 积分</p>

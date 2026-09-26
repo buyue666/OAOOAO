@@ -8,6 +8,7 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  Clapperboard,
   FolderKanban,
   GalleryHorizontalEnd,
   Image as ImageIcon,
@@ -29,7 +30,7 @@ interface StudioNavItem {
   href: string
   icon: LucideIcon
   exact?: boolean
-  activeView?: 'projects'
+  activeView?: 'drama' | 'projects'
 }
 
 interface StudioNavGroup {
@@ -44,6 +45,7 @@ const studioNavGroups: StudioNavGroup[] = [
       { label: '导演 Agent', href: '/agent', icon: Bot },
       { label: '图片生成', href: '/image', icon: ImageIcon },
       { label: '视频生成', href: '/video', icon: Video },
+      { label: '短剧制作', href: '/projects?view=drama', icon: Clapperboard, exact: true, activeView: 'drama' },
     ],
   },
   {
@@ -68,7 +70,7 @@ function isActiveRoute(pathname: string, searchParams: ReturnType<typeof useSear
   if (item.activeView) {
     if (pathname !== '/projects') return false
     const view = searchParams.get('view')
-    return view !== 'drama'
+    return item.activeView === 'drama' ? view === 'drama' : view !== 'drama'
   }
 
   // 画布是「列表 → 具体项目」两级：在具体项目里也应高亮「自由画布」。
@@ -91,7 +93,7 @@ function NavItem({ item, active, collapsed }: { item: StudioNavItem; active: boo
     >
       <span
         className="studio-nav-icon inline-flex size-4 shrink-0 items-center justify-center"
-        data-icon-motion={item.href.split('?')[0].replace(/^\//, '').split('/')[0] || 'studio'}
+        data-icon-motion={item.activeView === 'drama' ? 'drama' : item.href.split('?')[0].replace(/^\//, '').split('/')[0] || 'studio'}
         aria-hidden="true"
       >
         <Icon className="size-4" aria-hidden="true" />
