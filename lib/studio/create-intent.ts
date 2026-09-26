@@ -34,6 +34,13 @@ export type CreateIntent = {
   createdAt: number
   /** 目标项目（短剧等需要项目上下文的模式）。 */
   projectId?: string
+  /** 首页就地编辑的生成参数，进入工作台后继续沿用。 */
+  settings?: {
+    model?: string
+    ratio?: string
+    quality?: string
+    seconds?: number
+  }
 }
 
 /** 保存创作意图。文件过大时截断并如实记录，避免超出 sessionStorage 配额。 */
@@ -91,6 +98,12 @@ export function consumeCreateIntent(mode?: CreateMode): CreateIntent | null {
       files: Array.isArray(parsed.files) ? parsed.files.filter((file) => file && typeof file.dataUrl === 'string') : [],
       createdAt: parsed.createdAt,
       projectId: typeof parsed.projectId === 'string' ? parsed.projectId : undefined,
+      settings: parsed.settings && typeof parsed.settings === 'object' ? {
+        model: typeof parsed.settings.model === 'string' ? parsed.settings.model : undefined,
+        ratio: typeof parsed.settings.ratio === 'string' ? parsed.settings.ratio : undefined,
+        quality: typeof parsed.settings.quality === 'string' ? parsed.settings.quality : undefined,
+        seconds: Number.isFinite(Number(parsed.settings.seconds)) ? Number(parsed.settings.seconds) : undefined,
+      } : undefined,
     }
   } catch {
     return null

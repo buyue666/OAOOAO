@@ -119,7 +119,7 @@ export function AdminAccessBoundary({ section, children }: { section: AdminSecti
   }), [isAdmin, permissions, user])
   const reload = useMemo(() => ({ refresh: () => setReloadKey((value) => value + 1), reloadKey }), [reloadKey])
 
-  if (status === 'loading') return <div className="flex min-h-dvh items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />正在验证管理员身份</div>
+  if (status === 'loading') return <div className="admin-gate flex min-h-dvh items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />正在验证管理员身份</div>
 
   if (status === 'error') {
     return (
@@ -179,7 +179,7 @@ function AdminSectionCardShell({ title, description, children }: { title: string
 
 function CenteredCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center p-6">
+    <div className="admin-gate flex min-h-dvh items-center justify-center p-6">
       <div className="studio-surface max-w-md p-7 text-center">
         <ShieldCheck className="mx-auto size-9 text-muted-foreground" />
         <h1 className="mt-4 text-lg font-semibold">{title}</h1>
@@ -202,7 +202,8 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
 
   return (
     <div className="admin-console flex min-h-dvh bg-background text-foreground">
-      <aside className="hidden w-[232px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+      {/* 后台侧栏：玻璃表面。注意不能给它加 position/transform，否则内部 fixed 抽屉会错位。 */}
+      <aside className="admin-sidebar hidden w-[232px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b border-border px-5">
           <Link href="/studio" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background"><Zap className="size-4" /></span>
@@ -216,7 +217,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="flex min-h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 py-3 md:px-7">
+        <header className="admin-topbar flex min-h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 py-3 md:px-7">
           <div className="flex min-w-0 items-center gap-3">
             <ControlButton variant="ghost" size="sm" className="lg:hidden" aria-label="打开后台导航" onClick={() => setMobileOpen(true)}><Menu className="size-4" /></ControlButton>
             <Link href="/studio" className="flex items-center gap-2 lg:hidden" aria-label="OAOOAO 控制中心">
@@ -278,7 +279,7 @@ function AdminNavList({ section, items, onNavigate }: { section: AdminSection; i
     <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-5" aria-label="后台导航">
       {groups.map((group) => (
         <section key={group.label} className="mb-6">
-          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">{group.label}</p>
+          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">{group.label}</p>
           <div className="flex flex-col gap-0.5">
             {group.items.map(([value, label, Icon]) => (
               <button
@@ -286,7 +287,12 @@ function AdminNavList({ section, items, onNavigate }: { section: AdminSection; i
                 type="button"
                 onClick={() => onNavigate(value)}
                 aria-current={section === value ? 'page' : undefined}
-                className={cn('flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors', section === value ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}
+                className={cn(
+                  'flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors duration-150',
+                  section === value
+                    ? 'bg-studio-accent/14 font-medium text-studio-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--studio-accent)_22%,transparent)]'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
               >
                 <Icon className="size-4 shrink-0" />{label}
               </button>

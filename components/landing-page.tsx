@@ -2,17 +2,20 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowDown, ArrowRight, Menu, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, Languages, Menu, X } from 'lucide-react'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import styles from './landing-page.module.css'
+import { SiteAnnouncementBar } from './site-announcement-bar'
+import { useStudio } from '@/lib/studio/store'
+import { useLocale } from '@/lib/studio/i18n'
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value))
 const navigation = [
-  { label: '创作', href: '#create' },
-  { label: '作品', href: '#gallery' },
-  { label: '模型', href: '#models' },
-  { label: '关于', href: '#about' },
-]
+  { key: 'landingCreate', href: '#create' },
+  { key: 'landingWorks', href: '#gallery' },
+  { key: 'landingModels', href: '#models' },
+  { key: 'landingAbout', href: '#about' },
+] as const
 const scenes = [
   { src: '/media/generated/hero-film-v2.png', alt: '片场里的镜头与光线' },
   { src: '/media/generated/scene-storyboard-v2.png', alt: '从分镜草图展开的故事' },
@@ -77,6 +80,7 @@ function useProgress(ref: RefObject<HTMLElement | null>, reveal = false) {
 }
 
 function Header() {
+  const { locale, t, toggleLocale } = useLocale()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
   const [ready, setReady] = useState(false)
@@ -116,22 +120,24 @@ function Header() {
       <div className={styles.headerRow}>
         <a href="#hero" className={styles.logo} aria-label="OAO 首页" onClick={() => setOpen(false)}><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={92} height={22} className={styles.brandLogo} /></a>
         <nav className={styles.desktopNav} aria-label="首页导航">
-          {navigation.map((item) => <a key={item.href} href={item.href}>{item.label}</a>)}
+          {navigation.map((item) => <a key={item.href} href={item.href}>{t(item.key)}</a>)}
         </nav>
-        <Link href="/studio" className={styles.headerCta}>进入创作</Link>
+        <button type="button" className={styles.localeToggle} onClick={toggleLocale} aria-label={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')} title={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')}><Languages size={15} /></button>
+        <Link href="/studio" className={styles.headerCta}>{t('enterCreation')}</Link>
         <button ref={toggle} type="button" className={styles.menuToggle} aria-label={open ? '关闭菜单' : '打开菜单'} aria-expanded={open} aria-controls="landing-mobile-menu" onClick={() => setOpen(!open)}>
           {open ? <X size={22} /> : <Menu size={22} />}
         </button>
       </div>
       {open && <nav id="landing-mobile-menu" className={styles.mobileNav} aria-label="移动端首页导航">
-        {navigation.map((item) => <a key={item.href} href={item.href} onClick={() => setOpen(false)}>{item.label}</a>)}
-        <Link href="/studio" onClick={() => setOpen(false)}>进入创作 <ArrowRight size={18} /></Link>
+        {navigation.map((item) => <a key={item.href} href={item.href} onClick={() => setOpen(false)}>{t(item.key)}</a>)}
+        <Link href="/studio" onClick={() => setOpen(false)}>{t('enterCreation')} <ArrowRight size={18} /></Link>
       </nav>}
     </header>
   )
 }
 
 function Hero() {
+  const { t } = useLocale()
   const ref = useRef<HTMLElement>(null)
   const progress = useProgress(ref)
   const reduced = useReducedMotion()
@@ -175,8 +181,8 @@ function Hero() {
           ))}
         </div>
         <div className={styles.heroCaption} style={{ opacity: textOpacity }}>
-          <p>灵感，自由生长。<br />从一帧画面，到完整故事。</p>
-          <a href="#create" aria-label="探索创作" tabIndex={textOpacity < 0.1 ? -1 : 0}><ArrowDown size={18} /></a>
+          <p>{t('heroCaption').split('\n').map((line) => <span key={line}>{line}<br /></span>)}</p>
+          <a href="#create" aria-label={t('exploreCreation')} tabIndex={textOpacity < 0.1 ? -1 : 0}><ArrowDown size={18} /></a>
         </div>
       </div>
     </section>
@@ -291,13 +297,14 @@ function Gallery() {
 }
 
 function Collection() {
+  const { t } = useLocale()
   const items = [
-    { name: '图片创作', description: '从灵感、材质到光线，构建心中的画面。', image: '/media/generated/studio-still-life-v2.png', href: '/image' },
-    { name: '视频创作', description: '从第一帧到运镜，让静止的画面开始流动。', image: '/media/generated/video-aurora-poster-v2.png', href: '/video' },
-    { name: '智能导演', description: '梳理灵感与镜头，把片段组织成完整故事。', image: '/media/generated/scene-storyboard-v2.png', href: '/agent' },
+    { name: t('imageCreation'), description: '从灵感、材质到光线，构建心中的画面。', image: '/media/generated/studio-still-life-v2.png', href: '/image' },
+    { name: t('videoCreation'), description: '从第一帧到运镜，让静止的画面开始流动。', image: '/media/generated/video-aurora-poster-v2.png', href: '/video' },
+    { name: t('directorCreation'), description: '梳理灵感与镜头，把片段组织成完整故事。', image: '/media/generated/scene-storyboard-v2.png', href: '/agent' },
   ]
   return <section id="models" className={styles.collection}>
-    <div className={styles.sectionHeading}><h2>选择你的创作方式</h2><Link href="/studio">进入工作台 <ArrowRight size={17} /></Link></div>
+    <div className={styles.sectionHeading}><h2>{t('chooseCreation')}</h2><Link href="/studio">{t('openWorkbench')} <ArrowRight size={17} /></Link></div>
     <div className={styles.collectionGrid}>
       {items.map((item) => <Link href={item.href} key={item.href} className={styles.collectionItem}>
         <div className={styles.collectionImage}><Image src={item.image} alt={item.name} fill className={styles.cover} sizes="(max-width: 767px) 80vw, 33vw" /></div>
@@ -344,7 +351,11 @@ function Footer() {
 }
 
 export function LandingPage() {
-  return <main className={styles.landing} data-landing-version="oao-zh-v8-landscape-layered">
+  const { state } = useStudio()
+  const announcement = state.sessionSettings?.site?.announcementBar
+  const hasAnnouncement = announcement?.enabled === true && Boolean(announcement.text?.trim())
+  return <main className={styles.landing} data-landing-version="oao-zh-v8-landscape-layered" data-announcement={hasAnnouncement ? 'true' : 'false'}>
+    <SiteAnnouncementBar announcement={announcement} placement="landing" />
     <Header />
     <Hero />
     <Philosophy />

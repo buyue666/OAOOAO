@@ -121,6 +121,7 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
     event.preventDefault()
     const data = new FormData(event.currentTarget)
     const value = (key: string) => String(data.get(key) ?? '').trim()
+    const announcementTone = value('announcementTone') || 'promo'
     const next: SiteSettings = {
       ...site,
       title: value('title'),
@@ -134,11 +135,20 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
       termsVersion: value('termsVersion'),
       privacyUrl: value('privacyUrl'),
       privacyVersion: value('privacyVersion'),
+      announcementBar: {
+        ...(site.announcementBar ?? {}),
+        enabled: data.has('announcementEnabled'),
+        text: value('announcementText'),
+        href: value('announcementHref'),
+        tone: announcementTone,
+        dismissible: data.has('announcementDismissible'),
+      },
     }
     const summary: string[] = []
     for (const [key, label] of [['title', '站点名称'], ['logoUrl', 'Logo'], ['iconUrl', '站点图标'], ['seoTitle', '搜索标题'], ['seoDescription', '搜索描述'], ['footerCopyright', '页脚版权'], ['termsUrl', '服务条款地址'], ['privacyUrl', '隐私政策地址']] as const) {
       if (String((site as Record<string, unknown>)[key] ?? '') !== String((next as Record<string, unknown>)[key] ?? '')) summary.push(label)
     }
+    if (JSON.stringify(site.announcementBar ?? {}) !== JSON.stringify(next.announcementBar ?? {})) summary.push('顶部通知横幅')
     onSave({ site: next }, summary)
   }
   return (
@@ -157,6 +167,18 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
           <AdminField label="服务条款版本"><AdminInput name="termsVersion" defaultValue={site.termsVersion} /></AdminField>
           <AdminField label="隐私政策地址"><AdminInput name="privacyUrl" defaultValue={site.privacyUrl} /></AdminField>
           <AdminField label="隐私政策版本"><AdminInput name="privacyVersion" defaultValue={site.privacyVersion} /></AdminField>
+        </fieldset>
+      </AdminSectionCard>
+      <AdminSectionCard title="顶部通知横幅" description="像影策一样在页面最上方展示一条轻量通知。启用后会同步出现在着陆页与工作台，关闭或过期内容不会占位。">
+        <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
+          <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
+            <input name="announcementEnabled" type="checkbox" defaultChecked={site.announcementBar?.enabled === true} className="mt-0.5" />
+            <span><span className="font-medium text-foreground">显示顶部通知横幅</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">适合展示模型上线、价格活动、维护提醒等短消息。</span></span>
+          </label>
+          <AdminField label="横幅文案" hint="建议控制在一行内，支持 emoji。" className="sm:col-span-2"><AdminInput name="announcementText" maxLength={180} defaultValue={site.announcementBar?.text} placeholder="例如：🎉 MiniMax H3 已上线，首周限时优惠" /></AdminField>
+          <AdminField label="点击跳转地址" hint="留空时只展示文案。"><AdminInput name="announcementHref" maxLength={500} defaultValue={site.announcementBar?.href} placeholder="/plans 或 https://…" /></AdminField>
+          <AdminField label="强调色"><AdminSelect name="announcementTone" defaultValue={site.announcementBar?.tone || 'promo'}><option value="promo">品牌紫蓝</option><option value="info">冷静蓝</option><option value="warning">提醒橙</option></AdminSelect></AdminField>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input name="announcementDismissible" type="checkbox" defaultChecked={site.announcementBar?.dismissible !== false} />允许用户关闭（只对当前浏览器生效）</label>
         </fieldset>
       </AdminSectionCard>
       <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存站点设置'}</ControlButton></div>

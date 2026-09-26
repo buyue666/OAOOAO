@@ -508,6 +508,9 @@ export function ImageWorkspace() {
     const intent = consumeCreateIntent('image')
     if (!intent) return
     if (intent.prompt.trim()) setPrompt(intent.prompt)
+    if (intent.settings?.model) setModelId(intent.settings.model)
+    if (intent.settings?.ratio) setRatio(intent.settings.ratio)
+    if (intent.settings?.quality) setQuality(intent.settings.quality)
     if (intent.files.length) {
       void ingestIntentFiles(intent.files, setUploads, setNotice)
     }
@@ -1369,6 +1372,10 @@ export function VideoWorkspace() {
     const intent = consumeCreateIntent('video')
     if (!intent) return
     if (intent.prompt.trim()) setPrompt(intent.prompt)
+    if (intent.settings?.model) setModelId(intent.settings.model)
+    if (intent.settings?.ratio) setRatio(intent.settings.ratio)
+    if (intent.settings?.quality) setQuality(intent.settings.quality)
+    if (intent.settings?.seconds) setDuration(`${intent.settings.seconds} 秒`)
     if (intent.files.length) void ingestIntentFiles(intent.files, setUploads, setNotice)
     setNotice({ tone: 'accent', text: `已带入首页的创作描述${intent.files.length ? `与 ${intent.files.length} 个参考文件` : ''}。` })
     // 只在挂载时消费一次意图。
@@ -2070,4 +2077,3 @@ export function VideoWorkspace() {
     </>
   )
 }
-

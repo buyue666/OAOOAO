@@ -1,6 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { CanvasBoard, CanvasNodeData, Project } from './types'
 import type { DramaProject, DramaSourceAsset } from './drama-types'
+import type { SiteAnnouncementBar } from './admin-types'
 
 export type BackendUser = {
   id: string
@@ -40,7 +41,7 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionSettings = {
-  site?: { title?: string; logoUrl?: string; iconUrl?: string }
+  site?: { title?: string; logoUrl?: string; iconUrl?: string; announcementBar?: SiteAnnouncementBar; [key: string]: unknown }
   modelPointCosts?: Record<string, number>
   generationPointMultipliers?: { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
   generationConcurrency?: Record<string, number>
@@ -444,6 +445,14 @@ export function canvasProjectToBoard(project: CanvasBackendProject): CanvasBoard
       ...(typeof rawData.src === 'string' ? { src: rawData.src } : typeof metadata.remoteUrl === 'string' ? { src: metadata.remoteUrl } : {}),
       ...(typeof rawData.poster === 'string' ? { poster: rawData.poster } : typeof metadata.posterUrl === 'string' ? { poster: metadata.posterUrl } : {}),
       ...(typeof rawData.status === 'string' ? { status: rawData.status } : typeof metadata.status === 'string' ? { status: metadata.status } : {}),
+      ...(typeof rawData.generationTaskId === 'string' ? { generationTaskId: rawData.generationTaskId } : {}),
+      ...(typeof rawData.agentRunId === 'string' ? { agentRunId: rawData.agentRunId } : {}),
+      ...(typeof rawData.prompt === 'string' ? { prompt: rawData.prompt } : {}),
+      ...(typeof rawData.model === 'string' ? { model: rawData.model } : {}),
+      ...(typeof rawData.ratio === 'string' ? { ratio: rawData.ratio } : {}),
+      ...(typeof rawData.quality === 'string' ? { quality: rawData.quality } : {}),
+      ...(Number.isFinite(Number(rawData.seconds)) ? { seconds: Number(rawData.seconds) } : {}),
+      ...(Array.isArray(rawData.referenceUrls) ? { referenceUrls: rawData.referenceUrls.filter((item): item is string => typeof item === 'string') } : {}),
     }
     return {
       id: node.id,

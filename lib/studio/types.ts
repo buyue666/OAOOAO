@@ -13,6 +13,16 @@ export interface CanvasNodeData extends Record<string, unknown> {
   src?: string
   poster?: string
   status?: string
+  /** 与真实异步生成任务关联，任务轮询完成后会回写节点结果。 */
+  generationTaskId?: string
+  /** 与真实 Agent 运行关联，供画布节点显示执行上下文。 */
+  agentRunId?: string
+  prompt?: string
+  model?: string
+  ratio?: string
+  quality?: string
+  seconds?: number
+  referenceUrls?: string[]
 }
 
 export interface CanvasBoard {

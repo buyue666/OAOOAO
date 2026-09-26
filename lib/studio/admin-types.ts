@@ -335,6 +335,20 @@ export type SystemChannelModelFetchResult = {
 export type SiteFriendLink = { id: string; label: string; url: string; enabled: boolean }
 export type SiteSocial = { enabled: boolean; label: string; url: string }
 
+/**
+ * 站点顶部通知横幅。
+ *
+ * 这是站点设置的一部分，而不是一次性的前端常量：管理员保存后，公开会话
+ * 会把它带给着陆页和工作台。`enabled` 关闭时前台完全不占位。
+ */
+export type SiteAnnouncementBar = {
+  enabled?: boolean
+  text?: string
+  href?: string
+  tone?: 'promo' | 'info' | 'warning' | string
+  dismissible?: boolean
+}
+
 export type SiteSettings = {
   title?: string
   logoUrl?: string
@@ -351,6 +365,7 @@ export type SiteSettings = {
   socials?: Record<string, SiteSocial>
   heroVideoUrl?: string
   heroVideoPosterUrl?: string
+  announcementBar?: SiteAnnouncementBar
   [key: string]: unknown
 }
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, Download, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Palette, Pencil, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
+import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, Download, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
 import { ControlButton, KeyValue, MediaThumb, Modal, Notice, PageHeader, SectionHeading, SegmentedControl, StatusBadge } from './ui'
 import { useStudio } from '@/lib/studio/store'
 import { moneyLabel, StudioApiError } from '@/lib/studio/api'
@@ -22,7 +22,6 @@ import {
 } from '@/lib/studio/account-api'
 import { useLedgerSummary, useReferralCenter, useServerOrders, useServerWorks } from '@/lib/studio/use-account-data'
 import type { StudioWork } from '@/lib/studio/account-api'
-import type { StudioSkin } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------- 我的作品 ------------------------------- */
@@ -84,7 +83,7 @@ export function WorksPage() {
           <button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button>
         </Notice>
       ) : visible.length === 0 ? (
-        <div className="studio-surface flex flex-col items-center gap-2 border-dashed py-12 text-center">
+        <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center">
           <p className="text-sm font-medium">还没有生成成功的作品</p>
           <p className="max-w-sm text-xs leading-5 text-muted-foreground">在图片或视频工作台提交生成后，成功的结果会自动出现在这里。后端记录共 {total} 条。</p>
           <Link href="/image" className="mt-2 text-xs text-studio-accent underline">前往图片工作台</Link>
@@ -276,7 +275,7 @@ export function GalleryPage() {
       {loadState === 'loading' ? (
         <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取公开作品</div>
       ) : gallery.length === 0 ? (
-        <div className="studio-surface flex flex-col items-center gap-2 border-dashed py-12 text-center">
+        <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center">
           <p className="text-sm font-medium">{loadState === 'error' ? '公开作品暂时无法读取' : '还没有公开作品'}</p>
           <p className="max-w-sm text-xs leading-5 text-muted-foreground">{loadState === 'error' ? '接口不可用时不会用本地演示作品填充广场。' : '作品被发布后才会出现在这里。'}</p>
         </div>
@@ -309,11 +308,25 @@ export function AccountPage() {
   const [notice, setNotice] = useState('')
   return (
     <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader eyebrow="账户" title="账户与套餐" description="管理个人信息、安全、积分和消费记录。" actions={<Link href="/plans" className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><CircleDollarSign className="size-4" />购买套餐</Link>} />
+      <PageHeader eyebrow="账户" title="账户与套餐" description="管理个人信息、安全、积分和消费记录。" actions={<Link href="/plans" className="inline-flex h-9 items-center gap-2 rounded-lg border border-foreground bg-foreground px-3 text-sm font-medium text-background shadow-[var(--lg-shadow-2)] transition-opacity duration-150 hover:opacity-90"><CircleDollarSign className="size-4" />购买套餐</Link>} />
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav className="flex gap-1 overflow-x-auto lg:flex-col">
+        {/* 账户分区导航：桌面为纵向列表，移动端横向滚动；选中态与侧栏导航保持同一语言。 */}
+        <nav className="flex gap-1 overflow-x-auto lg:flex-col" data-mobile-scroll aria-label="账户分区">
           {[{ id: 'profile', label: '资料与安全', icon: UserRound }, { id: 'credits', label: '积分与消费', icon: CircleDollarSign }, { id: 'orders', label: '订单记录', icon: Package }, { id: 'invite', label: '邀请好友', icon: Users }].map(({ id, label, icon: Icon }) => (
-            <button type="button" key={id} onClick={() => setTab(id)} className={tab === id ? 'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-studio-accent/12 px-3 text-left text-xs font-medium text-studio-accent lg:w-full' : 'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground lg:w-full'}><Icon className="size-4" />{label}</button>
+            <button
+              type="button"
+              key={id}
+              onClick={() => setTab(id)}
+              aria-current={tab === id ? 'true' : undefined}
+              className={cn(
+                'inline-flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 lg:w-full',
+                tab === id
+                  ? 'bg-studio-accent/12 text-studio-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--studio-accent)_22%,transparent)]'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <Icon className="size-4" />{label}
+            </button>
           ))}
         </nav>
         <section className="min-w-0">
@@ -742,52 +755,8 @@ function InvitePanel({ onNotice }: { onNotice: (value: string) => void }) {
 
 /* -------------------------------- 设置页 -------------------------------- */
 
-function SkinPicker({ skin, onChange }: { skin: StudioSkin; onChange: (skin: StudioSkin) => void }) {
-  const options: Array<{ value: StudioSkin; label: string; description: string; gradient: string }> = [
-    { value: 'gradient', label: '渐变创作', description: '深色画布、冷暖渐变与创作感边框', gradient: 'linear-gradient(135deg, #ff9d7d 0%, #f5d78e 38%, #a9e7d1 68%, #83cfff 100%)' },
-    { value: 'minimal', label: '黑白极简', description: '保留当前中性黑白灰界面', gradient: 'linear-gradient(135deg, #ffffff 0%, #d4d4d8 55%, #18181b 100%)' },
-  ]
-  const selectedOption = options.find((option) => option.value === skin) ?? options[0]
-
-  return (
-    <div className="studio-surface p-5">
-      <SectionHeading title="界面皮肤" description="渐变创作会应用到整个产品界面；黑白极简保留中性灰白工作区。" />
-      <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2" role="radiogroup" aria-label="界面皮肤">
-        {options.map((option) => {
-          const selected = option.value === skin
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange(option.value)}
-              className={cn(
-                'flex items-center gap-3 rounded-xl border p-3 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60',
-                selected ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-card hover:bg-muted',
-              )}
-            >
-              <span className="flex h-10 w-14 shrink-0 items-center justify-center rounded-lg border border-white/15" style={{ background: option.gradient }} aria-hidden="true">
-                <Palette className={cn('size-4', option.value === 'gradient' ? 'text-[#10151a]' : 'text-[#ffffff]')} aria-hidden="true" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{option.label}</span>
-                  {selected && <Check className="size-3.5 text-studio-accent" aria-hidden="true" />}
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
-      <p className="mt-3 text-xs text-muted-foreground" aria-live="polite">当前启用：<span className="font-medium text-foreground">{selectedOption.label}</span> · 视觉样式会同步到整个产品界面</p>
-    </div>
-  )
-}
-
 export function SettingsPage() {
-  const { state, setSkin, toggleTheme, refreshSession } = useStudio()
+  const { state, toggleTheme, refreshSession } = useStudio()
   const connected = state.backendStatus === 'connected'
   const [notice, setNotice] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -807,10 +776,10 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader eyebrow="偏好设置" title="设置" description="管理主题、界面偏好与账户同步。" />
+      <PageHeader eyebrow="偏好设置" title="设置" description="管理主题、界面质感与账户同步。" />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="studio-surface p-5">
-          <SectionHeading title="外观" description="渐变创作会随浅色与深色主题切换，保留同一套彩色创作语言。" />
+          <SectionHeading title="外观" description="浅色与深色主题共用同一套层级、间距与强调色，切换主题不会改变布局。" />
           <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
             <div><p className="text-sm font-medium text-foreground">当前主题</p><p className="mt-1 text-xs text-muted-foreground">{state.theme === 'dark' ? '深色' : '浅色'}</p></div>
             <ControlButton variant="secondary" size="sm" onClick={toggleTheme}>{state.theme === 'dark' ? '切换浅色' : '切换深色'}</ControlButton>
@@ -827,7 +796,14 @@ export function SettingsPage() {
           {!connected && <Notice tone="neutral">未登录时工作台显示本地预览，真实数据需要登录后读取。</Notice>}
         </div>
       </div>
-      <SkinPicker skin={state.skin} onChange={(skin) => { setSkin(skin); setNotice(`已切换为${skin === 'gradient' ? '渐变创作' : '黑白极简'}，整个产品界面已同步更新。`) }} />
+      <div className="studio-surface p-5">
+        <SectionHeading title="界面质感" description="当前统一使用液态玻璃结构，导航、浮层与创作输入区保持同一套透光层级。" />
+        <div className="mt-4 flex items-center gap-3 border-t border-border pt-4 text-sm">
+          <span className="size-3 rounded-full bg-studio-accent shadow-[0_0_0_5px_color-mix(in_srgb,var(--studio-accent)_14%,transparent)]" aria-hidden="true" />
+          <span className="font-medium text-foreground">液态玻璃</span>
+          <span className="text-xs text-muted-foreground">已固定为当前界面风格</span>
+        </div>
+      </div>
       {notice && <Notice tone="accent"><Check className="mt-0.5 size-3.5 shrink-0" />{notice}</Notice>}
     </div>
   )

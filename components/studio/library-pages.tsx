@@ -14,6 +14,7 @@ import {
   Grid2X2,
   Image as ImageIcon,
   List,
+  LoaderCircle,
   MoreHorizontal,
   Play,
   RefreshCw,
@@ -28,6 +29,7 @@ import { useRouter } from 'next/navigation'
 import {
   ControlButton,
   EmptyState,
+  FilterChips,
   IconAction,
   KeyValue,
   MediaThumb,
@@ -320,15 +322,35 @@ export function AssetsPage() {
       <div className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
           <div className="w-full sm:max-w-sm"><SearchField value={search} onChange={setSearch} placeholder="搜索素材、标签或引用位置" /></div>
-          <div className="flex max-w-full gap-1 overflow-x-auto" data-mobile-scroll>
-            {assetFilters.map((item) => <button type="button" key={item.value} onClick={() => setFilter(item.value)} className={filter === item.value ? 'h-8 shrink-0 rounded-lg bg-studio-accent/12 px-3 text-xs font-medium text-studio-accent' : 'h-8 shrink-0 rounded-lg px-3 text-xs text-muted-foreground hover:bg-muted hover:text-foreground'}>{item.label}</button>)}
-          </div>
+          <FilterChips value={filter} onChange={setFilter} options={assetFilters} />
         </div>
         <SegmentedControl value={view} onChange={setView} options={[{ value: 'grid', label: '缩略图', icon: <Grid2X2 className="size-3.5" /> }, { value: 'list', label: '列表', icon: <List className="size-3.5" /> }]} />
       </div>
       {notice && <Notice tone="accent"><Check className="mt-0.5 size-3.5 shrink-0" />{notice}</Notice>}
+      {/*
+        素材库读取失败必须如实说明。
+        `useLibraryAssets` 一直提供 state/message，但这里此前没有读取它们，
+        于是素材库接口失败时页面只剩"生成结果"，
+        用户会以为"素材都没了"——把失败伪装成了空数据。
+      */}
+      {serverLibrary.state === 'error' && (
+        <Notice tone="warning">
+          <span className="min-w-0 flex-1">素材库读取失败：{serverLibrary.message || '请稍后重试'}。下方仅显示已获取到的内容。</span>
+          <button type="button" onClick={() => void serverLibrary.reload()} className="shrink-0 text-[11px] underline">重试</button>
+        </Notice>
+      )}
+      {/* 首次读取素材库时给出加载反馈（此前完全没有提示，页面看起来像"已经空了"）。 */}
+      {serverLibrary.state === 'loading' && serverLibrary.assets.length === 0 && (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />正在读取素材库…
+        </p>
+      )}
       {visible.length === 0 ? (
-        <EmptyState title="没有找到素材" description="上传一个文件或更换当前筛选条件。" action={<ControlButton variant="primary" onClick={() => fileRef.current?.click()}><Upload className="size-3.5" />上传素材</ControlButton>} />
+        <EmptyState
+          title={serverLibrary.state === 'error' ? '素材库暂时无法读取' : '没有找到素材'}
+          description={serverLibrary.state === 'error' ? '接口不可用时不会用演示数据填充素材库，请稍后重试。' : '上传一个文件或更换当前筛选条件。'}
+          action={<ControlButton variant="primary" onClick={() => fileRef.current?.click()}><Upload className="size-3.5" />上传素材</ControlButton>}
+        />
       ) : view === 'grid' ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {visible.map((asset) => <AssetCard key={asset.id} asset={asset} selected={selected.includes(asset.id)} onToggle={() => toggle(asset.id)} onDelete={() => setDeleteId(asset.id)} />)}
@@ -486,14 +508,16 @@ export function TasksPage() {
           }
         />
         <div className="flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex max-w-full gap-1 overflow-x-auto" data-mobile-scroll>
-            {([['all', '全部'], ['active', '进行中'], ['success', '已完成'], ['error', '失败或取消']] as const).map(([value, label]) => (
-              <button type="button" key={value} onClick={() => setLiveFilter(value)} className={liveFilter === value ? 'h-8 shrink-0 rounded-lg bg-studio-accent/12 px-3 text-xs font-medium text-studio-accent' : 'h-8 shrink-0 rounded-lg px-3 text-xs text-muted-foreground hover:bg-muted hover:text-foreground'}>
-                {label}
-                <span className="ml-1 opacity-60">{value === 'all' ? generation.tasks.length + history.total : generation.tasks.filter((task) => value === 'active' ? ['pending', 'running', 'paused'].includes(task.status) : value === 'success' ? task.status === 'success' : ['error', 'cancelled'].includes(task.status)).length}</span>
-              </button>
-            ))}
-          </div>
+          <FilterChips
+            value={liveFilter}
+            onChange={setLiveFilter}
+            options={([
+              ['all', '全部', generation.tasks.length + history.total],
+              ['active', '进行中', generation.tasks.filter((task) => ['pending', 'running', 'paused'].includes(task.status)).length],
+              ['success', '已完成', generation.tasks.filter((task) => task.status === 'success').length],
+              ['error', '失败或取消', generation.tasks.filter((task) => ['error', 'cancelled'].includes(task.status)).length],
+            ] as const).map(([value, label, count]) => ({ value, label, count }))}
+          />
           <div className="w-full md:max-w-xs"><SearchField value={search} onChange={setSearch} placeholder="搜索任务" /></div>
         </div>
 

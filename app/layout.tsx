@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { StudioApp } from '@/components/studio/studio-app'
 import { GenerationProvider } from '@/lib/studio/generation-store'
 import { StudioProvider } from '@/lib/studio/store'
+import { LocaleProvider } from '@/lib/studio/i18n'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -25,9 +26,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN" className="bg-background" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <StudioProvider>
-          <GenerationProvider><StudioApp>{children}</StudioApp></GenerationProvider>
-        </StudioProvider>
+        <LocaleProvider>
+          <StudioProvider>
+            <GenerationProvider><StudioApp>{children}</StudioApp></GenerationProvider>
+          </StudioProvider>
+        </LocaleProvider>
         {process.env.VERCEL === '1' && <Analytics />}
       </body>
     </html>

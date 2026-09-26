@@ -46,7 +46,7 @@ function getInitialState(): StudioState {
     backendStatus: 'checking',
     theme: 'light',
     skin: 'gradient',
-    sidebarCollapsed: true,
+    sidebarCollapsed: false,
     user: demoUser,
     credits: demoUser.credits,
     projects: projects.map((item) => ({ ...item, tags: [...item.tags] })),
@@ -103,7 +103,8 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
     case 'SET_THEME':
       return { ...state, theme: action.theme }
     case 'SET_SKIN':
-      return { ...state, skin: action.skin }
+      // 旧版本仍可能从缓存或外部调用发来 SET_SKIN，但当前产品只保留液态玻璃。
+      return { ...state, skin: 'gradient' }
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarCollapsed: !state.sidebarCollapsed }
     case 'SET_SELECTED_PROJECT':
@@ -227,7 +228,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsed = JSON.parse(raw) as Partial<StudioState>
         const theme = parsed.theme === 'dark' ? 'dark' : 'light'
-        const skin: StudioSkin = parsed.skin === 'minimal' ? 'minimal' : 'gradient'
+        // 玻璃质感是当前唯一公开皮肤；保留旧字段只为兼容历史缓存，不再允许旧缓存把界面切回去。
+        const skin: StudioSkin = 'gradient'
         dispatch({ type: 'HYDRATE', payload: { ...parsed, theme, skin } })
       } catch {
         dispatch({ type: 'HYDRATE', payload: { tasks: getLiveDemoTasks() } })
@@ -245,7 +247,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         const snapshot = await loadSessionSnapshot()
         if (cancelled) return
         if (!snapshot.user) {
-          dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), backendStatus: 'unauthenticated', liveModels: [], sessionSettings: undefined } })
+          dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), backendStatus: 'unauthenticated', liveModels: [], sessionSettings: snapshot.settings } })
           return
         }
         const user = backendUserToStudioUser(snapshot.user, media.portrait)
@@ -339,7 +341,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const setTheme = useCallback((theme: Theme) => dispatch({ type: 'SET_THEME', theme }), [])
-  const setSkin = useCallback((skin: StudioSkin) => dispatch({ type: 'SET_SKIN', skin }), [])
+  const setSkin = useCallback((_skin: StudioSkin) => dispatch({ type: 'SET_SKIN', skin: 'gradient' }), [])
   const toggleTheme = useCallback(() => dispatch({ type: 'SET_THEME', theme: state.theme === 'dark' ? 'light' : 'dark' }), [state.theme])
   const toggleSidebar = useCallback(() => dispatch({ type: 'TOGGLE_SIDEBAR' }), [])
   /** 有真实模型目录时用后端定价估算，否则退回演示估算并明确标注为本地预览。 */
@@ -376,7 +378,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (!snapshot.user) {
         // 退出登录：清掉上一个账号的任务缓存，避免下一个登录者看到其提示词与未确认提交。
         clearScopedTaskCache(previousIdentity || state.user.id)
-        dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), credits: 0, liveModels: [], sessionSettings: undefined, projects: [], assets: [], tasks: [], works: [], agentPlans: [] } })
+        dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), credits: 0, liveModels: [], sessionSettings: snapshot.settings, projects: [], assets: [], tasks: [], works: [], agentPlans: [] } })
         dispatch({ type: 'SET_BACKEND_STATUS', status: 'unauthenticated' })
         return
       }

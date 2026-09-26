@@ -47,13 +47,339 @@
   --color-studio-workspace: var(--studio-workspace);
   --color-studio-grid: var(--studio-grid);
   --color-studio-map-mask: var(--studio-map-mask);
-  /* 卡片圆角上限 8px：所有 radius 档位统一收敛，避免出现大圆角卡片 */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 8px;
-  --radius-2xl: 8px;
+  /* 液态玻璃圆角阶梯：控件紧凑、面板舒展，避免"所有东西同一圆角" */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
 }
+
+/* ==========================================================================
+   液态玻璃设计系统（Liquid Glass）
+   --------------------------------------------------------------------------
+   分三层，职责严格区分，避免"把一切都塞进玻璃卡片"：
+
+   1. 令牌层 `--lg-*`：颜色、玻璃透明度、边框、高光、阴影、模糊、层级、
+      间距、圆角、动效时长。浅色与深色各一套，是所有组件唯一的事实来源。
+   2. 表面层 `.lg-pane / .lg-glass / .lg-raised`：
+      - `lg-pane`   实心可读表面（列表、表格、表单容器、密集数据）——**不带模糊**；
+      - `lg-glass`  真正的玻璃表面（导航、浮动工具条、模型选择器、弹层）——带模糊；
+      - `lg-raised` 仅靠阴影与高光表达层级，零模糊。
+   3. 兼容层：既有 `studio-*` 类全部映射到上面两层，
+      因此页面组件无需逐个改写即可获得新视觉。
+
+   模糊只允许出现在**独立表面**上。绝不给 html/body/应用根容器或
+   任何 fixed/portal 元素的祖先添加 filter/backdrop-filter，
+   否则菜单、弹窗、下拉与固定工具条会错位或被裁切。
+   ========================================================================== */
+
+:root {
+  /* —— 层级与间距 —— */
+  --lg-gap-1: 4px;
+  --lg-gap-2: 8px;
+  --lg-gap-3: 12px;
+  --lg-gap-4: 16px;
+  --lg-gap-5: 24px;
+  --lg-gap-6: 32px;
+
+  /* —— 动效 —— */
+  --lg-dur-fast: 120ms;
+  --lg-dur-base: 180ms;
+  --lg-dur-slow: 280ms;
+  --lg-dur-panel: 320ms;
+  --lg-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --lg-ease-spring: cubic-bezier(0.34, 1.24, 0.64, 1);
+
+  /* —— 模糊强度 —— */
+  --lg-blur-bar: 20px;
+  --lg-blur-panel: 28px;
+  --lg-blur-overlay: 36px;
+  --lg-saturate: 165%;
+
+  /* —— 玻璃表面 —— */
+  --lg-glass-strong: rgba(255, 255, 255, 0.78);
+  --lg-glass-base: rgba(255, 255, 255, 0.62);
+  --lg-glass-soft: rgba(255, 255, 255, 0.46);
+  --lg-glass-quiet: rgba(255, 255, 255, 0.34);
+  --lg-pane-bg: #ffffff;
+  --lg-pane-bg-soft: #fbfbfd;
+
+  /* —— 玻璃边缘：上半高光 + 整体细边，制造"厚度" —— */
+  --lg-edge: rgba(24, 24, 27, 0.1);
+  --lg-edge-strong: rgba(24, 24, 27, 0.16);
+  --lg-highlight: rgba(255, 255, 255, 0.72);
+  --lg-highlight-soft: rgba(255, 255, 255, 0.4);
+  --lg-refract: rgba(255, 255, 255, 0.55);
+
+  /* —— 阴影：近距离接触阴影 + 远距离扩散，避免"糊成一团黑" —— */
+  --lg-shadow-1: 0 1px 2px rgba(24, 24, 27, 0.05), 0 1px 1px rgba(24, 24, 27, 0.03);
+  --lg-shadow-2: 0 2px 6px rgba(24, 24, 27, 0.06), 0 8px 24px rgba(24, 24, 27, 0.05);
+  --lg-shadow-3: 0 4px 12px rgba(24, 24, 27, 0.08), 0 18px 44px rgba(24, 24, 27, 0.09);
+  --lg-shadow-4: 0 8px 22px rgba(24, 24, 27, 0.1), 0 32px 80px rgba(24, 24, 27, 0.16);
+  --lg-shadow-inset-top: inset 0 1px 0 var(--lg-highlight);
+  --lg-glow: 0 0 0 1px color-mix(in srgb, var(--studio-accent) 12%, transparent),
+    0 8px 30px color-mix(in srgb, var(--studio-accent) 14%, transparent);
+
+  /* —— 环境光：极轻、缓慢、可关闭的背景层次 —— */
+  --lg-ambient:
+    radial-gradient(1100px 620px at 12% -8%, color-mix(in srgb, var(--studio-accent) 8%, transparent), transparent 62%),
+    radial-gradient(900px 520px at 92% 4%, color-mix(in srgb, var(--ring) 7%, transparent), transparent 58%);
+  --lg-ambient-opacity: 1;
+}
+
+.dark {
+  --lg-glass-strong: rgba(28, 29, 34, 0.76);
+  --lg-glass-base: rgba(24, 25, 30, 0.62);
+  --lg-glass-soft: rgba(20, 21, 25, 0.5);
+  --lg-glass-quiet: rgba(18, 19, 23, 0.38);
+  --lg-pane-bg: #17181c;
+  --lg-pane-bg-soft: #1c1d22;
+
+  --lg-edge: rgba(244, 244, 245, 0.12);
+  --lg-edge-strong: rgba(244, 244, 245, 0.2);
+  --lg-highlight: rgba(255, 255, 255, 0.09);
+  --lg-highlight-soft: rgba(255, 255, 255, 0.05);
+  --lg-refract: rgba(255, 255, 255, 0.07);
+
+  --lg-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lg-shadow-2: 0 2px 8px rgba(0, 0, 0, 0.45), 0 10px 28px rgba(0, 0, 0, 0.3);
+  --lg-shadow-3: 0 6px 18px rgba(0, 0, 0, 0.5), 0 22px 54px rgba(0, 0, 0, 0.4);
+  --lg-shadow-4: 0 10px 28px rgba(0, 0, 0, 0.55), 0 36px 90px rgba(0, 0, 0, 0.55);
+  --lg-ambient-opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   表面层
+   -------------------------------------------------------------------------- */
+
+@layer components {
+  /* 实心可读表面：列表、表格、表单容器、密集数据。**无模糊**，保证对比度与性能。 */
+  .lg-pane {
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--radius-lg);
+    background: var(--lg-pane-bg);
+    box-shadow: var(--lg-shadow-1);
+  }
+
+  /* 真正的玻璃表面：仅用于导航、浮动工具条、模型选择器、创作输入区、弹层。
+     带上下高光与折射描边，且只在支持 backdrop-filter 时生效。 */
+  .lg-glass {
+    position: relative;
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--radius-lg);
+    background: var(--lg-glass-base);
+    box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
+  }
+
+  /* 玻璃"厚度"高光：顶部一条渐隐亮线，模拟光线在边缘的折射。 */
+  .lg-glass::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    border-radius: inherit;
+    background: linear-gradient(90deg, transparent, var(--lg-highlight), transparent);
+    pointer-events: none;
+  }
+
+  /* 仅靠阴影与高光表达层级，零模糊：用于大量重复出现的卡片。 */
+  .lg-raised {
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--radius-lg);
+    background: var(--lg-pane-bg);
+    box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
+  }
+
+  /* 内凹表面：输入框、代码块、只读区域。 */
+  .lg-sunken {
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--radius-md);
+    background: var(--lg-pane-bg-soft);
+    box-shadow: inset 0 1px 2px rgba(24, 24, 27, 0.045);
+  }
+
+  .dark .lg-sunken {
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* 玻璃模糊本身。
+   这里**刻意不套 `@supports`**，且把无前缀属性写在**最后**：
+   Lightning CSS（Tailwind 4 / Next 16 的 CSS 管线）会把
+   `-webkit-backdrop-filter` 与 `backdrop-filter` 视为同一逻辑属性并只保留最后一条，
+   若把无前缀写在前面就会被删掉，Chrome 下玻璃完全失效（实测 computed = none）。
+   两个前缀都声明即可达到渐进增强：不支持者忽略，基础样式仍是实心表面。 */
+.lg-glass {
+  background: var(--lg-glass-base);
+  -webkit-backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
+}
+
+/* 导航与固定工具条用较轻的模糊：它们是长期驻留的大面积元素。 */
+.lg-glass-bar {
+  background: var(--lg-glass-strong);
+  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+}
+
+/* 浮层（弹窗、抽屉、下拉、Toast）：模糊最重，与背景明确分层。 */
+.lg-glass-overlay {
+  background: var(--lg-glass-strong);
+  -webkit-backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate));
+}
+
+/* 用户要求减少透明度 / 减少动态效果：全部退化为实心表面，且不做动画。 */
+@media (prefers-reduced-transparency: reduce) {
+  .lg-glass,
+  .lg-glass-bar,
+  .lg-glass-overlay {
+    background: var(--lg-pane-bg) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  :root { --lg-ambient-opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lg-dur-fast: 1ms;
+    --lg-dur-base: 1ms;
+    --lg-dur-slow: 1ms;
+    --lg-dur-panel: 1ms;
+  }
+}
+
+/* --------------------------- 站点顶部通知横幅 --------------------------- */
+.oao-announcement-bar {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  width: 100%;
+  color: #fff;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 18%), 0 10px 24px rgb(18 23 43 / 12%);
+}
+
+.oao-announcement-bar[data-placement='landing'] {
+  position: fixed;
+  inset: 0 0 auto;
+}
+
+.oao-announcement-promo { background: linear-gradient(100deg, #5a5fe0 0%, #6667dc 52%, #4f8de4 100%); }
+.oao-announcement-info { background: linear-gradient(100deg, #216aa2 0%, #3282bd 100%); }
+.oao-announcement-warning { background: linear-gradient(100deg, #bd632d 0%, #d78736 100%); }
+
+.oao-announcement-inner {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 7px 16px 7px 20px;
+}
+
+.oao-announcement-link {
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.oao-announcement-content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.oao-announcement-icon { width: 15px; height: 15px; flex: 0 0 auto; }
+.oao-announcement-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oao-announcement-arrow { width: 14px; height: 14px; flex: 0 0 auto; transition: transform 180ms ease; }
+.oao-announcement-link:hover .oao-announcement-arrow { transform: translate(2px, -2px); }
+.oao-announcement-close { display: inline-flex; width: 25px; height: 25px; flex: 0 0 auto; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: rgb(255 255 255 / 13%); color: inherit; cursor: pointer; transition: background 160ms ease, transform 160ms ease; }
+.oao-announcement-close svg { width: 14px; height: 14px; }
+.oao-announcement-close:hover { background: rgb(255 255 255 / 24%); transform: scale(1.05); }
+
+@media (max-width: 560px) {
+  .oao-announcement-inner { min-height: 40px; padding-inline: 12px; }
+  .oao-announcement-content { font-size: 11px; gap: 6px; }
+  .oao-announcement-icon { width: 13px; height: 13px; }
+  .oao-announcement-text { max-width: calc(100vw - 75px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oao-announcement-arrow, .oao-announcement-close { transition: none; }
+}
+
+/* 首页模式选择器：独立于输入框，保持参考图中的「先选创作方式，再写描述」节奏。 */
+.studio-home-mode-switcher {
+  border: 1px solid rgb(255 255 255 / 38%);
+  border-radius: 17px;
+  background: rgb(255 255 255 / 18%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 66%), 0 12px 30px rgb(20 31 60 / 10%);
+  -webkit-backdrop-filter: blur(22px) saturate(155%);
+  backdrop-filter: blur(22px) saturate(155%);
+}
+.studio-home-mode-tab { border-radius: 12px; }
+.studio-home-mode-tab-active { background: rgb(255 255 255 / 80%); box-shadow: 0 5px 14px rgb(24 34 60 / 13%), inset 0 1px 0 rgb(255 255 255 / 85%); }
+.studio-home-model-menu {
+  border: 1px solid rgb(255 255 255 / 54%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 92%);
+  color: #18181b;
+  box-shadow: 0 18px 44px rgb(30 38 70 / 18%), inset 0 1px 0 rgb(255 255 255 / 92%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+}
+.studio-home-model-menu .text-foreground { color: #18181b; }
+.studio-home-model-menu .text-muted-foreground { color: #67676f; }
+.studio-home-model-menu .bg-muted { background: #e9e9ed; }
+.studio-home-model-group + .studio-home-model-group { border-top: 1px solid rgb(24 24 27 / 8%); }
+.studio-home-model-option:hover,
+.studio-home-model-option:focus-visible { background: rgb(24 24 27 / 6%); outline: none; }
+.studio-home-model-option-active { background: rgb(88 92 220 / 10%); }
+.dark .studio-home-model-menu {
+  border-color: rgb(244 244 245 / 18%);
+  background: rgb(27 29 34 / 96%);
+  color: #f4f4f5;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 42%), inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+.dark .studio-home-model-menu .text-foreground { color: #f4f4f5; }
+.dark .studio-home-model-menu .text-muted-foreground { color: #b1b5bf; }
+.dark .studio-home-model-menu .bg-muted { background: #303238; }
+.dark .studio-home-model-group + .studio-home-model-group { border-top-color: rgb(244 244 245 / 12%); }
+.dark .studio-home-model-option:hover,
+.dark .studio-home-model-option:focus-visible { background: rgb(255 255 255 / 8%); }
+.dark .studio-home-model-option-active { background: rgb(199 243 232 / 12%); }
+.studio-home-inline-params { display: flex; min-width: 0; align-items: center; gap: 8px; overflow-x: auto; border-top: 1px solid rgb(24 24 27 / 9%); border-bottom: 1px solid rgb(24 24 27 / 9%); padding: 9px 8px 10px; scrollbar-width: none; }
+.studio-home-inline-params::-webkit-scrollbar { display: none; }
+.studio-home-inline-params-title { flex: 0 0 auto; color: var(--muted-foreground); font-size: 10px; font-weight: 700; }
+.studio-home-param-field { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; border: 1px solid rgb(24 24 27 / 10%); border-radius: 9px; background: rgb(255 255 255 / 42%); padding: 4px 7px; }
+.studio-home-param-field > span { color: var(--muted-foreground); font-size: 10px; }
+.studio-home-param-field select { max-width: 120px; border: 0; background: transparent; color: var(--foreground); font-size: 11px; outline: none; }
+.studio-home-param-summary { min-width: 0; overflow: hidden; margin-left: auto; color: var(--muted-foreground); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.dark .studio-home-inline-params { border-color: rgb(255 255 255 / 12%); }
+.dark .studio-home-param-field { border-color: rgb(255 255 255 / 13%); background: rgb(255 255 255 / 7%); }
+.dark .studio-home-param-field select { color: var(--foreground); }
+.studio-canvas-fullscreen { height: 100dvh; }
+.oao-canvas-index-card { border-color: rgb(255 255 255 / 38%); background: rgb(255 255 255 / 48%); box-shadow: 0 18px 46px rgb(26 38 70 / 9%), inset 0 1px 0 rgb(255 255 255 / 78%); transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+.oao-canvas-index-card:hover { border-color: rgb(255 255 255 / 68%); box-shadow: 0 22px 52px rgb(26 38 70 / 14%), inset 0 1px 0 rgb(255 255 255 / 88%); transform: translateY(-2px); }
+.oao-canvas-empty-cover { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--muted-foreground); font-size: 11px; }
+.oao-canvas-empty-cover svg { width: 24px; height: 24px; color: var(--studio-accent); }
+.oao-canvas-index-icon { display: inline-grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 1px solid rgb(24 24 27 / 10%); border-radius: 9px; background: rgb(255 255 255 / 42%); color: var(--studio-accent); }
+.oao-canvas-index-icon svg { width: 15px; height: 15px; }
+.oao-canvas-index-delete { border: 0; }
+.dark .oao-canvas-index-card { border-color: rgb(255 255 255 / 14%); background: rgb(24 29 32 / 72%); box-shadow: 0 18px 46px rgb(0 0 0 / 26%), inset 0 1px 0 rgb(255 255 255 / 8%); }
+.dark .oao-canvas-index-card:hover { border-color: rgb(199 243 232 / 32%); }
+.dark .oao-canvas-index-icon { border-color: rgb(255 255 255 / 13%); background: rgb(255 255 255 / 7%); }
+.oao-announcement-bar[data-placement='workbench'] + .oao-canvas-route .studio-canvas-fullscreen { height: calc(100dvh - 42px); }
+.studio-home-mode-tab-active svg { color: var(--studio-accent); }
 
 /* 浅色主题：中性灰白工作区，黑色承担主要操作与选中态 */
 :root {
@@ -69,7 +395,9 @@
   --secondary: #f4f4f5;
   --secondary-foreground: #18181b;
   --muted: #f4f4f5;
-  --muted-foreground: #71717a;
+  /* 次要文字需在**所有**浅色表面上达到 WCAG AA 4.5:1：
+     #67676f 在白底 5.61、#f4f4f5 上 5.10、#e9e9ed 上 4.63（原 #71717a 仅 3.99–4.83，不达标）。 */
+  --muted-foreground: #67676f;
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
   --destructive: #b42318;
@@ -85,7 +413,10 @@
   /* 媒体预览 / 画布保留独立深色场景，不把深色扩散到浅色工作区 */
   --studio-ink: #0c0d0f;
   --studio-ink-foreground: #f4f4f5;
-  --studio-ink-muted: rgba(244, 244, 245, 0.66);
+  /* 深色场景上的次要文字用 0.84 而非 0.66：渐变叠层在文字所在处并非满黑
+     （实测 from-studio-ink/75 叠在白卡上约 rgb(73,73,74)），
+     0.66 时像素对比度只有 3.98:1，低于 WCAG AA 4.5:1。 */
+  --studio-ink-muted: rgba(244, 244, 245, 0.84);
   --studio-ink-line: rgba(244, 244, 245, 0.16);
   --studio-ink-surface: rgba(18, 19, 22, 0.86);
   --studio-workspace: #0c0d0f;
@@ -129,7 +460,7 @@
   --studio-warn: #fbbf24;
   --studio-ink: #0b0c0e;
   --studio-ink-foreground: #f4f4f5;
-  --studio-ink-muted: rgba(244, 244, 245, 0.62);
+  --studio-ink-muted: rgba(244, 244, 245, 0.84);
   --studio-ink-line: rgba(244, 244, 245, 0.14);
   --studio-ink-surface: rgba(20, 21, 24, 0.88);
   --studio-workspace: #0b0c0e;
@@ -157,7 +488,7 @@
   --secondary: #e9e9ed;
   --secondary-foreground: #1d1d1f;
   --muted: #e9e9ed;
-  --muted-foreground: #6e6e73;
+  --muted-foreground: #67676f;
   --accent: #e9e9ed;
   --accent-foreground: #1d1d1f;
   --border: rgba(29, 29, 31, 0.1);
@@ -249,7 +580,21 @@
   .grid { grid-template-columns: minmax(0, 1fr); }
   [data-mobile-scroll] { scrollbar-width: none; }
   [data-mobile-scroll]::-webkit-scrollbar { display: none; }
-  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--studio-accent); outline-offset: 2px; }
+  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--studio-accent); outline-offset: 2px; }
+}
+
+/*
+  键盘可达性兜底（**必须放在所有 @layer 之外**）。
+  项目里有 50+ 处 `outline-none` 工具类用来去掉浏览器默认焦点环（为鼠标点击准备），
+  但 Tailwind 的 utilities 层在级联顺序上晚于 base 层，
+  仅靠提高选择器特异性也赢不了，实测登录输入框在 Tab 聚焦时 outline-style 仍为 none。
+  因此把焦点环放在无层级（unlayered）规则里：无层级样式优先于任何 @layer。
+  鼠标点击不匹配 `:focus-visible`，所以不会出现"点一下就有框"的噪音；
+  键盘操作一定有可见焦点提示。
+*/
+:where(button, a, input, textarea, select, [tabindex])[class*='outline-none']:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 2px;
 }
 
 .studio-flow .react-flow__controls { border: 1px solid var(--border); box-shadow: none; }
@@ -303,622 +648,1754 @@
   *, *::before, *::after { scroll-behavior: auto !important; }
 }
 
-/* 非首页页面作用域：严格复用工作台的黑白灰配色，只扩展留白、层级与表面。 */
-.studio-minimal-shell {
-  --background: #f5f5f7;
-  --foreground: #1d1d1f;
-  --card: #ffffff;
-  --card-foreground: #1d1d1f;
-  --popover: #ffffff;
-  --popover-foreground: #1d1d1f;
-  --primary: #1d1d1f;
-  --primary-foreground: #ffffff;
-  --secondary: #e9e9ed;
-  --secondary-foreground: #1d1d1f;
-  --muted: #e9e9ed;
-  --muted-foreground: #6e6e73;
-  --accent: #e9e9ed;
-  --accent-foreground: #1d1d1f;
-  --destructive: #b42318;
-  --destructive-foreground: #ffffff;
-  --success: #15803d;
-  --border: rgba(29, 29, 31, 0.1);
-  --input: rgba(29, 29, 31, 0.14);
-  --ring: #1d1d1f;
-  --studio-accent: #1d1d1f;
-  --studio-accent-foreground: #ffffff;
-  --studio-warn: #6e6e73;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1d1d1f;
-  --sidebar-primary: #1d1d1f;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e9e9ed;
-  --sidebar-accent-foreground: #1d1d1f;
-  --sidebar-border: rgba(29, 29, 31, 0.1);
-  --sidebar-ring: #1d1d1f;
-  --radius: 1rem;
-  --radius-sm: 0.625rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  color-scheme: light;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
+/* ==========================================================================
+   兼容层：把既有 `studio-*` 类统一映射到液态玻璃表面
+   --------------------------------------------------------------------------
+   页面组件无需逐个改写即可获得新视觉，同时明确区分三种表面：
+
+   - 实心可读面（`lg-pane` / `lg-raised`）：表格、列表、表单容器、密集数据；
+   - 玻璃面（`lg-glass` / `lg-glass-bar` / `lg-glass-overlay`）：导航、
+     浮动工具条、模型选择器、创作输入区、弹层；
+   - 兼容别名：`studio-surface` 等既有类按**用途**落到对应表面，
+     而不是一律加模糊 —— 旧实现给**每一个** `.studio-surface` 都加
+     `backdrop-filter`，/assets 页面上多达 725 个模糊层，
+     既拖慢渲染，也让 fixed/portal 元素错位。
+
+   关于 `-webkit-` 前缀的顺序：Lightning CSS（Tailwind 4 / Next 16 的 CSS 管线）
+   会把 `backdrop-filter` 与其 `-webkit-` 版本视为同一逻辑属性并**只保留最后一条**。
+   因此这里一律**先写 `-webkit-`、后写标准属性**；顺序反过来会让标准属性被删掉，
+   Chrome 下玻璃完全失效（实测 topbar 的 computed backdrop-filter = none）。
+   不套 `@supports`：不支持者自然忽略声明，基础样式仍是实心表面。
+   ========================================================================== */
+
+/* 工作台外壳。
+   这里**不**设置 filter / backdrop-filter / transform / contain：
+   那会给内部的 fixed 侧栏、sticky 顶栏与 portal 浮层创建新的包含块，
+   导致菜单、弹窗与工具提示错位。 */
+.studio-app-shell {
+  background: var(--background);
+  color: var(--foreground);
 }
 
-.dark .studio-minimal-shell {
-  --background: #000000;
-  --foreground: #f5f5f7;
-  --card: #1a1a1d;
-  --card-foreground: #f5f5f7;
-  --popover: #202023;
-  --popover-foreground: #f5f5f7;
-  --primary: #f5f5f7;
-  --primary-foreground: #1d1d1f;
-  --secondary: #2c2c2e;
-  --secondary-foreground: #f5f5f7;
-  --muted: #2c2c2e;
-  --muted-foreground: #a1a1a6;
-  --accent: #2c2c2e;
-  --accent-foreground: #f5f5f7;
-  --destructive: #ff6961;
-  --destructive-foreground: #2c0b09;
-  --success: #30d158;
-  --border: rgba(245, 245, 247, 0.14);
-  --input: rgba(245, 245, 247, 0.2);
-  --ring: #f5f5f7;
-  --studio-accent: #f5f5f7;
-  --studio-accent-foreground: #1d1d1f;
-  --studio-warn: #a1a1a6;
-  --sidebar: #1d1d1f;
-  --sidebar-foreground: #f5f5f7;
-  --sidebar-primary: #f5f5f7;
-  --sidebar-primary-foreground: #1d1d1f;
-  --sidebar-accent: #2c2c2e;
-  --sidebar-accent-foreground: #f5f5f7;
-  --sidebar-border: rgba(245, 245, 247, 0.12);
-  --sidebar-ring: #f5f5f7;
-  color-scheme: dark;
-}
-
-.studio-minimal-shell .studio-topbar {
-  background-color: color-mix(in srgb, var(--background) 78%, transparent);
-  border-bottom-color: var(--border);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
-}
-
-.studio-minimal-shell .studio-sidebar,
-.studio-minimal-shell .studio-mobile-nav aside {
-  background-color: var(--sidebar);
-  border-color: var(--sidebar-border);
-  backdrop-filter: saturate(180%) blur(18px);
-}
-
-.studio-minimal-shell .studio-sidebar .studio-nav-item,
-.studio-minimal-shell .studio-mobile-nav .studio-nav-item {
-  border-radius: 10px;
-}
-
-.studio-minimal-shell .studio-sidebar .studio-nav-item[data-active='true'],
-.studio-minimal-shell .studio-mobile-nav .studio-nav-item[data-active='true'] {
-  background: var(--sidebar-accent);
-  color: var(--sidebar-accent-foreground);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 5%, transparent);
-}
-
-.studio-minimal-shell .studio-page-header {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.studio-minimal-shell .studio-page-header h1 {
-  font-size: clamp(1.5rem, 2vw, 2rem);
-  letter-spacing: -0.04em;
-}
-
-.studio-minimal-shell .studio-page-header p {
-  color: var(--muted-foreground);
-}
-
-.studio-minimal-shell .studio-section-heading h2 {
-  letter-spacing: -0.02em;
-}
-
-.studio-minimal-shell .studio-control {
-  border-radius: 999px;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 7%, transparent);
-}
-
-.studio-minimal-shell .studio-control:hover {
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--foreground) 10%, transparent);
-}
-
-.studio-minimal-shell .studio-control.border-foreground {
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 16%, transparent);
-}
-
-.studio-minimal-shell .studio-surface {
-  border-color: var(--border);
-  border-radius: 16px;
-  background: var(--card);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 5%, transparent), 0 8px 24px color-mix(in srgb, var(--foreground) 3%, transparent);
-}
-
-.dark .studio-minimal-shell .studio-surface {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 35px rgba(0, 0, 0, 0.14);
-}
-
-.studio-minimal-shell .studio-surface-interactive:hover {
-  border-color: color-mix(in srgb, var(--studio-accent) 32%, var(--border));
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 9%, transparent);
-  transform: translateY(-2px);
-}
-
-.studio-minimal-shell .studio-field,
-.studio-minimal-shell .studio-search-field,
-.studio-minimal-shell .studio-select {
-  border-radius: 12px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 2%, transparent), 0 1px 2px color-mix(in srgb, var(--foreground) 3%, transparent);
-}
-
-.studio-minimal-shell .studio-segmented {
-  border-color: transparent;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--muted) 82%, transparent);
-  box-shadow: none;
-}
-
-.studio-minimal-shell .studio-segmented > span {
-  border-radius: 10px;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 11%, transparent);
-}
-
-.studio-minimal-shell .studio-status-badge {
-  border-color: color-mix(in srgb, currentColor 24%, transparent);
-  box-shadow: none;
-}
-
-.studio-minimal-shell .studio-empty-state {
-  min-height: 220px;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--card) 76%, transparent);
-}
-
-.studio-minimal-shell .studio-notice {
-  border-radius: 14px;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 4%, transparent);
-}
-
-.studio-minimal-shell .studio-modal-surface {
-  border-radius: 20px;
-  border-color: var(--border);
-  background: var(--popover);
-  box-shadow: 0 24px 70px color-mix(in srgb, var(--foreground) 22%, transparent);
-}
-
-.studio-minimal-shell .studio-modal-backdrop,
-.studio-minimal-shell .studio-sidepanel-backdrop {
-  background-color: color-mix(in srgb, #000000 34%, transparent);
-}
-
-.studio-minimal-shell .studio-sidepanel {
-  border-color: var(--border);
-  background: var(--card);
-  box-shadow: -18px 0 55px color-mix(in srgb, var(--foreground) 12%, transparent);
-}
-
-.studio-minimal-shell .studio-key-value {
-  border-color: color-mix(in srgb, var(--foreground) 9%, transparent);
-}
-
-.studio-minimal-shell .studio-workspace-shell {
-  gap: 24px;
-}
-
-.studio-minimal-shell .studio-workspace-shell > div {
-  gap: 24px;
-}
-
-@media (max-width: 767px) {
-  .studio-minimal-shell .studio-page-header h1 {
-    font-size: 1.5rem;
-  }
-
-  .studio-minimal-shell .studio-workspace-shell {
-    gap: 16px;
-  }
-}
-
-/* 渐变创作皮肤：随系统主题切换，媒体预览与画布仍保留独立的深色内容场景。 */
-.studio-gradient-shell {
-  --background: #f3f7f9;
-  --foreground: #17252d;
-  --card: #ffffff;
-  --card-foreground: #17252d;
-  --popover: #ffffff;
-  --popover-foreground: #17252d;
-  --primary: #15232b;
-  --primary-foreground: #ffffff;
-  --secondary: #e9f0f3;
-  --secondary-foreground: #17252d;
-  --muted: #eaf1f3;
-  --muted-foreground: #687985;
-  --accent: #e2edf0;
-  --accent-foreground: #17252d;
-  --destructive: #c94f47;
-  --destructive-foreground: #ffffff;
-  --success: #14815a;
-  --border: rgba(23, 47, 58, 0.14);
-  --input: rgba(23, 47, 58, 0.2);
-  --ring: #4ca9c4;
-  --studio-accent: #176d7e;
-  --studio-accent-foreground: #ffffff;
-  --studio-warn: #a45d18;
-  --studio-ink: #050608;
-  --studio-ink-foreground: #f4f2ec;
-  --studio-ink-muted: rgba(244, 242, 236, 0.64);
-  --studio-ink-line: rgba(244, 242, 236, 0.16);
-  --studio-ink-surface: rgba(13, 16, 19, 0.9);
-  --studio-workspace: #070a0d;
-  --studio-grid: #1d252b;
-  --studio-map-mask: rgba(5, 6, 8, 0.78);
-  --sidebar: rgba(248, 252, 253, 0.9);
-  --sidebar-foreground: #17252d;
-  --sidebar-primary: #15232b;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e4eef1;
-  --sidebar-accent-foreground: #17252d;
-  --sidebar-border: rgba(23, 47, 58, 0.12);
-  --sidebar-ring: #4ca9c4;
-  --radius: 0.75rem;
-  --studio-gradient-accent: linear-gradient(100deg, #ff9b7e 0%, #f5d78e 35%, #a8e7d2 68%, #83cfff 100%);
-  --studio-shell-background: radial-gradient(circle at 48% -18%, rgba(75, 169, 196, 0.2), transparent 38%), radial-gradient(circle at 91% 16%, rgba(255, 133, 99, 0.13), transparent 28%), var(--background);
-  --studio-home-background: radial-gradient(circle at 52% -12%, rgba(75, 169, 196, 0.22), transparent 37%), radial-gradient(circle at 7% 20%, rgba(255, 155, 126, 0.1), transparent 24%), var(--background);
-  --studio-topbar-background: linear-gradient(180deg, rgba(250, 253, 254, 0.94), rgba(245, 249, 250, 0.78));
-  --studio-sidebar-background: rgba(248, 252, 253, 0.9);
-  --studio-shortcut-background: rgba(255, 255, 255, 0.82);
-  --studio-shortcut-hover: rgba(233, 242, 244, 0.94);
-  --studio-tab-active: #dce9ed;
-  --studio-surface-background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(239, 247, 249, 0.9));
-  --studio-surface-shadow: 0 18px 54px rgba(28, 69, 82, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.88);
-  --studio-surface-hover-shadow: 0 20px 60px rgba(28, 69, 82, 0.16), 0 0 28px rgba(72, 178, 202, 0.1);
-  --studio-control-background: rgba(255, 255, 255, 0.84);
-  --studio-control-hover: rgba(232, 241, 244, 0.96);
-  --studio-segmented-background: rgba(229, 239, 242, 0.88);
-  --studio-segmented-shadow: 0 1px 3px rgba(25, 56, 66, 0.14);
-  --studio-notice-background: rgba(255, 255, 255, 0.9);
-  --studio-modal-background: linear-gradient(145deg, #ffffff, #edf5f7);
-  --studio-modal-shadow: 0 28px 80px rgba(20, 54, 65, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --studio-backdrop: rgba(10, 28, 36, 0.36);
-  --studio-topbar-shadow: 0 1px 0 rgba(23, 47, 58, 0.08), 0 12px 32px rgba(30, 75, 89, 0.08);
-  --studio-sidebar-shadow: 12px 0 40px rgba(30, 75, 89, 0.08);
-  --studio-workspace-glow: radial-gradient(circle at 62% 0%, rgba(72, 178, 202, 0.1), transparent 34%);
-  --studio-home-shadow: 0 24px 70px rgba(28, 69, 82, 0.12), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
-  color-scheme: light;
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
-  background: var(--studio-shell-background);
-}
-
-.dark .studio-gradient-shell {
-  --background: #080b0e;
-  --foreground: #f4f2ec;
-  --card: #111519;
-  --card-foreground: #f4f2ec;
-  --popover: #15191d;
-  --popover-foreground: #f4f2ec;
-  --primary: #f6f3ea;
-  --primary-foreground: #0a0c0f;
-  --secondary: #1b2025;
-  --secondary-foreground: #f4f2ec;
-  --muted: #171c21;
-  --muted-foreground: #a6adb5;
-  --accent: #252d33;
-  --accent-foreground: #f4f2ec;
-  --destructive: #ff817b;
-  --destructive-foreground: #260d0b;
-  --success: #91e3bd;
-  --border: rgba(232, 240, 246, 0.14);
-  --input: rgba(232, 240, 246, 0.2);
-  --ring: #a8e4f2;
-  --studio-accent: #dcecc7;
-  --studio-accent-foreground: #0a0c0f;
-  --studio-warn: #ffad8d;
-  --sidebar: #0c1014;
-  --sidebar-foreground: #f4f2ec;
-  --sidebar-primary: #dcecc7;
-  --sidebar-primary-foreground: #0a0c0f;
-  --sidebar-accent: #1a2329;
-  --sidebar-accent-foreground: #f4f2ec;
-  --sidebar-border: rgba(232, 240, 246, 0.12);
-  --sidebar-ring: #a8e4f2;
-  --studio-shell-background: radial-gradient(circle at 48% -18%, rgba(42, 132, 190, 0.2), transparent 38%), radial-gradient(circle at 91% 16%, rgba(255, 133, 99, 0.1), transparent 28%), var(--background);
-  --studio-home-background: radial-gradient(circle at 52% -12%, rgba(42, 132, 190, 0.22), transparent 37%), radial-gradient(circle at 7% 20%, rgba(255, 155, 126, 0.08), transparent 24%), var(--background);
-  --studio-topbar-background: linear-gradient(180deg, rgba(11, 15, 19, 0.94), rgba(11, 15, 19, 0.78));
-  --studio-sidebar-background: rgba(10, 14, 18, 0.94);
-  --studio-shortcut-background: rgba(17, 21, 25, 0.78);
-  --studio-shortcut-hover: rgba(29, 37, 43, 0.9);
-  --studio-tab-active: #29343b;
-  --studio-surface-background: linear-gradient(145deg, rgba(19, 24, 28, 0.96), rgba(13, 17, 20, 0.94));
-  --studio-surface-shadow: 0 18px 54px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  --studio-surface-hover-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 28px rgba(123, 211, 235, 0.07);
-  --studio-control-background: rgba(23, 29, 34, 0.82);
-  --studio-control-hover: rgba(36, 44, 50, 0.92);
-  --studio-segmented-background: rgba(15, 20, 24, 0.9);
-  --studio-segmented-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  --studio-notice-background: rgba(22, 28, 32, 0.86);
-  --studio-modal-background: linear-gradient(145deg, #161b1f, #0d1114);
-  --studio-modal-shadow: 0 28px 80px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --studio-backdrop: rgba(0, 0, 0, 0.64);
-  --studio-topbar-shadow: 0 1px 0 rgba(255, 255, 255, 0.035), 0 12px 32px rgba(0, 0, 0, 0.16);
-  --studio-sidebar-shadow: 12px 0 40px rgba(0, 0, 0, 0.16);
-  --studio-workspace-glow: radial-gradient(circle at 62% 0%, rgba(111, 195, 222, 0.06), transparent 34%);
-  --studio-home-shadow: 0 24px 70px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
-  color-scheme: dark;
-}
-
-.studio-gradient-shell main {
+.studio-app-shell main {
   background: transparent;
 }
 
-.studio-gradient-shell .studio-home {
-  --background: inherit;
-  --foreground: inherit;
-  --card: inherit;
-  --card-foreground: inherit;
-  --popover: inherit;
-  --popover-foreground: inherit;
-  --primary: inherit;
-  --primary-foreground: inherit;
-  --secondary: inherit;
-  --secondary-foreground: inherit;
-  --muted: inherit;
-  --muted-foreground: inherit;
-  --accent: inherit;
-  --accent-foreground: inherit;
-  --border: inherit;
-  --input: inherit;
-  --ring: inherit;
-  --studio-home-shadow: inherit;
-  color-scheme: inherit;
-  background: var(--studio-home-background);
+/* 环境光：极轻、可关闭。单独一个 fixed 装饰层，
+   不参与内容布局，也不影响任何浮层定位。 */
+.studio-app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--lg-ambient);
+  opacity: var(--lg-ambient-opacity);
+  transition: opacity var(--lg-dur-slow) var(--lg-ease-out);
 }
 
-.studio-gradient-shell .studio-home-prompt {
-  border-color: transparent;
-  background: linear-gradient(var(--card), var(--card)) padding-box, var(--studio-gradient-accent) border-box;
-  box-shadow: var(--studio-home-shadow);
+@media (prefers-reduced-motion: reduce) {
+  .studio-app-shell::before { transition: none; }
 }
 
-.studio-gradient-shell .studio-home-prompt:focus-within {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent), var(--studio-home-shadow);
+/* --------------------------------------------------------------------------
+   表面映射
+   -------------------------------------------------------------------------- */
+
+@layer components {
+  /* 普通卡片 / 面板：默认**实心**，保证文字与表单对比度。
+     需要玻璃质感处由 `.lg-glass` 显式声明。 */
+  .studio-surface {
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--radius-lg);
+    background: var(--lg-pane-bg);
+    box-shadow: var(--lg-shadow-1);
+  }
+
+  .studio-surface-interactive {
+    transition:
+      border-color var(--lg-dur-base) var(--lg-ease-out),
+      box-shadow var(--lg-dur-base) var(--lg-ease-out),
+      transform var(--lg-dur-base) var(--lg-ease-out),
+      background-color var(--lg-dur-base) var(--lg-ease-out);
+  }
+
+  .studio-surface-interactive:hover {
+    border-color: color-mix(in srgb, var(--studio-accent) 26%, var(--lg-edge));
+    box-shadow: var(--lg-shadow-2);
+    transform: translateY(-2px);
+  }
+
+  /* 表单控件：内凹表面，聚焦时用双层环表达。 */
+  .studio-field {
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 1px 2px rgba(24, 24, 27, 0.04);
+  }
+
+  .dark .studio-field {
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .studio-field:focus,
+  .studio-field:focus-within {
+    border-color: color-mix(in srgb, var(--studio-accent) 55%, var(--lg-edge));
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--studio-accent) 14%, transparent),
+      inset 0 1px 2px rgba(24, 24, 27, 0.03);
+  }
+
+  /* 浮层容器：最重的玻璃与阴影，与背景明确分层。 */
+  .studio-modal-surface {
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--lg-shadow-4), var(--lg-shadow-inset-top);
+  }
+
+  .studio-modal-backdrop,
+  .studio-sidepanel-backdrop {
+    background-color: color-mix(in srgb, #05060a 46%, transparent);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+
+  .studio-sidepanel {
+    border-left: 1px solid var(--lg-edge);
+    box-shadow: var(--lg-shadow-4);
+  }
+
+  .studio-notice {
+    border-radius: var(--radius-md);
+    box-shadow: var(--lg-shadow-1);
+  }
+
+  .studio-empty-state {
+    min-height: 220px;
+    border-radius: var(--radius-xl);
+    background: color-mix(in srgb, var(--lg-pane-bg) 72%, transparent);
+  }
+
+  .studio-key-value {
+    border-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+  }
+
+  .studio-segmented {
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--muted) 78%, transparent);
+    box-shadow: inset 0 1px 2px rgba(24, 24, 27, 0.04);
+  }
+
+  .dark .studio-segmented {
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .studio-segmented > span {
+    border-radius: calc(var(--radius-md) - 3px);
+    background: var(--lg-pane-bg);
+    box-shadow: var(--lg-shadow-2);
+  }
+
+  .studio-control {
+    border-radius: var(--radius-md);
+    transition:
+      background-color var(--lg-dur-base) var(--lg-ease-out),
+      border-color var(--lg-dur-base) var(--lg-ease-out),
+      box-shadow var(--lg-dur-base) var(--lg-ease-out),
+      transform var(--lg-dur-fast) var(--lg-ease-out),
+      opacity var(--lg-dur-base) var(--lg-ease-out);
+  }
+
+  .studio-control:not(:disabled):active {
+    transform: translateY(1px);
+  }
+
+  /* 玻璃按钮：浮层、工具条与创作输入区里的操作。 */
+  .lg-button-glass {
+    border: 1px solid var(--lg-edge);
+    border-radius: var(--radius-md);
+    background: var(--lg-glass-soft);
+    box-shadow: var(--lg-shadow-1), var(--lg-shadow-inset-top);
+    -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+    backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+    transition:
+      background-color var(--lg-dur-base) var(--lg-ease-out),
+      border-color var(--lg-dur-base) var(--lg-ease-out),
+      box-shadow var(--lg-dur-base) var(--lg-ease-out),
+      transform var(--lg-dur-fast) var(--lg-ease-out);
+  }
+
+  .lg-button-glass:not(:disabled):hover {
+    background: var(--lg-glass-base);
+    border-color: var(--lg-edge-strong);
+    box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
+  }
+
+  .lg-button-glass:not(:disabled):active {
+    transform: translateY(1px);
+    box-shadow: var(--lg-shadow-1);
+  }
 }
 
-.studio-gradient-shell .studio-home-shortcut {
-  border-color: var(--border);
-  background: var(--studio-shortcut-background);
-  box-shadow: var(--studio-surface-shadow);
-  backdrop-filter: blur(16px) saturate(125%);
-  transform: translateY(2px);
-  transition: transform 180ms ease-out, border-color 150ms ease, background-color 150ms ease;
+@media (prefers-reduced-transparency: reduce) {
+  .lg-button-glass,
+  .lg-glass,
+  .lg-glass-bar,
+  .lg-glass-overlay,
+  .studio-topbar,
+  .studio-sidebar,
+  .studio-mobile-nav aside,
+  .studio-home-prompt,
+  .studio-home-shortcut,
+  .studio-modal-backdrop,
+  .studio-sidepanel-backdrop {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .lg-button-glass,
+  .lg-glass,
+  .lg-glass-bar,
+  .lg-glass-overlay,
+  .studio-topbar,
+  .studio-sidebar,
+  .studio-mobile-nav aside,
+  .studio-home-prompt,
+  .studio-home-shortcut {
+    background: var(--lg-pane-bg) !important;
+  }
 }
 
-.studio-gradient-shell .studio-home-shortcut:hover {
-  border-color: color-mix(in srgb, var(--ring) 42%, var(--border));
-  background: var(--studio-shortcut-hover);
-  transform: translateY(0);
+@media (prefers-reduced-motion: reduce) {
+  .studio-surface-interactive,
+  .studio-control,
+  .lg-button-glass { transition: none; }
+  .studio-surface-interactive:hover { transform: none; }
+  .studio-control:not(:disabled):active,
+  .lg-button-glass:not(:disabled):active { transform: none; }
 }
 
-.studio-gradient-shell .studio-home [role='tab'][aria-selected='true'] {
-  background: var(--studio-tab-active);
-  box-shadow: var(--studio-segmented-shadow);
+/* --------------------------------------------------------------------------
+   导航：顶栏与侧栏是长期驻留的大面积表面 → 较轻的模糊 + 明确边界。
+   定位（sticky / fixed）仍由组件声明，这里不改，避免破坏包含块。
+   -------------------------------------------------------------------------- */
+
+.studio-topbar {
+  background: var(--lg-glass-strong);
+  border-bottom: 1px solid var(--lg-edge);
+  box-shadow: 0 1px 0 var(--lg-highlight-soft), 0 8px 24px rgba(24, 24, 27, 0.05);
+  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
 }
 
-.studio-gradient-shell .studio-home form button[type='submit'] {
-  background: var(--studio-gradient-accent);
-  color: #0b1013;
-  box-shadow: 0 10px 28px rgba(135, 218, 223, 0.16), 0 1px 0 rgba(255, 255, 255, 0.36) inset;
+.dark .studio-topbar {
+  box-shadow: 0 1px 0 var(--lg-highlight-soft), 0 8px 24px rgba(0, 0, 0, 0.36);
 }
 
-.studio-gradient-shell .studio-home form button[type='submit']:hover {
-  opacity: 1;
-  filter: brightness(1.06) saturate(1.04);
+.studio-sidebar,
+.studio-mobile-nav aside {
+  background: color-mix(in srgb, var(--sidebar) 84%, transparent);
+  border-color: var(--lg-edge);
+  box-shadow: 1px 0 0 var(--lg-highlight-soft);
+  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
 }
 
-.studio-gradient-shell .studio-home .group > span.relative {
-  border-color: var(--border);
+.studio-nav-item {
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--lg-dur-base) var(--lg-ease-out),
+    color var(--lg-dur-base) var(--lg-ease-out),
+    box-shadow var(--lg-dur-base) var(--lg-ease-out);
 }
 
-.studio-gradient-shell .studio-page-header {
+.studio-nav-item:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.studio-nav-item[data-active='true'] {
+  background: color-mix(in srgb, var(--studio-accent) 14%, transparent);
+  color: var(--studio-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--studio-accent) 22%, transparent);
+}
+
+.studio-nav-item[data-active='true']:hover {
+  background: color-mix(in srgb, var(--studio-accent) 18%, transparent);
+}
+
+/* 顶栏与侧栏内的小控件：中性叠加，避免彩色噪点。 */
+.studio-topbar button:hover,
+.studio-sidebar button:hover,
+.studio-mobile-nav button:hover {
+  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   页面排版：统一标题层级与留白节奏。
+   -------------------------------------------------------------------------- */
+
+.studio-page-header {
   border-bottom: 0;
   padding-bottom: 0;
+  gap: var(--lg-gap-3);
 }
 
-.studio-gradient-shell .studio-page-header h1 {
-  font-size: clamp(1.5rem, 2vw, 2rem);
-  letter-spacing: -0.04em;
+.studio-page-header h1 {
+  font-size: clamp(1.375rem, 1.6vw, 1.75rem);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
 }
 
-.studio-gradient-shell .studio-page-header p,
-.studio-gradient-shell .studio-section-heading p {
+.studio-page-header p {
   color: var(--muted-foreground);
+  max-width: 62ch;
 }
 
-.studio-gradient-shell .studio-section-heading h2 {
+.studio-section-heading h2 {
   letter-spacing: -0.02em;
 }
 
-.studio-gradient-shell .studio-empty-state {
-  min-height: 220px;
-  border-radius: 16px;
-  background: var(--studio-shortcut-background);
+.studio-workspace-shell {
+  gap: var(--lg-gap-5);
 }
 
-.studio-gradient-shell .studio-home-prompt,
-.studio-gradient-shell .studio-surface,
-.studio-gradient-shell .studio-empty-state,
-.studio-gradient-shell .studio-notice,
-.studio-gradient-shell .studio-modal-surface,
-.studio-gradient-shell .studio-sidepanel {
-  font-family: inherit;
-}
-
-.studio-gradient-shell .studio-topbar {
-  background: var(--studio-topbar-background);
-  border-bottom-color: var(--border);
-  box-shadow: var(--studio-topbar-shadow);
-  backdrop-filter: blur(20px) saturate(130%);
-}
-
-.studio-gradient-shell .studio-sidebar,
-.studio-gradient-shell .studio-mobile-nav aside {
-  background: var(--studio-sidebar-background);
-  border-color: var(--sidebar-border);
-  box-shadow: var(--studio-sidebar-shadow);
-  backdrop-filter: blur(20px) saturate(130%);
-}
-
-.studio-gradient-shell .studio-sidebar .studio-nav-item,
-.studio-gradient-shell .studio-mobile-nav .studio-nav-item {
-  border-radius: 10px;
-}
-
-.studio-gradient-shell .studio-sidebar .studio-nav-item[data-active='true'],
-.studio-gradient-shell .studio-mobile-nav .studio-nav-item[data-active='true'] {
-  background: linear-gradient(100deg, rgba(255, 155, 126, 0.12), rgba(132, 207, 255, 0.13));
-  color: var(--foreground);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ring) 18%, transparent);
-}
-
-.studio-gradient-shell .studio-workspace-shell {
-  gap: 18px;
-  background: var(--studio-workspace-glow);
-}
-
-.studio-gradient-shell .studio-workspace-shell > div {
-  gap: 18px;
-}
-
-.studio-gradient-shell .studio-surface {
-  border-color: var(--border);
-  border-radius: 14px;
-  background: var(--studio-surface-background);
-  box-shadow: var(--studio-surface-shadow);
-  backdrop-filter: blur(18px) saturate(125%);
-}
-
-.studio-gradient-shell .studio-surface-interactive:hover {
-  border-color: color-mix(in srgb, var(--ring) 42%, var(--border));
-  box-shadow: var(--studio-surface-hover-shadow);
-  transform: translateY(-2px);
-}
-
-.studio-gradient-shell .studio-control {
-  border-radius: 10px;
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 7px 18px color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.studio-gradient-shell .studio-control.border-foreground {
-  border-width: 0 !important;
-  background: var(--studio-gradient-accent) !important;
-  color: #0b1013;
-  filter: none;
-  box-shadow: 0 8px 24px rgba(135, 218, 223, 0.13);
-}
-
-.studio-gradient-shell .studio-control.border-foreground:hover {
-  background: var(--studio-gradient-accent);
-  filter: none;
-  box-shadow: 0 10px 28px rgba(135, 218, 223, 0.2);
-}
-
-.studio-gradient-shell .studio-control.border-border.bg-card {
-  background: var(--studio-control-background);
-  border-color: var(--border);
-}
-
-.studio-gradient-shell .studio-control.border-border.bg-card:hover {
-  background: var(--studio-control-hover);
-}
-
-.studio-gradient-shell .studio-field,
-.studio-gradient-shell .studio-search-field,
-.studio-gradient-shell .studio-select {
-  border-radius: 10px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 4%, transparent), 0 1px 2px color-mix(in srgb, var(--foreground) 9%, transparent);
-}
-
-.studio-gradient-shell .studio-field:focus,
-.studio-gradient-shell .studio-search-field:focus-within,
-.studio-gradient-shell .studio-select:focus {
-  border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 12%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--foreground) 5%, transparent);
-}
-
-.studio-gradient-shell textarea.studio-field {
-  border: 1px solid transparent;
-  background: linear-gradient(var(--card), var(--card)) padding-box, var(--studio-gradient-accent) border-box;
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--foreground) 12%, transparent), inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent);
-}
-
-.studio-gradient-shell .studio-segmented {
-  border-color: var(--border);
-  border-radius: 10px;
-  background: var(--studio-segmented-background);
-  box-shadow: var(--studio-segmented-shadow);
-}
-
-.studio-gradient-shell .studio-segmented > span {
-  border-radius: 8px;
-  background: var(--studio-tab-active);
-  box-shadow: var(--studio-segmented-shadow);
-}
-
-.studio-gradient-shell .studio-segmented button[aria-selected='true'] {
-  color: var(--foreground);
-}
-
-.studio-gradient-shell .studio-status-badge {
-  border-color: color-mix(in srgb, currentColor 32%, transparent);
-  background: color-mix(in srgb, currentColor 10%, var(--card));
-}
-
-.studio-gradient-shell .studio-status-badge[data-solid='true'] {
-  background: var(--card);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
-}
-
-.studio-gradient-shell .studio-notice {
-  border-radius: 12px;
-  background: var(--studio-notice-background);
-  box-shadow: 0 10px 28px color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.studio-gradient-shell .studio-modal-surface,
-.studio-gradient-shell .studio-sidepanel {
-  border-color: var(--border);
-  background: var(--studio-modal-background) !important;
-  box-shadow: var(--studio-modal-shadow);
-}
-
-.studio-gradient-shell .studio-modal-backdrop,
-.studio-gradient-shell .studio-sidepanel-backdrop {
-  background-color: var(--studio-backdrop);
-}
-
-.studio-gradient-shell .studio-key-value {
-  border-color: color-mix(in srgb, var(--foreground) 10%, transparent);
-}
-
-.studio-gradient-shell .studio-waiting.bg-studio-accent {
-  background: var(--studio-gradient-accent);
+.studio-workspace-shell > div {
+  gap: var(--lg-gap-5);
 }
 
 @media (max-width: 767px) {
-  .studio-gradient-shell .studio-workspace-shell {
-    gap: 14px;
+  .studio-page-header h1 {
+    font-size: 1.3125rem;
   }
 
-  .studio-gradient-shell .studio-workspace-shell > div {
-    gap: 14px;
+  .studio-workspace-shell,
+  .studio-workspace-shell > div {
+    gap: var(--lg-gap-4);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   首页创作区：玻璃输入台 + 玻璃快捷项 + 品牌强调色提交按钮。
+   只改视觉，不改任何表单结构或提交行为。
+   -------------------------------------------------------------------------- */
+
+.studio-home {
+  background: transparent;
+}
+
+.studio-home-prompt {
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--radius-2xl);
+  background: var(--lg-glass-strong);
+  box-shadow: var(--lg-shadow-3), var(--lg-shadow-inset-top);
+  -webkit-backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
+  transition: box-shadow var(--lg-dur-slow) var(--lg-ease-out), border-color var(--lg-dur-base) var(--lg-ease-out);
+}
+
+.studio-home-prompt:focus-within {
+  border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--lg-edge));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--studio-accent) 13%, transparent),
+    var(--lg-shadow-3);
+}
+
+.studio-home-shortcut {
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--radius-lg);
+  background: var(--lg-glass-soft);
+  box-shadow: var(--lg-shadow-1), var(--lg-shadow-inset-top);
+  -webkit-backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
+  transition:
+    transform var(--lg-dur-base) var(--lg-ease-out),
+    border-color var(--lg-dur-base) var(--lg-ease-out),
+    background-color var(--lg-dur-base) var(--lg-ease-out),
+    box-shadow var(--lg-dur-base) var(--lg-ease-out);
+}
+
+.studio-home-shortcut:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 34%, var(--lg-edge));
+  background: var(--lg-glass-base);
+  box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
+  transform: translateY(-2px);
+}
+
+.studio-home [role='tab'][aria-selected='true'] {
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  box-shadow: inset 0 1px 0 var(--lg-highlight-soft);
+}
+
+.studio-home form button[type='submit'] {
+  background: var(--studio-accent);
+  color: var(--studio-accent-foreground);
+  box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
+}
+
+.studio-home form button[type='submit']:hover {
+  opacity: 1;
+  filter: brightness(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-home-prompt { transition: none; }
+  .studio-home-shortcut { transition: none; }
+  .studio-home-shortcut:hover { transform: none; }
+}
+
+/* --------------------------------------------------------------------------
+   界面质感偏好：`data-studio-skin="minimal"` 表示"减少透明"，
+   把玻璃表面退化为实心并关闭环境光。这是**真实生效**的设置项，
+   与系统级 `prefers-reduced-transparency` 走同一条退化路径。
+   -------------------------------------------------------------------------- */
+
+.studio-app-shell[data-studio-skin='minimal'] {
+  --lg-ambient-opacity: 0;
+  --lg-glass-strong: var(--lg-pane-bg);
+  --lg-glass-base: var(--lg-pane-bg);
+  --lg-glass-soft: var(--lg-pane-bg-soft);
+  --lg-glass-quiet: var(--lg-pane-bg-soft);
+}
+
+.studio-app-shell[data-studio-skin='minimal'] .lg-glass,
+.studio-app-shell[data-studio-skin='minimal'] .lg-glass-bar,
+.studio-app-shell[data-studio-skin='minimal'] .lg-glass-overlay,
+.studio-app-shell[data-studio-skin='minimal'] .lg-button-glass,
+.studio-app-shell[data-studio-skin='minimal'] .studio-topbar,
+.studio-app-shell[data-studio-skin='minimal'] .studio-sidebar,
+.studio-app-shell[data-studio-skin='minimal'] .studio-mobile-nav aside,
+.studio-app-shell[data-studio-skin='minimal'] .studio-home-prompt,
+.studio-app-shell[data-studio-skin='minimal'] .studio-home-shortcut,
+.studio-app-shell[data-studio-skin='minimal'] .studio-modal-backdrop,
+.studio-app-shell[data-studio-skin='minimal'] .studio-sidepanel-backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* --------------------------------------------------------------------------
+   管理后台：独立控制台，可扫描、可比较优先。
+   -------------------------------------------------------------------------- */
+
+.admin-console {
+  background: var(--background);
+}
+
+.admin-console .admin-topbar {
+  background: var(--lg-glass-strong);
+  border-bottom: 1px solid var(--lg-edge);
+  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+}
+
+.admin-console .admin-sidebar {
+  background: color-mix(in srgb, var(--sidebar) 86%, transparent);
+  border-right: 1px solid var(--lg-edge);
+  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+}
+
+/* 后台表格：保持高密度与可比较性，表头吸顶但**不做玻璃化**。 */
+.admin-table-scroll {
+  border-radius: var(--radius-lg);
+}
+
+.admin-table-scroll table > thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--muted) 96%, transparent);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .admin-console .admin-topbar,
+  .admin-console .admin-sidebar {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--lg-pane-bg) !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   画布：React Flow 工作区**绝不**加模糊，只为工具条与浮动面板提供玻璃表面。
+   -------------------------------------------------------------------------- */
+
+.studio-flow .react-flow__controls {
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--lg-shadow-2);
+}
+
+.studio-flow .react-flow__controls-button {
+  background: var(--lg-glass-strong);
+  border-bottom-color: var(--lg-edge);
+  fill: var(--foreground);
+  color: var(--foreground);
+}
+
+.studio-flow .react-flow__minimap {
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.studio-flow .react-flow__handle {
+  z-index: 3;
+}
+
+/* React Flow 自带的右下角署名链接默认是浅灰 #999，压在深色画布上只有 1.3:1（实测）。
+   提高其对比度；保留链接本身（不隐藏署名）。 */
+.studio-flow .react-flow__attribution {
+  background: transparent;
+}
+
+.studio-flow .react-flow__attribution a {
+  color: var(--studio-ink-muted);
+  font-size: 10px;
+}
+
+.studio-flow .react-flow__attribution a:hover {
+  color: var(--studio-ink-foreground);
+}
+
+/* 画布工具条：玻璃表面，位于画布之上但不模糊画布内容。 */
+.canvas-toolbar {
+  background: var(--lg-glass-strong);
+  border-bottom: 1px solid var(--lg-edge);
+  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+}
+
+/*
+  画布上的浮动面板（节点属性等）。
+  它悬浮在**深色画布工作区**之上，若沿用浅色主题的 `--muted-foreground`，
+  标签文字会落在深色画布上只有 2.2:1（实测像素值），远低于 WCAG AA。
+  因此这里给它一套**局部深色令牌**：无论应用主题是浅还是深，
+  浮在深色画布上的面板都按深色表面渲染，保证可读性。
+*/
+.canvas-float-panel {
+  --background: #16171b;
+  --foreground: #f4f4f5;
+  --card: #1b1c21;
+  --popover: #1b1c21;
+  --popover-foreground: #f4f4f5;
+  --muted: #26272c;
+  --muted-foreground: #b9b9c0;
+  --secondary: #26272c;
+  --secondary-foreground: #f4f4f5;
+  --accent: #26272c;
+  --accent-foreground: #f4f4f5;
+  --border: rgba(244, 244, 245, 0.16);
+  --input: rgba(244, 244, 245, 0.22);
+  --studio-accent: #f4f4f5;
+  --studio-accent-foreground: #16171b;
+  --lg-glass-base: rgba(26, 27, 32, 0.82);
+  --lg-glass-strong: rgba(26, 27, 32, 0.9);
+  --lg-edge: rgba(244, 244, 245, 0.16);
+  --lg-highlight: rgba(255, 255, 255, 0.1);
+  --lg-highlight-soft: rgba(255, 255, 255, 0.06);
+  --lg-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --lg-shadow-2: 0 8px 26px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* 画布上的浮动控件（缩放条、缩略图）与深色工作区保持一致。 */
+.canvas-float-controls {
+  --foreground: #f4f4f5;
+  --muted-foreground: #b9b9c0;
+  --card: #1b1c21;
+  --border: rgba(244, 244, 245, 0.16);
+  --lg-glass-strong: rgba(26, 27, 32, 0.9);
+  --lg-edge: rgba(244, 244, 245, 0.16);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .canvas-toolbar {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--lg-pane-bg) !important;
+  }
+}
+
+/* ==========================================================================
+   OAO 无限画布编辑器
+   --------------------------------------------------------------------------
+   画布编辑器是独立的沉浸式工作区：黑色无限平面、左侧工作区轨道、
+   顶部项目状态、底部工具岛与右下角 Agent。它不复用普通工作台的浅色顶栏，
+   但节点、项目同步和 Agent 仍然使用同一套业务状态。
+   ========================================================================== */
+.oao-canvas-route { color-scheme: dark; }
+.oao-canvas-editor {
+  --canvas-ink: #f4f7f8;
+  --canvas-muted: rgba(224, 232, 235, .58);
+  --canvas-dim: rgba(224, 232, 235, .34);
+  --canvas-surface: rgba(23, 27, 30, .92);
+  --canvas-surface-soft: rgba(23, 27, 30, .76);
+  --canvas-border: rgba(235, 243, 246, .13);
+  --canvas-border-strong: rgba(235, 243, 246, .22);
+  --canvas-accent: #c7f3e8;
+  --canvas-accent-strong: #83dfcc;
+  color: var(--canvas-ink);
+  background: #050607;
+  isolation: isolate;
+}
+.oao-canvas-rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  display: flex;
+  width: 64px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-right: 1px solid rgb(240 246 248 / 9%);
+  background: rgb(12 15 17 / 74%);
+  padding: 14px 8px 12px;
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+.oao-canvas-rail-divider { width: 32px; height: 1px; margin: 3px 0 2px; background: rgb(240 246 248 / 10%); }
+.oao-canvas-rail-button {
+  display: flex;
+  width: 48px;
+  min-height: 48px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  color: var(--canvas-muted);
+  font-size: 10px;
+  line-height: 1;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+.oao-canvas-rail-button svg { width: 18px; height: 18px; stroke-width: 1.65; }
+.oao-canvas-rail-button:hover,
+.oao-canvas-rail-button:focus-visible { border-color: var(--canvas-border); background: rgb(255 255 255 / 8%); color: var(--canvas-ink); outline: none; }
+.oao-canvas-rail-button.is-active { border-color: rgb(199 243 232 / 28%); background: rgb(199 243 232 / 13%); color: var(--canvas-accent); box-shadow: inset 0 0 0 1px rgb(199 243 232 / 6%); }
+.oao-canvas-rail-button:active { transform: scale(.96); }
+.oao-canvas-topbar {
+  position: absolute;
+  inset: 12px 20px auto 80px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+.oao-canvas-topbar > * { pointer-events: auto; }
+.oao-canvas-topbar-leading,
+.oao-canvas-topbar-actions,
+.oao-canvas-project-pill,
+.oao-canvas-credit-pill,
+.oao-canvas-topbar-menu {
+  display: inline-flex;
+  align-items: center;
+}
+.oao-canvas-topbar-leading,
+.oao-canvas-topbar-actions { gap: 6px; }
+.oao-canvas-topbar-menu,
+.oao-canvas-project-pill,
+.oao-canvas-credit-pill {
+  min-height: 42px;
+  border: 1px solid var(--canvas-border);
+  background: var(--canvas-surface-soft);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 7%);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(130%);
+}
+.oao-canvas-topbar-menu { width: 42px; justify-content: center; border-radius: 14px; color: var(--canvas-muted); }
+.oao-canvas-topbar-menu:hover { color: var(--canvas-ink); background: rgb(255 255 255 / 10%); }
+.oao-canvas-topbar-menu svg { width: 18px; height: 18px; }
+.oao-canvas-project-pill { min-width: 0; max-width: min(480px, 48vw); gap: 10px; border-radius: 14px; padding: 0 15px; color: var(--canvas-ink); text-decoration: none; }
+.oao-canvas-project-pill:hover { border-color: var(--canvas-border-strong); }
+.oao-canvas-project-kind { color: var(--canvas-dim); font-size: 11px; }
+.oao-canvas-project-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 650; }
+.oao-canvas-save-badge { min-height: 26px; border-color: var(--canvas-border) !important; background: rgb(23 27 30 / 74%) !important; color: var(--canvas-muted) !important; }
+.oao-canvas-status-dot { width: 5px; height: 5px; border-radius: 999px; background: var(--canvas-accent-strong); box-shadow: 0 0 10px rgb(131 223 204 / 65%); }
+.oao-canvas-topbar-actions { border: 1px solid var(--canvas-border); border-radius: 15px; background: var(--canvas-surface-soft); padding: 3px; box-shadow: 0 14px 34px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 7%); -webkit-backdrop-filter: blur(22px) saturate(130%); backdrop-filter: blur(22px) saturate(130%); }
+.oao-canvas-topbar-actions .studio-icon-action { color: var(--canvas-muted); }
+.oao-canvas-topbar-actions .studio-icon-action:hover { background: rgb(255 255 255 / 9%); color: var(--canvas-ink); }
+.oao-canvas-topbar-actions .studio-icon-action svg { width: 16px; height: 16px; }
+.oao-canvas-credit-pill { min-height: 32px; gap: 5px; border-radius: 10px; padding: 0 9px; color: var(--canvas-accent); font-size: 11px; font-variant-numeric: tabular-nums; text-decoration: none; }
+.oao-canvas-credit-pill svg { width: 13px; height: 13px; }
+.oao-canvas-stage { position: absolute; inset: 0; min-width: 0; overflow: hidden; background: #050607; }
+.oao-canvas-stage::after { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(circle at 68% 44%, rgb(88 115 120 / 6%), transparent 40%), radial-gradient(circle at 10% 90%, rgb(103 154 141 / 4%), transparent 32%); content: ''; }
+.oao-canvas-flow { position: absolute; inset: 0; z-index: 0; background: #050607; }
+.oao-canvas-editor .react-flow__renderer { background: #050607; }
+.oao-canvas-node { border-color: rgb(228 239 242 / 17%); background: rgb(25 29 31 / 96%); color: var(--canvas-ink); transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.oao-canvas-node:hover { border-color: rgb(228 239 242 / 31%); }
+.oao-canvas-node.is-selected { border-color: rgb(199 243 232 / 72%); box-shadow: 0 0 0 1px rgb(199 243 232 / 30%), 0 22px 44px rgb(0 0 0 / 44%); }
+.oao-canvas-node-header { border-color: rgb(228 239 242 / 12%); background: rgb(255 255 255 / 4%); }
+.oao-canvas-node-icon { background: rgb(199 243 232 / 10%); color: var(--canvas-accent); }
+.oao-canvas-node-copy { color: var(--canvas-muted); }
+.oao-canvas-node-meta { border-top: 1px solid rgb(228 239 242 / 10%); color: var(--canvas-dim); }
+.oao-canvas-node-status { border: 1px solid rgb(199 243 232 / 24%); border-radius: 999px; background: rgb(199 243 232 / 9%); padding: 2px 6px; color: var(--canvas-accent); font-size: 9px; white-space: nowrap; }
+.oao-canvas-editor .react-flow__pane { cursor: grab; }
+.oao-canvas-editor .react-flow__pane:active { cursor: grabbing; }
+.oao-canvas-editor .react-flow__edge-path { stroke: rgb(183 203 207 / 42%); stroke-width: 1.35; }
+.oao-canvas-editor .react-flow__edge.selected .react-flow__edge-path { stroke: var(--canvas-accent-strong); }
+.oao-canvas-editor .react-flow__controls,
+.oao-canvas-editor .react-flow__attribution { display: none; }
+.oao-canvas-editor .react-flow__minimap { right: 18px; bottom: 88px; border: 1px solid var(--canvas-border); border-radius: 13px; background: rgb(16 20 22 / 84%); box-shadow: 0 14px 30px rgb(0 0 0 / 24%); overflow: hidden; }
+.oao-canvas-workspace-panel,
+.oao-canvas-agent-panel,
+.oao-canvas-inspector,
+.oao-canvas-generation-panel {
+  border: 1px solid var(--canvas-border-strong);
+  background: rgb(18 22 24 / 92%);
+  box-shadow: 0 22px 54px rgb(0 0 0 / 36%), inset 0 1px 0 rgb(255 255 255 / 7%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  backdrop-filter: blur(24px) saturate(130%);
+  color: var(--canvas-ink);
+}
+.oao-canvas-workspace-panel { position: absolute; inset: 70px auto 70px 76px; z-index: 25; display: flex; width: 302px; min-height: 0; flex-direction: column; border-radius: 16px; overflow: hidden; }
+.oao-canvas-panel-header,
+.oao-canvas-inspector-header,
+.oao-canvas-agent-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--canvas-border); padding: 13px 14px; }
+.oao-canvas-panel-header h2,
+.oao-canvas-inspector-header h2,
+.oao-canvas-agent-header h2 { margin: 2px 0 0; font-size: 14px; font-weight: 680; }
+.oao-canvas-panel-kicker { color: var(--canvas-dim); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.oao-canvas-panel-header .studio-icon-action,
+.oao-canvas-inspector-header .studio-icon-action,
+.oao-canvas-agent-header .studio-icon-action { color: var(--canvas-muted); }
+.oao-canvas-panel-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; border-bottom: 1px solid var(--canvas-border); padding: 7px; }
+.oao-canvas-panel-tab { display: inline-flex; min-width: 0; flex-direction: column; align-items: center; gap: 4px; border: 1px solid transparent; border-radius: 9px; padding: 7px 2px; color: var(--canvas-dim); font-size: 10px; }
+.oao-canvas-panel-tab svg { width: 15px; height: 15px; }
+.oao-canvas-panel-tab:hover { color: var(--canvas-ink); background: rgb(255 255 255 / 6%); }
+.oao-canvas-panel-tab.is-active { border-color: rgb(199 243 232 / 20%); background: rgb(199 243 232 / 10%); color: var(--canvas-accent); }
+.oao-canvas-panel-scroll { min-height: 0; flex: 1; overflow-y: auto; padding: 8px; scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 16%) transparent; }
+.oao-canvas-list-row { display: flex; width: 100%; align-items: center; gap: 9px; border: 1px solid transparent; border-radius: 10px; padding: 9px; color: var(--canvas-muted); text-align: left; }
+.oao-canvas-list-row:hover,
+.oao-canvas-list-row.is-active { border-color: rgb(199 243 232 / 19%); background: rgb(199 243 232 / 8%); color: var(--canvas-ink); }
+.oao-canvas-list-row strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; font-size: 11px; font-weight: 620; }
+.oao-canvas-list-row small { display: block; overflow: hidden; margin-top: 3px; color: var(--canvas-dim); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.oao-canvas-list-icon { display: inline-grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border: 1px solid var(--canvas-border); border-radius: 8px; background: rgb(255 255 255 / 5%); color: var(--canvas-accent); }
+.oao-canvas-list-icon svg { width: 14px; height: 14px; }
+.oao-canvas-panel-empty,
+.oao-canvas-history-empty { padding: 34px 18px; color: var(--canvas-dim); font-size: 11px; line-height: 1.7; text-align: center; }
+.oao-canvas-history-empty svg { width: 26px; height: 26px; margin: 0 auto 10px; color: var(--canvas-accent); }
+.oao-canvas-history-empty strong { display: block; color: var(--canvas-ink); font-size: 12px; }
+.oao-canvas-history-empty p { margin-top: 6px; }
+.oao-canvas-inspector { position: absolute; top: 70px; right: 18px; z-index: 22; width: 242px; border-radius: 15px; overflow: hidden; }
+.oao-canvas-inspector-body { display: flex; flex-direction: column; gap: 13px; padding: 13px 14px 14px; }
+.oao-canvas-inspector-body > div { display: flex; flex-direction: column; gap: 4px; }
+.oao-canvas-inspector-body span { color: var(--canvas-dim); font-size: 10px; }
+.oao-canvas-inspector-body strong { overflow: hidden; color: var(--canvas-ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.oao-canvas-inspector-body p { color: var(--canvas-muted); font-size: 11px; line-height: 1.6; }
+.oao-canvas-inspector .studio-control { border-color: var(--canvas-border-strong); background: rgb(255 255 255 / 8%); color: var(--canvas-ink); }
+.oao-canvas-agent-panel {
+  --background: #111619;
+  --foreground: #eff8f6;
+  --card: #192124;
+  --card-foreground: #eff8f6;
+  --muted: #202b2e;
+  --muted-foreground: #a8b8b9;
+  --border: rgba(227, 242, 240, .16);
+  --input: rgba(227, 242, 240, .18);
+  position: absolute;
+  inset: 70px 18px 70px auto;
+  z-index: 27;
+  display: flex;
+  width: min(360px, calc(100vw - 96px));
+  min-height: 0;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.oao-canvas-agent-panel .director-agent { min-height: 0; flex: 1; background: transparent; }
+.oao-canvas-agent-panel .border-border { border-color: var(--canvas-border) !important; }
+.oao-canvas-agent-panel .bg-background { background: rgba(13, 18, 20, .78) !important; }
+.oao-canvas-agent-panel .bg-card,
+.oao-canvas-agent-panel .bg-muted\/40 { background: rgba(28, 36, 39, .74) !important; }
+.oao-canvas-agent-panel .text-foreground { color: var(--canvas-ink) !important; }
+.oao-canvas-agent-panel .text-muted-foreground { color: var(--canvas-muted) !important; }
+.oao-canvas-agent-panel .studio-field { border-color: var(--canvas-border) !important; background: rgba(10, 14, 16, .62) !important; color: var(--canvas-ink) !important; }
+.oao-canvas-agent-panel .studio-control { border-color: var(--canvas-border) !important; background: rgba(255, 255, 255, .07) !important; color: var(--canvas-ink) !important; }
+.oao-canvas-agent-panel .studio-surface { border-color: var(--canvas-border) !important; background: rgba(25, 32, 35, .62) !important; }
+.oao-canvas-generation-panel { position: absolute; inset: 70px 18px 70px auto; z-index: 28; display: flex; width: min(390px, calc(100vw - 96px)); min-height: 0; flex-direction: column; border-radius: 16px; overflow: hidden; }
+.oao-canvas-generation-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--canvas-border); padding: 14px; }
+.oao-canvas-generation-header h2 { margin-top: 3px; font-size: 15px; font-weight: 700; }
+.oao-canvas-generation-scroll { min-height: 0; flex: 1; overflow-y: auto; padding: 13px 14px 16px; scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 16%) transparent; }
+.oao-canvas-generation-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-bottom: 15px; padding: 4px; border: 1px solid var(--canvas-border); border-radius: 12px; background: rgb(255 255 255 / 4%); }
+.oao-canvas-generation-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: 9px; padding: 8px 5px; color: var(--canvas-muted); font-size: 11px; transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease; }
+.oao-canvas-generation-tab svg { width: 14px; height: 14px; }
+.oao-canvas-generation-tab:hover { color: var(--canvas-ink); background: rgb(255 255 255 / 7%); }
+.oao-canvas-generation-tab.is-active { border-color: rgb(199 243 232 / 22%); background: rgb(199 243 232 / 13%); color: var(--canvas-accent); }
+.oao-canvas-generation-field { display: flex; flex-direction: column; gap: 7px; }
+.oao-canvas-generation-field > span,
+.oao-canvas-control-label { color: var(--canvas-muted); font-size: 10px; font-weight: 650; }
+.oao-canvas-generation-field textarea { min-height: 112px; resize: vertical; border: 1px solid var(--canvas-border); border-radius: 12px; background: rgba(7, 10, 11, .48); padding: 11px; color: var(--canvas-ink); font-size: 12px; line-height: 1.7; outline: none; }
+.oao-canvas-generation-field textarea::placeholder { color: var(--canvas-dim); }
+.oao-canvas-generation-field textarea:focus { border-color: rgb(199 243 232 / 44%); box-shadow: 0 0 0 3px rgb(199 243 232 / 9%); }
+.oao-canvas-picker { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 7px; }
+.oao-canvas-glass-select { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--canvas-border); border-radius: 10px; background: rgba(255, 255, 255, .06); padding: 9px 10px; color: var(--canvas-ink); font-size: 11px; text-align: left; transition: border-color 160ms ease, background-color 160ms ease; }
+.oao-canvas-glass-select:hover,
+.oao-canvas-glass-select[aria-expanded='true'] { border-color: rgb(199 243 232 / 38%); background: rgb(199 243 232 / 9%); }
+.oao-canvas-select-menu { position: absolute; top: calc(100% + 6px); right: 0; left: 0; z-index: 60; max-height: 220px; overflow-y: auto; border: 1px solid var(--canvas-border-strong); border-radius: 11px; background: rgba(19, 24, 26, .98); padding: 4px; box-shadow: 0 18px 36px rgb(0 0 0 / 42%); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.oao-canvas-select-option { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border-radius: 8px; padding: 8px; color: var(--canvas-muted); font-size: 11px; text-align: left; }
+.oao-canvas-select-option:hover,
+.oao-canvas-select-option.is-selected { background: rgb(199 243 232 / 11%); color: var(--canvas-ink); }
+.oao-canvas-reference-section { display: flex; flex-direction: column; gap: 9px; border-top: 1px solid var(--canvas-border); padding-top: 13px; }
+.oao-canvas-reference-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.oao-canvas-reference-item { position: relative; min-width: 0; overflow: hidden; border: 1px solid var(--canvas-border); border-radius: 8px; background: rgb(255 255 255 / 4%); padding: 3px; color: var(--canvas-dim); font-size: 9px; text-align: left; }
+.oao-canvas-reference-item:hover,
+.oao-canvas-reference-item.is-selected { border-color: rgb(199 243 232 / 48%); background: rgb(199 243 232 / 10%); color: var(--canvas-ink); }
+.oao-canvas-reference-item > span:last-of-type { display: block; padding: 3px 2px 2px; }
+.oao-canvas-upload-control { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 1px dashed rgb(199 243 232 / 28%); border-radius: 10px; padding: 10px; color: var(--canvas-muted); font-size: 10px; cursor: pointer; }
+.oao-canvas-upload-control:hover { background: rgb(199 243 232 / 7%); color: var(--canvas-ink); }
+.oao-canvas-upload-control input { position: absolute; inset: 0; cursor: pointer; opacity: 0; }
+.oao-canvas-reference-chip { max-width: 100%; overflow: hidden; border: 1px solid var(--canvas-border); border-radius: 999px; padding: 3px 7px; color: var(--canvas-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.oao-canvas-agent-hint { display: flex; gap: 8px; border: 1px solid rgb(199 243 232 / 18%); border-radius: 11px; background: rgb(199 243 232 / 7%); padding: 10px; color: var(--canvas-muted); font-size: 10px; line-height: 1.6; }
+.oao-canvas-agent-hint svg { flex: 0 0 auto; color: var(--canvas-accent); }
+.oao-canvas-generation-error { border: 1px solid rgb(255 157 139 / 30%); border-radius: 9px; background: rgb(255 157 139 / 9%); padding: 8px 9px; color: #ffb4a3; font-size: 10px; line-height: 1.55; }
+.oao-canvas-generation-submit { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--canvas-border); padding-top: 13px; color: var(--canvas-dim); font-size: 10px; }
+.oao-canvas-generation-submit > span { display: inline-flex; min-width: 0; align-items: center; gap: 5px; }
+.oao-canvas-generate-button { display: inline-flex; flex-shrink: 0; align-items: center; gap: 6px; border: 1px solid rgb(199 243 232 / 30%); border-radius: 10px; background: linear-gradient(135deg, rgb(199 243 232 / 94%), rgb(126 198 183 / 94%)); padding: 9px 12px; color: #10201f; font-size: 11px; font-weight: 700; box-shadow: 0 8px 20px rgb(92 177 158 / 18%); }
+.oao-canvas-generate-button:hover { filter: brightness(1.05); }
+.oao-canvas-generate-button:disabled { cursor: not-allowed; opacity: .45; }
+.oao-canvas-context-menu { position: fixed; z-index: 80; display: flex; width: 190px; flex-direction: column; gap: 2px; transform: translate(0, 4px); border: 1px solid var(--canvas-border-strong); border-radius: 12px; background: rgba(18, 23, 25, .97); padding: 6px; box-shadow: 0 20px 44px rgb(0 0 0 / 46%), inset 0 1px 0 rgb(255 255 255 / 7%); -webkit-backdrop-filter: blur(22px) saturate(130%); backdrop-filter: blur(22px) saturate(130%); }
+.oao-canvas-context-title { padding: 5px 8px 6px; color: var(--canvas-dim); font-size: 10px; }
+.oao-canvas-context-menu button { display: flex; align-items: center; gap: 8px; border-radius: 8px; padding: 8px; color: var(--canvas-muted); font-size: 11px; text-align: left; }
+.oao-canvas-context-menu button:hover { background: rgb(199 243 232 / 10%); color: var(--canvas-ink); }
+.oao-canvas-context-menu button.is-danger:hover { background: rgb(255 157 139 / 10%); color: #ffb4a3; }
+.oao-canvas-context-menu button svg { width: 14px; height: 14px; color: var(--canvas-accent); }
+.oao-canvas-context-menu button.is-danger svg { color: #ff9d8b; }
+.oao-canvas-context-divider { height: 1px; margin: 4px 2px; background: var(--canvas-border); }
+.oao-canvas-agent-launcher { position: absolute; right: 22px; bottom: 76px; z-index: 24; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--canvas-muted); font-size: 10px; }
+.oao-canvas-agent-orb { display: grid; width: 52px; height: 52px; place-items: center; border: 1px solid rgb(199 243 232 / 36%); border-radius: 50%; background: radial-gradient(circle at 35% 28%, #d9fff5 0%, #80b6ad 31%, #425c61 70%, #172226 100%); box-shadow: 0 0 0 5px rgb(199 243 232 / 5%), 0 15px 32px rgb(0 0 0 / 40%); color: #10201f; transition: transform 180ms ease, box-shadow 180ms ease; }
+.oao-canvas-agent-orb svg { width: 20px; height: 20px; }
+.oao-canvas-agent-launcher:hover .oao-canvas-agent-orb { transform: translateY(-3px) scale(1.04); box-shadow: 0 0 0 7px rgb(199 243 232 / 8%), 0 18px 38px rgb(0 0 0 / 46%); }
+.oao-canvas-zoom-dock,
+.oao-canvas-dock { position: absolute; z-index: 24; display: inline-flex; align-items: center; border: 1px solid var(--canvas-border); background: rgb(20 24 26 / 88%); box-shadow: 0 14px 30px rgb(0 0 0 / 30%), inset 0 1px 0 rgb(255 255 255 / 7%); -webkit-backdrop-filter: blur(20px) saturate(130%); backdrop-filter: blur(20px) saturate(130%); }
+.oao-canvas-zoom-dock { bottom: 18px; left: 78px; gap: 2px; border-radius: 13px; padding: 3px 5px; color: var(--canvas-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.oao-canvas-zoom-dock .studio-icon-action { color: var(--canvas-muted); }
+.oao-canvas-zoom-dock .studio-icon-action:hover { background: rgb(255 255 255 / 8%); color: var(--canvas-ink); }
+.oao-canvas-zoom-dock .studio-icon-action svg { width: 14px; height: 14px; }
+.oao-canvas-zoom-symbol { display: inline-grid; width: 27px; place-items: center; font-size: 18px; font-weight: 300; }
+.oao-canvas-dock { bottom: 18px; left: 50%; gap: 2px; transform: translateX(-50%); border-radius: 15px; padding: 4px; }
+.oao-canvas-dock-button { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid transparent; border-radius: 9px; color: var(--canvas-muted); transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; }
+.oao-canvas-dock-button svg { width: 15px; height: 15px; }
+.oao-canvas-dock-button:hover:not(:disabled), .oao-canvas-dock-button:focus-visible { background: rgb(255 255 255 / 8%); color: var(--canvas-ink); outline: none; }
+.oao-canvas-dock-button.is-active { border-color: rgb(199 243 232 / 22%); background: rgb(199 243 232 / 14%); color: var(--canvas-accent); }
+.oao-canvas-dock-button.is-accent { color: var(--canvas-accent); }
+.oao-canvas-dock-button:disabled { cursor: not-allowed; opacity: .28; }
+.oao-canvas-dock-button:active:not(:disabled) { transform: scale(.92); }
+.oao-canvas-dock-divider { width: 1px; height: 19px; margin: 0 3px; background: var(--canvas-border); }
+
+@media (max-width: 720px) {
+  .oao-canvas-rail { width: 56px; padding-inline: 5px; }
+  .oao-canvas-rail-button { width: 44px; min-height: 44px; }
+  .oao-canvas-topbar { left: 66px; right: 10px; }
+  .oao-canvas-project-pill { max-width: min(50vw, 280px); padding-inline: 11px; }
+  .oao-canvas-project-kind { display: none; }
+  .oao-canvas-topbar-actions .studio-icon-action:nth-child(1), .oao-canvas-topbar-actions .studio-icon-action:nth-child(4) { display: none; }
+  .oao-canvas-save-badge { display: none; }
+  .oao-canvas-workspace-panel { inset: 66px 8px 70px 64px; width: auto; }
+  .oao-canvas-inspector { top: 66px; right: 8px; width: min(242px, calc(100vw - 80px)); }
+  .oao-canvas-agent-panel { inset: 66px 8px 70px 64px; width: auto; }
+  .oao-canvas-generation-panel { inset: 66px 8px 70px 64px; width: auto; }
+  .oao-canvas-context-menu { max-width: calc(100vw - 76px); }
+  .oao-canvas-minimap { display: none; }
+  .oao-canvas-zoom-dock { bottom: 72px; left: 64px; }
+  .oao-canvas-dock { right: 10px; bottom: 14px; left: 64px; justify-content: flex-start; overflow-x: auto; transform: none; scrollbar-width: none; }
+  .oao-canvas-dock::-webkit-scrollbar { display: none; }
+  .oao-canvas-agent-launcher { right: 12px; bottom: 74px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oao-canvas-rail-button, .oao-canvas-dock-button, .oao-canvas-agent-orb { transition: none; }
+}
+
+/* ==========================================================================\n+   OAOOAO 液态创作空间：明确可见的环境层\n+   --------------------------------------------------------------------------\n+   DeepSeek Harness 参考主题的关键不是单独给卡片加透明度，而是让整个创作\n+   空间先拥有一层持续存在的环境壁纸，再让侧栏、输入台和浮层在它上面形成\n+   不同厚度的玻璃。这里限定在工作台 / 后台作用域，不影响首页与套餐页。\n+   ========================================================================== */
+
+.studio-app-shell[data-studio-skin='gradient'] {
+  /* 保留一个可用于 `text-background` 的深色值；画布本身通过外壳规则保持透明。 */
+  --background: #10252c;
+  --foreground: #f4fbfb;
+  --card: rgba(11, 30, 37, 0.34);
+  --card-foreground: #f4fbfb;
+  --popover: rgba(13, 28, 35, 0.9);
+  --popover-foreground: #f4fbfb;
+  --primary: #f5ffff;
+  --primary-foreground: #0e2026;
+  --secondary: rgba(255, 255, 255, 0.13);
+  --secondary-foreground: #f4fbfb;
+  --muted: rgba(255, 255, 255, 0.11);
+  --muted-foreground: rgba(239, 250, 250, 0.74);
+  --accent: rgba(255, 255, 255, 0.14);
+  --accent-foreground: #ffffff;
+  --border: rgba(235, 255, 252, 0.23);
+  --input: rgba(235, 255, 252, 0.22);
+  --ring: #e9fffb;
+  --studio-accent: #eafffb;
+  --studio-accent-foreground: #0d2026;
+  --studio-warn: #ffd38a;
+  --sidebar: rgba(7, 31, 39, 0.5);
+  --sidebar-foreground: #f5ffff;
+  --sidebar-primary: #f5ffff;
+  --sidebar-primary-foreground: #0d2026;
+  --sidebar-accent: rgba(255, 255, 255, 0.14);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(235, 255, 252, 0.2);
+  --sidebar-ring: #e9fffb;
+  --lg-glass-strong: rgba(11, 31, 38, 0.48);
+  --lg-glass-base: rgba(17, 43, 49, 0.3);
+  --lg-glass-soft: rgba(255, 255, 255, 0.11);
+  --lg-glass-quiet: rgba(255, 255, 255, 0.07);
+  --lg-pane-bg: rgba(11, 29, 36, 0.62);
+  --lg-pane-bg-soft: rgba(255, 255, 255, 0.1);
+  --lg-edge: rgba(235, 255, 252, 0.25);
+  --lg-edge-strong: rgba(244, 255, 253, 0.46);
+  --lg-highlight: rgba(255, 255, 255, 0.48);
+  --lg-highlight-soft: rgba(255, 255, 255, 0.18);
+  --lg-refract: rgba(255, 255, 255, 0.3);
+  --lg-saturate: 180%;
+  --lg-wallpaper:
+    radial-gradient(1100px 680px at 10% -12%, rgba(2, 147, 173, 0.72), transparent 68%),
+    radial-gradient(960px 700px at 86% 0%, rgba(117, 122, 33, 0.68), transparent 67%),
+    radial-gradient(1060px 720px at 58% 112%, rgba(26, 126, 151, 0.74), transparent 70%),
+    radial-gradient(820px 580px at 92% 82%, rgba(195, 92, 73, 0.42), transparent 70%),
+    linear-gradient(135deg, #0b1f2a 0%, #285254 43%, #112d38 100%);
+  color-scheme: dark;
+  background: transparent !important;
+}
+
+.studio-app-shell[data-studio-skin='gradient']::before {
+  background: var(--lg-wallpaper);
+  background-size: 135% 135%;
+  background-position: 50% 50%;
+  filter: saturate(112%);
+  animation: liquid-wallpaper-drift 28s ease-in-out infinite alternate;
+}
+
+.studio-app-shell[data-studio-skin='gradient']::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(2, 13, 19, 0.04), rgba(2, 13, 19, 0.2));
+}
+
+@keyframes liquid-wallpaper-drift {
+  0% { background-position: 42% 46%; transform: scale(1.02); }
+  100% { background-position: 58% 54%; transform: scale(1.08); }
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-topbar,
+.studio-app-shell[data-studio-skin='gradient'] .studio-sidebar,
+.studio-app-shell[data-studio-skin='gradient'] .studio-mobile-nav aside {
+  background: var(--lg-glass-strong);
+  border-color: var(--lg-edge);
+  box-shadow: 0 1px 0 var(--lg-highlight-soft), 0 16px 42px rgba(0, 10, 16, 0.18);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 8px 24px rgba(0, 15, 20, 0.12);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 999px;
+  background: #f3fffd;
+  box-shadow: 0 0 14px rgba(215, 255, 249, 0.9);
+}
+
+/* 液态玻璃高亮已经由整颗按钮和图标光环表达，移除旧版左侧白色竖杠。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true']::before {
+  content: none;
+  display: none;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item:not([data-active='true']):hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home > section[aria-labelledby='continue-title'] {
+  border-top: 1px solid rgba(235, 255, 252, 0.14);
+  background: rgba(3, 19, 26, 0.16) !important;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home {
+  /* `.studio-home` 自带的页面变量需要在液态皮肤中被局部覆盖，否则标题和卡片仍会读取旧浅色值。 */
+  --background: #10252c;
+  --foreground: #f4fbfb;
+  --card: rgba(11, 30, 37, 0.34);
+  --card-foreground: #f4fbfb;
+  --popover: rgba(13, 28, 35, 0.9);
+  --popover-foreground: #f4fbfb;
+  --primary: #f5ffff;
+  --primary-foreground: #0e2026;
+  --secondary: rgba(255, 255, 255, 0.13);
+  --secondary-foreground: #f4fbfb;
+  --muted: rgba(255, 255, 255, 0.11);
+  --muted-foreground: rgba(239, 250, 250, 0.74);
+  --accent: rgba(255, 255, 255, 0.14);
+  --accent-foreground: #ffffff;
+  --border: rgba(235, 255, 252, 0.23);
+  --input: rgba(235, 255, 252, 0.22);
+  --ring: #e9fffb;
+  --studio-accent: #eafffb;
+  --studio-accent-foreground: #0d2026;
+  --sidebar: rgba(7, 31, 39, 0.5);
+  --sidebar-foreground: #f5ffff;
+  --sidebar-accent: rgba(255, 255, 255, 0.14);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(235, 255, 252, 0.2);
+  --sidebar-ring: #e9fffb;
+  color: var(--foreground);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt {
+  background: rgba(12, 39, 46, 0.34);
+  border-color: rgba(238, 255, 253, 0.42);
+  box-shadow: 0 24px 70px rgba(0, 11, 16, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.52);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt:focus-within {
+  background: rgba(15, 50, 56, 0.44);
+  border-color: rgba(243, 255, 253, 0.72);
+  box-shadow: 0 0 0 4px rgba(231, 255, 250, 0.13), 0 28px 84px rgba(0, 8, 12, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut {
+  background: rgba(11, 37, 44, 0.29);
+  border-color: rgba(235, 255, 252, 0.28);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut:hover {
+  background: rgba(22, 66, 72, 0.46);
+  border-color: rgba(240, 255, 253, 0.55);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home [role='tab'][aria-selected='true'] {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home form button[type='submit'] {
+  background: #f5ffff;
+  color: #0c2026;
+  box-shadow: 0 10px 26px rgba(0, 13, 18, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home form button[type='submit']:hover {
+  background: #ffffff;
+  filter: none;
+  transform: translateY(-1px);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .lg-glass,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-surface,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-empty-state {
+  border-color: rgba(235, 255, 252, 0.28);
+  box-shadow: 0 18px 52px rgba(0, 10, 15, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-field,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell select,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell textarea,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell input {
+  background: rgba(4, 22, 29, 0.3);
+  border-color: rgba(235, 255, 252, 0.24);
+  color: #f4fbfb;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-field::placeholder,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell textarea::placeholder,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell input::placeholder {
+  color: rgba(235, 250, 249, 0.58);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .bg-card,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .bg-background {
+  background-color: transparent;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home .bg-card,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home .bg-background {
+  background-color: transparent;
+}
+
+/* 后台保持数据密度，但换成同一套深色玻璃环境，避免进入后台时突然回到白页。 */
+.admin-console {
+  --background: #10252c;
+  --foreground: #f4fbfb;
+  --card: rgba(11, 30, 37, 0.58);
+  --card-foreground: #f4fbfb;
+  --popover: rgba(13, 28, 35, 0.94);
+  --popover-foreground: #f4fbfb;
+  --primary: #f5ffff;
+  --primary-foreground: #0e2026;
+  --secondary: rgba(255, 255, 255, 0.12);
+  --secondary-foreground: #f4fbfb;
+  --muted: rgba(255, 255, 255, 0.1);
+  --muted-foreground: rgba(239, 250, 250, 0.72);
+  --accent: rgba(255, 255, 255, 0.14);
+  --accent-foreground: #ffffff;
+  --border: rgba(235, 255, 252, 0.2);
+  --input: rgba(235, 255, 252, 0.22);
+  --ring: #e9fffb;
+  --studio-accent: #eafffb;
+  --studio-accent-foreground: #0d2026;
+  --studio-warn: #ffd38a;
+  --sidebar: rgba(7, 31, 39, 0.58);
+  --sidebar-foreground: #f5ffff;
+  --sidebar-accent: rgba(255, 255, 255, 0.14);
+  --sidebar-accent-foreground: #ffffff;
+  --lg-pane-bg: rgba(11, 29, 36, 0.72);
+  --lg-pane-bg-soft: rgba(255, 255, 255, 0.09);
+  --lg-glass-strong: rgba(11, 31, 38, 0.6);
+  --lg-glass-base: rgba(17, 43, 49, 0.38);
+  --lg-glass-soft: rgba(255, 255, 255, 0.1);
+  --lg-edge: rgba(235, 255, 252, 0.24);
+  --lg-highlight: rgba(255, 255, 255, 0.4);
+  --lg-highlight-soft: rgba(255, 255, 255, 0.15);
+  --lg-wallpaper: radial-gradient(1100px 680px at 10% -12%, rgba(2, 147, 173, 0.68), transparent 68%), radial-gradient(960px 700px at 86% 0%, rgba(117, 122, 33, 0.6), transparent 67%), radial-gradient(1060px 720px at 58% 112%, rgba(26, 126, 151, 0.66), transparent 70%), linear-gradient(135deg, #0b1f2a 0%, #285254 43%, #112d38 100%);
+  background: var(--lg-wallpaper) !important;
+  background-attachment: fixed;
+  color-scheme: dark;
+}
+
+.admin-console .studio-surface,
+.admin-console .lg-pane,
+.admin-console .lg-raised {
+  background: var(--lg-pane-bg);
+  border-color: var(--lg-edge);
+  box-shadow: 0 14px 38px rgba(0, 10, 15, 0.18), inset 0 1px 0 var(--lg-highlight-soft);
+}
+
+.admin-console .admin-topbar,
+.admin-console .admin-sidebar,
+.admin-console .admin-sidebar + div > div:first-of-type {
+  background: var(--lg-glass-strong);
+  border-color: var(--lg-edge);
+  box-shadow: 0 1px 0 var(--lg-highlight-soft), 0 14px 38px rgba(0, 10, 15, 0.16);
+}
+
+.admin-console .admin-sidebar button[aria-current='page'] {
+  background: rgba(255, 255, 255, 0.19);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-app-shell[data-studio-skin='gradient']::before { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .studio-app-shell[data-studio-skin='gradient'] {
+    --background: #111d22;
+    --card: #172a30;
+    --lg-pane-bg: #172a30;
+    --lg-glass-strong: #172a30;
+    --lg-glass-base: #1b3339;
+    --lg-glass-soft: #203b42;
+  }
+
+  .studio-app-shell[data-studio-skin='gradient']::before { animation: none; }
+}
+
+/* 登录与后台权限门页也使用同一套环境层，避免从创作区跳转时突然闪回纯白。 */
+.oao-auth-page,
+.admin-gate {
+  --background: #10252c;
+  --foreground: #f4fbfb;
+  --card: rgba(11, 30, 37, 0.62);
+  --card-foreground: #f4fbfb;
+  --popover: rgba(13, 28, 35, 0.94);
+  --popover-foreground: #f4fbfb;
+  --primary: #f5ffff;
+  --primary-foreground: #0e2026;
+  --secondary: rgba(255, 255, 255, 0.13);
+  --secondary-foreground: #f4fbfb;
+  --muted: rgba(255, 255, 255, 0.11);
+  --muted-foreground: rgba(239, 250, 250, 0.75);
+  --accent: rgba(255, 255, 255, 0.14);
+  --accent-foreground: #ffffff;
+  --border: rgba(235, 255, 252, 0.24);
+  --input: rgba(235, 255, 252, 0.22);
+  --ring: #e9fffb;
+  --studio-accent: #eafffb;
+  --studio-accent-foreground: #0d2026;
+  --studio-warn: #ffd38a;
+  --lg-glass-strong: rgba(11, 31, 38, 0.62);
+  --lg-glass-base: rgba(17, 43, 49, 0.42);
+  --lg-glass-soft: rgba(255, 255, 255, 0.11);
+  --lg-pane-bg: rgba(11, 29, 36, 0.74);
+  --lg-pane-bg-soft: rgba(255, 255, 255, 0.1);
+  --lg-edge: rgba(235, 255, 252, 0.28);
+  --lg-highlight: rgba(255, 255, 255, 0.45);
+  --lg-highlight-soft: rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(1050px 680px at 8% -12%, rgba(2, 147, 173, 0.72), transparent 68%),
+    radial-gradient(940px 680px at 90% 0%, rgba(117, 122, 33, 0.62), transparent 67%),
+    radial-gradient(900px 620px at 70% 106%, rgba(195, 92, 73, 0.38), transparent 70%),
+    linear-gradient(135deg, #0b1f2a 0%, #285254 43%, #112d38 100%) !important;
+  color: var(--foreground);
+  color-scheme: dark;
+}
+
+.oao-auth-page > .lg-glass {
+  background: var(--lg-glass-strong);
+  border-color: var(--lg-edge);
+  box-shadow: 0 24px 72px rgba(0, 8, 12, 0.32), inset 0 1px 0 var(--lg-highlight);
+}
+
+.oao-auth-page input,
+.oao-auth-page textarea,
+.oao-auth-page select {
+  background: rgba(5, 24, 31, 0.34) !important;
+  border-color: var(--lg-edge) !important;
+  color: var(--foreground) !important;
+}
+
+.oao-auth-page input::placeholder,
+.oao-auth-page textarea::placeholder {
+  color: rgba(235, 250, 249, 0.58);
+}
+
+.admin-gate .studio-surface {
+  background: var(--lg-pane-bg);
+  border-color: var(--lg-edge);
+  box-shadow: 0 24px 72px rgba(0, 8, 12, 0.32), inset 0 1px 0 var(--lg-highlight);
+}
+
+/* 参考主题的视觉重点是“背景先存在，玻璃再透出来”。最后这一层只收紧
+   gradient 皮肤，避免其它浅色主题和套餐页被连带改变。 */
+.studio-app-shell[data-studio-skin='gradient'] {
+  --lg-wallpaper:
+    radial-gradient(58% 86% at 96% 16%, rgba(74, 112, 16, 0.92), transparent 68%),
+    radial-gradient(56% 78% at 68% 82%, rgba(37, 146, 182, 0.86), transparent 70%),
+    radial-gradient(48% 78% at 8% 62%, rgba(111, 98, 57, 0.88), transparent 72%),
+    radial-gradient(40% 58% at 42% 18%, rgba(13, 116, 128, 0.72), transparent 70%),
+    radial-gradient(34% 48% at 91% 92%, rgba(188, 84, 70, 0.5), transparent 72%),
+    linear-gradient(118deg, #716f51 0%, #1e5960 42%, #176b84 73%, #28679c 100%);
+}
+
+.studio-app-shell[data-studio-skin='gradient']::before {
+  inset: -7%;
+  background-size: 150% 150%;
+  filter: saturate(128%) contrast(104%);
+}
+
+.studio-app-shell[data-studio-skin='gradient']::after {
+  background:
+    linear-gradient(180deg, rgba(2, 13, 19, 0.02), rgba(2, 13, 19, 0.1)),
+    radial-gradient(70% 55% at 50% 45%, transparent 38%, rgba(2, 13, 19, 0.12) 100%);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-topbar,
+.studio-app-shell[data-studio-skin='gradient'] .studio-sidebar,
+.studio-app-shell[data-studio-skin='gradient'] .studio-mobile-nav aside {
+  background: rgba(13, 45, 51, 0.26);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-sidebar {
+  box-shadow: 1px 0 0 rgba(238, 255, 253, 0.18), 14px 0 46px rgba(0, 15, 22, 0.12);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home > section,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home > section[aria-labelledby='continue-title'] {
+  background: transparent !important;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt {
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.12), rgba(13, 52, 57, 0.18)) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  box-shadow: 0 26px 80px rgba(0, 13, 18, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.62), inset 0 -1px 0 rgba(3, 24, 31, 0.2);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut {
+  background: rgba(255, 255, 255, 0.09) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 12px 28px rgba(0, 15, 20, 0.14);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home > section[aria-labelledby='continue-title'] > div {
+  border-radius: 24px 24px 0 0;
+  background: linear-gradient(180deg, rgba(3, 25, 31, 0.08), rgba(3, 25, 31, 0.2));
+}
+
+/* 最近项目和首屏之间只用色彩过渡，不要一条硬边横穿工作台。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-home > section[aria-labelledby='continue-title'] {
+  border-top: 0 !important;
+  box-shadow: none !important;
+}
+
+/* 最近项目按真实数量收拢：三项时使用三列并整体居中，不留下第四列空洞。 */
+@media (min-width: 1024px) {
+  .studio-app-shell[data-studio-skin='gradient'] .studio-home-project-grid {
+    width: 100%;
+    max-width: 1120px;
+    margin-inline: auto;
+    justify-content: center;
+  }
+
+  .studio-app-shell[data-studio-skin='gradient'] .studio-home-project-grid[data-count='1'] {
+    grid-template-columns: minmax(0, 300px);
+  }
+
+  .studio-app-shell[data-studio-skin='gradient'] .studio-home-project-grid[data-count='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .studio-app-shell[data-studio-skin='gradient'] .studio-home-project-grid[data-count='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .studio-app-shell[data-studio-skin='gradient'] .studio-home-project-grid[data-count='4'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* 玻璃滚动条：保留可拖动性，但不再显示默认的亮灰色粗条。 */
+:root:has(.studio-app-shell[data-studio-skin='gradient']) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(222, 255, 251, 0.34) transparent;
+}
+
+:root:has(.studio-app-shell[data-studio-skin='gradient'])::-webkit-scrollbar,
+.studio-app-shell[data-studio-skin='gradient'] *::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+:root:has(.studio-app-shell[data-studio-skin='gradient'])::-webkit-scrollbar-track,
+.studio-app-shell[data-studio-skin='gradient'] *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root:has(.studio-app-shell[data-studio-skin='gradient'])::-webkit-scrollbar-thumb,
+.studio-app-shell[data-studio-skin='gradient'] *::-webkit-scrollbar-thumb {
+  min-height: 42px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(224, 255, 251, 0.28);
+  background-clip: padding-box;
+}
+
+:root:has(.studio-app-shell[data-studio-skin='gradient'])::-webkit-scrollbar-thumb:hover,
+.studio-app-shell[data-studio-skin='gradient'] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(237, 255, 253, 0.56);
+  background-clip: padding-box;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .lg-glass,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-surface,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .studio-empty-state,
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .lg-glass-bar {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(8, 35, 42, 0.22));
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .lg-button-glass,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-overlay {
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+}
+
+@media (max-width: 767px) {
+  .studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt {
+    border-radius: 22px;
+  }
+}
+
+/* 玻璃材质强化：外层透明，内层用一条柔和的高光带和暗边把厚度读出来。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-bar,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-overlay,
+.studio-app-shell[data-studio-skin='gradient'] .lg-button-glass,
+.studio-app-shell[data-studio-skin='gradient'] .studio-surface {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: rgba(245, 255, 254, 0.46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    inset 0 0 18px rgba(255, 255, 255, 0.1),
+    inset 0 0 38px rgba(255, 255, 255, 0.04),
+    inset 2px 2px 7px rgba(255, 255, 255, 0.16),
+    inset -3px -3px 7px rgba(0, 12, 18, 0.12),
+    inset 0 -1px 0 rgba(3, 28, 35, 0.24),
+    0 22px 60px rgba(0, 15, 22, 0.2);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt::before,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-bar::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-overlay::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-button-glass::before,
+.studio-app-shell[data-studio-skin='gradient'] .studio-surface::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(116deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.06) 16%, transparent 42%, transparent 76%, rgba(255, 255, 255, 0.11)),
+    linear-gradient(180deg, transparent 55%, rgba(4, 30, 38, 0.12));
+  opacity: 0.78;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt::before,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-bar::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-overlay::before,
+.studio-app-shell[data-studio-skin='gradient'] .lg-button-glass::before,
+.studio-app-shell[data-studio-skin='gradient'] .studio-surface::before {
+  -webkit-backdrop-filter: blur(24px) saturate(175%) url(#oao-liquid-edge);
+  backdrop-filter: blur(24px) saturate(175%) url(#oao-liquid-edge);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt > *,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut > *,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass > *,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-bar > *,
+.studio-app-shell[data-studio-skin='gradient'] .lg-glass-overlay > *,
+.studio-app-shell[data-studio-skin='gradient'] .lg-button-glass > *,
+.studio-app-shell[data-studio-skin='gradient'] .studio-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt {
+  background: rgba(212, 247, 244, 0.14) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(190%) contrast(106%);
+  backdrop-filter: blur(34px) saturate(190%) contrast(106%);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut {
+  background: rgba(221, 249, 247, 0.12) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(185%);
+  backdrop-filter: blur(22px) saturate(185%);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-topbar,
+.studio-app-shell[data-studio-skin='gradient'] .studio-sidebar,
+.studio-app-shell[data-studio-skin='gradient'] .studio-mobile-nav aside {
+  border-color: rgba(245, 255, 254, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 12px 0 48px rgba(0, 15, 22, 0.12);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-sidebar::after,
+.studio-app-shell[data-studio-skin='gradient'] .studio-topbar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.1), transparent 22%, transparent 78%, rgba(255, 255, 255, 0.05));
+}
+
+/* 轻微的斜向反光让输入台在静止时也有“液体”质感。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt::after {
+  content: '';
+  position: absolute;
+  inset: -70% auto -70% -18%;
+  z-index: 1;
+  width: 17%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+  filter: blur(3px);
+  opacity: 0.58;
+  transform: rotate(16deg);
+  animation: liquid-glass-sheen 9s ease-in-out infinite;
+}
+
+@keyframes liquid-glass-sheen {
+  0%, 18% { transform: translateX(0) rotate(16deg); opacity: 0; }
+  32% { opacity: 0.58; }
+  72%, 100% { transform: translateX(760%) rotate(16deg); opacity: 0; }
+}
+
+/* 菜单图标：当前项持续呼吸，悬停时轻抬并根据工具类型做很小的差异化动作。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-icon {
+  position: relative;
+  overflow: visible;
+  transform-origin: 50% 55%;
+  transition: transform 180ms ease, filter 180ms ease, color 180ms ease;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-icon::before,
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-icon::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* 不是整颗图标跳动：光环、扫描线和节点轨道分别叠在图标内部。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-icon::before {
+  inset: -4px;
+  border: 1px solid rgba(224, 255, 251, 0.7);
+  border-radius: 999px;
+  box-shadow: 0 0 9px rgba(179, 255, 246, 0.38);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-icon::after {
+  left: 1px;
+  top: 50%;
+  width: 14px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(242, 255, 253, 0.95), transparent);
+  box-shadow: 0 0 7px rgba(222, 255, 250, 0.8);
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item:hover .studio-nav-icon {
+  transform: translateY(-1px) scale(1.1);
+  filter: drop-shadow(0 0 7px rgba(224, 255, 251, 0.58));
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] .studio-nav-icon {
+  filter: drop-shadow(0 0 8px rgba(224, 255, 251, 0.44));
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] .studio-nav-icon::before {
+  opacity: 0.78;
+  animation: nav-icon-ring 3.4s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] .studio-nav-icon::after {
+  opacity: 0.8;
+  animation: nav-icon-glint 2.8s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='image'],
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='video'] {
+  animation: nav-icon-pulse 2.4s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='canvas'] {
+  animation: nav-icon-orbit 3.1s linear infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='tasks'] {
+  animation: nav-icon-check 2.1s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='studio'] {
+  animation: nav-icon-sparkle 3.2s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='agent'] {
+  animation: nav-icon-bob 2.6s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='drama'] {
+  animation: nav-icon-clap 2.9s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='projects'] {
+  animation: nav-icon-folder 3.2s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='assets'] {
+  animation: nav-icon-gallery 3s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='works'] {
+  animation: nav-icon-palette 3.4s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='gallery'] {
+  animation: nav-icon-grid 3.1s ease-in-out infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='settings'] {
+  animation: nav-icon-gear 4s linear infinite;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='image']::after {
+  animation-name: nav-icon-scan;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='video']::before {
+  animation-name: nav-icon-focus;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='canvas']::before {
+  border-top-color: transparent;
+  border-right-color: rgba(224, 255, 251, 0.86);
+  animation-name: nav-icon-track;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='tasks']::after {
+  width: 10px;
+  left: 2px;
+  animation-name: nav-icon-progress;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='agent']::before {
+  border-style: dotted;
+  animation-name: nav-icon-agent;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] [data-icon-motion='studio']::after {
+  width: 4px;
+  height: 4px;
+  left: 9px;
+  top: 1px;
+  border-radius: 50%;
+  animation-name: nav-icon-star;
+}
+
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item:hover .studio-nav-icon::before,
+.studio-app-shell[data-studio-skin='gradient'] .studio-nav-item:hover .studio-nav-icon::after {
+  opacity: 0.72;
+}
+
+@keyframes nav-icon-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-1px) scale(1.08); }
+}
+
+@keyframes nav-icon-sparkle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  34% { transform: rotate(-7deg) scale(1.06); }
+  52% { transform: rotate(7deg) scale(1.12); }
+  70% { transform: rotate(0deg) scale(1); }
+}
+
+@keyframes nav-icon-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  42% { transform: translateY(-2px) rotate(-4deg); }
+  65% { transform: translateY(1px) rotate(3deg); }
+}
+
+@keyframes nav-icon-clap {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  30% { transform: rotate(-8deg) translateY(-1px); }
+  42% { transform: rotate(4deg) translateY(0); }
+  56% { transform: rotate(-3deg) translateY(-1px); }
+}
+
+@keyframes nav-icon-folder {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-1px) scale(1.08); }
+  58% { transform: translateY(0) scale(0.98); }
+}
+
+@keyframes nav-icon-gallery {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  35% { transform: rotate(4deg) scale(1.05); }
+  68% { transform: rotate(-4deg) scale(1.05); }
+}
+
+@keyframes nav-icon-palette {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  46% { transform: translateY(-1px) rotate(6deg); }
+  64% { transform: translateY(0) rotate(-3deg); }
+}
+
+@keyframes nav-icon-grid {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.08); }
+  52% { transform: scale(0.96); }
+  70% { transform: scale(1.04); }
+}
+
+@keyframes nav-icon-gear {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes nav-icon-pulse {
+  0%, 100% { transform: scale(1); }
+  46% { transform: scale(1.12); }
+}
+
+@keyframes nav-icon-sway {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(-5deg) translateY(-1px); }
+}
+
+@keyframes nav-icon-check {
+  0%, 100% { transform: translateY(0); }
+  35% { transform: translateY(-1px) rotate(-4deg); }
+  65% { transform: translateY(0) rotate(3deg); }
+}
+
+@keyframes nav-icon-ring {
+  0%, 100% { transform: scale(0.72); opacity: 0.18; }
+  45% { transform: scale(1.12); opacity: 0.78; }
+  72% { transform: scale(0.9); opacity: 0.44; }
+}
+
+@keyframes nav-icon-glint {
+  0%, 100% { transform: translateX(-7px) scaleX(0.35); opacity: 0; }
+  42% { transform: translateX(0) scaleX(1); opacity: 0.9; }
+  70% { transform: translateX(7px) scaleX(0.35); opacity: 0; }
+}
+
+@keyframes nav-icon-scan {
+  0%, 100% { transform: translateX(-5px) scaleX(0.28); opacity: 0; }
+  38% { transform: translateX(1px) scaleX(1); opacity: 1; }
+  70% { transform: translateX(6px) scaleX(0.2); opacity: 0; }
+}
+
+@keyframes nav-icon-focus {
+  0%, 100% { transform: scale(0.62); opacity: 0.1; }
+  48% { transform: scale(1.18); opacity: 0.92; }
+}
+
+@keyframes nav-icon-orbit {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  25% { transform: rotate(-7deg) translateY(-1px); }
+  75% { transform: rotate(7deg) translateY(0); }
+}
+
+@keyframes nav-icon-track {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes nav-icon-progress {
+  0%, 100% { transform: translateX(-5px) scaleX(0.45); opacity: 0.1; }
+  50% { transform: translateX(5px) scaleX(1); opacity: 1; }
+}
+
+@keyframes nav-icon-agent {
+  0%, 100% { transform: rotate(0deg) scale(0.82); opacity: 0.22; }
+  50% { transform: rotate(180deg) scale(1.08); opacity: 0.82; }
+}
+
+@keyframes nav-icon-star {
+  0%, 100% { transform: scale(0.35); opacity: 0; }
+  35% { transform: scale(1.2); opacity: 1; }
+  58% { transform: scale(0.55); opacity: 0.2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt::after,
+  .studio-app-shell[data-studio-skin='gradient'] .studio-nav-item[data-active='true'] .studio-nav-icon {
+    animation: none;
   }
 }

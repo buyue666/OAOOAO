@@ -8,14 +8,21 @@ import { cn } from '@/lib/utils'
 
 export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'muted'
 
-export function ControlButton({ className, variant = 'secondary', size = 'md', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'sm' | 'md' | 'lg' }) {
+/**
+ * 按钮。
+ *
+ * `variant="glass"` 是液态玻璃系统里的浮层操作按钮（工具条、弹层、创作输入区）；
+ * 其余变体保持实心，用于页面主体与后台，保证对比度与可扫描性。
+ */
+export function ControlButton({ className, variant = 'secondary', size = 'md', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'glass' | 'danger'; size?: 'sm' | 'md' | 'lg' }) {
   return (
     <button
       type="button"
       className={cn(
-        'studio-control inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border text-sm font-medium shadow-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 disabled:pointer-events-none disabled:opacity-45',
-        variant === 'primary' && 'border-foreground bg-foreground text-background hover:opacity-90',
-        variant === 'secondary' && 'border-border bg-card text-foreground hover:bg-muted',
+        'studio-control inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 disabled:pointer-events-none disabled:opacity-45',
+        variant === 'primary' && 'border-foreground bg-foreground text-background shadow-[var(--lg-shadow-2)] hover:opacity-90',
+        variant === 'secondary' && 'border-border bg-card text-foreground shadow-[var(--lg-shadow-1)] hover:bg-muted',
+        variant === 'glass' && 'lg-button-glass text-foreground',
         variant === 'ghost' && 'border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
         variant === 'danger' && 'border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15',
         size === 'sm' && 'h-7 px-2.5 text-xs',
@@ -58,7 +65,7 @@ export function Tooltip({ label, side = 'top', className, children }: { label: s
             role="tooltip"
             style={{ top: coords.top, left: coords.left }}
             className={cn(
-              'motion-fade pointer-events-none fixed z-[60] whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-xs font-medium text-popover-foreground shadow-md',
+              'lg-glass-overlay motion-fade pointer-events-none fixed z-[60] whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs font-medium text-popover-foreground shadow-md',
               side === 'right' ? '-translate-y-1/2' : '-translate-x-1/2 -translate-y-full',
             )}
           >
@@ -102,14 +109,20 @@ export function StatusBadge({ children, tone = 'neutral', className, solid = fal
 }
 
 /**
- * 页面主标题只出现一次。顶栏只保留面包屑，因此这里不再渲染眉题（eyebrow），
- * 标题也收敛到 18–20px，避免把后台页面做成 Hero 字号。
+ * 页面主标题只出现一次。顶栏只保留面包屑，因此这里不重复渲染标题，
+ * 标题收敛到 22–28px，避免把后台页面做成 Hero 字号。
+ *
+ * `eyebrow` 现在真正渲染：它给页面一个低成本的层级锚点，
+ * 也让"我在哪一类页面"在视觉上立刻可辨。
  */
-export function PageHeader({ title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
+export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
   return (
-    <header className="studio-page-header flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
+    <header className="studio-page-header flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0">
-        <h1 className="text-balance text-lg font-semibold tracking-[-0.02em] text-foreground md:text-xl">{title}</h1>
+        {eyebrow && (
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-studio-accent">{eyebrow}</p>
+        )}
+        <h1 className="text-balance text-xl font-semibold tracking-[-0.035em] text-foreground md:text-2xl">{title}</h1>
         {description && <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
@@ -121,7 +134,7 @@ export function SectionHeading({ title, description, action }: { title: string; 
   return (
     <div className="studio-section-heading flex items-end justify-between gap-4">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <h2 className="text-sm font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
         {description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}
       </div>
       {action}
@@ -131,9 +144,9 @@ export function SectionHeading({ title, description, action }: { title: string; 
 
 export function StatBlock({ label, value, detail, tone = 'neutral' }: { label: string; value: string; detail?: string; tone?: Tone }) {
   return (
-    <div className="min-w-0 border-l-2 border-border pl-3 first:border-l-0 first:pl-0 md:first:border-l-2 md:first:pl-3">
+    <div className="lg-raised min-w-0 p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={cn('mt-1 text-xl font-semibold tracking-[-0.03em]', tone === 'accent' && 'text-studio-accent', tone === 'warning' && 'text-studio-warn')}>{value}</p>
+      <p className={cn('mt-1.5 text-2xl font-semibold tracking-[-0.035em] tabular-nums', tone === 'accent' && 'text-studio-accent', tone === 'warning' && 'text-studio-warn')}>{value}</p>
       {detail && <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>}
     </div>
   )
@@ -231,7 +244,48 @@ export function ProgressBar({ value, tone = 'accent' }: { value: number; tone?: 
 }
 
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
-  return <div className="studio-empty-state studio-surface flex min-h-44 flex-col items-center justify-center border-dashed bg-card/40 px-5 text-center"><p className="text-sm font-medium text-foreground">{title}</p><p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{description}</p>{action && <div className="mt-4">{action}</div>}</div>
+  return <div className="studio-empty-state flex min-h-44 flex-col items-center justify-center border border-dashed border-border px-5 text-center"><p className="text-sm font-medium text-foreground">{title}</p><p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{description}</p>{action && <div className="mt-4">{action}</div>}</div>
+}
+
+/**
+ * 筛选标签行。
+ *
+ * 此前素材页、任务页、账户页各自手写了同一套 `<button>` 三态样式，
+ * 三处的圆角、内边距与选中态都不完全一致。统一到这里后：
+ *  - 选中态用强调色底 + 细描边，未选中态保持中性，可扫描性更好；
+ *  - 横向滚动时不换行（配合 `data-mobile-scroll` 隐藏滚动条）；
+ *  - 保留 `aria-pressed`，键盘与读屏语义不变。
+ */
+export function FilterChips<T extends string>({ value, onChange, options, className }: {
+  value: T
+  onChange: (value: T) => void
+  options: Array<{ value: T; label: string; count?: number }>
+  className?: string
+}) {
+  return (
+    <div className={cn('flex max-w-full gap-1 overflow-x-auto', className)} data-mobile-scroll role="group">
+      {options.map((option) => {
+        const active = option.value === value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              'h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60',
+              active
+                ? 'bg-studio-accent/12 text-studio-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--studio-accent)_24%,transparent)]'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            {option.label}
+            {option.count !== undefined && <span className="ml-1 opacity-60 tabular-nums">{option.count}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 /** 打开时锁定焦点到对话框，关闭后把焦点还给触发元素；Escape 关闭。 */
@@ -279,11 +333,11 @@ export function Modal({ open, title, description, onClose, children, footer, cla
   const containerRef = useDialogBehavior(open, onClose)
   if (!open) return null
   return (
-    <div className="studio-modal-backdrop motion-fade fixed inset-0 z-50 flex items-center justify-center bg-studio-ink/60 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={containerRef} tabIndex={-1} className={cn('studio-modal-surface motion-panel flex max-h-[calc(100dvh-32px)] w-full max-w-lg flex-col overflow-hidden border border-border bg-background outline-none', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4"><div><h2 id="modal-title" className="text-base font-semibold text-foreground">{title}</h2>{description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}</div><IconAction label="关闭" onClick={onClose}><X /></IconAction></div>
+    <div className="studio-modal-backdrop motion-fade fixed inset-0 z-50 flex items-center justify-center bg-studio-ink/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section ref={containerRef} tabIndex={-1} className={cn('studio-modal-surface lg-glass-overlay motion-panel flex max-h-[calc(100dvh-32px)] w-full max-w-lg flex-col overflow-hidden border border-border outline-none', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4"><div><h2 id="modal-title" className="text-base font-semibold tracking-[-0.01em] text-foreground">{title}</h2>{description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}</div><IconAction label="关闭" onClick={onClose}><X /></IconAction></div>
         <div className="min-h-0 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex max-h-32 flex-wrap items-center justify-end gap-2 overflow-y-auto border-t border-border bg-muted/30 px-4 py-3 sm:px-5">{footer}</div>}
+        {footer && <div className="flex max-h-32 flex-wrap items-center justify-end gap-2 overflow-y-auto border-t border-border bg-muted/40 px-4 py-3 sm:px-5">{footer}</div>}
       </section>
     </div>
   )
@@ -299,8 +353,8 @@ export function SidePanel({ open, onClose, title, description, children, footer,
   const portalRoot = document.querySelector<HTMLElement>('[data-studio-portal-root]') ?? document.body
 
   return createPortal(
-    <div className="studio-sidepanel-backdrop motion-fade fixed inset-0 z-50 flex justify-end bg-studio-ink/60 lg:bg-transparent" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <aside ref={containerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="side-panel-title" className={cn('studio-sidepanel motion-panel flex h-full w-full flex-col overflow-hidden border-l border-border bg-card shadow-2xl outline-none lg:mt-[60px] lg:h-[calc(100dvh-60px)] lg:max-w-[420px]', width)}>
+    <div className="studio-sidepanel-backdrop motion-fade fixed inset-0 z-50 flex justify-end bg-studio-ink/55 lg:bg-transparent" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <aside ref={containerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="side-panel-title" className={cn('studio-sidepanel lg-glass-overlay motion-panel flex h-full w-full flex-col overflow-hidden border-l border-border shadow-2xl outline-none lg:mt-[60px] lg:h-[calc(100dvh-60px)] lg:max-w-[420px]', width)}>
         <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
           <div className="min-w-0">
             <h2 id="side-panel-title" className="truncate text-sm font-semibold text-foreground">{title}</h2>
@@ -309,7 +363,7 @@ export function SidePanel({ open, onClose, title, description, children, footer,
           <IconAction label="关闭面板" onClick={onClose}><X /></IconAction>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-        {footer && <div className="border-t border-border bg-muted/30 px-4 py-3">{footer}</div>}
+        {footer && <div className="border-t border-border bg-muted/40 px-4 py-3">{footer}</div>}
       </aside>
     </div>,
     portalRoot,

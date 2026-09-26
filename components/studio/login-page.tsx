@@ -118,13 +118,19 @@ export function LoginPage() {
       : '通过邮箱验证码重置密码。验证码由服务端校验，前端不会跳过验证。'
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-background px-5 py-10 text-foreground">
-      <section className="w-full max-w-md">
+    <main className="oao-auth-page flex min-h-dvh items-center justify-center bg-background px-5 py-10 text-foreground">
+      {/* 登录页背景光晕：纯装饰层，不参与布局。 */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 -z-0"
+        style={{ background: 'radial-gradient(760px 420px at 50% -10%, color-mix(in srgb, var(--studio-accent) 10%, transparent), transparent 70%)' }}
+      />
+      <section className="relative w-full max-w-md">
         <div className="mb-8 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-studio-accent text-studio-accent-foreground"><Sparkles className="size-5" /></span>
-          <div><p className="text-lg font-semibold">OAOOAO Studio</p><p className="text-xs text-muted-foreground">连接你的真实创作账户</p></div>
+          <span className="flex size-10 items-center justify-center rounded-xl bg-foreground text-background shadow-[var(--lg-shadow-2)]"><Sparkles className="size-5" /></span>
+          <div><p className="text-lg font-semibold tracking-[-0.02em]">OAOOAO Studio</p><p className="text-xs text-muted-foreground">连接你的真实创作账户</p></div>
         </div>
-        <div className="studio-surface p-6 sm:p-8">
+        <div className="lg-glass motion-panel p-6 sm:p-8">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold tracking-[-0.03em]">{title}</h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>

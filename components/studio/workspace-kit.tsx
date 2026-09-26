@@ -63,10 +63,11 @@ export function WorkspaceShell({
   const [paramsOpen, setParamsOpen] = useState(false)
 
   return (
-    <form onSubmit={onSubmit} className="studio-workspace-shell studio-gradient-workspace mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 py-5 sm:px-5 md:gap-5 md:px-8 md:py-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:[contain:paint] xl:px-10">
+    <form onSubmit={onSubmit} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 py-5 sm:px-5 md:gap-5 md:px-8 md:py-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10">
       <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="order-2 hidden min-h-0 min-w-0 xl:order-1 xl:block">
-          <div className="studio-surface flex h-full min-h-0 flex-col">
+          {/* 创作参数面板：常驻玻璃面板，让参数区与右侧预览形成明确前后景关系。 */}
+          <div className="lg-glass flex h-full min-h-0 flex-col">
 
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
               <h2 className="text-sm font-semibold text-foreground">{paramsTitle}</h2>
@@ -113,7 +114,8 @@ export function WorkspaceShell({
         </section>
       </div>
 
-      <div className="sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5 xl:hidden">
+      {/* 移动端吸底提交条：玻璃表面，始终可操作。 */}
+      <div className="lg-glass-bar sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-border px-4 py-3 sm:-mx-5 sm:px-5 xl:hidden">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] text-muted-foreground">预计消耗</p>
           <p className="text-sm font-semibold tabular-nums text-studio-accent">{credits} 积分</p>
@@ -629,8 +631,10 @@ export function ReferencePicker({
                 data-asset-id={asset.id}
                 data-asset-url={asset.src}
                 className={cn(
-                  'relative aspect-square overflow-hidden rounded-md border transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60',
-                  selected ? 'border-studio-accent' : 'border-border hover:border-studio-accent/50',
+                  'relative aspect-square overflow-hidden rounded-md border transition-[border-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60',
+                  selected
+                    ? 'border-studio-accent shadow-[0_0_0_2px_color-mix(in_srgb,var(--studio-accent)_32%,transparent)]'
+                    : 'border-border hover:-translate-y-0.5 hover:border-studio-accent/50 hover:shadow-[var(--lg-shadow-2)]',
                 )}
               >
                 <MediaThumb onLoadError={() => setBrokenIds((current) => (current.includes(asset.id) ? current : [...current, asset.id]))} src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="size-full" />

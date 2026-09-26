@@ -49,7 +49,7 @@ export function AdminEmpty({ title, description, action }: { title: string; desc
 /* --------------------------------- 表格 --------------------------------- */
 
 export function AdminTableShell({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('studio-surface max-w-full overflow-x-auto', className)}>{children}</div>
+  return <div className={cn('admin-table-scroll studio-surface max-w-full overflow-x-auto', className)}>{children}</div>
 }
 
 export function AdminTable({ columns, children, minWidth = 760, caption }: { columns: string[]; children: ReactNode; minWidth?: number; caption?: string }) {
@@ -57,6 +57,7 @@ export function AdminTable({ columns, children, minWidth = 760, caption }: { col
     <AdminTableShell>
       <table className="w-full text-left text-sm" style={{ minWidth }}>
         {caption && <caption className="sr-only">{caption}</caption>}
+        {/* 表头吸顶便于长表格对照，但**不做玻璃化**，避免密集数据失去对比度。 */}
         <thead className="bg-muted/60 text-xs text-muted-foreground">
           <tr>{columns.map((column) => <th key={column} scope="col" className="whitespace-nowrap px-4 py-3 font-medium">{column}</th>)}</tr>
         </thead>
@@ -67,7 +68,7 @@ export function AdminTable({ columns, children, minWidth = 760, caption }: { col
 }
 
 export function AdminRow({ children, className }: { children: ReactNode; className?: string }) {
-  return <tr className={cn('border-t border-border align-top', className)}>{children}</tr>
+  return <tr className={cn('border-t border-border align-top transition-colors duration-150 hover:bg-muted/40', className)}>{children}</tr>
 }
 
 export function AdminCell({ children, className, colSpan }: { children: ReactNode; className?: string; colSpan?: number }) {
@@ -153,14 +154,14 @@ export function AdminDrawer({ open, title, description, onClose, children, foote
   }, [onClose, open])
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-studio-ink/50" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={containerRef} role="dialog" aria-modal="true" aria-label={title} className={cn('flex h-full w-full flex-col overflow-hidden border-l border-border bg-background shadow-2xl', width)}>
+    <div className="studio-sidepanel-backdrop motion-fade fixed inset-0 z-50 flex justify-end bg-studio-ink/50" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section ref={containerRef} role="dialog" aria-modal="true" aria-label={title} className={cn('lg-glass-overlay motion-panel flex h-full w-full flex-col overflow-hidden border-l border-border shadow-2xl', width)}>
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{title}</h2>{description && <p className="mt-1 truncate text-xs text-muted-foreground">{description}</p>}</div>
           <ControlButton variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><X className="size-4" /></ControlButton>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/30 px-5 py-3">{footer}</footer>}
+        {footer && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/40 px-5 py-3">{footer}</footer>}
       </section>
     </div>
   )
@@ -168,7 +169,7 @@ export function AdminDrawer({ open, title, description, onClose, children, foote
 
 /* -------------------------------- 表单 -------------------------------- */
 
-export const adminFieldClass = 'studio-field h-9 w-full min-w-0 border border-border bg-card px-3 text-sm text-foreground outline-none transition-colors focus:border-studio-accent/60'
+export const adminFieldClass = 'studio-field h-9 w-full min-w-0 border border-border bg-card px-3 text-sm text-foreground outline-none transition-colors duration-150 focus:border-studio-accent/60'
 
 export function AdminField({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
   return (

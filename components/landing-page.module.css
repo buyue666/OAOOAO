@@ -28,15 +28,29 @@
   border-radius: 32px;
   transition: opacity 700ms ease, transform 700ms ease, background-color 700ms ease, box-shadow 700ms ease;
 }
+.landing[data-announcement='true'] .header { top: 58px; }
+/*
+  着陆页导航与页脚：与工作台共用同一套"玻璃"语言（高光边缘 + 细边 + 分层阴影），
+  但**只改视觉值**：定位、尺寸、结构、显隐时序与 `data-ready/data-scrolled/data-open`
+  契约全部保持不变（浏览器回归对这些有断言）。
+  模糊与饱和度**直接引用设计令牌**（`--lg-blur-bar` / `--lg-saturate` / `--lg-edge`），
+  因此以后调整设计系统时着陆页导航会自动跟随，不会再出现"两套数值各写一遍"。
+  首屏主视觉（蓝天、字标、人物与画架、滚动动画）完全不在此段范围内。
+*/
 .header:is([data-ready='true'], [data-scrolled='true'], [data-open='true'], :focus-within) {
   opacity: 1;
   transform: translate(-50%, 0);
-  background: rgb(255 255 255 / 86%);
-  backdrop-filter: blur(16px);
-  box-shadow: 0 0 0 1px rgb(20 25 30 / 4%), 0 3px 5px -2px rgb(20 25 30 / 8%), 0 12px 24px -12px rgb(20 25 30 / 12%);
+  background: rgb(255 255 255 / 82%);
+  -webkit-backdrop-filter: blur(var(--lg-blur-bar, 20px)) saturate(var(--lg-saturate, 165%));
+  backdrop-filter: blur(var(--lg-blur-bar, 20px)) saturate(var(--lg-saturate, 165%));
+  box-shadow:
+    inset 0 1px 0 var(--lg-highlight, rgb(255 255 255 / 72%)),
+    0 0 0 1px var(--lg-edge, rgb(20 25 30 / 6%)),
+    0 2px 6px -2px rgb(20 25 30 / 8%),
+    0 14px 34px -14px rgb(20 25 30 / 16%);
 }
 .header:not([data-scrolled='true']) .logo { color: #0a0a0a; }
-.header:not([data-scrolled='true']) .desktopNav a { color: #717171; }
+.header:not([data-scrolled='true']) .desktopNav a { color: #5f5f63; }
 .header:not([data-scrolled='true']) .desktopNav a:hover { color: #0a0a0a; }
 .header:not([data-scrolled='true']) .menuToggle { color: #0a0a0a; }
 .headerRow { min-height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; gap: 20px; }
@@ -44,10 +58,12 @@
 .brandLogo { display: block; width: 92px; height: 22px; object-fit: contain; mix-blend-mode: multiply; }
 .footerLogo { display: block; width: 126px; height: 30px; object-fit: contain; }
 .desktopNav { display: flex; align-items: center; gap: 40px; }
-.desktopNav a { color: #717171; font-size: 14px; transition: color 180ms; }
+.desktopNav a { color: #5f5f63; font-size: 14px; transition: color 180ms; }
 .desktopNav a:hover { color: #0a0a0a; }
 .headerCta { background: #0a0a0a; color: #fff; font-size: 14px; font-weight: 500; border-radius: 24px; padding: 10px 18px; white-space: nowrap; transition: opacity 180ms; }
 .headerCta:hover { opacity: .8; }
+.localeToggle { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgb(20 25 30 / 10%); border-radius: 999px; background: rgb(255 255 255 / 44%); color: #5f5f63; font-size: 12px; padding: 8px 10px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.localeToggle:hover { color: #0a0a0a; background: rgb(255 255 255 / 72%); }
 .menuToggle { display: none; border: 0; background: none; color: #0a0a0a; width: 40px; height: 40px; align-items: center; justify-content: center; }
 .mobileNav { display: none; }
 
@@ -141,16 +157,49 @@
 .aboutShade { position: absolute; inset: 0; background: linear-gradient(0deg,rgb(0 0 0 / 65%),rgb(0 0 0 / 10%) 70%,transparent); }
 .aboutText { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding: 40px var(--page-gutter) 96px; color: #fff; text-align: center; }
 .aboutText p { max-width: 1024px; font-size: 36px; line-height: 1.7; }
-.footerGrid { display: grid; grid-template-columns: 2fr repeat(3,1fr); gap: 48px; padding: 80px var(--page-gutter); border-top: 1px solid #e5e5e5; }
+.footerGrid { display: grid; grid-template-columns: 2fr repeat(3,1fr); gap: 48px; padding: 80px var(--page-gutter); border-top: 1px solid rgb(20 25 30 / 8%); }
 .footerBrand > a { font-size: 18px; font-weight: 500; }
-.footerBrand p { margin-top: 16px; font-size: 14px; line-height: 1.8; color: #737373; }
+.footerBrand p { margin-top: 16px; font-size: 14px; line-height: 1.8; color: #5f5f63; }
 .footerGrid h3 { font-size: 14px; font-weight: 500; margin-bottom: 16px; }
 .footerGrid ul { padding: 0; list-style: none; display: grid; gap: 12px; }
-.footerGrid li { font-size: 14px; color: #737373; }
+.footerGrid li { font-size: 14px; color: #5f5f63; }
 .footerGrid a:hover { color: #0a0a0a; }
-.footerBottom { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e5e5e5; padding: 24px var(--page-gutter); color: #737373; font-size: 12px; }
+.footerBottom { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgb(20 25 30 / 8%); padding: 24px var(--page-gutter); color: #5f5f63; font-size: 12px; }
 .footerBottom a { display: inline-flex; align-items: center; gap: 8px; }
 .up { transform: rotate(180deg); }
+
+/* 着陆页沿用同一套液态玻璃语汇，但不把主视觉包进厚重卡片。 */
+.landing {
+  background:
+    radial-gradient(circle at 12% 8%, rgb(109 137 255 / 12%), transparent 28%),
+    linear-gradient(180deg, #f8fbff 0%, #f5f8fc 48%, #fff 100%);
+}
+.heroCaption::before {
+  position: absolute;
+  z-index: -1;
+  inset: -18px -28px;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: 24px;
+  background: rgb(19 31 62 / 12%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 26%), 0 18px 50px rgb(0 0 0 / 12%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+  content: '';
+}
+.sketch { border-color: rgb(255 255 255 / 46%); box-shadow: 0 14px 36px rgb(28 42 68 / 7%), inset 0 1px 0 rgb(255 255 255 / 80%); }
+.collectionItem { border: 1px solid rgb(255 255 255 / 68%); border-radius: 20px; background: rgb(255 255 255 / 44%); box-shadow: 0 22px 50px rgb(24 39 74 / 8%), inset 0 1px 0 rgb(255 255 255 / 78%); -webkit-backdrop-filter: blur(18px) saturate(135%); backdrop-filter: blur(18px) saturate(135%); transition: transform 260ms ease, box-shadow 260ms ease, background-color 260ms ease; }
+.collectionItem:hover { transform: translateY(-5px); background: rgb(255 255 255 / 64%); box-shadow: 0 28px 60px rgb(24 39 74 / 14%), inset 0 1px 0 rgb(255 255 255 / 88%); }
+.collectionImage { border-radius: 16px; margin: 8px; }
+.collectionText { padding: 18px 20px 20px; }
+.sectionHeading a { border: 1px solid rgb(255 255 255 / 70%); border-radius: 999px; background: rgb(255 255 255 / 54%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%), 0 8px 20px rgb(24 39 74 / 6%); padding: 10px 14px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.specs { background: rgb(255 255 255 / 42%); border: 1px solid rgb(255 255 255 / 58%); box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.aboutText { padding: 32px; }
+.aboutText p { display: inline-block; border: 1px solid rgb(255 255 255 / 28%); border-radius: 20px; background: rgb(0 0 0 / 20%); padding: 20px 24px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%), 0 18px 40px rgb(0 0 0 / 16%); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .collectionItem { transition: none; }
+  .collectionItem:hover { transform: none; }
+}
 
 @keyframes brandmark-in { from { opacity: 0; transform: translateY(42%); } to { opacity: 1; transform: translateY(0); } }
 @media (min-width: 768px) and (max-width: 1199px) {
@@ -165,9 +214,10 @@
 @media (max-width: 767px) {
   .landing { --page-gutter: 24px; }
   .header { top: 12px; }
+  .landing[data-announcement='true'] .header { top: 50px; }
   .headerRow { padding: 6px 8px 6px 18px; gap: 12px; }
   .header[data-open='true'] { border-radius: 24px; background: #fff; }
-  .desktopNav, .headerCta { display: none; }
+  .desktopNav, .headerCta, .localeToggle { display: none; }
   .menuToggle { display: flex; }
   .mobileNav { display: flex; flex-direction: column; padding: 16px 24px 24px; gap: 22px; border-top: 1px solid #eee; }
   .mobileNav a { font-size: 16px; }
@@ -217,6 +267,7 @@
 @media (prefers-reduced-motion: reduce) {
   .landing *, .landing *::before, .landing *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .header { opacity: 1; transform: translate(-50%, 0); background: rgb(255 255 255 / 86%); }
+  .landing[data-announcement='true'] .header { top: 50px; }
   .hero, .philosophyScroll, .technologyScroll { height: auto; }
   .heroStage, .philosophyStage, .technologyStage { position: relative; }
   .philosophyStage { height: 55svh; }

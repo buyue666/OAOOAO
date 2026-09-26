@@ -1,110 +1,70 @@
 'use client'
 
-/**
- * 画布入口页。
- *
- * 为什么需要它：侧边栏与首页都提供「自由画布」入口，而画布必须绑定一个
- * **真实项目**。早先入口直接写死 `/canvas/aurora`（演示项目），
- * 真实账号下该请求返回 404，用户看到的是一个加载失败的空页面。
- *
- * 这里按真实数据解析目标项目：
- *  1. 已有选中项目 → 直接进入；
- *  2. 已有项目列表 → 进入第一个（属于当前用户）；
- *  3. 一个都没有 → **为本用户新建一个**画布项目后进入；
- *  4. 未登录 → 明确提示登录，不伪造一个本地项目。
- */
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import Link from 'next/link'
+import { ArrowRight, CalendarDays, LayoutPanelTop, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { ControlButton, EmptyState } from './ui'
-import { listCanvasProjects } from '@/lib/studio/api'
 import { useStudio } from '@/lib/studio/store'
+import { ControlButton, EmptyState, MediaThumb, StatusBadge } from './ui'
 
+/** 画布管理页：用户先看到自己的画布，再决定进入哪一个，不自动跳到演示项目。 */
 export function CanvasIndexPage() {
   const router = useRouter()
-  const { state, createProject } = useStudio()
-  const [error, setError] = useState('')
+  const { state, createProject, deleteProject } = useStudio()
+  const [createOpen, setCreateOpen] = useState(false)
+  const [title, setTitle] = useState('')
   const [creating, setCreating] = useState(false)
-  /** 防止 StrictMode 下的重复执行产生两个项目。 */
-  const startedRef = useRef(false)
-  /**
-   * 项目列表是否已经**从服务端加载完成**。
-   *
-   * `backendStatus === 'connected'` 只说明会话拿到了，项目列表可能还在请求中。
-   * 此时 `state.projects` 仍是**演示数据**（含演示项目 `aurora`），
-   * 用它跳转就会落到 `/canvas/aurora`（服务端不存在 → 404）。
-   * 实测：项目请求与跳转几乎同时发生，跳转先于响应到达。
-   *
-   * 因此这里显式等待列表请求结束（成功或失败），再决定目标项目。
-   */
-  const [projectsLoaded, setProjectsLoaded] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (state.backendStatus === 'checking') return
-    if (state.backendStatus !== 'connected') { setProjectsLoaded(true); return }
-    let cancelled = false
-    listCanvasProjects()
-      .then(() => { if (!cancelled) setProjectsLoaded(true) })
-      .catch(() => { if (!cancelled) setProjectsLoaded(true) })
-    return () => { cancelled = true }
-  }, [state.backendStatus])
-
-  useEffect(() => {
-    if (startedRef.current) return
-    if (state.backendStatus === 'checking') return
-    // 已连接时必须等真实项目列表就绪，否则会用到演示数据。
-    if (state.backendStatus === 'connected' && !projectsLoaded) return
-    startedRef.current = true
-
-    // 未登录 / 后端不可用：不创建项目，明确提示。
-    if (state.backendStatus === 'unauthenticated') { setError('unauthenticated'); return }
-    if (state.backendStatus === 'offline') { setError('后端暂时不可用，无法创建或读取画布项目。请稍后重试。'); return }
-
-    /**
-     * 已连接：只使用**真实存在**的项目。
-     *
-     * 必须校验 `selectedProjectId` 确实在项目列表里：
-     * 它可能来自 localStorage 的旧值（例如老版本写死的演示项目 `aurora`），
-     * 直接跳过去仍会 404。失效时回落到列表里的第一个真实项目。
-     */
-    const exists = state.projects.some((project) => project.id === state.selectedProjectId)
-    const target = exists ? state.selectedProjectId : state.projects[0]?.id
-    if (target) { router.replace(`/canvas/${target}`); return }
-
-    // 已连接且确实没有项目：为当前用户新建一个。
+  async function createCanvas() {
+    if (creating) return
+    const name = title.trim() || '未命名画布'
     setCreating(true)
-    void createProject('新建画布项目')
-      .then((project) => router.replace(`/canvas/${project.id}`))
-      .catch((reason) => setError(reason instanceof Error ? reason.message : '创建画布项目失败'))
-      .finally(() => setCreating(false))
-  }, [createProject, projectsLoaded, router, state.backendStatus, state.projects, state.selectedProjectId])
-
-  if (error === 'unauthenticated') {
-    return (
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-4 py-10">
-        <EmptyState
-          title="请先登录"
-          description="画布需要绑定属于你的项目，登录后即可创建并进入。"
-          action={<ControlButton variant="primary" onClick={() => router.push('/login')}>去登录</ControlButton>}
-        />
-      </div>
-    )
+    setError('')
+    try {
+      const project = await createProject(name)
+      router.push(`/canvas/${project.id}`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '创建画布失败')
+    } finally {
+      setCreating(false)
+    }
   }
 
-  if (error) {
-    return (
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-4 py-10">
-        <EmptyState
-          title="无法打开画布"
-          description={error}
-          action={<ControlButton variant="secondary" onClick={() => router.push('/projects')}>前往项目列表</ControlButton>}
-        />
-      </div>
-    )
+  async function removeCanvas(id: string) {
+    if (deleting) return
+    if (!window.confirm('删除后无法恢复，确定删除这张画布吗？')) return
+    setDeleting(id)
+    setError('')
+    try {
+      await deleteProject(id)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '删除画布失败')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  if (state.backendStatus === 'checking' || !state.hydrated) {
+    return <div className="flex min-h-[60vh] items-center justify-center px-4"><p className="text-sm text-muted-foreground" role="status">正在加载你的画布…</p></div>
+  }
+
+  if (state.backendStatus === 'unauthenticated') {
+    return <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-4 py-10"><EmptyState title="请先登录" description="画布需要绑定属于你的项目，登录后即可创建并进入。" action={<ControlButton variant="primary" onClick={() => router.push('/login')}>去登录</ControlButton>} /></div>
   }
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-4">
-      <p className="text-sm text-muted-foreground" role="status">{creating ? '正在为你创建画布项目…' : '正在打开画布…'}</p>
+    <div className="oao-canvas-index mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-studio-accent">创作空间</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground sm:text-3xl">自由画布</h1><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">把参考素材、文字、生成任务和 Agent 连接在同一张无限画布上。</p></div>
+        <ControlButton variant="primary" onClick={() => { setCreateOpen((value) => !value); setTitle(''); setError('') }}><Plus className="size-4" aria-hidden="true" />新建画布</ControlButton>
+      </header>
+
+      {createOpen && <form className="oao-canvas-create-bar lg-glass flex flex-col gap-3 p-3 sm:flex-row sm:items-center" onSubmit={(event) => { event.preventDefault(); void createCanvas() }}><LayoutPanelTop className="hidden size-5 shrink-0 text-studio-accent sm:block" aria-hidden="true" /><label htmlFor="new-canvas-title" className="sr-only">画布名称</label><input id="new-canvas-title" autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="给这张画布起个名字，例如：品牌主视觉" className="studio-field h-10 min-w-0 flex-1 border border-border bg-background/60 px-3 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" /><div className="flex shrink-0 gap-2"><ControlButton type="button" variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>取消</ControlButton><ControlButton type="submit" variant="primary" size="sm" disabled={creating}>{creating ? '创建中…' : '进入画布'}<ArrowRight className="size-3.5" aria-hidden="true" /></ControlButton></div></form>}
+      {error && <p className="studio-notice studio-notice-warning" role="alert">{error}</p>}
+
+      {state.projects.length ? <section aria-label="我的画布" className="oao-canvas-index-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{state.projects.map((project) => <article key={project.id} className="oao-canvas-index-card group lg-glass overflow-hidden"><Link href={`/canvas/${project.id}`} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/70"><div className="relative aspect-[16/9] overflow-hidden bg-muted">{project.cover ? <MediaThumb src={project.cover} alt={project.title} fallback={project.title} className="h-full w-full [&_img]:transition-transform [&_img]:duration-500 group-hover:[&_img]:scale-105" /> : <div className="oao-canvas-empty-cover"><Sparkles aria-hidden="true" /><span>从空白画布开始</span></div>}<span className="absolute left-3 top-3"><StatusBadge solid tone="accent">自由画布</StatusBadge></span></div><div className="flex items-start gap-3 p-4"><span className="oao-canvas-index-icon"><LayoutPanelTop aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-sm font-semibold text-foreground">{project.title}</strong><span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><CalendarDays className="size-3.5" aria-hidden="true" />{project.updatedAt}更新 · {project.shotCount} 个节点</span></span><ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-foreground" aria-hidden="true" /></div></Link><div className="flex items-center justify-between border-t border-border/70 px-4 py-2.5"><span className="text-[11px] text-muted-foreground">节点、素材与任务会自动保存</span><button type="button" aria-label={`删除${project.title}`} title="删除画布" className="oao-canvas-index-delete rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40" disabled={deleting === project.id} onClick={() => void removeCanvas(project.id)}><Trash2 className="size-3.5" aria-hidden="true" /></button></div></article>)}</section> : <EmptyState title="还没有画布" description="创建第一张画布，把生成、参考素材和 Agent 放在一起工作。" action={<ControlButton variant="primary" onClick={() => setCreateOpen(true)}><Plus className="size-4" aria-hidden="true" />创建第一张画布</ControlButton>} />}
     </div>
   )
 }
