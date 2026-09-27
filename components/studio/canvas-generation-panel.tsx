@@ -136,6 +136,7 @@ export function CanvasGenerationPanel({
   const qualities = capabilities?.qualities.length ? capabilities.qualities : mode === 'video' ? ['720', '1080'] : ['auto', 'high']
   const durations = capabilities?.durations.length ? capabilities.durations : ['5 秒', '8 秒', '10 秒']
   const estimatedCredits = selectedModel ? estimateCredits(selectedModel.id, { quality, duration: `${seconds} 秒` }) : 0
+  const modeLabel = mode === 'image' ? '图片生成' : mode === 'video' ? '视频生成' : mode === 'text' ? '文本生成' : 'Agent 任务'
 
   useEffect(() => {
     setMode(lockedMode ?? initialMode)
@@ -206,23 +207,23 @@ export function CanvasGenerationPanel({
   }
 
   return (
-    <aside className="oao-canvas-generation-panel" data-canvas-no-zoom aria-label="画布内生成面板">
+    <aside className="oao-canvas-generation-panel oao-canvas-generation-composer" data-canvas-no-zoom aria-label="画布内生成面板">
       <div className="oao-canvas-generation-header">
-        <div className="min-w-0"><p className="oao-canvas-panel-kicker">画布内创作</p><h2>创建节点</h2></div>
-        <IconAction label="关闭生成面板" onClick={onClose}><X aria-hidden="true" /></IconAction>
+        <div className="oao-canvas-generation-title"><span className="oao-canvas-generation-title-icon">{mode === 'image' ? <ImageIcon aria-hidden="true" /> : mode === 'video' ? <Video aria-hidden="true" /> : mode === 'text' ? <Type aria-hidden="true" /> : <Bot aria-hidden="true" />}</span><div className="min-w-0"><p className="oao-canvas-panel-kicker">画布内创作</p><h2>{selectedNode ? `编辑${modeLabel}` : '创建生成节点'}</h2></div></div>
+        <div className="oao-canvas-generation-header-actions">{selectedNode && <span className="oao-canvas-generation-target" title={selectedNode.data.title}>{selectedNode.data.title}</span>}<IconAction label="关闭生成面板" onClick={onClose}><X aria-hidden="true" /></IconAction></div>
       </div>
       <div className="oao-canvas-generation-scroll">
         {modeLocked ? <div className="oao-canvas-generation-locked"><span>节点类型</span><strong>{mode === 'image' ? '图片生成' : mode === 'video' ? '视频生成' : mode === 'text' ? '文本生成' : 'Agent 任务'}</strong><small>当前节点类型已锁定，避免把图片、视频和文本参数混在一起。</small></div> : <div className="oao-canvas-generation-tabs" role="tablist" aria-label="生成类型">
           {([['image', '图片', ImageIcon], ['video', '视频', Video], ['text', '文本', Type], ['agent', 'Agent', Bot]] as const).map(([value, label, Icon]) => <button key={value} type="button" role="tab" aria-selected={mode === value} className={cn('oao-canvas-generation-tab', mode === value && 'is-active')} onClick={() => setMode(value)}><Icon aria-hidden="true" />{label}</button>)}
         </div>}
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <label className="oao-canvas-generation-field"><span>创作描述</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === 'agent' ? '告诉 Agent 你要完成什么创作…' : '描述这个节点要生成的画面或镜头…'} rows={5} /></label>
+        <form onSubmit={submit} className="oao-canvas-generation-form flex flex-col gap-4">
+          <label className="oao-canvas-generation-field"><span>创作描述</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === 'agent' ? '告诉 Agent 你要完成什么创作…' : '描述这个节点要生成的画面或镜头…'} rows={3} /></label>
           {mode !== 'agent' && (
-            <>
+            <div className="oao-canvas-generation-controls">
               <GlassPicker label="模型" value={selectedModel?.id || ''} options={models.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost || 0} 积分` }))} onChange={setModelId} />
-              {mode !== 'text' && <div className="grid grid-cols-2 gap-2"><GlassPicker label="比例" value={ratio} options={ratios.map((item) => ({ value: item, label: item }))} onChange={setRatio} /><GlassPicker label="清晰度" value={quality} options={qualities.map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} onChange={setQuality} /></div>}
+              {mode !== 'text' && <><GlassPicker label="比例" value={ratio} options={ratios.map((item) => ({ value: item, label: item }))} onChange={setRatio} /><GlassPicker label="清晰度" value={quality} options={qualities.map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} onChange={setQuality} /></>}
               {mode === 'video' && <GlassPicker label="时长" value={`${seconds} 秒`} options={durations.map((item) => ({ value: item, label: item }))} onChange={(value) => setSeconds(secondsOf(value) || 8)} />}
-            </>
+            </div>
           )}
           {(mode === 'image' || mode === 'video' || mode === 'agent') && (
             <section className="oao-canvas-reference-section">

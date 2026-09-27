@@ -202,6 +202,21 @@ export function CanvasWorkspaceView({
     setContextMenu(null)
     setExpandMenu({ x: event.clientX, y: event.clientY, nodeId, direction })
   }
+  const nodeGenerationMode = (node: Node<CanvasNodeData>): CanvasGenerationMode => node.data.kind === 'video' ? 'video' : node.data.kind === 'task' ? 'agent' : node.data.kind === 'text' ? 'text' : 'image'
+  const inspectNode = (nodeId: string) => {
+    setSelectedId(nodeId)
+    setContextMenu(null)
+    setExpandMenu(null)
+    closeGeneration()
+  }
+  const generateNode = (nodeId: string) => {
+    const node = nodes.find((item) => item.id === nodeId)
+    if (!node) return
+    setSelectedId(nodeId)
+    setContextMenu(null)
+    setExpandMenu(null)
+    openGeneration(nodeGenerationMode(node), nodeId)
+  }
 
   useEffect(() => {
     if (!expandMenu) return
@@ -244,7 +259,7 @@ export function CanvasWorkspaceView({
       </header>
 
       <main className="oao-canvas-stage" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={(event) => { if (!event.dataTransfer.files.length) return; event.preventDefault(); addUploadedFiles(event.dataTransfer.files) }}>
-        <CanvasNodeActionsContext.Provider value={{ onExpand: onNodeExpand }}>
+        <CanvasNodeActionsContext.Provider value={{ onExpand: onNodeExpand, onInspect: inspectNode, onGenerate: generateNode, onDuplicate: duplicateNode, onDelete: deleteNode }}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -260,7 +275,7 @@ export function CanvasWorkspaceView({
             onNodeDragStart={handleNodeDragStart}
             onNodeDragStop={handleNodeDragStop}
             onNodeClick={(_, node) => { setSelectedId(node.id); setContextMenu(null); setExpandMenu(null) }}
-            onNodeDoubleClick={(_, node) => { setSelectedId(node.id); openGeneration(node.data.kind === 'video' ? 'video' : node.data.kind === 'task' ? 'agent' : node.data.kind === 'text' ? 'text' : 'image', node.id) }}
+            onNodeDoubleClick={(_, node) => { generateNode(node.id) }}
             onNodeContextMenu={(event, node) => { event.preventDefault(); setSelectedId(node.id); setExpandMenu(null); setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id }) }}
             onPaneContextMenu={(event) => { event.preventDefault(); setExpandMenu(null); setContextMenu({ x: event.clientX, y: event.clientY, position: flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) }) }}
             onPaneClick={() => { setSelectedId(null); setContextMenu(null); setExpandMenu(null) }}
