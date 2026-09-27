@@ -302,7 +302,7 @@ function AgentRunTaskRow({ task, onRetry, busy }: { task: AgentRunTask; onRetry:
 }
 
 /** 执行计划面板：桌面端放在右侧抽屉，移动端由 SidePanel 自动变成全屏 Sheet。 */
-export function AgentPlanPanel({ planId, onNotice, hideTitle = false }: { planId: string | null; onNotice?: (text: string) => void; hideTitle?: boolean }) {
+export function AgentPlanPanel({ planId, onNotice, hideTitle = false, hideDestinations = false }: { planId: string | null; onNotice?: (text: string) => void; hideTitle?: boolean; hideDestinations?: boolean }) {
   const { state, dispatch } = useStudio()
   const router = useRouter()
   const [editingStep, setEditingStep] = useState<string | null>(null)
@@ -414,7 +414,7 @@ export function AgentPlanPanel({ planId, onNotice, hideTitle = false }: { planId
         )}
       </div>
 
-      {plan.status === 'completed' && (
+      {plan.status === 'completed' && !hideDestinations && (
         <section className="border border-border bg-muted/40 p-3">
           <p className="text-xs font-semibold text-foreground">结果去向</p>
           <p className="mt-1 text-[11px] leading-5 text-muted-foreground">把这次结果继续送入图片、视频、分镜或画布，不需要重新描述。</p>
@@ -424,6 +424,13 @@ export function AgentPlanPanel({ planId, onNotice, hideTitle = false }: { planId
             <ControlButton size="sm" variant="ghost" onClick={() => router.push(state.selectedProjectId ? `/projects/${state.selectedProjectId}/storyboard` : '/projects')}><Clapperboard className="size-3.5" aria-hidden="true" />加入分镜</ControlButton>
             <ControlButton size="sm" variant="ghost" onClick={() => router.push('/canvas')}><Send className="size-3.5" aria-hidden="true" />送入画布</ControlButton>
           </div>
+        </section>
+      )}
+
+      {plan.status === 'completed' && hideDestinations && (
+        <section className="border border-border bg-muted/40 p-3">
+          <p className="text-xs font-semibold text-foreground">已在当前画布完成</p>
+          <p className="mt-1 text-[11px] leading-5 text-muted-foreground">Agent 任务和生成节点会留在这张画布中，不需要切换到其他创作工作台。</p>
         </section>
       )}
 
@@ -487,6 +494,7 @@ export function DirectorAgent({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const projectTitle = projectId ? state.projects.find((project) => project.id === projectId)?.title : undefined
+  const isCanvasContext = context.includes('画布')
   const planCredits = useMemo(() => estimateCredits('motion-03', { duration: '8 秒', quality: '高清' }), [estimateCredits])
 
   useEffect(() => {
@@ -724,7 +732,7 @@ export function DirectorAgent({
                           <ControlButton size="sm" variant="secondary" onClick={() => onOpenPlan(message.planId!)}>查看计划</ControlButton>
                         </div>
                       ) : (
-                        <AgentPlanPanel planId={message.planId} onNotice={setNotice} />
+                        <AgentPlanPanel planId={message.planId} onNotice={setNotice} hideDestinations={isCanvasContext} />
                       )}
                     </div>
                   )}
@@ -856,4 +864,3 @@ export function DirectorAgentWorkspace({ projectId, context }: { projectId?: str
     </>
   )
 }
-

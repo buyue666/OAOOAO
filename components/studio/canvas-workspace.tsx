@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   addEdge,
   applyEdgeChanges,
@@ -24,7 +23,7 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Archive, ArrowLeft, Check, Copy, Film, FolderOpen, Hand, History, Home, Image as ImageIcon, Images, Layers3, Link2, ListChecks, Maximize2, Menu, MessageCircle, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, RotateCcw, Search, Settings2, Share2, Sparkles, Trash2, Type, Undo2, Upload, Video, X } from 'lucide-react'
+import { Archive, ArrowLeft, Check, Copy, Film, FolderOpen, Hand, History, Home, Image as ImageIcon, Images, Layers3, ListChecks, Maximize2, Menu, MessageCircle, MousePointer2, PanelLeftClose, PanelLeftOpen, Plus, Redo2, RotateCcw, Search, Settings2, Share2, Sparkles, Trash2, Type, Undo2, Upload, Video, X } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { canvasProjectToBoard, createCanvasProject, getCanvasProject, isUnauthorized, StudioApiError, updateCanvasProject, type CanvasBackendProject } from '@/lib/studio/api'
 import { media } from '@/lib/studio/mock-data'
@@ -130,7 +129,6 @@ type HistoryState = {
 type CanvasPanelTab = 'nodes' | 'assets' | 'tasks' | 'history'
 
 export function CanvasWorkspace({ projectId, fullScreen = false }: { projectId?: string; fullScreen?: boolean }) {
-  const router = useRouter()
   const { state, dispatch } = useStudio()
   const generation = useGeneration()
   const boardKey = projectId ?? state.selectedProjectId ?? 'canvas'
@@ -590,23 +588,6 @@ export function CanvasWorkspace({ projectId, fullScreen = false }: { projectId?:
     flowRef.current?.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2, duration: 260 })
   }, [showAgent])
 
-  const sendToWorkspace = useCallback(() => {
-    if (!selectedNode) return
-    if (selectedNode.data.kind === 'image') {
-      router.push('/image')
-      return
-    }
-    if (selectedNode.data.kind === 'video') {
-      router.push('/video')
-      return
-    }
-    if (selectedNode.data.kind === 'task') {
-      router.push('/tasks')
-      return
-    }
-    router.push(`/projects/${projectId ?? boardKey}/storyboard`)
-  }, [boardKey, projectId, router, selectedNode])
-
   const shellClass = fullScreen
     ? 'studio-canvas-fullscreen oao-canvas-editor relative flex min-h-0 overflow-hidden bg-black'
     : 'oao-canvas-editor studio-surface relative flex min-h-[600px] min-h-0 overflow-hidden'
@@ -709,7 +690,7 @@ export function CanvasWorkspace({ projectId, fullScreen = false }: { projectId?:
         {selectedNode && !showAgent && !generationPanelOpen && (
           <aside className="oao-canvas-inspector canvas-float-panel" data-canvas-no-zoom>
             <div className="oao-canvas-inspector-header"><div><p className="oao-canvas-panel-kicker">当前选择</p><h2>节点属性</h2></div><IconAction label="关闭属性" onClick={() => setSelectedId(null)}><X aria-hidden="true" /></IconAction></div>
-            <div className="oao-canvas-inspector-body"><div><span>名称</span><strong>{selectedNode.data.title}</strong></div><div><span>类型</span><strong>{selectedNode.data.kind === 'image' ? '图片节点' : selectedNode.data.kind === 'video' ? '视频节点' : selectedNode.data.kind === 'task' ? '任务节点' : '文本节点'}</strong></div><div><span>描述</span><p>{selectedNode.data.detail}</p></div><ControlButton size="sm" variant="primary" onClick={() => openGeneration(selectedNode.data.kind === 'video' ? 'video' : 'image', selectedNode.id)}><Sparkles className="size-3.5" aria-hidden="true" />生成变体</ControlButton><ControlButton size="sm" variant="secondary" onClick={sendToWorkspace}><Link2 className="size-3.5" aria-hidden="true" />打开完整工作台</ControlButton></div>
+            <div className="oao-canvas-inspector-body"><div><span>名称</span><strong>{selectedNode.data.title}</strong></div><div><span>类型</span><strong>{selectedNode.data.kind === 'image' ? '图片节点' : selectedNode.data.kind === 'video' ? '视频节点' : selectedNode.data.kind === 'task' ? '任务节点' : '文本节点'}</strong></div><div><span>描述</span><p>{selectedNode.data.detail}</p></div><ControlButton size="sm" variant="primary" onClick={() => openGeneration(selectedNode.data.kind === 'video' ? 'video' : 'image', selectedNode.id)}><Sparkles className="size-3.5" aria-hidden="true" />在画布内生成</ControlButton></div>
           </aside>
         )}
 

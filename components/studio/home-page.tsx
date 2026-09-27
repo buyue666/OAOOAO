@@ -14,16 +14,14 @@ type CreateMode = 'agent' | 'image' | 'video' | 'text' | 'drama'
 /**
  * 创作模式 → 目标工作台。
  *
- * 短剧不再指向写死的 `/projects/aurora/script`：那是一个**固定项目**，
- * 对没有该项目的用户会跳到空页面，也可能打开别人的项目。
- * 短剧入口改为「当前用户真实项目」的解析（见 `startCreation`）。
+ * 短剧入口使用独立的 `/drama` 生产线；不会借用画布项目上下文。
  */
 const modes: Array<{ id: CreateMode; label: string; href: string; icon: typeof Video }> = [
   { id: 'video', label: '视频', href: '/video', icon: Video },
   { id: 'image', label: '图片', href: '/image', icon: ImageIcon },
   { id: 'text', label: '文本', href: '/agent', icon: MessageSquareText },
   { id: 'agent', label: 'Agent', href: '/agent', icon: Bot },
-  { id: 'drama', label: '短剧', href: '/projects', icon: Sparkles },
+  { id: 'drama', label: '短剧', href: '/drama', icon: Sparkles },
 ]
 
 const visibleModes = modes.filter((item) => item.id !== 'drama')
@@ -73,7 +71,7 @@ const projectTones: Record<string, Tone> = {
 
 export function HomePage() {
   const router = useRouter()
-  const { state, createProject } = useStudio()
+  const { state } = useStudio()
   const [mode, setMode] = useState<CreateMode>('agent')
   const [prompt, setPrompt] = useState('')
   const [files, setFiles] = useState<File[]>([])
@@ -132,22 +130,6 @@ export function HomePage() {
   }, [modelDropdownOpen])
 
   /**
-   * 解析短剧要打开的项目。
-   *
-   * 优先用当前选中的项目；没有则用当前用户的第一个真实项目；
-   * 一个都没有时**为本用户新建一个**，而不是跳到固定的 aurora。
-   */
-  async function resolveDramaProject(): Promise<string | null> {
-    if (state.selectedProjectId && state.projects.some((project) => project.id === state.selectedProjectId)) {
-      return state.selectedProjectId
-    }
-    if (state.projects.length) return state.projects[0].id
-    if (state.backendStatus !== 'connected') return null
-    const created = await createProject(`${prompt.trim().slice(0, 18) || '新建'}短剧项目`)
-    return created.id
-  }
-
-  /**
    * 开始创作。
    *
    * 早先这里只 `router.push(activeMode.href)`，**提示词、参考文件、模式全部丢失**：
@@ -166,15 +148,8 @@ export function HomePage() {
         seconds: mode === 'video' ? seconds : undefined,
       }
       if (mode === 'drama') {
-        const projectId = await resolveDramaProject()
-        if (!projectId) {
-          window.alert('短剧需要项目上下文，但当前未登录，无法创建项目。请先登录后再试。')
-          return
-        }
-        const result = saveCreateIntent({ mode, prompt: prompt.trim(), files: intentFiles, projectId, settings })
-        if (!result.saved) window.alert('浏览器存储不可用，创作描述与参考文件未能传递到工作台。')
-        else if (failed.length || result.droppedFiles) window.alert(`有 ${failed.length + result.droppedFiles} 个参考文件未能传递（读取失败或超出浏览器存储上限）。`)
-        router.push(`/projects/${projectId}/script`)
+        // 短剧是独立的生产线入口，不再借用画布项目上下文。
+        router.push('/drama')
         return
       }
       // 文本模式沿用导演 Agent 的执行入口，但保留独立的首页模式语义。

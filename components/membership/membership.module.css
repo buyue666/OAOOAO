@@ -828,6 +828,48 @@
   color: var(--membership-ink);
 }
 
+/* Dialogs are rendered through a portal, outside `.themeScope`; keep their
+   semantic controls on the membership palette instead of the app theme. */
+.dialogContent [data-slot='badge'] {
+  border-color: color-mix(in srgb, var(--membership-ink) 30%, transparent);
+  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
+  color: var(--membership-ink);
+}
+
+.dialogContent [data-slot='dialog-description'] {
+  color: #c6c9cd;
+}
+
+.dialogContent [data-slot='dialog-footer'] {
+  border-top-color: color-mix(in srgb, var(--membership-ink) 16%, transparent);
+  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
+}
+
+.dialogCancelButton,
+.dialogConfirmButton {
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.dialogCancelButton {
+  border-color: color-mix(in srgb, var(--membership-ink) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page)) !important;
+  color: var(--membership-ink) !important;
+}
+
+.dialogCancelButton:hover {
+  background: color-mix(in srgb, var(--membership-ink) 15%, var(--membership-page)) !important;
+}
+
+.dialogConfirmButton {
+  background: var(--membership-ink) !important;
+  color: var(--membership-page) !important;
+}
+
+.dialogConfirmButton:hover {
+  background: #ffffff !important;
+}
+
 .dialogSummary {
   display: flex;
   flex-direction: column;

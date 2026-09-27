@@ -24,6 +24,7 @@ const rootLabels: Record<string, string> = {
   plans: '套餐',
   admin: '管理后台',
   canvas: '自由画布',
+  drama: '短剧制作',
 }
 
 const sectionLabels: Record<string, string> = {
@@ -65,6 +66,12 @@ function buildCrumbs(pathname: string, projectTitle?: string): Crumb[] {
   if (segments[0] === 'admin') {
     const crumbs: Crumb[] = [{ label: '管理后台', href: '/admin' }]
     if (segments[1]) crumbs.push({ label: sectionLabels[segments[1]] ?? segments[1] })
+    return crumbs
+  }
+
+  if (segments[0] === 'drama') {
+    const crumbs: Crumb[] = [{ label: '短剧制作', href: '/drama' }]
+    if (segments[1]) crumbs.push({ label: projectTitle ?? '短剧项目' })
     return crumbs
   }
 

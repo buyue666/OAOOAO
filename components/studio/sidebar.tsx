@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { Suspense } from 'react'
 import {
   Bot,
@@ -44,7 +44,7 @@ const studioNavGroups: StudioNavGroup[] = [
       { label: '导演 Agent', href: '/agent', icon: Bot },
       { label: '图片生成', href: '/image', icon: ImageIcon },
       { label: '视频生成', href: '/video', icon: Video },
-      { label: '短剧制作', href: '/projects?view=drama', icon: Clapperboard, exact: true, activeView: 'drama' },
+      { label: '短剧制作', href: '/drama', icon: Clapperboard, activeView: 'drama' },
     ],
   },
   {
@@ -64,11 +64,9 @@ const studioNavGroups: StudioNavGroup[] = [
   },
 ]
 
-function isActiveRoute(pathname: string, searchParams: ReturnType<typeof useSearchParams>, item: StudioNavItem) {
+function isActiveRoute(pathname: string, item: StudioNavItem) {
   if (item.activeView) {
-    if (pathname !== '/projects') return false
-    const view = searchParams.get('view')
-    return item.activeView === 'drama' ? view === 'drama' : view !== 'drama'
+    return item.activeView === 'drama' && (pathname === '/drama' || pathname.startsWith('/drama/'))
   }
 
   // 画布是「列表 → 具体项目」两级：在具体项目里也应高亮「自由画布」。
@@ -105,7 +103,6 @@ function NavItem({ item, active, collapsed }: { item: StudioNavItem; active: boo
 
 function SidebarContent() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const { state, toggleSidebar } = useStudio()
   const collapsed = state.sidebarCollapsed
 
@@ -157,7 +154,7 @@ function SidebarContent() {
               </h2>
               <div className="flex flex-col gap-0.5">
                 {group.items.map((item) => (
-                  <NavItem key={item.href} item={item} active={isActiveRoute(pathname, searchParams, item)} collapsed={collapsed} />
+                  <NavItem key={item.href} item={item} active={isActiveRoute(pathname, item)} collapsed={collapsed} />
                 ))}
               </div>
             </section>

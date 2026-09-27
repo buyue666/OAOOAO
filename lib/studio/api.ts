@@ -297,6 +297,7 @@ export async function createDramaProject(input: {
   title: string
   summary?: string
   style?: string
+  ratio?: string
   initialScript?: string
   sourceHandoffId?: string
   sourceAssets?: DramaSourceAsset[]
@@ -307,6 +308,7 @@ export async function createDramaProject(input: {
       title: input.title,
       ...(input.summary ? { summary: input.summary } : {}),
       ...(input.style ? { style: input.style } : {}),
+      ...(input.ratio ? { ratio: input.ratio } : {}),
       ...(input.initialScript ? { initialScript: input.initialScript } : {}),
       ...(input.sourceHandoffId ? { sourceHandoffId: input.sourceHandoffId } : {}),
       ...(input.sourceAssets?.length ? { sourceAssets: input.sourceAssets } : {}),

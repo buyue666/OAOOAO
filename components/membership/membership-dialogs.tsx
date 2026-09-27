@@ -62,8 +62,8 @@ export function MembershipDialogs({
           ) : null}
           {errorMessage && <p role="alert" className="text-sm text-red-400">{errorMessage}</p>}
           <DialogFooter>
-            <Button variant="outline" disabled={submitting} onClick={() => onSelectionOpenChange(false)}>取消</Button>
-            <Button disabled={submitting} onClick={onConfirm}>{submitting ? '处理中…' : '确认并继续'}</Button>
+            <Button className={styles.dialogCancelButton} variant="outline" disabled={submitting} onClick={() => onSelectionOpenChange(false)}>取消</Button>
+            <Button className={styles.dialogConfirmButton} disabled={submitting} onClick={onConfirm}>{submitting ? '处理中…' : '确认并继续'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

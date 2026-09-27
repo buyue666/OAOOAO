@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Suspense, useEffect } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { Bot, Clapperboard, GalleryHorizontalEnd, Image as ImageIcon, LayoutDashboard, ListChecks, Palette, PanelsTopLeft, Settings, Sparkles, Video, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -11,7 +11,7 @@ const studioNavGroups = [
     { label: '导演 Agent', href: '/agent', icon: Bot },
     { label: '图片生成', href: '/image', icon: ImageIcon },
     { label: '视频生成', href: '/video', icon: Video },
-    { label: '短剧制作', href: '/projects?view=drama', icon: Clapperboard },
+    { label: '短剧制作', href: '/drama', icon: Clapperboard },
   ] },
   { label: '工具', items: [
     { label: '自由画布', href: '/canvas', icon: PanelsTopLeft },
@@ -26,7 +26,6 @@ const studioNavGroups = [
 
 function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
 
   useEffect(() => {
     if (!open) return
@@ -58,11 +57,9 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
               <div className="flex flex-col gap-0.5">
                 {group.items.map((item) => {
                   const Icon = item.icon
-                  const active = item.href === '/projects?view=drama'
-                    ? pathname === '/projects' && searchParams.get('view') === 'drama'
-                    : item.href === '/projects'
-                      ? pathname === '/projects' && searchParams.get('view') !== 'drama'
-                      : item.href === '/canvas'
+                  const active = item.href === '/drama'
+                    ? pathname === '/drama' || pathname.startsWith('/drama/')
+                    : item.href === '/canvas'
                     ? pathname === '/canvas' || pathname.startsWith('/canvas/')
                     : pathname === item.href || pathname.startsWith(`${item.href}/`)
                   return <Link key={item.href} href={item.href} onClick={onClose} data-active={active} className={cn('studio-nav-item flex h-10 shrink-0 items-center gap-3 rounded-lg px-3 text-sm font-medium', active ? 'text-studio-accent' : 'text-muted-foreground')}><Icon className="size-4" />{item.label}</Link>
