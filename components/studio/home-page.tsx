@@ -7,7 +7,7 @@ import { ArrowRight, Bot, Check, ChevronDown, Image as ImageIcon, MessageSquareT
 import { useStudio } from '@/lib/studio/store'
 import { readIntentFiles, saveCreateIntent } from '@/lib/studio/create-intent'
 import { cn } from '@/lib/utils'
-import { MediaThumb, StatusBadge, Tooltip, type Tone } from './ui'
+import { MediaThumb, SelectField, StatusBadge, Tooltip, type Tone } from './ui'
 
 type CreateMode = 'agent' | 'image' | 'video' | 'text' | 'drama'
 
@@ -210,9 +210,9 @@ export function HomePage() {
             {parametersOpen && mode !== 'agent' && mode !== 'text' && (
               <div className="studio-home-inline-params" aria-label="生成参数">
                 <span className="studio-home-inline-params-title">生成参数</span>
-                <label className="studio-home-param-field"><span>比例</span><select value={ratio} onChange={(event) => setRatio(event.target.value)} aria-label="比例"><option value="">自动</option>{ratioOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                <label className="studio-home-param-field"><span>清晰度</span><select value={quality} onChange={(event) => setQuality(event.target.value)} aria-label="清晰度"><option value="">自动</option>{qualityOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                {mode === 'video' && <label className="studio-home-param-field"><span>时长</span><select value={`${seconds} 秒`} onChange={(event) => { const value = Number(event.target.value.match(/\d+(?:\.\d+)?/)?.[0] || 8); setSeconds(value) }} aria-label="时长">{durationOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>}
+                <div className="studio-home-param-field"><span>比例</span><SelectField value={ratio} onChange={setRatio} options={[{ value: '', label: '自动' }, ...ratioOptions.map((item) => ({ value: item, label: item }))]} className="studio-home-param-select" /></div>
+                <div className="studio-home-param-field"><span>清晰度</span><SelectField value={quality} onChange={setQuality} options={[{ value: '', label: '自动' }, ...qualityOptions.map((item) => ({ value: item, label: item }))]} className="studio-home-param-select" /></div>
+                {mode === 'video' && <div className="studio-home-param-field"><span>时长</span><SelectField value={`${seconds} 秒`} onChange={(value) => { const next = Number(value.match(/\d+(?:\.\d+)?/)?.[0] || 8); setSeconds(next) }} options={durationOptions.map((item) => ({ value: item, label: item }))} className="studio-home-param-select" /></div>}
                 <span className="studio-home-param-summary">{selectedModel?.shortName || '自动模型'}{files.length ? ` · ${files.length} 个参考` : ''}</span>
               </div>
             )}

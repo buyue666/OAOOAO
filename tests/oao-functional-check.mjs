@@ -57,10 +57,12 @@ try {
   check('画布不再显示完整工作台跳转文案', !(await page.locator('body').innerText()).includes('打开完整工作台'))
   const pane = page.locator('.react-flow__pane')
   check('画布 React Flow 面板存在', await pane.count() === 1)
+  check('画布节点使用绝对定位而不是普通文档流', await page.locator('.react-flow__node').first().evaluate((element) => getComputedStyle(element).position === 'absolute'))
   await pane.click({ button: 'right', position: { x: 120, y: 120 } })
   check('画布右键菜单可以打开', await page.locator('.oao-canvas-context-menu').isVisible())
   await page.getByRole('button', { name: '生成图片' }).click()
   check('右键生成直接打开画布内创作面板', (await page.locator('body').innerText()).includes('画布内创作'))
+  check('右键生成会在画布内创建图片节点', await page.locator('[data-canvas-node-kind="image"]').count() >= 3)
 
   await visit('/plans')
   await page.getByRole('button', { name: '立即开通' }).first().click()
@@ -77,6 +79,12 @@ try {
   for (const pathname of ['/studio', '/image', '/video', '/agent', '/tasks', '/assets', '/works', '/gallery', '/settings', '/admin']) {
     await visit(pathname)
   }
+  await page.goto(`${base}/image`, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(320)
+  const glassSelect = page.locator('.studio-select-trigger').first()
+  check('工作台模型选择使用自定义玻璃菜单', await glassSelect.count() === 1)
+  await glassSelect.click()
+  check('工作台模型菜单文字和背景有明确对比度', await page.locator('[data-studio-select-menu]').evaluate((element) => getComputedStyle(element).color !== getComputedStyle(element).backgroundColor))
   check('核心页面没有未捕获浏览器异常', pageErrors.length === 0)
   console.log(`CHECKS: ${checks}; FAILURES: 0`)
 } finally {

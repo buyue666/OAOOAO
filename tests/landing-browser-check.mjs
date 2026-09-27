@@ -38,46 +38,6 @@ async function checkHeroComposition(page, label) {
   })
   check(`Foreground stays smaller and bottom-aligned (${label})`, geometry.heightRatio <= 0.73 && Math.abs(geometry.bottomGap) < 1)
   check(`Foreground retains its original aspect ratio (${label})`, Math.abs(geometry.aspect - 1.5) < 0.01)
-  const clip = await page.locator('[data-hero-brandmark]').boundingBox()
-  const pixels = async () => sharp(await page.screenshot({ clip, animations: 'disabled' })).removeAlpha().raw().toBuffer()
-  const shown = await pixels()
-  let bare
-  try {
-    await foreground.evaluate(image => { image.style.visibility = 'hidden' })
-    bare = await pixels()
-  } finally {
-    await foreground.evaluate(image => { image.style.removeProperty('visibility') })
-  }
-  let ink = 0
-  let visible = 0
-  for (let i = 0; i < bare.length; i += 3) {
-    if (bare[i] > 20 || bare[i + 1] > 20 || bare[i + 2] > 20) continue
-    ink++
-    if (shown[i] <= 26 && shown[i + 1] <= 26 && shown[i + 2] <= 26) visible++
-  }
-  check(`At least 85% of the brand lettering remains visible (${label}, ${Math.round(visible / ink * 100)}%)`, ink > 100 && visible / ink >= 0.85)
-}
-
-async function checkBrandmarkEntrance(page) {
-  const brandmark = page.locator('[data-hero-brandmark]')
-  const timing = await brandmark.evaluate(element => {
-    const animation = element.getAnimations()[0]
-    const effect = animation?.effect?.getTiming()
-    return { duration: Number(effect?.duration), delay: Number(effect?.delay), animation: element.getAnimations().length > 0 }
-  })
-  check('Brand icon has a readable entrance animation', timing.animation && timing.duration >= 1200 && timing.delay >= 160)
-  const positions = await brandmark.evaluate(element => {
-    const animation = element.getAnimations()[0]
-    const effect = animation.effect.getTiming()
-    animation.pause()
-    animation.currentTime = effect.delay + Number(effect.duration) * 0.15
-    const early = element.getBoundingClientRect().top
-    animation.currentTime = effect.delay + Number(effect.duration) * 0.8
-    const late = element.getBoundingClientRect().top
-    return { early, late }
-  })
-  check('Brand icon visibly rises during the entrance', positions.early - positions.late > 24)
-  await brandmark.evaluate(element => element.getAnimations().forEach(animation => animation.finish()))
 }
 
 async function checkCanvasOcclusion(page, label) {
@@ -92,26 +52,11 @@ async function checkCanvasOcclusion(page, label) {
   })
   const pixels = async () => sharp(await page.screenshot({ clip, animations: 'disabled' })).raw().toBuffer()
   const original = await pixels()
-  const wordmark = page.locator('[data-hero-brandmark]').locator('..')
-  const previous = await wordmark.getAttribute('style')
   try {
-    // A loud color behind the scene exposes holes in the blue paint on the canvas.
-    await wordmark.evaluate(element => {
-      element.style.background = '#ff00ff'
-      element.style.inset = '0'
-      element.style.opacity = '1'
-    })
-    const covered = await pixels()
-    // User-supplied foreground has a soft alpha (roughly 252/255) even on solid subjects.
-    check(`Canvas blocks text without large transparency holes (${label})`, original.every((value, index) => Math.abs(value - covered[index]) <= 6))
     await foreground.evaluate(element => { element.style.visibility = 'hidden' })
     check(`Canvas occlusion regression detects a missing foreground (${label})`, !original.equals(await pixels()))
   } finally {
     await foreground.evaluate(element => { element.style.removeProperty('visibility') })
-    await wordmark.evaluate((element, style) => {
-      if (style === null) element.removeAttribute('style')
-      else element.setAttribute('style', style)
-    }, previous)
   }
 }
 
@@ -121,13 +66,13 @@ try {
   await page.goto(base, { waitUntil: 'networkidle' })
   await page.locator('[data-landing-version="oao-zh-v8-landscape-layered"]').waitFor()
   check('Chinese page metadata', (await page.title()) === 'OAO · 图片、视频与故事创作')
-  check('Brand icon is visible', await page.locator('[data-hero-brandmark]').isVisible())
+  check('Hero does not render a duplicate text wordmark', await page.locator('[data-hero-brandmark]').count() === 0)
   await page.waitForFunction(() => {
     const header = document.querySelector('header')
     const style = getComputedStyle(header)
     return header.dataset.ready === 'true' && Number(style.opacity) > 0.99 && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
   })
-  check('Navigation and its backdrop appear without scrolling', await page.evaluate(() => scrollY === 0))
+  check('Navigation appears without scrolling', await page.evaluate(() => scrollY === 0))
   check('User brand image appears in header and footer', await page.locator('header img[alt="OAO"], footer img[alt="OAO"]').evaluateAll(images => images.length === 2 && images.every(image => image.getAttribute('src').includes('oao-logo-transparent.png'))))
   const words = await page.locator('main').innerText()
   check('No English copy other than OAO', (words.match(/[A-Za-z]{2,}/g) || []).every(word => word === 'OAO'))
@@ -139,16 +84,13 @@ try {
   check('No remote template video is embedded', await page.locator('video').count() === 0)
   check('Clean background and extracted foreground are active', await page.locator('#hero img[aria-hidden="true"]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-background-clean-v1.png')) && await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v3.png')) && await page.locator('[data-hero-canvas]').count() === 0)
   await heroCenter.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
-  await checkBrandmarkEntrance(page)
   await checkHeroComposition(page, 'desktop')
   await checkCanvasOcclusion(page, 'desktop')
   await snapshot(page, 'desktop-hero')
   await page.evaluate(() => scrollTo(0, innerHeight * 0.1))
   await settled(page)
-  check('A slight scroll does not immediately fade the brand', await page.locator('[data-hero-brandmark]').locator('..').evaluate(el => Number(getComputedStyle(el).opacity) > 0.99))
   await page.evaluate(() => scrollTo(0, innerHeight * 0.36))
   await settled(page)
-  check('The brand fades gradually after its initial hold', await page.locator('[data-hero-brandmark]').locator('..').evaluate(el => Number(getComputedStyle(el).opacity) > 0.45 && Number(getComputedStyle(el).opacity) < 0.8))
   await snapshot(page, 'desktop-hero-partial-scroll')
   await page.evaluate(() => scrollTo(0, innerHeight * 2))
   await page.waitForFunction(() => document.querySelector('img[alt="旷野中进行绘画与影像记录的 OAO 创作现场"]').parentElement.style.width === '20%')
@@ -190,7 +132,7 @@ try {
     await settled(page)
     check(`No overflow at ${viewport.width}px`, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     check(`Hero retains photograph to the bottom at ${viewport.width}px`, await page.locator('#hero img[aria-hidden="true"]').first().evaluate(image => image.getBoundingClientRect().bottom >= image.parentElement.getBoundingClientRect().bottom))
-    check(`Brand icon fits at ${viewport.width}px`, await page.locator('[data-hero-brandmark]').evaluate(brandmark => brandmark.getBoundingClientRect().left >= 0 && brandmark.getBoundingClientRect().right <= innerWidth))
+    check(`No duplicate hero wordmark at ${viewport.width}px`, await page.locator('[data-hero-brandmark]').count() === 0)
     await checkHeroComposition(page, `${viewport.width}px`)
     await snapshot(page, `hero-${viewport.width}`)
     if (viewport.width === 390) {

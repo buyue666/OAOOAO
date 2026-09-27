@@ -63,7 +63,10 @@ export function cloneBoard(board: CanvasBoard): CanvasBoard {
 /** 空画布：真实登录状态下新建画布保持为空，不自动填充演示节点。 */
 export const emptyBoard: CanvasBoard = { nodes: [], edges: [] }
 
-export type CanvasFlowInstance = { fitView: (options?: { padding?: number; maxZoom?: number; duration?: number }) => void }
+export type CanvasFlowInstance = {
+  fitView: (options?: { padding?: number; maxZoom?: number; duration?: number }) => void
+  screenToFlowPosition: (position: { x: number; y: number }) => { x: number; y: number }
+}
 export type HistoryState = { canUndo: boolean; canRedo: boolean }
 export type CanvasPanelTab = 'nodes' | 'assets' | 'tasks' | 'history'
-export type CanvasContextMenu = { x: number; y: number; nodeId?: string } | null
+export type CanvasContextMenu = { x: number; y: number; position?: { x: number; y: number }; nodeId?: string } | null

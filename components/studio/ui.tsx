@@ -179,14 +179,97 @@ export function SearchField({ value, onChange, placeholder = '搜索' }: { value
 }
 
 export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }>; className?: string; hint?: string; disabled?: boolean }) {
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const [menuStyle, setMenuStyle] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
+  const selected = options.find((option) => option.value === value) ?? options[0]
+
+  useLayoutEffect(() => {
+    if (!open || disabled) return
+    const updatePosition = () => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const rect = trigger.getBoundingClientRect()
+      const gap = 6
+      const preferredHeight = Math.min(280, Math.max(120, options.length * 38 + 8))
+      const roomBelow = window.innerHeight - rect.bottom - gap - 12
+      const roomAbove = rect.top - gap - 12
+      const openAbove = roomBelow < Math.min(preferredHeight, 220) && roomAbove > roomBelow
+      const maxHeight = Math.max(120, Math.min(preferredHeight, openAbove ? roomAbove : roomBelow))
+      setMenuStyle({
+        top: openAbove ? rect.top - gap - maxHeight : rect.bottom + gap,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)),
+        width: rect.width,
+        maxHeight,
+      })
+    }
+    updatePosition()
+    const closeOnOutside = (event: PointerEvent) => {
+      const target = event.target instanceof globalThis.Node ? event.target : null
+      if (target && (triggerRef.current?.contains(target) || (target instanceof Element && target.closest('[data-studio-select-menu]')))) return
+      setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    document.addEventListener('pointerdown', closeOnOutside, true)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+      document.removeEventListener('pointerdown', closeOnOutside, true)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [disabled, open, options.length])
+
+  const moveSelection = (direction: 1 | -1) => {
+    if (!options.length) return
+    const index = Math.max(0, options.findIndex((option) => option.value === value))
+    onChange(options[(index + direction + options.length) % options.length].value)
+  }
+
   return (
     <label className={cn('flex min-w-0 flex-col gap-1.5', className)}>
       {label && <span className="text-xs font-medium text-muted-foreground">{label}</span>}
       <span className="relative">
-        <select disabled={disabled} className="studio-select studio-field h-8 w-full appearance-none border border-border bg-card px-2.5 pr-8 text-sm text-foreground outline-none transition-colors duration-150 focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15 disabled:cursor-not-allowed disabled:opacity-60" value={value} onChange={(event) => onChange(event.target.value)}>
-          {options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={disabled || !options.length}
+          className="studio-select-trigger studio-field flex h-10 w-full items-center justify-between gap-2 border border-border px-3 text-left text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 focus-visible:border-studio-accent/70 focus-visible:ring-2 focus-visible:ring-studio-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={label}
+          onClick={() => setOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown') { event.preventDefault(); if (!open) setOpen(true); else moveSelection(1) }
+            if (event.key === 'ArrowUp') { event.preventDefault(); if (!open) setOpen(true); else moveSelection(-1) }
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpen((current) => !current) }
+          }}
+        >
+          <span className={cn('min-w-0 truncate', !selected && 'text-muted-foreground')}>{selected?.label || '暂无选项'}</span>
+          <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-180 text-studio-accent')} aria-hidden="true" />
+        </button>
+        {open && menuStyle && createPortal(
+          <div
+            data-studio-select-menu
+            role="listbox"
+            aria-label={label}
+            className="studio-select-menu"
+            style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width, maxHeight: menuStyle.maxHeight }}
+          >
+            {options.map((option) => {
+              const active = option.value === value
+              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}><span className="min-w-0 truncate">{option.label}</span>{active && <Check className="size-3.5 shrink-0" aria-hidden="true" />}</button>
+            })}
+          </div>,
+          document.body,
+        )}
       </span>
       {hint && <span className="text-[11px] leading-4 text-muted-foreground">{hint}</span>}
     </label>

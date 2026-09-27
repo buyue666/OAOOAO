@@ -4,6 +4,7 @@ import { StudioApp } from '@/components/studio/studio-app'
 import { GenerationProvider } from '@/lib/studio/generation-store'
 import { StudioProvider } from '@/lib/studio/store'
 import { LocaleProvider } from '@/lib/studio/i18n'
+import '@xyflow/react/dist/style.css'
 import './globals.css'
 
 export const metadata: Metadata = {

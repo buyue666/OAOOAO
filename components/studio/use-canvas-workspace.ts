@@ -293,17 +293,17 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     setSelectedId(added[0].id)
   }, [pushHistory, setNodes, state.hydrated])
 
-  const addNode = useCallback((kind: CanvasNodeData['kind']) => {
+  const addNode = useCallback((kind: CanvasNodeData['kind'], position?: { x: number; y: number }) => {
     const id = `${boardKey}-node-${Date.now()}-${nodesRef.current.length}`
     const item: Node<CanvasNodeData> = {
       id,
       type: 'canvas',
-      position: { x: 260 + nodesRef.current.length * 20, y: 180 + nodesRef.current.length * 16 },
+      position: position ?? { x: 260 + (nodesRef.current.length % 5) * 290, y: 180 + Math.floor(nodesRef.current.length / 5) * 230 },
       data: {
         title: kind === 'image' ? '新图片节点' : kind === 'video' ? '新视频节点' : kind === 'task' ? '新任务节点' : '新文本节点',
         kind,
-        // 新节点保持空白，不预填演示媒体；内容由用户从作品或素材中选择。
-        detail: kind === 'text' ? '点击后在属性面板中编辑文字。' : '从「我的作品」或素材库选择内容后填入。',
+        // 新节点保持空白，不预填演示媒体；内容由用户直接在画布内编辑或生成。
+        detail: kind === 'text' ? '在右侧属性面板中编辑文字。' : kind === 'task' ? '在画布内创建一个 Agent 任务。' : '在画布内填写提示词后生成。',
         status: kind === 'task' ? '待确认' : undefined,
       },
     }
@@ -312,6 +312,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     nodesRef.current = nextNodes
     setNodes(nextNodes)
     setSelectedId(id)
+    return id
   }, [boardKey, pushHistory, setNodes])
 
   const addUploadedFiles = useCallback((incoming: FileList | File[]) => {
@@ -383,6 +384,18 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     setWorkspacePanelOpen(false)
     setContextMenu(null)
   }, [selectedId])
+
+  /** 在右键坐标直接建立生成节点，生成面板仍然属于画布，不跳去其他工作台。 */
+  const openGenerationAt = useCallback((mode: 'image' | 'video' | 'agent', position: { x: number; y: number }) => {
+    const kind: CanvasNodeData['kind'] = mode === 'agent' ? 'task' : mode
+    const targetId = addNode(kind, position)
+    setGenerationTargetId(targetId)
+    setGenerationMode(mode)
+    setGenerationPanelOpen(true)
+    setShowAgent(false)
+    setWorkspacePanelOpen(false)
+    setContextMenu(null)
+  }, [addNode])
 
   const closeGeneration = useCallback(() => {
     setGenerationPanelOpen(false)
@@ -477,6 +490,15 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     setContextMenu(null)
   }, [pushHistory, setNodes])
 
+  const updateNodeData = useCallback((nodeId: string, patch: Partial<CanvasNodeData>) => {
+    const original = nodesRef.current.find((node) => node.id === nodeId)
+    if (!original) return
+    pushHistory()
+    const nextNodes = nodesRef.current.map((node) => node.id === nodeId ? { ...node, data: { ...node.data, ...patch } } : node)
+    nodesRef.current = nextNodes
+    setNodes(nextNodes)
+  }, [pushHistory, setNodes])
+
   const resetView = useCallback(() => {
     flowRef.current?.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2, duration: 260 })
   }, [showAgent])
@@ -519,6 +541,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     handleNodeDragStop,
     addUploadedFiles,
     addNode,
+    openGenerationAt,
     addAssetNode,
     openGeneration,
     closeGeneration,
@@ -526,6 +549,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     addAgentNode,
     duplicateNode,
     deleteNode,
+    updateNodeData,
     resetView,
     undo,
     redo,

@@ -97,14 +97,16 @@ type CanvasWorkspaceViewProps = {
   handleNodeDragStart: () => void
   handleNodeDragStop: () => void
   addUploadedFiles: (files: FileList | File[]) => void
-  addNode: (kind: CanvasNodeData['kind']) => void
+  addNode: (kind: CanvasNodeData['kind'], position?: { x: number; y: number }) => string
   addAssetNode: (asset: Asset) => void
   openGeneration: (mode: CanvasGenerationMode, targetId?: string) => void
+  openGenerationAt: (mode: CanvasGenerationMode, position: { x: number; y: number }) => void
   closeGeneration: () => void
   addGeneratedNode: (created: CanvasCreatedGeneration) => void
   addAgentNode: (run: AgentRun, prompt: string) => void
   duplicateNode: (nodeId: string) => void
   deleteNode: (nodeId: string) => void
+  updateNodeData: (nodeId: string, patch: Partial<CanvasNodeData>) => void
   resetView: () => void
   undo: () => void
   redo: () => void
@@ -156,15 +158,24 @@ export function CanvasWorkspaceView({
   addNode,
   addAssetNode,
   openGeneration,
+  openGenerationAt,
   closeGeneration,
   addGeneratedNode,
   addAgentNode,
   duplicateNode,
   deleteNode,
+  updateNodeData,
   resetView,
   undo,
   redo,
 }: CanvasWorkspaceViewProps) {
+  const contextFlowPosition = contextMenu?.position
+  const startContextGeneration = (mode: CanvasGenerationMode) => {
+    if (contextMenu?.nodeId) openGeneration(mode, contextMenu.nodeId)
+    else if (contextFlowPosition) openGenerationAt(mode, contextFlowPosition)
+    else openGeneration(mode)
+  }
+
   return (
     <div className={shellClass} data-canvas-editor="true">
       <input ref={uploadInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(event) => { addUploadedFiles(event.target.files ?? []); event.currentTarget.value = '' }} />
@@ -209,8 +220,9 @@ export function CanvasWorkspaceView({
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           onNodeClick={(_, node) => { setSelectedId(node.id); setContextMenu(null) }}
+          onNodeDoubleClick={(_, node) => { setSelectedId(node.id); openGeneration(node.data.kind === 'video' ? 'video' : node.data.kind === 'task' ? 'agent' : 'image', node.id) }}
           onNodeContextMenu={(event, node) => { event.preventDefault(); setSelectedId(node.id); setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id }) }}
-          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY }) }}
+          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, position: flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) }) }}
           onPaneClick={() => { setSelectedId(null); setContextMenu(null) }}
           fitView
           panOnDrag={panMode}
@@ -226,16 +238,17 @@ export function CanvasWorkspaceView({
         {contextMenu && (
           <div className="oao-canvas-context-menu" data-canvas-no-zoom style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()}>
             <p className="oao-canvas-context-title">{contextMenu.nodeId ? '节点操作' : '画布操作'}</p>
-            <button type="button" onClick={() => openGeneration('image', contextMenu.nodeId)}><ImageIcon aria-hidden="true" />生成图片</button>
-            <button type="button" onClick={() => openGeneration('video', contextMenu.nodeId)}><Video aria-hidden="true" />生成视频</button>
-            <button type="button" onClick={() => openGeneration('agent', contextMenu.nodeId)}><Sparkles aria-hidden="true" />交给 Agent</button>
+            <button type="button" onClick={() => startContextGeneration('image')}><ImageIcon aria-hidden="true" />生成图片</button>
+            <button type="button" onClick={() => startContextGeneration('video')}><Video aria-hidden="true" />生成视频</button>
+            <button type="button" onClick={() => startContextGeneration('agent')}><Sparkles aria-hidden="true" />交给 Agent</button>
             <span className="oao-canvas-context-divider" />
             {contextMenu.nodeId ? <>
               <button type="button" onClick={() => duplicateNode(contextMenu.nodeId as string)}><Copy aria-hidden="true" />复制节点</button>
               <button type="button" className="is-danger" onClick={() => deleteNode(contextMenu.nodeId as string)}><Trash2 aria-hidden="true" />删除节点</button>
             </> : <>
-              <button type="button" onClick={() => { addNode('text'); setContextMenu(null) }}><Type aria-hidden="true" />新建文本节点</button>
-              <button type="button" onClick={() => { addNode('image'); setContextMenu(null) }}><Plus aria-hidden="true" />新建空白节点</button>
+              <button type="button" onClick={() => { addNode('text', contextFlowPosition); setContextMenu(null) }}><Type aria-hidden="true" />新建文本节点</button>
+              <button type="button" onClick={() => { addNode('image', contextFlowPosition); setContextMenu(null) }}><Plus aria-hidden="true" />新建图片节点</button>
+              <button type="button" onClick={() => { addNode('video', contextFlowPosition); setContextMenu(null) }}><Video aria-hidden="true" />新建视频节点</button>
             </>}
           </div>
         )}
@@ -256,7 +269,13 @@ export function CanvasWorkspaceView({
         {selectedNode && !showAgent && !generationPanelOpen && (
           <aside className="oao-canvas-inspector canvas-float-panel" data-canvas-no-zoom>
             <div className="oao-canvas-inspector-header"><div><p className="oao-canvas-panel-kicker">当前选择</p><h2>节点属性</h2></div><IconAction label="关闭属性" onClick={() => setSelectedId(null)}><X aria-hidden="true" /></IconAction></div>
-            <div className="oao-canvas-inspector-body"><div><span>名称</span><strong>{selectedNode.data.title}</strong></div><div><span>类型</span><strong>{selectedNode.data.kind === 'image' ? '图片节点' : selectedNode.data.kind === 'video' ? '视频节点' : selectedNode.data.kind === 'task' ? '任务节点' : '文本节点'}</strong></div><div><span>描述</span><p>{selectedNode.data.detail}</p></div><ControlButton size="sm" variant="primary" onClick={() => openGeneration(selectedNode.data.kind === 'video' ? 'video' : 'image', selectedNode.id)}><Sparkles className="size-3.5" aria-hidden="true" />在画布内生成</ControlButton></div>
+            <div className="oao-canvas-inspector-body">
+              <label className="oao-canvas-inspector-field"><span>名称</span><input className="studio-field" value={selectedNode.data.title} onChange={(event) => updateNodeData(selectedNode.id, { title: event.target.value })} /></label>
+              <div><span>类型</span><strong>{selectedNode.data.kind === 'image' ? '图片节点' : selectedNode.data.kind === 'video' ? '视频节点' : selectedNode.data.kind === 'task' ? 'Agent 任务节点' : '文本节点'}</strong></div>
+              <label className="oao-canvas-inspector-field"><span>{selectedNode.data.kind === 'text' ? '文字内容' : '提示词 / 说明'}</span><textarea className="studio-field" value={selectedNode.data.prompt || selectedNode.data.detail} onChange={(event) => updateNodeData(selectedNode.id, { prompt: event.target.value, detail: event.target.value })} rows={4} /></label>
+              {selectedNode.data.model && <div><span>生成设置</span><strong>{selectedNode.data.model} · {selectedNode.data.ratio || '自动比例'}{selectedNode.data.quality ? ` · ${selectedNode.data.quality}` : ''}</strong></div>}
+              <ControlButton size="sm" variant="primary" onClick={() => openGeneration(selectedNode.data.kind === 'video' ? 'video' : selectedNode.data.kind === 'task' ? 'agent' : 'image', selectedNode.id)}><Sparkles className="size-3.5" aria-hidden="true" />在画布内生成</ControlButton>
+            </div>
           </aside>
         )}
 
