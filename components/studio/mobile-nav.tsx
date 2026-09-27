@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Suspense, useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { Bot, Clapperboard, FolderKanban, GalleryHorizontalEnd, Image as ImageIcon, LayoutDashboard, ListChecks, Palette, PanelsTopLeft, Settings, Sparkles, Video, X } from 'lucide-react'
+import { Bot, Clapperboard, GalleryHorizontalEnd, Image as ImageIcon, LayoutDashboard, ListChecks, Palette, PanelsTopLeft, Settings, Sparkles, Video, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const studioNavGroups = [
@@ -18,7 +18,6 @@ const studioNavGroups = [
     { label: '任务中心', href: '/tasks', icon: ListChecks },
   ] },
   { label: '管理', items: [
-    { label: '项目', href: '/projects', icon: FolderKanban },
     { label: '素材库', href: '/assets', icon: GalleryHorizontalEnd },
     { label: '我的作品', href: '/works', icon: Palette },
     { label: '广场', href: '/gallery', icon: LayoutDashboard },

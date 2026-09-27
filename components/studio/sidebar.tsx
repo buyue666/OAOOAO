@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clapperboard,
-  FolderKanban,
   GalleryHorizontalEnd,
   Image as ImageIcon,
   LayoutDashboard,
@@ -30,7 +29,7 @@ interface StudioNavItem {
   href: string
   icon: LucideIcon
   exact?: boolean
-  activeView?: 'drama' | 'projects'
+  activeView?: 'drama'
 }
 
 interface StudioNavGroup {
@@ -58,7 +57,6 @@ const studioNavGroups: StudioNavGroup[] = [
   {
     label: '管理',
     items: [
-      { label: '项目', href: '/projects', icon: FolderKanban, exact: true, activeView: 'projects' },
       { label: '素材库', href: '/assets', icon: GalleryHorizontalEnd },
       { label: '我的作品', href: '/works', icon: Palette },
       { label: '广场', href: '/gallery', icon: LayoutDashboard },
