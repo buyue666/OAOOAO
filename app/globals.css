@@ -1325,6 +1325,7 @@
 .oao-canvas-stage::after { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: radial-gradient(circle at 68% 44%, rgb(88 115 120 / 6%), transparent 40%), radial-gradient(circle at 10% 90%, rgb(103 154 141 / 4%), transparent 32%); content: ''; }
 .oao-canvas-flow { position: absolute; inset: 0; z-index: 0; background: #050607; }
 .oao-canvas-editor .react-flow__renderer { background: #050607; }
+.oao-canvas-editor .react-flow__background { pointer-events: none; }
 .oao-canvas-node { border-color: rgb(228 239 242 / 17%); background: rgb(25 29 31 / 96%); color: var(--canvas-ink); transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
 .oao-canvas-node:hover { border-color: rgb(228 239 242 / 31%); }
 .oao-canvas-node.is-selected { border-color: rgb(199 243 232 / 72%); box-shadow: 0 0 0 1px rgb(199 243 232 / 30%), 0 22px 44px rgb(0 0 0 / 44%); }
