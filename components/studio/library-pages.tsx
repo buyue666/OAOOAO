@@ -58,7 +58,8 @@ import { useLibraryAssets, useServerHistory, useServerWorks } from '@/lib/studio
 import { bumpAccountData } from '@/lib/studio/account-data-sync'
 import { addMediaToProject, removeMediaFromProject } from '@/lib/studio/project-media'
 import { cn } from '@/lib/utils'
-import type { AssetKind, Asset, Task, TaskStatus } from '@/lib/studio/types'
+import type { AssetCategory, AssetKind, Asset, Task, TaskStatus } from '@/lib/studio/types'
+import { assetCategoryLabels, assetCategoryOf } from '@/lib/studio/reference-assets'
 
 const assetFilters: Array<{ value: string; label: string; kind?: AssetKind }> = [
   { value: '全部', label: '全部' },
@@ -90,6 +91,7 @@ function libraryAssetToAsset(record: LibraryAssetView): Asset {
   return {
     id: record.id,
     kind: record.kind === 'video' ? 'video' : record.kind === 'audio' ? 'audio' : 'image',
+    category: assetCategoryOf(record),
     title: record.title,
     src,
     poster: record.kind === 'video' ? record.coverUrl : undefined,
@@ -115,6 +117,7 @@ function workToAsset(work: StudioWork): Asset {
   return {
     id: `generated-${work.id}`,
     kind: work.kind === 'video' ? 'video' : work.kind === 'audio' ? 'audio' : 'image',
+    category: 'general',
     title: work.title,
     src: work.src,
     poster: work.poster,
@@ -137,6 +140,7 @@ export function AssetsPage() {
   const [notice, setNotice] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadCategory, setUploadCategory] = useState<AssetCategory>('general')
   const [projectBusy, setProjectBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   /**
@@ -158,7 +162,10 @@ export function AssetsPage() {
   }, [libraryAssets, serverAssets, state.backendStatus])
   const visible = useMemo(() => mergedAssets.filter((asset) => {
     const definition = assetFilters.find((item) => item.value === filter)
-    return (!definition?.kind || asset.kind === definition.kind)
+    const categoryMatch = definition?.kind === 'character' || definition?.kind === 'scene'
+      ? (asset.category ?? asset.kind) === definition.kind
+      : !definition?.kind || asset.kind === definition.kind
+    return categoryMatch
       && `${asset.title} ${asset.tags.join(' ')}`.toLowerCase().includes(search.toLowerCase())
   }), [mergedAssets, filter, search])
 
@@ -193,7 +200,7 @@ export function AssetsPage() {
         await createLibraryAsset({
           kind,
           title: file.name.replace(/\.[^.]+$/, '').slice(0, 120) || '未命名素材',
-          tags: ['上传'],
+          tags: uploadCategory === 'general' ? ['上传'] : ['上传', assetCategoryLabels[uploadCategory]],
           source: 'user-upload',
           data: {
             storageKey: stored.key,
@@ -204,6 +211,7 @@ export function AssetsPage() {
             bytes: stored.bytes,
             mimeType: stored.mimeType || file.type,
             ...(size ? { width: size.width, height: size.height } : {}),
+            assetRole: uploadCategory,
           },
         })
         uploaded.push(file.name)
@@ -324,7 +332,11 @@ export function AssetsPage() {
           <div className="w-full sm:max-w-sm"><SearchField value={search} onChange={setSearch} placeholder="搜索素材、标签或引用位置" /></div>
           <FilterChips value={filter} onChange={setFilter} options={assetFilters} />
         </div>
-        <SegmentedControl value={view} onChange={setView} options={[{ value: 'grid', label: '缩略图', icon: <Grid2X2 className="size-3.5" /> }, { value: 'list', label: '列表', icon: <List className="size-3.5" /> }]} />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">上传归类</span>
+          <FilterChips value={uploadCategory} onChange={(value) => setUploadCategory(value as AssetCategory)} options={Object.entries(assetCategoryLabels).map(([value, label]) => ({ value, label }))} />
+          <SegmentedControl value={view} onChange={setView} options={[{ value: 'grid', label: '缩略图', icon: <Grid2X2 className="size-3.5" /> }, { value: 'list', label: '列表', icon: <List className="size-3.5" /> }]} />
+        </div>
       </div>
       {notice && <Notice tone="accent"><Check className="mt-0.5 size-3.5 shrink-0" />{notice}</Notice>}
       {/*
@@ -404,7 +416,7 @@ function AssetCard({ asset, selected, onToggle, onDelete }: {
       </div>
       <div className="p-3">
         <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-medium text-foreground">{asset.title}</p><p className="mt-1 text-[11px] text-muted-foreground">{asset.dimensions ?? asset.duration ?? asset.size}</p></div><AssetMenu title={asset.title} onDelete={onDelete} /></div>
-        <div className="mt-3 flex flex-wrap gap-1">{asset.tags.slice(0, 3).map((tag) => <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tag}</span>)}</div>
+        <div className="mt-3 flex flex-wrap gap-1">{[asset.category && asset.category !== 'general' ? assetCategoryLabels[asset.category] : '', ...asset.tags].filter(Boolean).slice(0, 3).map((tag) => <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tag}</span>)}</div>
         <div className="mt-3 flex items-center justify-between gap-2"><StatusBadge tone={asset.status === '处理中' ? 'accent' : 'neutral'}>{asset.status}</StatusBadge><span className="truncate text-[10px] text-muted-foreground">{asset.referencedBy.length ? `${asset.referencedBy.length} 处引用` : '未引用'}</span></div>
       </div>
     </article>

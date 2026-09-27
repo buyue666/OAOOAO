@@ -32,7 +32,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showAgent, setShowAgent] = useState(false)
   const [generationPanelOpen, setGenerationPanelOpen] = useState(false)
-  const [generationMode, setGenerationMode] = useState<'image' | 'video' | 'agent'>('image')
+  const [generationMode, setGenerationMode] = useState<'image' | 'video' | 'text' | 'agent'>('image')
   const [generationTargetId, setGenerationTargetId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<CanvasContextMenu>(null)
   const [panMode, setPanMode] = useState(false)
@@ -198,9 +198,10 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
         ...node.data,
         status,
         detail: task.error || `${node.data.model || task.model || '自动模型'} · ${status}`,
+        ...(task.text ? { content: task.text } : {}),
         ...(mediaResult?.url ? { src: mediaResult.url, poster: mediaResult.poster } : {}),
       }
-      if (node.data.status !== nextData.status || node.data.src !== nextData.src || node.data.detail !== nextData.detail) changed = true
+      if (node.data.status !== nextData.status || node.data.src !== nextData.src || node.data.detail !== nextData.detail || node.data.content !== nextData.content) changed = true
       return changed ? { ...node, data: nextData } : node
     })
     if (changed) {
@@ -315,6 +316,30 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     return id
   }, [boardKey, pushHistory, setNodes])
 
+  /**
+   * 节点边缘的「+」是有方向的扩展动作：新增节点会落在当前节点旁边，
+   * 并立即建立一条有向边，避免只增加一个孤立卡片让用户再手工连线。
+   */
+  const expandNode = useCallback((sourceId: string, kind: CanvasNodeData['kind'], direction: 'before' | 'after' = 'after') => {
+    const source = nodesRef.current.find((node) => node.id === sourceId)
+    if (!source) return ''
+    const deltaX = direction === 'after' ? 350 : -350
+    let position = { x: source.position.x + deltaX, y: source.position.y }
+    let offset = 0
+    while (nodesRef.current.some((node) => Math.abs(node.position.x - position.x) < 300 && Math.abs(node.position.y - position.y) < 170)) {
+      offset += 210
+      position = { x: source.position.x + deltaX, y: source.position.y + offset }
+    }
+    const id = addNode(kind, position)
+    const edge = direction === 'after'
+      ? { id: `${sourceId}-to-${id}`, source: sourceId, target: id, type: 'smoothstep', style: canvasEdgeStyle }
+      : { id: `${id}-to-${sourceId}`, source: id, target: sourceId, type: 'smoothstep', style: canvasEdgeStyle }
+    const nextEdges = [...edgesRef.current, edge]
+    edgesRef.current = nextEdges
+    setEdges(nextEdges)
+    return id
+  }, [addNode, setEdges])
+
   const addUploadedFiles = useCallback((incoming: FileList | File[]) => {
     const files = Array.from(incoming).filter((file) => file.type.startsWith('image/') || file.type.startsWith('video/'))
     if (!files.length) return
@@ -349,7 +374,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
       id,
       type: 'canvas',
       position: { x: 180 + (nodesRef.current.length % 4) * 270, y: 130 + Math.floor(nodesRef.current.length / 4) * 220 },
-      data: { title: asset.title, kind, detail: `素材库 · ${asset.dimensions || asset.kind}`, src: asset.src, poster: asset.poster, status: '已引用' },
+      data: { title: asset.title, kind, assetCategory: asset.category, detail: `我的资产 · ${asset.dimensions || asset.kind}`, src: asset.src, poster: asset.poster, status: '已引用' },
     }
     const nextNodes = [...nodesRef.current, item]
     nodesRef.current = nextNodes
@@ -376,17 +401,24 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     syncHistoryState()
   }, [setBoard, syncHistoryState])
 
-  const openGeneration = useCallback((mode: 'image' | 'video' | 'agent', targetId?: string) => {
-    setGenerationTargetId(targetId ?? selectedId)
-    setGenerationMode(mode)
+  const openGeneration = useCallback((mode: 'image' | 'video' | 'text' | 'agent', targetId?: string) => {
+    // 没有明确目标时创建一个独立生成任务；只有双击/属性面板/节点菜单
+    // 明确传入目标节点时才锁定节点类型，避免选中图片后顶部按钮莫名变成图片专属。
+    const resolvedTargetId = targetId ?? null
+    const target = nodesRef.current.find((node) => node.id === resolvedTargetId)
+    const lockedMode = target?.data.kind === 'image' || target?.data.kind === 'video' || target?.data.kind === 'text'
+      ? target.data.kind
+      : target?.data.kind === 'task' ? 'agent' : mode
+    setGenerationTargetId(resolvedTargetId)
+    setGenerationMode(lockedMode)
     setGenerationPanelOpen(true)
     setShowAgent(false)
     setWorkspacePanelOpen(false)
     setContextMenu(null)
-  }, [selectedId])
+  }, [])
 
   /** 在右键坐标直接建立生成节点，生成面板仍然属于画布，不跳去其他工作台。 */
-  const openGenerationAt = useCallback((mode: 'image' | 'video' | 'agent', position: { x: number; y: number }) => {
+  const openGenerationAt = useCallback((mode: 'image' | 'video' | 'text' | 'agent', position: { x: number; y: number }) => {
     const kind: CanvasNodeData['kind'] = mode === 'agent' ? 'task' : mode
     const targetId = addNode(kind, position)
     setGenerationTargetId(targetId)
@@ -405,26 +437,70 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
   const addGeneratedNode = useCallback((created: CanvasCreatedGeneration) => {
     const mediaResult = created.task.media[0]
     const kind = created.mode === 'video' ? 'video' : 'image'
-    const id = `${boardKey}-generation-${created.task.id}`
+    const targetIsSameKind = generationTargetNode?.data.kind === kind
+    const id = targetIsSameKind ? generationTargetNode.id : `${boardKey}-generation-${created.task.id}`
     const basePosition = generationTargetNode?.position ?? { x: 180 + (nodesRef.current.length % 4) * 270, y: 130 + Math.floor(nodesRef.current.length / 4) * 220 }
+    const generatedData: CanvasNodeData = {
+      title: kind === 'video' ? '视频生成节点' : '图片生成节点',
+      kind,
+      detail: `${created.model || '自动模型'} · ${created.ratio || '自动比例'}`,
+      status: created.task.status === 'success' ? '已完成' : created.task.status === 'error' ? '生成失败' : '生成中',
+      generationTaskId: created.task.id,
+      prompt: created.prompt,
+      model: created.model,
+      ratio: created.ratio,
+      quality: created.quality,
+      seconds: created.seconds,
+      referenceUrls: created.referenceUrls,
+      src: mediaResult?.url,
+      poster: mediaResult?.poster,
+    }
+    if (targetIsSameKind) {
+      pushHistory()
+      const nextNodes = nodesRef.current.map((node) => node.id === generationTargetNode.id ? { ...node, data: { ...node.data, ...generatedData } } : node)
+      nodesRef.current = nextNodes
+      setNodes(nextNodes)
+      setSelectedId(generationTargetNode.id)
+      closeGeneration()
+      return
+    }
     const item: Node<CanvasNodeData> = {
       id,
       type: 'canvas',
       position: { x: basePosition.x + 330, y: basePosition.y + 20 },
-      data: {
-        title: kind === 'video' ? '视频生成节点' : '图片生成节点',
-        kind,
-        detail: `${created.model || '自动模型'} · ${created.ratio || '自动比例'}`,
-        status: created.task.status === 'success' ? '已完成' : created.task.status === 'error' ? '生成失败' : '生成中',
-        generationTaskId: created.task.id,
-        prompt: created.prompt,
-        model: created.model,
-        ratio: created.ratio,
-        quality: created.quality,
-        seconds: created.seconds,
-        referenceUrls: created.referenceUrls,
-        ...(mediaResult?.url ? { src: mediaResult.url, poster: mediaResult.poster } : {}),
-      },
+      data: generatedData,
+    }
+    pushHistory()
+    const nextNodes = [...nodesRef.current, item]
+    const nextEdges = generationTargetNode ? [...edgesRef.current, { id: `${id}-from-${generationTargetNode.id}`, source: generationTargetNode.id, target: id, type: 'smoothstep', style: canvasEdgeStyle }] : edgesRef.current
+    nodesRef.current = nextNodes
+    edgesRef.current = nextEdges
+    setNodes(nextNodes)
+    setEdges(nextEdges)
+    setSelectedId(id)
+    closeGeneration()
+  }, [boardKey, closeGeneration, generationTargetNode, pushHistory, setEdges, setNodes])
+
+  const addGeneratedTextNode = useCallback((created: { task: { id: string; status: string; text?: string; error?: string }; prompt: string; model: string }) => {
+    const targetIsSameKind = generationTargetNode?.data.kind === 'text'
+    const id = targetIsSameKind ? generationTargetNode.id : `${boardKey}-text-generation-${created.task.id}`
+    const basePosition = generationTargetNode?.position ?? { x: 180 + (nodesRef.current.length % 4) * 270, y: 130 + Math.floor(nodesRef.current.length / 4) * 220 }
+    const status = created.task.status === 'success' ? '已完成' : created.task.status === 'error' ? '生成失败' : '生成中'
+    const generatedData: CanvasNodeData = { title: '文本生成节点', kind: 'text', detail: created.task.error || '文本生成任务', status, generationTaskId: created.task.id, prompt: created.prompt, model: created.model, content: created.task.text }
+    if (targetIsSameKind) {
+      pushHistory()
+      const nextNodes = nodesRef.current.map((node) => node.id === generationTargetNode.id ? { ...node, data: { ...node.data, ...generatedData } } : node)
+      nodesRef.current = nextNodes
+      setNodes(nextNodes)
+      setSelectedId(generationTargetNode.id)
+      closeGeneration()
+      return
+    }
+    const item: Node<CanvasNodeData> = {
+      id,
+      type: 'canvas',
+      position: { x: basePosition.x + 330, y: basePosition.y + 20 },
+      data: generatedData,
     }
     pushHistory()
     const nextNodes = [...nodesRef.current, item]
@@ -438,20 +514,31 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
   }, [boardKey, closeGeneration, generationTargetNode, pushHistory, setEdges, setNodes])
 
   const addAgentNode = useCallback((run: AgentRun, prompt: string) => {
-    const id = `${boardKey}-agent-${run.id}`
+    const targetIsSameKind = generationTargetNode?.data.kind === 'task'
+    const id = targetIsSameKind ? generationTargetNode.id : `${boardKey}-agent-${run.id}`
     const basePosition = generationTargetNode?.position ?? { x: 180 + (nodesRef.current.length % 4) * 270, y: 130 + Math.floor(nodesRef.current.length / 4) * 220 }
+    const generatedData: CanvasNodeData = {
+      title: '导演 Agent 任务',
+      kind: 'task',
+      detail: `${run.tasks.length} 个步骤 · ${run.status === 'completed' ? '已完成' : '执行中'}`,
+      status: run.status === 'completed' ? '已完成' : run.status === 'failed' ? '执行失败' : '执行中',
+      agentRunId: run.id,
+      prompt,
+    }
+    if (targetIsSameKind) {
+      pushHistory()
+      const nextNodes = nodesRef.current.map((node) => node.id === generationTargetNode.id ? { ...node, data: { ...node.data, ...generatedData } } : node)
+      nodesRef.current = nextNodes
+      setNodes(nextNodes)
+      setSelectedId(generationTargetNode.id)
+      closeGeneration()
+      return
+    }
     const item: Node<CanvasNodeData> = {
       id,
       type: 'canvas',
       position: { x: basePosition.x + 330, y: basePosition.y + 20 },
-      data: {
-        title: '导演 Agent 任务',
-        kind: 'task',
-        detail: `${run.tasks.length} 个步骤 · ${run.status === 'completed' ? '已完成' : '执行中'}`,
-        status: run.status === 'completed' ? '已完成' : run.status === 'failed' ? '执行失败' : '执行中',
-        agentRunId: run.id,
-        prompt,
-      },
+      data: generatedData,
     }
     pushHistory()
     const nextNodes = [...nodesRef.current, item]
@@ -541,11 +628,13 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     handleNodeDragStop,
     addUploadedFiles,
     addNode,
+    expandNode,
     openGenerationAt,
     addAssetNode,
     openGeneration,
     closeGeneration,
     addGeneratedNode,
+    addGeneratedTextNode,
     addAgentNode,
     duplicateNode,
     deleteNode,

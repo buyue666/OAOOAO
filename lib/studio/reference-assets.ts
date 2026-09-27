@@ -12,7 +12,7 @@
  * 因此可以在 Node 里直接用真实接口返回的数据跑断言。
  */
 import type { LibraryAssetView, StudioWork } from './account-api'
-import type { Asset } from './types'
+import type { Asset, AssetCategory } from './types'
 
 /** 参考素材候选池需要的字段；`Asset` 是最常见的来源，但生成结果做最小适配即可。 */
 export type ReferenceCandidate = {
@@ -25,6 +25,27 @@ export type ReferenceCandidate = {
   tags?: string[]
 }
 
+export const assetCategoryLabels: Record<AssetCategory, string> = {
+  general: '通用素材',
+  character: '角色',
+  scene: '场景',
+  prop: '道具',
+  style: '风格',
+}
+
+/** 资产分类存放在素材库 data 中，媒体 kind 仍由后端按图片/视频校验。 */
+export function assetCategoryOf(value: { kind?: string; tags?: string[]; data?: Record<string, unknown> }): AssetCategory {
+  const raw = value.data?.assetRole ?? value.data?.category
+  if (raw === 'character' || raw === 'scene' || raw === 'prop' || raw === 'style') return raw
+  if (value.kind === 'character' || value.kind === 'scene') return value.kind
+  const tags = value.tags ?? []
+  if (tags.includes('角色')) return 'character'
+  if (tags.includes('场景')) return 'scene'
+  if (tags.includes('道具')) return 'prop'
+  if (tags.includes('风格')) return 'style'
+  return 'general'
+}
+
 /** 素材库条目的媒体地址。后端对图片把地址放在 `dataUrl`，视频/音频放在 `url`。 */
 export function libraryAssetMediaUrl(asset: LibraryAssetView): string {
   const data = (asset.data ?? {}) as { serverUrl?: unknown; url?: unknown; dataUrl?: unknown }
@@ -34,9 +55,11 @@ export function libraryAssetMediaUrl(asset: LibraryAssetView): string {
 /** 素材库条目 → 参考素材候选。 */
 export function libraryAssetToReferenceAsset(asset: LibraryAssetView): Asset {
   const src = libraryAssetMediaUrl(asset)
+  const category = assetCategoryOf(asset)
   return {
     id: asset.id,
     kind: asset.kind === 'video' ? 'video' : asset.kind === 'audio' ? 'audio' : 'image',
+    category,
     title: asset.title || '未命名素材',
     src,
     poster: asset.coverUrl,
@@ -57,6 +80,7 @@ export function workToReferenceAsset(work: StudioWork): Asset {
   return {
     id: `generated-${work.id}`,
     kind: work.kind === 'video' ? 'video' : 'image',
+    category: 'general',
     title: work.title,
     src: work.src,
     poster: work.poster,

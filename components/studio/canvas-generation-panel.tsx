@@ -1,18 +1,19 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, Check, ChevronDown, Coins, Image as ImageIcon, Loader2, Paperclip, Sparkles, Video, X } from 'lucide-react'
+import { Bot, Check, ChevronDown, Coins, Image as ImageIcon, Loader2, Paperclip, Sparkles, Type, Video, X } from 'lucide-react'
 import type { Node as FlowNode } from '@xyflow/react'
 import { useStudio } from '@/lib/studio/store'
 import { useGeneration } from '@/lib/studio/generation-store'
 import { defaultModelFor, filterModelsByCapability, qualityLabel } from '@/lib/studio/studio-models'
 import { publishReferenceAsset } from '@/lib/studio/generation-api'
 import type { AgentRun, GenerationTaskView } from '@/lib/studio/generation-types'
-import type { Asset, CanvasNodeData, ModelConfig } from '@/lib/studio/types'
+import type { Asset, AssetCategory, CanvasNodeData, ModelConfig } from '@/lib/studio/types'
+import { assetCategoryLabels } from '@/lib/studio/reference-assets'
 import { cn } from '@/lib/utils'
 import { IconAction, MediaThumb } from './ui'
 
-type CanvasGenerationMode = 'image' | 'video' | 'agent'
+type CanvasGenerationMode = 'image' | 'video' | 'text' | 'agent'
 
 export type CanvasCreatedGeneration = {
   task: GenerationTaskView
@@ -23,6 +24,12 @@ export type CanvasCreatedGeneration = {
   quality: string
   seconds?: number
   referenceUrls: string[]
+}
+
+export type CanvasCreatedText = {
+  task: GenerationTaskView
+  prompt: string
+  model: string
 }
 
 function readDataUrl(file: File) {
@@ -83,35 +90,47 @@ function GlassPicker({ label, value, options, onChange }: { label: string; value
 export function CanvasGenerationPanel({
   projectId,
   selectedNode,
+  availableAssets,
   initialMode = 'image',
   onClose,
   onCreated,
+  onTextCreated,
   onAgentCreated,
 }: {
   projectId: string
   selectedNode?: FlowNode<CanvasNodeData>
+  availableAssets: Asset[]
   initialMode?: CanvasGenerationMode
   onClose: () => void
   onCreated: (created: CanvasCreatedGeneration) => void
+  onTextCreated: (created: CanvasCreatedText) => void
   onAgentCreated: (run: AgentRun, prompt: string) => void
 }) {
   const { state, estimateCredits } = useStudio()
   const generation = useGeneration()
   const [mode, setMode] = useState<CanvasGenerationMode>(initialMode)
-  const [prompt, setPrompt] = useState(selectedNode?.data.prompt || selectedNode?.data.detail || '')
+  const [prompt, setPrompt] = useState(selectedNode?.data.content || selectedNode?.data.prompt || selectedNode?.data.detail || '')
   const [modelId, setModelId] = useState('')
   const [ratio, setRatio] = useState('')
   const [quality, setQuality] = useState('')
   const [seconds, setSeconds] = useState(8)
   const [assetIds, setAssetIds] = useState<string[]>([])
+  const [assetCategory, setAssetCategory] = useState<AssetCategory | 'all'>('all')
   const [uploads, setUploads] = useState<Array<{ name: string; type: 'image' | 'video'; dataUrl: string }>>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const sourceModels = state.liveModels.length ? state.liveModels : state.models
+  const lockedMode: CanvasGenerationMode | null = selectedNode?.data.kind === 'task'
+    ? 'agent'
+    : selectedNode?.data.kind === 'image' || selectedNode?.data.kind === 'video' || selectedNode?.data.kind === 'text'
+      ? selectedNode.data.kind
+      : null
+  const modeLocked = Boolean(lockedMode)
   const models = useMemo<ModelConfig[]>(() => mode === 'agent' ? [] : filterModelsByCapability(sourceModels, mode), [mode, sourceModels])
   const selectedModel = models.find((item) => item.id === modelId) ?? models[0]
   const capabilities = selectedModel?.capabilities
-  const assets = useMemo(() => state.assets.filter((asset) => asset.src && (asset.kind === 'image' || asset.kind === 'video')).slice(0, 12), [state.assets])
+  const assets = useMemo(() => availableAssets.filter((asset) => asset.src && (asset.kind === 'image' || asset.kind === 'video')).slice(0, 24), [availableAssets])
+  const filteredAssets = useMemo(() => assetCategory === 'all' ? assets : assets.filter((asset) => (asset.category ?? 'general') === assetCategory), [assetCategory, assets])
   const maxReferences = Math.max(1, capabilities?.maxReferences ?? 4)
   const ratios = capabilities?.ratios.length ? capabilities.ratios : mode === 'video' ? ['16:9', '9:16', '1:1'] : ['1:1', '16:9', '9:16']
   const qualities = capabilities?.qualities.length ? capabilities.qualities : mode === 'video' ? ['720', '1080'] : ['auto', 'high']
@@ -119,12 +138,13 @@ export function CanvasGenerationPanel({
   const estimatedCredits = selectedModel ? estimateCredits(selectedModel.id, { quality, duration: `${seconds} 秒` }) : 0
 
   useEffect(() => {
-    setPrompt(selectedNode?.data.prompt || (selectedNode?.data.kind === 'text' ? selectedNode.data.detail : ''))
+    setMode(lockedMode ?? initialMode)
+    setPrompt(selectedNode?.data.content || selectedNode?.data.prompt || (selectedNode?.data.kind === 'text' ? selectedNode.data.detail : ''))
     setAssetIds([])
-  }, [selectedNode?.id])
+  }, [initialMode, lockedMode, selectedNode?.id])
 
   useEffect(() => {
-    const fallback = defaultModelFor(mode === 'video' ? 'video' : 'image', state.sessionSettings, models)
+    const fallback = defaultModelFor(mode === 'agent' ? 'text' : mode, state.sessionSettings, models)
     const nextModel = models.some((item) => item.id === modelId) ? modelId : fallback
     setModelId(nextModel)
     const next = models.find((item) => item.id === nextModel)
@@ -165,6 +185,11 @@ export function CanvasGenerationPanel({
         onAgentCreated(run, prompt.trim())
         return
       }
+      if (mode === 'text') {
+        const task = await generation.createText({ prompt: prompt.trim(), model: selectedModel?.id })
+        onTextCreated({ task, prompt: prompt.trim(), model: selectedModel?.id || '' })
+        return
+      }
       const referenceUrls = await resolveReferences()
       if (mode === 'image') {
         const task = await generation.createImage({ prompt: prompt.trim(), model: selectedModel?.id, ratio, quality, kind: referenceUrls.length ? 'edit' : 'generation', referenceUrls, projectId, surface: 'canvas' })
@@ -187,22 +212,27 @@ export function CanvasGenerationPanel({
         <IconAction label="关闭生成面板" onClick={onClose}><X aria-hidden="true" /></IconAction>
       </div>
       <div className="oao-canvas-generation-scroll">
-        <div className="oao-canvas-generation-tabs" role="tablist" aria-label="生成类型">
-          {([['image', '图片', ImageIcon], ['video', '视频', Video], ['agent', 'Agent', Bot]] as const).map(([value, label, Icon]) => <button key={value} type="button" role="tab" aria-selected={mode === value} className={cn('oao-canvas-generation-tab', mode === value && 'is-active')} onClick={() => setMode(value)}><Icon aria-hidden="true" />{label}</button>)}
-        </div>
+        {modeLocked ? <div className="oao-canvas-generation-locked"><span>节点类型</span><strong>{mode === 'image' ? '图片生成' : mode === 'video' ? '视频生成' : mode === 'text' ? '文本生成' : 'Agent 任务'}</strong><small>当前节点类型已锁定，避免把图片、视频和文本参数混在一起。</small></div> : <div className="oao-canvas-generation-tabs" role="tablist" aria-label="生成类型">
+          {([['image', '图片', ImageIcon], ['video', '视频', Video], ['text', '文本', Type], ['agent', 'Agent', Bot]] as const).map(([value, label, Icon]) => <button key={value} type="button" role="tab" aria-selected={mode === value} className={cn('oao-canvas-generation-tab', mode === value && 'is-active')} onClick={() => setMode(value)}><Icon aria-hidden="true" />{label}</button>)}
+        </div>}
         <form onSubmit={submit} className="flex flex-col gap-4">
           <label className="oao-canvas-generation-field"><span>创作描述</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === 'agent' ? '告诉 Agent 你要完成什么创作…' : '描述这个节点要生成的画面或镜头…'} rows={5} /></label>
           {mode !== 'agent' && (
             <>
               <GlassPicker label="模型" value={selectedModel?.id || ''} options={models.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost || 0} 积分` }))} onChange={setModelId} />
-              <div className="grid grid-cols-2 gap-2"><GlassPicker label="比例" value={ratio} options={ratios.map((item) => ({ value: item, label: item }))} onChange={setRatio} /><GlassPicker label="清晰度" value={quality} options={qualities.map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} onChange={setQuality} /></div>
+              {mode !== 'text' && <div className="grid grid-cols-2 gap-2"><GlassPicker label="比例" value={ratio} options={ratios.map((item) => ({ value: item, label: item }))} onChange={setRatio} /><GlassPicker label="清晰度" value={quality} options={qualities.map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} onChange={setQuality} /></div>}
               {mode === 'video' && <GlassPicker label="时长" value={`${seconds} 秒`} options={durations.map((item) => ({ value: item, label: item }))} onChange={(value) => setSeconds(secondsOf(value) || 8)} />}
             </>
           )}
-          {mode !== 'agent' && (
+          {(mode === 'image' || mode === 'video' || mode === 'agent') && (
             <section className="oao-canvas-reference-section">
-              <div className="flex items-center justify-between gap-2"><div><p className="oao-canvas-control-label">参考素材</p><p className="mt-1 text-[10px] text-[var(--canvas-muted)]">节点、素材库和本地文件都能直接参与生成</p></div><span className="text-[10px] text-[var(--canvas-muted)]">{Math.min(maxReferences, assetIds.length + uploads.length + (selectedNode?.data.src ? 1 : 0))}/{maxReferences}</span></div>
-              {assets.length > 0 && <div className="oao-canvas-reference-grid">{assets.slice(0, 8).map((asset) => <button key={asset.id} type="button" className={cn('oao-canvas-reference-item', assetIds.includes(asset.id) && 'is-selected')} onClick={() => toggleAsset(asset)} aria-pressed={assetIds.includes(asset.id)}><MediaThumb src={asset.src} poster={asset.poster} alt={asset.title} fallback={asset.title} kind={asset.kind === 'video' ? 'video' : 'image'} className="h-12 w-full rounded-md" /><span className="truncate">{asset.title}</span>{assetIds.includes(asset.id) && <Check className="absolute right-1 top-1 size-3.5" aria-hidden="true" />}</button>)}</div>}
+              <div className="flex items-center justify-between gap-2"><div><p className="oao-canvas-control-label">我的资产</p><p className="mt-1 text-[10px] text-[var(--canvas-muted)]">角色、场景和生成结果只从你的资产库读取</p></div><span className="text-[10px] text-[var(--canvas-muted)]">{Math.min(maxReferences, assetIds.length + uploads.length + (selectedNode?.data.src ? 1 : 0))}/{maxReferences}</span></div>
+              {assets.length > 0 && <>
+                <div className="oao-canvas-asset-filters" role="tablist" aria-label="资产分类">
+                  {(['all', 'character', 'scene', 'prop', 'general'] as const).map((value) => <button key={value} type="button" role="tab" aria-selected={assetCategory === value} className={cn(assetCategory === value && 'is-active')} onClick={() => setAssetCategory(value)}>{value === 'all' ? '全部' : assetCategoryLabels[value]}</button>)}
+                </div>
+                {filteredAssets.length > 0 ? <div className="oao-canvas-reference-grid">{filteredAssets.slice(0, 8).map((asset) => <button key={asset.id} type="button" className={cn('oao-canvas-reference-item', assetIds.includes(asset.id) && 'is-selected')} onClick={() => toggleAsset(asset)} aria-pressed={assetIds.includes(asset.id)}><MediaThumb src={asset.src} poster={asset.poster} alt={asset.title} fallback={asset.title} kind={asset.kind === 'video' ? 'video' : 'image'} className="h-12 w-full rounded-md" /><span className="truncate">{asset.title}</span>{assetIds.includes(asset.id) && <Check className="absolute right-1 top-1 size-3.5" aria-hidden="true" />}</button>)}</div> : <p className="oao-canvas-panel-empty">这个分类还没有资产。</p>}
+              </>}
               <label className="oao-canvas-upload-control"><Paperclip className="size-3.5" aria-hidden="true" /><span>拖入或选择参考文件</span><input type="file" multiple accept={mode === 'video' ? 'image/*,video/*' : 'image/*'} onChange={(event) => { void addFiles(event.target.files ?? []); event.currentTarget.value = '' }} /></label>
               {uploads.length > 0 && <div className="flex flex-wrap gap-1.5">{uploads.map((upload, index) => <span key={`${upload.name}-${index}`} className="oao-canvas-reference-chip">{upload.name}</span>)}</div>}
             </section>

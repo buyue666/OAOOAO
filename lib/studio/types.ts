@@ -23,6 +23,10 @@ export interface CanvasNodeData extends Record<string, unknown> {
   quality?: string
   seconds?: number
   referenceUrls?: string[]
+  /** 引用用户资产时保留角色/场景等语义，避免只剩一张无上下文的图片。 */
+  assetCategory?: AssetCategory
+  /** 文本节点生成结果；文本没有媒体地址。 */
+  content?: string
 }
 
 export interface CanvasBoard {
@@ -39,6 +43,8 @@ export type ModelCapabilityKind = 'text' | 'image' | 'video' | 'audio'
 export type ProjectType = '短剧' | '广告片' | '品牌视觉' | '个人作品'
 export type ProjectStatus = '进行中' | '已完成' | '已归档'
 export type AssetKind = 'image' | 'video' | 'audio' | 'character' | 'scene'
+/** 用户素材在创作库里的用途分类；媒体类型仍由 `kind` 表示。 */
+export type AssetCategory = 'general' | 'character' | 'scene' | 'prop' | 'style'
 export type AssetStatus = '可用' | '处理中' | '已归档'
 export type TaskStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
 export type TaskType = 'image' | 'video' | 'storyboard' | 'upscale' | 'export'
@@ -73,6 +79,7 @@ export interface Project {
 export interface Asset {
   id: ID
   kind: AssetKind
+  category?: AssetCategory
   title: string
   src: string
   poster?: string

@@ -1,6 +1,6 @@
 'use client'
 
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type MutableRefObject, type RefObject, type SetStateAction } from 'react'
 import Link from 'next/link'
 import {
   Background,
@@ -46,11 +46,13 @@ import {
 } from 'lucide-react'
 import type { AgentRun } from '@/lib/studio/generation-types'
 import type { Asset, CanvasNodeData, StudioState } from '@/lib/studio/types'
+import { mergeReferenceAssets, libraryAssetToReferenceAsset, workToReferenceAsset } from '@/lib/studio/reference-assets'
+import { useLibraryAssets, useServerWorks } from '@/lib/studio/use-account-data'
 import { cn } from '@/lib/utils'
 import { DirectorAgent } from './director-agent'
 import { CanvasGenerationPanel, type CanvasCreatedGeneration } from './canvas-generation-panel'
 import { ControlButton, IconAction, MediaThumb, StatusBadge } from './ui'
-import { nodeTypes } from './canvas-node'
+import { CanvasNodeActionsContext, nodeTypes, type CanvasNodeExpandDirection } from './canvas-node'
 import {
   type CanvasContextMenu,
   defaultEdgeOptions,
@@ -59,7 +61,7 @@ import {
   type HistoryState,
 } from './canvas-workspace-model'
 
-export type CanvasGenerationMode = 'image' | 'video' | 'agent'
+export type CanvasGenerationMode = 'image' | 'video' | 'text' | 'agent'
 
 type CanvasWorkspaceViewProps = {
   shellClass: string
@@ -98,11 +100,13 @@ type CanvasWorkspaceViewProps = {
   handleNodeDragStop: () => void
   addUploadedFiles: (files: FileList | File[]) => void
   addNode: (kind: CanvasNodeData['kind'], position?: { x: number; y: number }) => string
+  expandNode: (sourceId: string, kind: CanvasNodeData['kind'], direction?: CanvasNodeExpandDirection) => string
   addAssetNode: (asset: Asset) => void
   openGeneration: (mode: CanvasGenerationMode, targetId?: string) => void
   openGenerationAt: (mode: CanvasGenerationMode, position: { x: number; y: number }) => void
   closeGeneration: () => void
   addGeneratedNode: (created: CanvasCreatedGeneration) => void
+  addGeneratedTextNode: (created: { task: { id: string; status: string; text?: string; error?: string }; prompt: string; model: string }) => void
   addAgentNode: (run: AgentRun, prompt: string) => void
   duplicateNode: (nodeId: string) => void
   deleteNode: (nodeId: string) => void
@@ -156,11 +160,13 @@ export function CanvasWorkspaceView({
   handleNodeDragStop,
   addUploadedFiles,
   addNode,
+  expandNode,
   addAssetNode,
   openGeneration,
   openGenerationAt,
   closeGeneration,
   addGeneratedNode,
+  addGeneratedTextNode,
   addAgentNode,
   duplicateNode,
   deleteNode,
@@ -169,12 +175,45 @@ export function CanvasWorkspaceView({
   undo,
   redo,
 }: CanvasWorkspaceViewProps) {
+  const [expandMenu, setExpandMenu] = useState<{ x: number; y: number; nodeId: string; direction: CanvasNodeExpandDirection } | null>(null)
+  const serverLibrary = useLibraryAssets({ pageSize: 60 })
+  const serverWorks = useServerWorks({ pageSize: 60 })
+  const canvasAssets = useMemo<Asset[]>(() => {
+    if (state.backendStatus !== 'connected') return state.assets
+    return mergeReferenceAssets([
+      serverLibrary.assets.map(libraryAssetToReferenceAsset),
+      serverWorks.works.map(workToReferenceAsset),
+    ])
+  }, [serverLibrary.assets, serverWorks.works, state.assets, state.backendStatus])
   const contextFlowPosition = contextMenu?.position
   const startContextGeneration = (mode: CanvasGenerationMode) => {
     if (contextMenu?.nodeId) openGeneration(mode, contextMenu.nodeId)
     else if (contextFlowPosition) openGenerationAt(mode, contextFlowPosition)
     else openGeneration(mode)
   }
+  const contextNode = contextMenu?.nodeId ? nodes.find((node) => node.id === contextMenu.nodeId) : undefined
+  const contextNodeMode: CanvasGenerationMode | null = contextNode?.data.kind === 'task'
+    ? 'agent'
+    : contextNode?.data.kind === 'image' || contextNode?.data.kind === 'video' || contextNode?.data.kind === 'text'
+      ? contextNode.data.kind
+      : null
+  const onNodeExpand = (nodeId: string, direction: CanvasNodeExpandDirection, event: ReactMouseEvent<HTMLButtonElement>) => {
+    setSelectedId(nodeId)
+    setContextMenu(null)
+    setExpandMenu({ x: event.clientX, y: event.clientY, nodeId, direction })
+  }
+
+  useEffect(() => {
+    if (!expandMenu) return
+    const close = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof globalThis.Node) || !(target as Element).closest('[data-canvas-expand-menu]')) setExpandMenu(null)
+    }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpandMenu(null) }
+    document.addEventListener('pointerdown', close, true)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', close, true); document.removeEventListener('keydown', escape) }
+  }, [expandMenu])
 
   return (
     <div className={shellClass} data-canvas-editor="true">
@@ -205,51 +244,66 @@ export function CanvasWorkspaceView({
       </header>
 
       <main className="oao-canvas-stage" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={(event) => { if (!event.dataTransfer.files.length) return; event.preventDefault(); addUploadedFiles(event.dataTransfer.files) }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={handleEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={defaultEdgeOptions}
-          onInit={(instance: ReactFlowInstance<Node<CanvasNodeData>, Edge>) => {
-            flowRef.current = instance
-            window.setTimeout(() => instance.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2 }), 0)
-          }}
-          onNodeDragStart={handleNodeDragStart}
-          onNodeDragStop={handleNodeDragStop}
-          onNodeClick={(_, node) => { setSelectedId(node.id); setContextMenu(null) }}
-          onNodeDoubleClick={(_, node) => { setSelectedId(node.id); openGeneration(node.data.kind === 'video' ? 'video' : node.data.kind === 'task' ? 'agent' : 'image', node.id) }}
-          onNodeContextMenu={(event, node) => { event.preventDefault(); setSelectedId(node.id); setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id }) }}
-          onPaneContextMenu={(event) => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, position: flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) }) }}
-          onPaneClick={() => { setSelectedId(null); setContextMenu(null) }}
-          fitView
-          panOnDrag={panMode}
-          selectionOnDrag={!panMode}
-          selectionKeyCode="Shift"
-          className="studio-flow oao-canvas-flow"
-        >
-          <Background color="#2b343b" gap={28} size={1} />
-          <Controls showInteractive={false} position="bottom-left" className="canvas-float-controls oao-canvas-native-controls" />
-          <MiniMap nodeColor="#9aa5ac" maskColor="rgba(4, 7, 9, .72)" position="bottom-right" className="canvas-float-controls oao-canvas-minimap" />
-        </ReactFlow>
+        <CanvasNodeActionsContext.Provider value={{ onExpand: onNodeExpand }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={handleEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            onInit={(instance: ReactFlowInstance<Node<CanvasNodeData>, Edge>) => {
+              flowRef.current = instance
+              window.setTimeout(() => instance.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2 }), 0)
+            }}
+            onNodeDragStart={handleNodeDragStart}
+            onNodeDragStop={handleNodeDragStop}
+            onNodeClick={(_, node) => { setSelectedId(node.id); setContextMenu(null); setExpandMenu(null) }}
+            onNodeDoubleClick={(_, node) => { setSelectedId(node.id); openGeneration(node.data.kind === 'video' ? 'video' : node.data.kind === 'task' ? 'agent' : node.data.kind === 'text' ? 'text' : 'image', node.id) }}
+            onNodeContextMenu={(event, node) => { event.preventDefault(); setSelectedId(node.id); setExpandMenu(null); setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id }) }}
+            onPaneContextMenu={(event) => { event.preventDefault(); setExpandMenu(null); setContextMenu({ x: event.clientX, y: event.clientY, position: flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) }) }}
+            onPaneClick={() => { setSelectedId(null); setContextMenu(null); setExpandMenu(null) }}
+            fitView
+            panOnDrag={panMode}
+            selectionOnDrag={!panMode}
+            selectionKeyCode="Shift"
+            className="studio-flow oao-canvas-flow"
+          >
+            <Background color="#2b343b" gap={28} size={1} />
+            <Controls showInteractive={false} position="bottom-left" className="canvas-float-controls oao-canvas-native-controls" />
+            <MiniMap nodeColor="#9aa5ac" maskColor="rgba(4, 7, 9, .72)" position="bottom-right" className="canvas-float-controls oao-canvas-minimap" />
+          </ReactFlow>
+        </CanvasNodeActionsContext.Provider>
 
         {contextMenu && (
           <div className="oao-canvas-context-menu" data-canvas-no-zoom style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={(event) => event.stopPropagation()}>
             <p className="oao-canvas-context-title">{contextMenu.nodeId ? '节点操作' : '画布操作'}</p>
-            <button type="button" onClick={() => startContextGeneration('image')}><ImageIcon aria-hidden="true" />生成图片</button>
-            <button type="button" onClick={() => startContextGeneration('video')}><Video aria-hidden="true" />生成视频</button>
-            <button type="button" onClick={() => startContextGeneration('agent')}><Sparkles aria-hidden="true" />交给 Agent</button>
-            <span className="oao-canvas-context-divider" />
             {contextMenu.nodeId ? <>
+              {contextNodeMode && <button type="button" onClick={() => startContextGeneration(contextNodeMode)}>{contextNodeMode === 'image' ? <ImageIcon aria-hidden="true" /> : contextNodeMode === 'video' ? <Video aria-hidden="true" /> : contextNodeMode === 'agent' ? <Sparkles aria-hidden="true" /> : <Type aria-hidden="true" />}重新生成{contextNodeMode === 'image' ? '图片' : contextNodeMode === 'video' ? '视频' : contextNodeMode === 'agent' ? 'Agent 任务' : '文本'}</button>}
+              <span className="oao-canvas-context-divider" />
               <button type="button" onClick={() => duplicateNode(contextMenu.nodeId as string)}><Copy aria-hidden="true" />复制节点</button>
               <button type="button" className="is-danger" onClick={() => deleteNode(contextMenu.nodeId as string)}><Trash2 aria-hidden="true" />删除节点</button>
             </> : <>
+              <button type="button" onClick={() => startContextGeneration('image')}><ImageIcon aria-hidden="true" />生成图片节点</button>
+              <button type="button" onClick={() => startContextGeneration('video')}><Video aria-hidden="true" />生成视频节点</button>
+              <button type="button" onClick={() => startContextGeneration('text')}><Type aria-hidden="true" />生成文本节点</button>
+              <button type="button" onClick={() => startContextGeneration('agent')}><Sparkles aria-hidden="true" />交给 Agent</button>
+              <span className="oao-canvas-context-divider" />
               <button type="button" onClick={() => { addNode('text', contextFlowPosition); setContextMenu(null) }}><Type aria-hidden="true" />新建文本节点</button>
               <button type="button" onClick={() => { addNode('image', contextFlowPosition); setContextMenu(null) }}><Plus aria-hidden="true" />新建图片节点</button>
               <button type="button" onClick={() => { addNode('video', contextFlowPosition); setContextMenu(null) }}><Video aria-hidden="true" />新建视频节点</button>
             </>}
+          </div>
+        )}
+
+        {expandMenu && (
+          <div className={cn('oao-canvas-expand-menu', expandMenu.direction === 'before' && 'is-before')} data-canvas-expand-menu data-canvas-no-zoom style={{ left: expandMenu.x, top: expandMenu.y }} onPointerDown={(event) => event.stopPropagation()}>
+            <p className="oao-canvas-expand-menu-title">添加连接节点</p>
+            <button type="button" data-canvas-expand-option="image" onClick={() => { expandNode(expandMenu.nodeId, 'image', expandMenu.direction); setExpandMenu(null) }}><ImageIcon aria-hidden="true" />图片生成</button>
+            <button type="button" data-canvas-expand-option="video" onClick={() => { expandNode(expandMenu.nodeId, 'video', expandMenu.direction); setExpandMenu(null) }}><Video aria-hidden="true" />视频生成</button>
+            <button type="button" data-canvas-expand-option="text" onClick={() => { expandNode(expandMenu.nodeId, 'text', expandMenu.direction); setExpandMenu(null) }}><Type aria-hidden="true" />文本节点</button>
+            <button type="button" data-canvas-expand-option="task" onClick={() => { expandNode(expandMenu.nodeId, 'task', expandMenu.direction); setExpandMenu(null) }}><Sparkles aria-hidden="true" />Agent 任务</button>
           </div>
         )}
 
@@ -259,7 +313,7 @@ export function CanvasWorkspaceView({
             <div className="oao-canvas-panel-tabs">{workspaceTabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={cn('oao-canvas-panel-tab', workspacePanelTab === id && 'is-active')} onClick={() => setWorkspacePanelTab(id)}><Icon aria-hidden="true" />{label}</button>)}</div>
             <div className="oao-canvas-panel-scroll">
               {workspacePanelTab === 'nodes' && (nodes.length ? nodes.map((node) => <button key={node.id} type="button" className={cn('oao-canvas-list-row', selectedId === node.id && 'is-active')} onClick={() => setSelectedId(node.id)}><span className="oao-canvas-list-icon">{node.data.kind === 'image' ? <ImageIcon aria-hidden="true" /> : node.data.kind === 'video' ? <Video aria-hidden="true" /> : node.data.kind === 'task' ? <Sparkles aria-hidden="true" /> : <Type aria-hidden="true" />}</span><span className="min-w-0 flex-1 text-left"><strong>{node.data.title}</strong><small>{node.data.detail}</small></span></button>) : <p className="oao-canvas-panel-empty">画布还是空的。可以从底部工具岛添加节点，或把图片、视频拖进来。</p>)}
-              {workspacePanelTab === 'assets' && (state.assets.length ? state.assets.slice(0, 24).map((asset) => <button key={asset.id} type="button" className="oao-canvas-list-row" onClick={() => addAssetNode(asset)}><MediaThumb src={asset.src} poster={asset.poster} alt={asset.title} fallback={asset.title} kind={asset.kind === 'video' ? 'video' : 'image'} className="size-10 shrink-0 rounded-md" /><span className="min-w-0 flex-1 text-left"><strong>{asset.title}</strong><small>{asset.kind === 'video' ? '视频素材' : '图片素材'}</small></span><Plus aria-hidden="true" /></button>) : <p className="oao-canvas-panel-empty">暂无可引用素材。</p>)}
+              {workspacePanelTab === 'assets' && (canvasAssets.length ? canvasAssets.slice(0, 24).map((asset) => <button key={asset.id} type="button" className="oao-canvas-list-row" onClick={() => addAssetNode(asset)}><MediaThumb src={asset.src} poster={asset.poster} alt={asset.title} fallback={asset.title} kind={asset.kind === 'video' ? 'video' : 'image'} className="size-10 shrink-0 rounded-md" /><span className="min-w-0 flex-1 text-left"><strong>{asset.title}</strong><small>{asset.category === 'character' ? '角色资产' : asset.category === 'scene' ? '场景资产' : asset.category === 'prop' ? '道具资产' : asset.kind === 'video' ? '视频素材' : '图片素材'}</small></span><Plus aria-hidden="true" /></button>) : <p className="oao-canvas-panel-empty">暂无属于你的可引用资产，请先在素材库上传。</p>)}
               {workspacePanelTab === 'tasks' && (generationTasks.length ? generationTasks.slice(0, 24).map((task) => <div key={task.id} className="oao-canvas-list-row"><span className="oao-canvas-list-icon"><ListChecks aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong>{task.title}</strong><small>{task.error || task.executionPhase || task.status}</small></span><StatusBadge tone={task.status === 'success' ? 'success' : task.status === 'error' ? 'warning' : 'neutral'}>{task.status === 'success' ? '已完成' : task.status === 'error' ? '失败' : '进行中'}</StatusBadge></div>) : state.tasks.length ? state.tasks.slice(0, 24).map((task) => <div key={task.id} className="oao-canvas-list-row"><span className="oao-canvas-list-icon"><ListChecks aria-hidden="true" /></span><span className="min-w-0 flex-1"><strong>{task.title}</strong><small>{task.stage || task.status}</small></span><StatusBadge tone={task.status === 'completed' ? 'success' : task.status === 'failed' ? 'warning' : 'neutral'}>{task.status}</StatusBadge></div>) : <p className="oao-canvas-panel-empty">暂无生成任务。</p>)}
               {workspacePanelTab === 'history' && <div className="oao-canvas-history-empty"><History aria-hidden="true" /><strong>画布历史</strong><p>每次节点移动、连接和导入都会进入撤销栈。底部工具岛可以逐步撤销或重做。</p></div>}
             </div>
@@ -272,14 +326,14 @@ export function CanvasWorkspaceView({
             <div className="oao-canvas-inspector-body">
               <label className="oao-canvas-inspector-field"><span>名称</span><input className="studio-field" value={selectedNode.data.title} onChange={(event) => updateNodeData(selectedNode.id, { title: event.target.value })} /></label>
               <div><span>类型</span><strong>{selectedNode.data.kind === 'image' ? '图片节点' : selectedNode.data.kind === 'video' ? '视频节点' : selectedNode.data.kind === 'task' ? 'Agent 任务节点' : '文本节点'}</strong></div>
-              <label className="oao-canvas-inspector-field"><span>{selectedNode.data.kind === 'text' ? '文字内容' : '提示词 / 说明'}</span><textarea className="studio-field" value={selectedNode.data.prompt || selectedNode.data.detail} onChange={(event) => updateNodeData(selectedNode.id, { prompt: event.target.value, detail: event.target.value })} rows={4} /></label>
+              <label className="oao-canvas-inspector-field"><span>{selectedNode.data.kind === 'text' ? '文字内容' : '提示词 / 说明'}</span><textarea className="studio-field" value={selectedNode.data.content || selectedNode.data.prompt || selectedNode.data.detail} onChange={(event) => updateNodeData(selectedNode.id, selectedNode.data.kind === 'text' ? { content: event.target.value, prompt: event.target.value, detail: event.target.value } : { prompt: event.target.value, detail: event.target.value })} rows={4} /></label>
               {selectedNode.data.model && <div><span>生成设置</span><strong>{selectedNode.data.model} · {selectedNode.data.ratio || '自动比例'}{selectedNode.data.quality ? ` · ${selectedNode.data.quality}` : ''}</strong></div>}
-              <ControlButton size="sm" variant="primary" onClick={() => openGeneration(selectedNode.data.kind === 'video' ? 'video' : selectedNode.data.kind === 'task' ? 'agent' : 'image', selectedNode.id)}><Sparkles className="size-3.5" aria-hidden="true" />在画布内生成</ControlButton>
+              <ControlButton size="sm" variant="primary" onClick={() => openGeneration(selectedNode.data.kind === 'video' ? 'video' : selectedNode.data.kind === 'task' ? 'agent' : selectedNode.data.kind === 'text' ? 'text' : 'image', selectedNode.id)}><Sparkles className="size-3.5" aria-hidden="true" />在画布内生成</ControlButton>
             </div>
           </aside>
         )}
 
-        {generationPanelOpen && <CanvasGenerationPanel projectId={projectId ?? boardKey} selectedNode={generationTargetNode} initialMode={generationMode} onClose={closeGeneration} onCreated={addGeneratedNode} onAgentCreated={addAgentNode} />}
+        {generationPanelOpen && <CanvasGenerationPanel projectId={projectId ?? boardKey} selectedNode={generationTargetNode} availableAssets={canvasAssets} initialMode={generationMode} onClose={closeGeneration} onCreated={addGeneratedNode} onTextCreated={addGeneratedTextNode} onAgentCreated={addAgentNode} />}
 
         {showAgent ? (
           <aside className="oao-canvas-agent-panel" data-canvas-no-zoom><div className="oao-canvas-agent-header"><div><p className="oao-canvas-panel-kicker">画布助手</p><h2>Agent</h2></div><IconAction label="关闭 Agent" onClick={() => setShowAgent(false)}><X aria-hidden="true" /></IconAction></div><div className="min-h-0 flex-1"><DirectorAgent projectId={projectId} context="画布 · 当前选择" compact emptyStateLayout="stacked" /></div></aside>
