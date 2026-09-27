@@ -62,7 +62,7 @@ import {
 } from './canvas-workspace-model'
 
 export type CanvasGenerationMode = 'image' | 'video' | 'text' | 'agent'
-type CanvasGenerationAnchor = { left: number; top: number }
+type CanvasGenerationAnchor = { left: number; top: number; width: number }
 
 type CanvasWorkspaceViewProps = {
   shellClass: string
@@ -230,18 +230,38 @@ export function CanvasWorkspaceView({
       : undefined
     const targetBox = targetElement?.getBoundingClientRect()
     const compact = window.innerWidth <= 720
-    const panelWidth = compact ? Math.min(350, Math.max(280, stageBox.width - 76)) : Math.min(420, Math.max(360, stageBox.width - 110))
+    const preferredWidth = compact ? Math.min(350, Math.max(280, stageBox.width - 76)) : 420
     const panelHeight = compact ? Math.min(450, Math.max(320, stageBox.height - 80)) : Math.min(430, Math.max(320, stageBox.height - 100))
     const minLeft = compact ? 64 : 76
-    const maxLeft = Math.max(minLeft, stageBox.width - panelWidth - 14)
+    let panelWidth = preferredWidth
     let left = targetBox ? targetBox.right - stageBox.left + 16 : (stageBox.width - panelWidth) / 2
-    if (targetBox && left + panelWidth > stageBox.width - 14) left = targetBox.left - stageBox.left - panelWidth - 16
+    if (targetBox && !compact) {
+      const targetLeft = targetBox.left - stageBox.left
+      const targetRight = targetBox.right - stageBox.left
+      const rightLeft = targetRight + 16
+      const rightAvailable = stageBox.width - rightLeft - 14
+      const leftAvailable = targetLeft - minLeft - 16
+      if (rightAvailable >= 300) {
+        left = rightLeft
+        panelWidth = Math.min(preferredWidth, rightAvailable)
+      } else if (leftAvailable >= 300) {
+        panelWidth = Math.min(preferredWidth, leftAvailable)
+        left = targetLeft - panelWidth - 16
+      } else if (rightAvailable >= leftAvailable) {
+        left = rightLeft
+        panelWidth = Math.max(260, rightAvailable)
+      } else {
+        panelWidth = Math.max(260, leftAvailable)
+        left = targetLeft - panelWidth - 16
+      }
+    }
+    const maxLeft = Math.max(minLeft, stageBox.width - panelWidth - 14)
     let top = targetBox ? targetBox.top - stageBox.top : (stageBox.height - panelHeight) / 2
     const maxTop = Math.max(64, stageBox.height - panelHeight - 14)
     left = Math.min(Math.max(left, minLeft), maxLeft)
     top = Math.min(Math.max(top, 64), maxTop)
-    const next = { left: Math.round(left), top: Math.round(top) }
-    setGenerationAnchor((current) => current?.left === next.left && current.top === next.top ? current : next)
+    const next = { left: Math.round(left), top: Math.round(top), width: Math.round(panelWidth) }
+    setGenerationAnchor((current) => current?.left === next.left && current.top === next.top && current.width === next.width ? current : next)
   }
 
   useEffect(() => {

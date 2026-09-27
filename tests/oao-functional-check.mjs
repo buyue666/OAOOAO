@@ -93,6 +93,18 @@ try {
   await page.getByRole('button', { name: '打开资产' }).click()
   check('画布资产面板明确绑定当前用户资产', (await page.locator('.oao-canvas-workspace-panel').innerText()).includes('属于你的可引用资产') || await page.locator('.oao-canvas-workspace-panel').innerText().then((text) => text.includes('资产')))
 
+  await page.setViewportSize({ width: 730, height: 544 })
+  await visit('/canvas/canvas-aurora')
+  await page.locator('[data-canvas-node-kind="image"]').first().dblclick()
+  const narrowComposer = await page.locator('.oao-canvas-generation-node-card').boundingBox()
+  const narrowButton = await page.locator('.oao-canvas-generate-button').boundingBox()
+  const narrowOverflow = await page.locator('.oao-canvas-generation-scroll').evaluate((element) => element.scrollWidth > element.clientWidth)
+  check('窄窗口生成编辑器不会超出画布右边界', Boolean(narrowComposer && narrowComposer.x >= 64 && narrowComposer.x + narrowComposer.width <= 730))
+  check('窄窗口生成按钮仍在编辑器内', Boolean(narrowComposer && narrowButton && narrowButton.y >= narrowComposer.y && narrowButton.y + narrowButton.height <= narrowComposer.y + narrowComposer.height))
+  check('窄窗口生成内容没有横向溢出', !narrowOverflow)
+  await page.getByRole('button', { name: '关闭生成面板' }).click()
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
   await visit('/plans')
   await page.getByRole('button', { name: '立即开通' }).first().click()
   const dialog = page.getByRole('dialog')

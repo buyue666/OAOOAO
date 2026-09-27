@@ -102,7 +102,7 @@ export function CanvasGenerationPanel({
   selectedNode?: FlowNode<CanvasNodeData>
   availableAssets: Asset[]
   initialMode?: CanvasGenerationMode
-  anchor?: { left: number; top: number }
+  anchor?: { left: number; top: number; width: number }
   onClose: () => void
   onCreated: (created: CanvasCreatedGeneration) => void
   onTextCreated: (created: CanvasCreatedText) => void
@@ -209,7 +209,7 @@ export function CanvasGenerationPanel({
   }
 
   return (
-    <aside className="oao-canvas-generation-panel oao-canvas-generation-composer oao-canvas-generation-node-card" data-canvas-no-zoom style={anchor ? { left: anchor.left, top: anchor.top } : undefined} aria-label="画布内生成面板">
+    <aside className="oao-canvas-generation-panel oao-canvas-generation-composer oao-canvas-generation-node-card" data-canvas-no-zoom style={anchor ? { left: anchor.left, top: anchor.top, width: anchor.width } : undefined} aria-label="画布内生成面板">
       <div className="oao-canvas-generation-header">
         <div className="oao-canvas-generation-title"><span className="oao-canvas-generation-title-icon">{mode === 'image' ? <ImageIcon aria-hidden="true" /> : mode === 'video' ? <Video aria-hidden="true" /> : mode === 'text' ? <Type aria-hidden="true" /> : <Bot aria-hidden="true" />}</span><div className="min-w-0"><p className="oao-canvas-panel-kicker">画布内创作</p><h2>{selectedNode ? `编辑${modeLabel}` : '创建生成节点'}</h2></div></div>
         <div className="oao-canvas-generation-header-actions">{selectedNode && <span className="oao-canvas-generation-target" title={selectedNode.data.title}>{selectedNode.data.title}</span>}<IconAction label="关闭生成面板" onClick={onClose}><X aria-hidden="true" /></IconAction></div>
