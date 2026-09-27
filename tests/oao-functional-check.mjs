@@ -67,6 +67,7 @@ try {
   const imageCountBeforeContextGeneration = await page.locator('[data-canvas-node-kind="image"]').count()
   await page.getByRole('button', { name: '生成图片' }).click()
   check('右键生成直接打开画布内创作面板', (await page.locator('body').innerText()).includes('画布内创作'))
+  await page.waitForFunction((count) => document.querySelectorAll('[data-canvas-node-kind="image"]').length > count, imageCountBeforeContextGeneration)
   check('右键生成会在画布内创建图片节点', await page.locator('[data-canvas-node-kind="image"]').count() > imageCountBeforeContextGeneration)
   await page.getByRole('button', { name: '关闭生成面板' }).click()
   const firstCanvasNode = page.locator('.oao-canvas-node-shell').first()
@@ -75,11 +76,15 @@ try {
   await firstCanvasNode.hover()
   const expandAfter = firstCanvasNode.getByRole('button', { name: /之后添加节点/ })
   check('节点悬停时显示动态扩展按钮', await expandAfter.isVisible())
-  await expandAfter.click()
+  // React Flow renders node actions inside a transformed layer. The action is
+  // visible and positioned in the viewport, but Playwright may try to scroll
+  // the transformed button and report it as out of view. Force the same DOM
+  // click after the visibility assertion so the test checks the real handler.
+  await expandAfter.evaluate((button) => button.click())
   check('节点扩展菜单可以打开', await page.locator('[data-canvas-expand-menu]').isVisible())
   const videoCountBeforeExpand = await page.locator('[data-canvas-node-kind="video"]').count()
   await page.locator('[data-canvas-expand-option="video"]').click()
-  await page.waitForTimeout(180)
+  await page.waitForFunction((count) => document.querySelectorAll('[data-canvas-node-kind="video"]').length > count, videoCountBeforeExpand)
   check('扩展节点会自动创建并连接视频节点', await page.locator('[data-canvas-node-kind="video"]').count() > videoCountBeforeExpand && await page.locator('.react-flow__edge').count() >= 4)
   await page.locator('.oao-canvas-node.is-media').first().dispatchEvent('dblclick')
   check('图片节点打开后锁定为图片生成', await page.locator('.oao-canvas-generation-locked').isVisible() && (await page.locator('.oao-canvas-generation-locked').innerText()).includes('图片生成'))

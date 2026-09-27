@@ -5,7 +5,6 @@ import Link from 'next/link'
 import {
   Background,
   Controls,
-  MiniMap,
   ReactFlow,
   type Connection,
   type Edge,
@@ -401,7 +400,6 @@ export function CanvasWorkspaceView({
           >
             <Background color="#3d3d3d" gap={28} size={1} />
             <Controls showInteractive={false} position="bottom-left" className="canvas-float-controls oao-canvas-native-controls" />
-            <MiniMap nodeColor="#9aa5ac" maskColor="rgba(4, 7, 9, .72)" position="bottom-right" className="canvas-float-controls oao-canvas-minimap" />
           </ReactFlow>
         </CanvasNodeActionsContext.Provider>
 

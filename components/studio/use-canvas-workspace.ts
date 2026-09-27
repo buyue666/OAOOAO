@@ -21,6 +21,15 @@ import { useGeneration } from '@/lib/studio/generation-store'
 import type { AgentRun } from '@/lib/studio/generation-types'
 import { canvasEdgeStyle, cloneBoard, createInitialBoard, emptyBoard, fitCanvasWithTopSafeArea, type CanvasContextMenu, type CanvasFlowInstance, type CanvasPanelTab, type HistoryState } from './canvas-workspace-model'
 
+function mergeRemoteBoardWithLocalEdits(remote: CanvasBoard, local: CanvasBoard): CanvasBoard {
+  const remoteNodeIds = new Set(remote.nodes.map((node) => node.id))
+  const nodes = [...remote.nodes, ...local.nodes.filter((node) => !remoteNodeIds.has(node.id))]
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  const remoteEdgeIds = new Set(remote.edges.map((edge) => edge.id))
+  const localEdges = local.edges.filter((edge) => !remoteEdgeIds.has(edge.id) && nodeIds.has(edge.source) && nodeIds.has(edge.target))
+  return { nodes, edges: [...remote.edges, ...localEdges] }
+}
+
 export function useCanvasWorkspaceController({ projectId }: { projectId?: string }) {
   const { state, dispatch } = useStudio()
   const generation = useGeneration()
@@ -50,6 +59,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const remoteProjectRef = useRef<CanvasBackendProject | null>(null)
   const remoteLoadedRef = useRef(false)
+  const localMutationDuringLoadRef = useRef(false)
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedId), [nodes, selectedId])
   const generationTargetNode = useMemo(() => nodes.find((node) => node.id === generationTargetId), [generationTargetId, nodes])
 
@@ -65,11 +75,16 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     setEdges(next.edges)
   }, [setEdges, setNodes])
 
+  const markLocalMutation = useCallback(() => {
+    if (!remoteLoadedRef.current) localMutationDuringLoadRef.current = true
+  }, [])
+
   const pushHistory = useCallback(() => {
+    markLocalMutation()
     historyRef.current = [...historyRef.current, cloneBoard({ nodes: nodesRef.current, edges: edgesRef.current })].slice(-40)
     futureRef.current = []
     syncHistoryState()
-  }, [syncHistoryState])
+  }, [markLocalMutation, syncHistoryState])
 
   useEffect(() => {
     if (!state.hydrated) return
@@ -91,6 +106,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     if (!state.hydrated || state.backendStatus === 'checking') return
     let cancelled = false
     remoteLoadedRef.current = false
+    localMutationDuringLoadRef.current = false
     remoteProjectRef.current = null
     if (state.backendStatus !== 'connected') {
       setSyncStatus('local')
@@ -122,7 +138,13 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
          * 使用本地草稿，否则保持空画布。
          */
         const localDraft = state.canvasBoards?.[boardKey]
-        const nextBoard = cloneBoard(remoteBoard ?? (localDraft?.nodes.length ? localDraft : emptyBoard))
+        const localBoard = cloneBoard({ nodes: nodesRef.current, edges: edgesRef.current })
+        const nextBoard = cloneBoard(
+          remoteBoard && localMutationDuringLoadRef.current
+            ? mergeRemoteBoardWithLocalEdits(remoteBoard, localBoard)
+            : remoteBoard ?? (localDraft?.nodes.length ? localDraft : emptyBoard),
+        )
+        localMutationDuringLoadRef.current = false
         nodesRef.current = nextBoard.nodes
         edgesRef.current = nextBoard.edges
         setNodes(nextBoard.nodes)
@@ -219,18 +241,20 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
   }, [contextMenu])
 
   const handleNodesChange = useCallback((changes: NodeChange<Node<CanvasNodeData>>[]) => {
+    if (changes.some((change) => change.type !== 'select')) markLocalMutation()
     if (changes.some((change) => change.type !== 'select' && change.type !== 'position' && change.type !== 'dimensions')) pushHistory()
     const nextNodes = applyNodeChanges(changes, nodesRef.current)
     nodesRef.current = nextNodes
     setNodes(nextNodes)
-  }, [pushHistory, setNodes])
+  }, [markLocalMutation, pushHistory, setNodes])
 
   const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
+    if (changes.some((change) => change.type !== 'select')) markLocalMutation()
     if (changes.some((change) => change.type !== 'select')) pushHistory()
     const nextEdges = applyEdgeChanges(changes, edgesRef.current)
     edgesRef.current = nextEdges
     setEdges(nextEdges)
-  }, [pushHistory, setEdges])
+  }, [markLocalMutation, pushHistory, setEdges])
 
   const handleNodeDragStart = useCallback(() => {
     if (draggingHistoryRef.current) return
