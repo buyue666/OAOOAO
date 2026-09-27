@@ -62,6 +62,7 @@ import {
 } from './canvas-workspace-model'
 
 export type CanvasGenerationMode = 'image' | 'video' | 'text' | 'agent'
+type CanvasGenerationAnchor = { left: number; top: number }
 
 type CanvasWorkspaceViewProps = {
   shellClass: string
@@ -176,6 +177,7 @@ export function CanvasWorkspaceView({
   redo,
 }: CanvasWorkspaceViewProps) {
   const [expandMenu, setExpandMenu] = useState<{ x: number; y: number; nodeId: string; direction: CanvasNodeExpandDirection } | null>(null)
+  const [generationAnchor, setGenerationAnchor] = useState<CanvasGenerationAnchor | null>(null)
   const serverLibrary = useLibraryAssets({ pageSize: 60 })
   const serverWorks = useServerWorks({ pageSize: 60 })
   const canvasAssets = useMemo<Asset[]>(() => {
@@ -217,6 +219,41 @@ export function CanvasWorkspaceView({
     setExpandMenu(null)
     openGeneration(nodeGenerationMode(node), nodeId)
   }
+
+  const updateGenerationAnchor = () => {
+    if (!generationPanelOpen) return
+    const stage = document.querySelector<HTMLElement>('.oao-canvas-stage')
+    if (!stage) return
+    const stageBox = stage.getBoundingClientRect()
+    const targetElement = generationTargetNode
+      ? Array.from(stage.querySelectorAll<HTMLElement>('[data-node-id]')).find((element) => element.dataset.nodeId === generationTargetNode.id)
+      : undefined
+    const targetBox = targetElement?.getBoundingClientRect()
+    const compact = window.innerWidth <= 720
+    const panelWidth = compact ? Math.min(350, Math.max(280, stageBox.width - 76)) : Math.min(420, Math.max(360, stageBox.width - 110))
+    const panelHeight = compact ? Math.min(450, Math.max(320, stageBox.height - 80)) : Math.min(430, Math.max(320, stageBox.height - 100))
+    const minLeft = compact ? 64 : 76
+    const maxLeft = Math.max(minLeft, stageBox.width - panelWidth - 14)
+    let left = targetBox ? targetBox.right - stageBox.left + 16 : (stageBox.width - panelWidth) / 2
+    if (targetBox && left + panelWidth > stageBox.width - 14) left = targetBox.left - stageBox.left - panelWidth - 16
+    let top = targetBox ? targetBox.top - stageBox.top : (stageBox.height - panelHeight) / 2
+    const maxTop = Math.max(64, stageBox.height - panelHeight - 14)
+    left = Math.min(Math.max(left, minLeft), maxLeft)
+    top = Math.min(Math.max(top, 64), maxTop)
+    const next = { left: Math.round(left), top: Math.round(top) }
+    setGenerationAnchor((current) => current?.left === next.left && current.top === next.top ? current : next)
+  }
+
+  useEffect(() => {
+    if (!generationPanelOpen) {
+      setGenerationAnchor(null)
+      return
+    }
+    const update = () => window.requestAnimationFrame(updateGenerationAnchor)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [generationPanelOpen, generationTargetNode?.id, nodes])
 
   useEffect(() => {
     if (!expandMenu) return
@@ -273,7 +310,9 @@ export function CanvasWorkspaceView({
               window.setTimeout(() => instance.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2 }), 0)
             }}
             onNodeDragStart={handleNodeDragStart}
+            onNodeDrag={() => { if (generationPanelOpen) window.requestAnimationFrame(updateGenerationAnchor) }}
             onNodeDragStop={handleNodeDragStop}
+            onMove={() => { if (generationPanelOpen) window.requestAnimationFrame(updateGenerationAnchor) }}
             onNodeClick={(_, node) => { setSelectedId(node.id); setContextMenu(null); setExpandMenu(null) }}
             onNodeDoubleClick={(_, node) => { generateNode(node.id) }}
             onNodeContextMenu={(event, node) => { event.preventDefault(); setSelectedId(node.id); setExpandMenu(null); setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id }) }}
@@ -285,7 +324,7 @@ export function CanvasWorkspaceView({
             selectionKeyCode="Shift"
             className="studio-flow oao-canvas-flow"
           >
-            <Background color="#2b343b" gap={28} size={1} />
+            <Background color="#3d3d3d" gap={28} size={1} />
             <Controls showInteractive={false} position="bottom-left" className="canvas-float-controls oao-canvas-native-controls" />
             <MiniMap nodeColor="#9aa5ac" maskColor="rgba(4, 7, 9, .72)" position="bottom-right" className="canvas-float-controls oao-canvas-minimap" />
           </ReactFlow>
@@ -348,7 +387,7 @@ export function CanvasWorkspaceView({
           </aside>
         )}
 
-        {generationPanelOpen && <CanvasGenerationPanel projectId={projectId ?? boardKey} selectedNode={generationTargetNode} availableAssets={canvasAssets} initialMode={generationMode} onClose={closeGeneration} onCreated={addGeneratedNode} onTextCreated={addGeneratedTextNode} onAgentCreated={addAgentNode} />}
+        {generationPanelOpen && <CanvasGenerationPanel projectId={projectId ?? boardKey} selectedNode={generationTargetNode} availableAssets={canvasAssets} initialMode={generationMode} anchor={generationAnchor ?? undefined} onClose={closeGeneration} onCreated={addGeneratedNode} onTextCreated={addGeneratedTextNode} onAgentCreated={addAgentNode} />}
 
         {showAgent ? (
           <aside className="oao-canvas-agent-panel" data-canvas-no-zoom><div className="oao-canvas-agent-header"><div><p className="oao-canvas-panel-kicker">画布助手</p><h2>Agent</h2></div><IconAction label="关闭 Agent" onClick={() => setShowAgent(false)}><X aria-hidden="true" /></IconAction></div><div className="min-h-0 flex-1"><DirectorAgent projectId={projectId} context="画布 · 当前选择" compact emptyStateLayout="stacked" /></div></aside>

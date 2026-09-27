@@ -42,7 +42,7 @@ export function CanvasNode({ id, data, selected }: NodeProps<Node<CanvasNodeData
         <button type="button" aria-label="删除节点" title="删除节点" onClick={() => actions.onDelete(id)}><Trash2 aria-hidden="true" /></button>
       </div>}
       <article className="oao-canvas-node w-[286px] overflow-hidden rounded-[16px] border shadow-[0_18px_38px_rgba(0,0,0,.32)]">
-        <Handle type="target" position={Position.Left} className="!size-2 !border-0 !bg-[#bfeee2]" />
+        <Handle type="target" position={Position.Left} className="!size-2 !border-0 !bg-[#f2f2f2]" />
         <div className="oao-canvas-node-header flex items-center gap-2 border-b px-3 py-2.5">
           <span className="oao-canvas-node-icon flex size-7 shrink-0 items-center justify-center rounded-lg">{icon}</span>
           <div className="min-w-0 flex-1"><p className="truncate text-[12px] font-semibold">{data.title}</p><p className="mt-0.5 text-[10px] text-[var(--canvas-dim)]">{typeLabel}{assetLabel ? ` · ${assetLabel}` : ''}{data.model ? ` · ${data.model}` : ''}</p></div>
@@ -50,7 +50,7 @@ export function CanvasNode({ id, data, selected }: NodeProps<Node<CanvasNodeData
         </div>
         {data.src ? <MediaThumb src={data.src} poster={data.poster} alt={data.title} fallback={data.title} kind={data.kind === 'video' ? 'video' : 'image'} className="h-40 rounded-none" /> : <div className={cn('oao-canvas-node-copy flex min-h-[104px] flex-col justify-between gap-3 px-3 py-3.5 text-xs leading-5', data.kind === 'task' && 'oao-canvas-node-task')}><p className="line-clamp-4">{data.content || data.prompt || data.detail}</p><div className="flex items-center justify-between gap-2"><span className="oao-canvas-node-hint">双击节点编辑 · 右键打开操作</span>{data.kind !== 'task' && actions && <button type="button" className="oao-canvas-node-inline-action" onClick={(event) => { event.stopPropagation(); actions.onGenerate(id) }}><Sparkles aria-hidden="true" />生成</button>}</div></div>}
         {data.src && <div className="oao-canvas-node-meta flex items-center justify-between gap-2 px-3 py-2.5"><p className="min-w-0 truncate text-[10px]">{data.detail}</p>{data.prompt && <span className="oao-canvas-node-hint shrink-0">提示词</span>}</div>}
-        <Handle type="source" position={Position.Right} className="!size-2 !border-0 !bg-[#bfeee2]" />
+        <Handle type="source" position={Position.Right} className="!size-2 !border-0 !bg-[#f2f2f2]" />
       </article>
     </div>
   )
