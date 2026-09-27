@@ -58,6 +58,7 @@ import {
   defaultEdgeOptions,
   type CanvasFlowInstance,
   type CanvasPanelTab,
+  fitCanvasWithTopSafeArea,
   type HistoryState,
 } from './canvas-workspace-model'
 
@@ -178,6 +179,8 @@ export function CanvasWorkspaceView({
 }: CanvasWorkspaceViewProps) {
   const [expandMenu, setExpandMenu] = useState<{ x: number; y: number; nodeId: string; direction: CanvasNodeExpandDirection } | null>(null)
   const [generationAnchor, setGenerationAnchor] = useState<CanvasGenerationAnchor | null>(null)
+  const [canvasToolNotice, setCanvasToolNotice] = useState('')
+  const [canvasZoom, setCanvasZoom] = useState(1)
   const serverLibrary = useLibraryAssets({ pageSize: 60 })
   const serverWorks = useServerWorks({ pageSize: 60 })
   const canvasAssets = useMemo<Asset[]>(() => {
@@ -219,6 +222,35 @@ export function CanvasWorkspaceView({
     setExpandMenu(null)
     openGeneration(nodeGenerationMode(node), nodeId)
   }
+  const runCanvasImageTool = (label: string) => {
+    if (!selectedNode || selectedNode.data.kind !== 'image') {
+      const message = '请先选择一个图片节点'
+      setCanvasToolNotice(message)
+      window.setTimeout(() => setCanvasToolNotice((current) => current === message ? '' : current), 2200)
+      return
+    }
+    if (label === '局部重绘') {
+      generateNode(selectedNode.id)
+      return
+    }
+    if (label === '文字编辑') {
+      inspectNode(selectedNode.id)
+      return
+    }
+    if (label === '图片工具') {
+      inspectNode(selectedNode.id)
+      return
+    }
+    const toolPrompts: Record<string, string> = {
+      九宫格: '将当前主体整理为九宫格角色/场景设定图，保持外观一致。',
+      全景图: '将当前画面扩展为连续的宽幅全景构图，保持主体和光线一致。',
+      人像调整: '优化当前画面中的人物造型与面部细节，保持身份和构图一致。',
+      视角: '基于当前图片生成一个新的镜头视角，保持主体、材质和风格一致。',
+    }
+    const instruction = toolPrompts[label]
+    if (instruction) updateNodeData(selectedNode.id, { prompt: `${instruction}\n${selectedNode.data.prompt || selectedNode.data.detail}` })
+    generateNode(selectedNode.id)
+  }
 
   const updateGenerationAnchor = () => {
     if (!generationPanelOpen) return
@@ -235,9 +267,17 @@ export function CanvasWorkspaceView({
     const minLeft = compact ? 64 : 76
     let panelWidth = preferredWidth
     let left = targetBox ? targetBox.right - stageBox.left + 16 : (stageBox.width - panelWidth) / 2
+    let top = targetBox ? targetBox.top - stageBox.top : (stageBox.height - panelHeight) / 2
     if (targetBox && !compact) {
       const targetLeft = targetBox.left - stageBox.left
       const targetRight = targetBox.right - stageBox.left
+      const targetBottom = targetBox.bottom - stageBox.top
+      const belowTop = targetBottom + 16
+      const belowAvailable = stageBox.height - belowTop - 14
+      if (belowAvailable >= panelHeight) {
+        left = targetLeft + (targetBox.width - panelWidth) / 2
+        top = belowTop
+      } else {
       const rightLeft = targetRight + 16
       const rightAvailable = stageBox.width - rightLeft - 14
       const leftAvailable = targetLeft - minLeft - 16
@@ -254,9 +294,9 @@ export function CanvasWorkspaceView({
         panelWidth = Math.max(260, leftAvailable)
         left = targetLeft - panelWidth - 16
       }
+      }
     }
     const maxLeft = Math.max(minLeft, stageBox.width - panelWidth - 14)
-    let top = targetBox ? targetBox.top - stageBox.top : (stageBox.height - panelHeight) / 2
     const maxTop = Math.max(64, stageBox.height - panelHeight - 14)
     left = Math.min(Math.max(left, minLeft), maxLeft)
     top = Math.min(Math.max(top, 64), maxTop)
@@ -302,20 +342,34 @@ export function CanvasWorkspaceView({
       <header className="oao-canvas-topbar" data-canvas-no-zoom>
         <div className="oao-canvas-topbar-leading">
           <button type="button" className="oao-canvas-topbar-menu" aria-label="打开画布面板" title="打开画布面板" onClick={() => setWorkspacePanelOpen((value) => !value)}><Menu aria-hidden="true" /></button>
-          <Link href="/canvas" className="oao-canvas-project-pill" title="返回画布列表"><span className="oao-canvas-project-kind">自由画布</span><span className="oao-canvas-project-title">{projectTitle || '未命名画布'}</span></Link>
+          <Link href="/canvas" className="oao-canvas-project-pill" title="返回画布列表"><span className="oao-canvas-project-kind">Agent 创作</span><span className="oao-canvas-project-title">{projectTitle || '未命名画布'}</span></Link>
           <StatusBadge tone={syncStatus === 'synced' ? 'success' : syncStatus === 'error' || syncStatus === 'conflict' ? 'warning' : 'neutral'} className="oao-canvas-save-badge"><span className="oao-canvas-status-dot" aria-hidden="true" />{syncLabel}</StatusBadge>
         </div>
         <div className="oao-canvas-topbar-actions">
-          <IconAction label="创建生成节点" onClick={() => openGeneration('image')}><Sparkles aria-hidden="true" /></IconAction>
-          <IconAction label="搜索节点" onClick={() => { setWorkspacePanelTab('nodes'); setWorkspacePanelOpen(true) }}><Search aria-hidden="true" /></IconAction>
-          <IconAction label="导入素材" onClick={() => uploadInputRef.current?.click()}><Upload aria-hidden="true" /></IconAction>
+          <button type="button" className="oao-canvas-topbar-labeled" title="搜索节点" onClick={() => { setWorkspacePanelTab('nodes'); setWorkspacePanelOpen(true) }}><Search aria-hidden="true" /><span>搜索</span></button>
+          <button type="button" className="oao-canvas-topbar-labeled" title="导入素材到画布" onClick={() => uploadInputRef.current?.click()}><Upload aria-hidden="true" /><span>导入画布素材</span></button>
           <Link href="/plans" className="oao-canvas-credit-pill" title="打开套餐页"><Sparkles aria-hidden="true" /><span>{state.credits.toLocaleString()}</span></Link>
+          <button type="button" className="oao-canvas-topbar-labeled" title="查看画布版本" onClick={() => { setWorkspacePanelTab('history'); setWorkspacePanelOpen(true) }}><History aria-hidden="true" /><span>版本</span></button>
           <IconAction label="专注模式" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen?.() }}><Maximize2 aria-hidden="true" /></IconAction>
-          <IconAction label="分享画布" onClick={() => { void navigator.clipboard?.writeText(window.location.href); window.alert('画布链接已复制') }}><Share2 aria-hidden="true" /></IconAction>
+          <IconAction label="分享画布" onClick={() => { void navigator.clipboard?.writeText(window.location.href); setCanvasToolNotice('画布链接已复制') }}><Share2 aria-hidden="true" /></IconAction>
         </div>
       </header>
 
       <main className="oao-canvas-stage" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={(event) => { if (!event.dataTransfer.files.length) return; event.preventDefault(); addUploadedFiles(event.dataTransfer.files) }}>
+        <div className="oao-canvas-image-toolbar" data-canvas-no-zoom aria-label="图片工具栏">
+          <button type="button" onClick={() => runCanvasImageTool('局部重绘')}><Sparkles aria-hidden="true" /><span>局部重绘</span></button>
+          <button type="button" onClick={() => runCanvasImageTool('文字编辑')}><Type aria-hidden="true" /><span>文字编辑</span></button>
+          <button type="button" onClick={() => runCanvasImageTool('九宫格')}><Layers3 aria-hidden="true" /><span>九宫格</span></button>
+          <button type="button" onClick={() => runCanvasImageTool('全景图')}><Images aria-hidden="true" /><span>全景图</span></button>
+          <button type="button" onClick={() => runCanvasImageTool('人像调整')}><MessageCircle aria-hidden="true" /><span>人像调整</span></button>
+          <button type="button" onClick={() => runCanvasImageTool('视角')}><Maximize2 aria-hidden="true" /><span>视角</span></button>
+          <button type="button" onClick={() => runCanvasImageTool('图片工具')}><ImageIcon aria-hidden="true" /><span>图片工具</span></button>
+          <span className="oao-canvas-image-toolbar-divider" aria-hidden="true" />
+          <button type="button" onClick={() => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen?.() }}><Maximize2 aria-hidden="true" /><span>全屏</span></button>
+          <button type="button" onClick={() => setCanvasToolNotice('当前画布可从右键菜单导出节点')}><Upload aria-hidden="true" /><span>导出</span></button>
+          <button type="button" onClick={() => setCanvasToolNotice('更多节点工具已收纳在底部工具岛')}><Archive aria-hidden="true" /><span>更多</span></button>
+          {canvasToolNotice && <span className="oao-canvas-tool-notice" role="status">{canvasToolNotice}</span>}
+        </div>
         <CanvasNodeActionsContext.Provider value={{ onExpand: onNodeExpand, onInspect: inspectNode, onGenerate: generateNode, onDuplicate: duplicateNode, onDelete: deleteNode }}>
           <ReactFlow
             nodes={nodes}
@@ -327,12 +381,13 @@ export function CanvasWorkspaceView({
             defaultEdgeOptions={defaultEdgeOptions}
             onInit={(instance: ReactFlowInstance<Node<CanvasNodeData>, Edge>) => {
               flowRef.current = instance
-              window.setTimeout(() => instance.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2 }), 0)
+              setCanvasZoom(instance.getViewport().zoom)
+              window.setTimeout(() => fitCanvasWithTopSafeArea(instance, showAgent ? 0.26 : 0.22), 0)
             }}
             onNodeDragStart={handleNodeDragStart}
             onNodeDrag={() => { if (generationPanelOpen) window.requestAnimationFrame(updateGenerationAnchor) }}
             onNodeDragStop={handleNodeDragStop}
-            onMove={() => { if (generationPanelOpen) window.requestAnimationFrame(updateGenerationAnchor) }}
+            onMove={(_, viewport) => { setCanvasZoom(viewport.zoom); if (generationPanelOpen) window.requestAnimationFrame(updateGenerationAnchor) }}
             onNodeClick={(_, node) => { setSelectedId(node.id); setContextMenu(null); setExpandMenu(null) }}
             onNodeDoubleClick={(_, node) => { generateNode(node.id) }}
             onNodeContextMenu={(event, node) => { event.preventDefault(); setSelectedId(node.id); setExpandMenu(null); setContextMenu({ x: event.clientX, y: event.clientY, nodeId: node.id }) }}
@@ -413,7 +468,7 @@ export function CanvasWorkspaceView({
           <aside className="oao-canvas-agent-panel" data-canvas-no-zoom><div className="oao-canvas-agent-header"><div><p className="oao-canvas-panel-kicker">画布助手</p><h2>Agent</h2></div><IconAction label="关闭 Agent" onClick={() => setShowAgent(false)}><X aria-hidden="true" /></IconAction></div><div className="min-h-0 flex-1"><DirectorAgent projectId={projectId} context="画布 · 当前选择" compact emptyStateLayout="stacked" /></div></aside>
         ) : !generationPanelOpen && <button type="button" className="oao-canvas-agent-launcher" data-canvas-no-zoom aria-label="打开画布 Agent" title="打开画布 Agent" onClick={() => { setShowAgent(true) }}><span className="oao-canvas-agent-orb"><MessageCircle aria-hidden="true" /></span><span>Agent</span></button>}
 
-        <div className="oao-canvas-zoom-dock" data-canvas-no-zoom><IconAction label="缩小画布" onClick={() => flowRef.current?.fitView({ padding: 0.28, maxZoom: 0.62, duration: 220 })}><span className="oao-canvas-zoom-symbol">−</span></IconAction><span>100%</span><IconAction label="适应画布" onClick={resetView}><RotateCcw aria-hidden="true" /></IconAction><IconAction label="放大画布" onClick={() => flowRef.current?.fitView({ padding: 0.06, maxZoom: 1.45, duration: 220 })}><Plus aria-hidden="true" /></IconAction></div>
+        <div className="oao-canvas-zoom-dock" data-canvas-no-zoom><IconAction label="缩小画布" onClick={() => flowRef.current?.fitView({ padding: 0.28, maxZoom: 0.62, duration: 220 })}><span className="oao-canvas-zoom-symbol">−</span></IconAction><span>{Math.round(canvasZoom * 100)}%</span><IconAction label="适应画布" onClick={resetView}><RotateCcw aria-hidden="true" /></IconAction><IconAction label="放大画布" onClick={() => flowRef.current?.fitView({ padding: 0.06, maxZoom: 1.45, duration: 220 })}><Plus aria-hidden="true" /></IconAction></div>
 
         <div className="oao-canvas-dock canvas-toolbar" data-canvas-no-zoom aria-label="画布工具"><button type="button" className={cn('oao-canvas-dock-button', !panMode && 'is-active')} title="选择" aria-label="选择" aria-pressed={!panMode} onClick={() => { setPanMode(false); setSelectedId(null) }}><MousePointer2 aria-hidden="true" /></button><button type="button" className={cn('oao-canvas-dock-button', panMode && 'is-active')} title="抓手平移" aria-label="抓手平移" aria-pressed={panMode} onClick={() => setPanMode(true)}><Hand aria-hidden="true" /></button><span className="oao-canvas-dock-divider" /><button type="button" className="oao-canvas-dock-button" title="撤销" aria-label="撤销" disabled={!historyState.canUndo} onClick={undo}><Undo2 aria-hidden="true" /></button><button type="button" className="oao-canvas-dock-button" title="重做" aria-label="重做" disabled={!historyState.canRedo} onClick={redo}><Redo2 aria-hidden="true" /></button><span className="oao-canvas-dock-divider" /><button type="button" className="oao-canvas-dock-button is-accent" title="在画布内生成" aria-label="在画布内生成" onClick={() => openGeneration('image')}><Sparkles aria-hidden="true" /></button><button type="button" className="oao-canvas-dock-button" title="添加空白图片节点" aria-label="添加空白图片节点" onClick={() => addNode('image')}><ImageIcon aria-hidden="true" /></button><button type="button" className="oao-canvas-dock-button" title="添加视频节点" aria-label="添加视频节点" onClick={() => addNode('video')}><Film aria-hidden="true" /></button><button type="button" className="oao-canvas-dock-button" title="添加文本节点" aria-label="添加文本节点" onClick={() => addNode('text')}><Type aria-hidden="true" /></button><button type="button" className="oao-canvas-dock-button" title="导入素材" aria-label="导入素材" onClick={() => uploadInputRef.current?.click()}><Upload aria-hidden="true" /></button><button type="button" className="oao-canvas-dock-button" title="清空选择" aria-label="清空选择" onClick={() => setSelectedId(null)}><Archive aria-hidden="true" /></button></div>
       </main>

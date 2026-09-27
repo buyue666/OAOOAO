@@ -1370,6 +1370,9 @@
 .oao-canvas-save-badge { min-height: 26px; border-color: var(--canvas-border) !important; background: rgb(23 27 30 / 74%) !important; color: var(--canvas-muted) !important; }
 .oao-canvas-status-dot { width: 5px; height: 5px; border-radius: 999px; background: var(--canvas-accent-strong); box-shadow: 0 0 10px rgb(131 223 204 / 65%); }
 .oao-canvas-topbar-actions { border: 1px solid var(--canvas-border); border-radius: 15px; background: var(--canvas-surface-soft); padding: 3px; box-shadow: 0 14px 34px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 7%); -webkit-backdrop-filter: blur(22px) saturate(130%); backdrop-filter: blur(22px) saturate(130%); }
+.oao-canvas-topbar-labeled { display: inline-flex; min-height: 32px; align-items: center; gap: 7px; border: 1px solid transparent; border-radius: 10px; padding: 0 9px; color: var(--canvas-muted); font-size: 11px; white-space: nowrap; transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease; }
+.oao-canvas-topbar-labeled svg { width: 15px; height: 15px; }
+.oao-canvas-topbar-labeled:hover, .oao-canvas-topbar-labeled:focus-visible { border-color: rgb(255 255 255 / 14%); background: rgb(255 255 255 / 9%); color: var(--canvas-ink); outline: none; }
 .oao-canvas-topbar-actions .studio-icon-action { color: var(--canvas-muted); }
 .oao-canvas-topbar-actions .studio-icon-action:hover { background: rgb(255 255 255 / 9%); color: var(--canvas-ink); }
 .oao-canvas-topbar-actions .studio-icon-action svg { width: 16px; height: 16px; }
@@ -1380,6 +1383,13 @@
 .oao-canvas-flow { position: absolute; inset: 0; z-index: 0; background: #050607; }
 .oao-canvas-editor .react-flow__renderer { background: #050607; }
 .oao-canvas-editor .react-flow__background { pointer-events: none; }
+.oao-canvas-image-toolbar { position: absolute; top: 146px; left: 50%; z-index: 26; display: inline-flex; max-width: calc(100% - 220px); align-items: center; gap: 2px; transform: translateX(-50%); border: 1px solid rgb(255 255 255 / 13%); border-radius: 18px; background: rgb(24 24 24 / 94%); padding: 7px 8px; box-shadow: 0 18px 42px rgb(0 0 0 / 36%), inset 0 1px 0 rgb(255 255 255 / 8%); -webkit-backdrop-filter: blur(20px) saturate(130%); backdrop-filter: blur(20px) saturate(130%); }
+.oao-canvas-image-toolbar button { display: inline-flex; min-height: 34px; align-items: center; gap: 7px; border: 1px solid transparent; border-radius: 10px; padding: 0 11px; color: rgb(245 245 245 / 76%); font-size: 11px; white-space: nowrap; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease; }
+.oao-canvas-image-toolbar button svg { width: 15px; height: 15px; stroke-width: 1.8; }
+.oao-canvas-image-toolbar button:hover,
+.oao-canvas-image-toolbar button:focus-visible { border-color: rgb(255 255 255 / 17%); background: rgb(255 255 255 / 10%); color: #ffffff; outline: none; }
+.oao-canvas-image-toolbar button:active { transform: scale(.96); }
+.oao-canvas-tool-notice { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); border: 1px solid rgb(255 255 255 / 15%); border-radius: 999px; background: rgb(24 24 24 / 96%); padding: 6px 10px; color: rgb(245 245 245 / 72%); font-size: 10px; white-space: nowrap; box-shadow: 0 10px 24px rgb(0 0 0 / 32%); }
 .oao-canvas-node-shell { position: relative; width: 286px; }
 .oao-canvas-node-expand { position: absolute; top: 50%; z-index: 8; display: inline-flex; width: 31px; height: 31px; align-items: center; justify-content: center; gap: 0; border: 1px solid rgb(199 243 232 / 42%); border-radius: 999px; background: rgb(23 30 31 / 94%); color: var(--canvas-accent); box-shadow: 0 8px 20px rgb(0 0 0 / 32%), inset 0 1px 0 rgb(255 255 255 / 9%); opacity: 0; pointer-events: none; transform: translateY(-50%) scale(.74); transition: opacity 150ms ease, transform 180ms ease, background-color 150ms ease, border-color 150ms ease; }
 .oao-canvas-node-expand-before { right: calc(100% + 13px); }
@@ -1396,6 +1406,20 @@
 .oao-canvas-node:hover { border-color: rgb(235 235 235 / 31%); }
 .oao-canvas-node.is-selected { border-color: rgb(199 243 232 / 72%); box-shadow: 0 0 0 1px rgb(199 243 232 / 30%), 0 22px 44px rgb(0 0 0 / 44%); }
 .oao-canvas-node-header { border-color: rgb(235 235 235 / 12%); background: rgb(255 255 255 / 4%); }
+.oao-canvas-node.is-media { position: relative; border-color: rgb(255 255 255 / 82%); background: #f1f1f1; color: #171717; box-shadow: 0 18px 40px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 12%); }
+.oao-canvas-node.is-media:hover { border-color: #ffffff; }
+.oao-canvas-node.is-media .oao-canvas-node-header { position: absolute; inset: 0 0 auto; z-index: 3; min-height: 48px; border: 0; background: linear-gradient(180deg, rgb(0 0 0 / 62%), transparent); color: #ffffff; }
+.oao-canvas-node.is-media .oao-canvas-node-header p:first-child { color: #ffffff; text-shadow: 0 1px 8px rgb(0 0 0 / 55%); }
+.oao-canvas-node.is-media .oao-canvas-node-header p:last-child { color: rgb(255 255 255 / 76%); }
+.oao-canvas-node.is-media .oao-canvas-node-icon { background: rgb(0 0 0 / 35%); color: #ffffff; }
+.oao-canvas-node.is-media .oao-canvas-node-status { border-color: rgb(255 255 255 / 48%); background: rgb(0 0 0 / 34%); color: #ffffff; }
+.oao-canvas-node.is-media .oao-canvas-node-meta { border-top-color: rgb(0 0 0 / 10%); background: #f3f3f3; color: #515151; }
+.oao-canvas-node.is-media .oao-canvas-node-hint { color: #777777; }
+.oao-canvas-node.is-media .react-flow__handle { background: #111111 !important; }
+.oao-canvas-node.is-media .oao-canvas-node-meta p { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.oao-canvas-node.is-media .oao-canvas-node-meta strong { overflow: hidden; color: #252525; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.oao-canvas-node.is-media .oao-canvas-node-meta span { overflow: hidden; color: #737373; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.oao-canvas-media-badge { position: absolute; top: 9px; right: 9px; z-index: 4; border: 1px solid rgb(255 255 255 / 72%); border-radius: 999px; background: rgb(0 0 0 / 45%); padding: 3px 7px; color: #ffffff; font-size: 9px; line-height: 1; box-shadow: 0 2px 8px rgb(0 0 0 / 26%); }
 .oao-canvas-node-icon { background: rgb(199 243 232 / 10%); color: var(--canvas-accent); }
 .oao-canvas-node-copy { color: var(--canvas-muted); }
 .oao-canvas-node-copy p { color: rgb(235 235 235 / 86%); }
@@ -1410,7 +1434,7 @@
 .oao-canvas-inspector-field textarea:focus { border-color: rgb(199 243 232 / 56%); box-shadow: 0 0 0 3px rgb(199 243 232 / 9%); }
 .oao-canvas-editor .react-flow__pane { cursor: grab; }
 .oao-canvas-editor .react-flow__pane:active { cursor: grabbing; }
-.oao-canvas-editor .react-flow__edge-path { stroke: rgb(210 210 210 / 42%); stroke-width: 1.35; }
+.oao-canvas-editor .react-flow__edge-path { stroke: rgb(248 248 248 / 82%); stroke-width: 2.1; stroke-linecap: round; }
 .oao-canvas-editor .react-flow__edge.selected .react-flow__edge-path { stroke: var(--canvas-accent-strong); }
 .oao-canvas-editor .react-flow__controls,
 .oao-canvas-editor .react-flow__attribution { display: none; }
@@ -2621,6 +2645,34 @@
 .oao-canvas-editor .oao-canvas-generation-error { border-color: rgb(255 255 255 / 30%); background: rgb(255 255 255 / 8%); color: #eeeeee; }
 .oao-canvas-editor .oao-canvas-context-menu button.is-danger:hover { border-color: rgb(255 255 255 / 25%); background: rgb(255 255 255 / 12%); color: #ffffff; }
 .oao-canvas-editor .oao-canvas-context-menu button.is-danger svg { color: #ffffff; }
+
+/* 画布工具栏和媒体节点采用影策式的“画布优先”层级：内容保持原色，
+   操作界面只用黑、白、灰，避免生成卡片把画布切成几块。 */
+.oao-canvas-editor .oao-canvas-image-toolbar { border-color: rgb(255 255 255 / 18%); background: rgb(21 21 21 / 96%); }
+.oao-canvas-editor .oao-canvas-image-toolbar button:hover,
+.oao-canvas-editor .oao-canvas-image-toolbar button:focus-visible { border-color: rgb(255 255 255 / 25%); background: rgb(255 255 255 / 13%); color: #ffffff; }
+.oao-canvas-editor .oao-canvas-image-toolbar-divider { width: 1px; height: 23px; margin: 0 5px; background: rgb(255 255 255 / 20%); }
+.oao-canvas-editor .oao-canvas-node.is-media.is-selected { border-color: #ffffff; box-shadow: 0 0 0 2px rgb(255 255 255 / 28%), 0 24px 48px rgb(0 0 0 / 48%); }
+.oao-canvas-editor .oao-canvas-node.is-media .oao-canvas-node-meta p { color: #3e3e3e; }
+
+@media (max-width: 900px) {
+  .oao-canvas-rail { width: 56px; padding-inline: 5px; }
+  .oao-canvas-rail-button { width: 44px; min-height: 44px; }
+  .oao-canvas-topbar { left: 66px; right: 8px; gap: 5px; }
+  .oao-canvas-project-pill { max-width: 180px; padding-inline: 9px; }
+  .oao-canvas-project-kind { display: none; }
+  .oao-canvas-project-title { max-width: 105px; }
+  .oao-canvas-topbar-actions { min-width: 0; max-width: calc(100% - 190px); overflow: hidden; }
+  .oao-canvas-topbar-labeled { min-width: 32px; justify-content: center; padding-inline: 7px; }
+  .oao-canvas-topbar-labeled span { display: none; }
+  .oao-canvas-image-toolbar { display: none; }
+}
+
+@media (max-width: 720px) {
+  .oao-canvas-image-toolbar { display: none; }
+  .oao-canvas-topbar-labeled { min-width: 32px; justify-content: center; padding-inline: 8px; }
+  .oao-canvas-topbar-labeled span { display: none; }
+}
 
 /* 生成编辑器属于当前节点：它是局部浮层，不再横跨整个画布底部。 */
 .oao-canvas-generation-node-card {

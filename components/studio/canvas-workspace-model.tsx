@@ -4,7 +4,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { media } from '@/lib/studio/mock-data'
 import type { CanvasBoard, CanvasNodeData } from '@/lib/studio/types'
 
-export const canvasEdgeStyle = { stroke: 'var(--studio-ink-line)', strokeWidth: 1.35 }
+export const canvasEdgeStyle = { stroke: 'rgba(248, 248, 248, .82)', strokeWidth: 2.1 }
 export const defaultEdgeOptions = { animated: false, style: canvasEdgeStyle }
 
 export function createInitialBoard(projectId: string, projectTitle?: string): CanvasBoard {
@@ -66,6 +66,18 @@ export const emptyBoard: CanvasBoard = { nodes: [], edges: [] }
 export type CanvasFlowInstance = {
   fitView: (options?: { padding?: number; maxZoom?: number; duration?: number }) => void
   screenToFlowPosition: (position: { x: number; y: number }) => { x: number; y: number }
+  getViewport?: () => { x: number; y: number; zoom: number }
+  setViewport?: (viewport: { x: number; y: number; zoom: number }, options?: { duration?: number }) => unknown
+}
+
+/** ReactFlow 不知道顶部浮动工具栏占用了画布空间，给自动适配留一段安全边距。 */
+export function fitCanvasWithTopSafeArea(flow: CanvasFlowInstance, padding: number, duration = 0) {
+  flow.fitView({ padding, maxZoom: 1.05, duration })
+  window.setTimeout(() => {
+    const viewport = flow.getViewport?.()
+    if (!viewport || !flow.setViewport) return
+    void flow.setViewport({ ...viewport, y: viewport.y + 62 }, { duration: 0 })
+  }, Math.max(32, duration + 32))
 }
 export type HistoryState = { canUndo: boolean; canRedo: boolean }
 export type CanvasPanelTab = 'nodes' | 'assets' | 'tasks' | 'history'

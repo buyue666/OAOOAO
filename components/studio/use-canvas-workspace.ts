@@ -19,7 +19,7 @@ import type { Asset, CanvasBoard, CanvasNodeData } from '@/lib/studio/types'
 import type { CanvasCreatedGeneration } from './canvas-generation-panel'
 import { useGeneration } from '@/lib/studio/generation-store'
 import type { AgentRun } from '@/lib/studio/generation-types'
-import { canvasEdgeStyle, cloneBoard, createInitialBoard, emptyBoard, type CanvasContextMenu, type CanvasFlowInstance, type CanvasPanelTab, type HistoryState } from './canvas-workspace-model'
+import { canvasEdgeStyle, cloneBoard, createInitialBoard, emptyBoard, fitCanvasWithTopSafeArea, type CanvasContextMenu, type CanvasFlowInstance, type CanvasPanelTab, type HistoryState } from './canvas-workspace-model'
 
 export function useCanvasWorkspaceController({ projectId }: { projectId?: string }) {
   const { state, dispatch } = useStudio()
@@ -79,7 +79,8 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     edgesRef.current = nextBoard.edges
     setNodes(nextBoard.nodes)
     setEdges(nextBoard.edges)
-    setSelectedId(nextBoard.nodes.find((node) => node.data.kind === 'text')?.id ?? nextBoard.nodes[0]?.id ?? null)
+    // 初次进入画布不预选节点，保持影策式的纯画布状态；用户点击节点后再显示节点工具。
+    setSelectedId(null)
     historyRef.current = []
     futureRef.current = []
     syncHistoryState()
@@ -126,7 +127,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
         edgesRef.current = nextBoard.edges
         setNodes(nextBoard.nodes)
         setEdges(nextBoard.edges)
-        setSelectedId(nextBoard.nodes.find((node) => node.data.kind === 'text')?.id ?? nextBoard.nodes[0]?.id ?? null)
+        setSelectedId(null)
         setBoardRevision((value) => value + 1)
       } catch (error) {
         if (cancelled) return
@@ -174,7 +175,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
   useEffect(() => {
     if (!state.hydrated || !flowRef.current) return
     const timer = window.setTimeout(() => {
-      flowRef.current?.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2, duration: 220 })
+      if (flowRef.current) fitCanvasWithTopSafeArea(flowRef.current, showAgent ? 0.26 : 0.22, 220)
     }, 180)
     return () => window.clearTimeout(timer)
   }, [boardKey, boardRevision, showAgent, state.hydrated])
@@ -587,7 +588,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
   }, [pushHistory, setNodes])
 
   const resetView = useCallback(() => {
-    flowRef.current?.fitView({ padding: showAgent ? 0.2 : 0.14, maxZoom: 1.2, duration: 260 })
+    if (flowRef.current) fitCanvasWithTopSafeArea(flowRef.current, showAgent ? 0.26 : 0.22, 260)
   }, [showAgent])
 
   const syncLabel = syncStatus === 'synced' ? '已保存' : syncStatus === 'saving' ? '保存中' : syncStatus === 'conflict' ? '版本冲突' : syncStatus === 'error' ? '同步失败' : syncStatus === 'local' ? '本地草稿' : '连接中'
