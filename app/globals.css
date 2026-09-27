@@ -2644,6 +2644,7 @@
 }
 
 @media (min-width: 721px) and (max-width: 900px) {
+  .oao-canvas-generation-node-card { width: 360px; }
   .oao-canvas-generation-node-card .oao-canvas-generation-scroll { padding-inline: 10px; }
   .oao-canvas-generation-node-card .oao-canvas-reference-grid { width: min(190px, 27vw); grid-template-columns: repeat(3, minmax(38px, 1fr)); }
   .oao-canvas-generation-node-card .oao-canvas-upload-control { min-width: 88px; padding-inline: 6px; }

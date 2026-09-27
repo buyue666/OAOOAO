@@ -230,7 +230,7 @@ export function CanvasWorkspaceView({
       : undefined
     const targetBox = targetElement?.getBoundingClientRect()
     const compact = window.innerWidth <= 720
-    const preferredWidth = compact ? Math.min(350, Math.max(280, stageBox.width - 76)) : 420
+    const preferredWidth = compact ? Math.min(350, Math.max(280, stageBox.width - 76)) : window.innerWidth <= 900 ? 360 : 420
     const panelHeight = compact ? Math.min(450, Math.max(320, stageBox.height - 80)) : Math.min(430, Math.max(320, stageBox.height - 100))
     const minLeft = compact ? 64 : 76
     let panelWidth = preferredWidth
