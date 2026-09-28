@@ -18,11 +18,40 @@ const page = await context.newPage()
 const pageErrors = []
 page.on('pageerror', (error) => pageErrors.push(error.message))
 let checks = 0
+let canvasSnapshot = null
 
 function check(label, value) {
   assert.ok(value, label)
   checks += 1
   console.log(`PASS ${label}`)
+}
+
+async function captureCanvasSnapshot() {
+  return page.evaluate(async () => {
+    const response = await fetch('/api/canvas/projects/canvas-aurora')
+    if (!response.ok) return null
+    const result = await response.json()
+    return result.data?.project ?? null
+  })
+}
+
+async function restoreCanvasSnapshot(snapshot) {
+  if (!snapshot) return
+  await page.evaluate(async (original) => {
+    const currentResponse = await fetch('/api/canvas/projects/canvas-aurora')
+    if (!currentResponse.ok) return
+    const currentResult = await currentResponse.json()
+    const current = currentResult.data?.project
+    if (!current) return
+    await fetch('/api/canvas/projects/canvas-aurora', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        expectedUpdatedAt: current.updatedAt,
+        project: { ...current, nodes: original.nodes, connections: original.connections },
+      }),
+    })
+  }, snapshot)
 }
 
 async function visit(pathname) {
@@ -52,6 +81,7 @@ try {
   check('旧短剧地址重定向到独立短剧页', page.url().endsWith('/drama'))
 
   await visit('/canvas/canvas-aurora')
+  canvasSnapshot = await captureCanvasSnapshot()
   check('画布有本地生成入口', await page.getByRole('button', { name: '在画布内生成' }).count() >= 1)
   check('画布不包含跳转到其他生成工作台的链接', await page.locator('a').evaluateAll((links) => links.every((link) => !/\/(image|video|tasks|projects)(\/|$)/.test(link.getAttribute('href') || ''))))
   check('画布不再显示完整工作台跳转文案', !(await page.locator('body').innerText()).includes('打开完整工作台'))
@@ -83,9 +113,10 @@ try {
   await expandAfter.evaluate((button) => button.click())
   check('节点扩展菜单可以打开', await page.locator('[data-canvas-expand-menu]').isVisible())
   const videoCountBeforeExpand = await page.locator('[data-canvas-node-kind="video"]').count()
+  const edgeCountBeforeExpand = await page.locator('.react-flow__edge').count()
   await page.locator('[data-canvas-expand-option="video"]').click()
-  await page.waitForFunction((count) => document.querySelectorAll('[data-canvas-node-kind="video"]').length > count, videoCountBeforeExpand)
-  check('扩展节点会自动创建并连接视频节点', await page.locator('[data-canvas-node-kind="video"]').count() > videoCountBeforeExpand && await page.locator('.react-flow__edge').count() >= 4)
+  await page.waitForFunction(({ videoCount, edgeCount }) => document.querySelectorAll('[data-canvas-node-kind="video"]').length > videoCount && document.querySelectorAll('.react-flow__edge').length > edgeCount, { videoCount: videoCountBeforeExpand, edgeCount: edgeCountBeforeExpand })
+  check('扩展节点会自动创建并连接视频节点', await page.locator('[data-canvas-node-kind="video"]').count() > videoCountBeforeExpand && await page.locator('.react-flow__edge').count() > edgeCountBeforeExpand)
   await page.locator('.oao-canvas-node.is-media').first().dispatchEvent('dblclick')
   check('图片节点打开后锁定为图片生成', await page.locator('.oao-canvas-generation-locked').isVisible() && (await page.locator('.oao-canvas-generation-locked').innerText()).includes('图片生成'))
   check('图片节点不会显示跨类型生成标签', await page.locator('[role="tablist"][aria-label="生成类型"]').count() === 0)
@@ -138,5 +169,6 @@ try {
   check('核心页面没有未捕获浏览器异常', pageErrors.length === 0)
   console.log(`CHECKS: ${checks}; FAILURES: 0`)
 } finally {
+  await restoreCanvasSnapshot(canvasSnapshot)
   await browser.close()
 }
