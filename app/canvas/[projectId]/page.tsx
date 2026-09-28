@@ -1,6 +1,7 @@
-import { CanvasWorkspace } from '@/components/studio/canvas-workspace'
+import { Suspense } from 'react'
+import { OaoInfiniteCanvas } from '@/components/oao-canvas/oao-infinite-canvas'
 
 export default async function Page({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
-  return <CanvasWorkspace projectId={projectId} fullScreen />
+  return <Suspense fallback={<main className="h-full min-h-dvh bg-black" />}><OaoInfiniteCanvas projectId={projectId} /></Suspense>
 }

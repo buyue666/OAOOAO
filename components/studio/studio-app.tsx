@@ -18,7 +18,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === '/login' || pathname === '/plans'
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isWorkspace = pathname === '/image' || pathname === '/video'
-  const isCanvasEditor = pathname.startsWith('/canvas/')
+  const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/')
 
   /**
    * 着陆页、登录、套餐与后台都自带独立版式，不套工作台外壳：
@@ -30,7 +30,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
    */
   if (isLanding || isAuthPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isAdmin) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
-  if (isCanvasEditor) return <div className="oao-canvas-route min-h-dvh bg-black text-white"><SiteAnnouncementBar announcement={state.sessionSettings?.site?.announcementBar} placement="workbench" />{children}</div>
+  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 flex-col overflow-hidden bg-black text-white"><SiteAnnouncementBar announcement={state.sessionSettings?.site?.announcementBar} placement="workbench" /><div className="min-h-0 flex-1">{children}</div></div>
 
   return (
     <>

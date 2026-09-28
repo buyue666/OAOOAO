@@ -1,5 +1,6 @@
-import { CanvasIndexPage } from '@/components/studio/canvas-index-page'
+import { Suspense } from 'react'
+import { OaoInfiniteCanvasIndex } from '@/components/oao-canvas/oao-infinite-canvas'
 
 export default function Page() {
-  return <CanvasIndexPage />
+  return <Suspense fallback={<main className="h-full min-h-dvh bg-background" />}><OaoInfiniteCanvasIndex /></Suspense>
 }
