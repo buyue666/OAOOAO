@@ -355,7 +355,7 @@ export function CanvasWorkspaceView({
       </header>
 
       <main className="oao-canvas-stage" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={(event) => { if (!event.dataTransfer.files.length) return; event.preventDefault(); addUploadedFiles(event.dataTransfer.files) }}>
-        <div className="oao-canvas-image-toolbar" data-canvas-no-zoom aria-label="图片工具栏">
+        {selectedNode?.data.kind === 'image' && <div className="oao-canvas-image-toolbar" data-canvas-no-zoom aria-label="图片工具栏">
           <button type="button" onClick={() => runCanvasImageTool('局部重绘')}><Sparkles aria-hidden="true" /><span>局部重绘</span></button>
           <button type="button" onClick={() => runCanvasImageTool('文字编辑')}><Type aria-hidden="true" /><span>文字编辑</span></button>
           <button type="button" onClick={() => runCanvasImageTool('九宫格')}><Layers3 aria-hidden="true" /><span>九宫格</span></button>
@@ -368,7 +368,7 @@ export function CanvasWorkspaceView({
           <button type="button" onClick={() => setCanvasToolNotice('当前画布可从右键菜单导出节点')}><Upload aria-hidden="true" /><span>导出</span></button>
           <button type="button" onClick={() => setCanvasToolNotice('更多节点工具已收纳在底部工具岛')}><Archive aria-hidden="true" /><span>更多</span></button>
           {canvasToolNotice && <span className="oao-canvas-tool-notice" role="status">{canvasToolNotice}</span>}
-        </div>
+        </div>}
         <CanvasNodeActionsContext.Provider value={{ onExpand: onNodeExpand, onInspect: inspectNode, onGenerate: generateNode, onDuplicate: duplicateNode, onDelete: deleteNode }}>
           <ReactFlow
             nodes={nodes}
