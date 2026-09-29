@@ -90,7 +90,7 @@ function CanvasRuntime({ children }: { children: ReactNode }) {
     return (
         <QueryClientProvider client={queryClient}>
             <div className="h-full min-h-0">
-                <ConfigProvider theme={{ token: { colorPrimary: "#f5f5f4", colorInfo: "#f5f5f4", borderRadius: 12 } }}>
+                <ConfigProvider theme={{ token: { colorPrimary: "#f5f5f4", colorInfo: "#f5f5f4", colorTextLightSolid: "#171717", borderRadius: 12 } }}>
                     <AntApp className="h-full min-h-0">{children}</AntApp>
                 </ConfigProvider>
             </div>
