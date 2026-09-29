@@ -29,5 +29,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "components/oao-canvas/reference-src/**"]
+  "exclude": ["node_modules", "components/oao-canvas/core/**"]
 }

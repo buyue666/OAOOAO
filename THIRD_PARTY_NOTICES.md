@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-## Infinite Canvas
+## Canvas Foundation (MIT)
 
-The canvas implementation under `components/oao-canvas/reference-src/` is adapted from [basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas), licensed under the MIT License. The adapter around it connects the canvas to OAOOAO's existing session, model, generation, and canvas-project APIs. The rest of the application is not part of that upstream project.
+OAO 自由画布包含一部分采用 MIT 许可的底层画布交互实现。OAO 在此基础上重新组织了画布节点、资产管理、模型调用、Agent 操作、项目存储和用户界面；本文件仅保留原始版权与许可证要求，不提供外部项目入口。
 
 Copyright (c) 2026 basketikun
 
