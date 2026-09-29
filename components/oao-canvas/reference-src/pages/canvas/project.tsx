@@ -38,7 +38,7 @@ import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "@/components/oao-ca
 import { CanvasSelectionToolbar } from "@/components/oao-canvas/reference-src/components/canvas/canvas-selection-toolbar";
 import { InfiniteCanvas } from "@/components/oao-canvas/reference-src/components/canvas/infinite-canvas";
 import { Minimap } from "@/components/oao-canvas/reference-src/components/canvas/canvas-mini-map";
-import { CanvasNode } from "@/components/oao-canvas/reference-src/components/canvas/canvas-node";
+import { CanvasNode, type CanvasNodePanelPlacement } from "@/components/oao-canvas/reference-src/components/canvas/canvas-node";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/oao-canvas/reference-src/components/canvas/canvas-node-prompt-panel";
 import { CanvasToolbar } from "@/components/oao-canvas/reference-src/components/canvas/canvas-toolbar";
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/oao-canvas/reference-src/components/canvas/asset-picker-modal";
@@ -277,6 +277,19 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
             openSidePanel();
         },
         [openSidePanel],
+    );
+
+    const nodePanelPlacement = useCallback(
+        (node: CanvasNodeData): CanvasNodePanelPlacement => {
+            const screenLeft = viewport.x + node.position.x * viewport.k;
+            const screenRight = screenLeft + node.width * viewport.k;
+            const panelWidth = Math.min(440, Math.max(320, size.width - 128));
+            const gutter = 18;
+            if (screenRight + gutter + panelWidth <= size.width - 18) return "right";
+            if (screenLeft - gutter - panelWidth >= 18) return "left";
+            return "below";
+        },
+        [size.width, viewport.k, viewport.x],
     );
 
     const nodesRef = useRef(nodes);
@@ -2290,11 +2303,13 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
         setTitleEditing(false);
     }, [projectId, renameProject, titleDraft]);
 
-    const preventCanvasContextMenu = useCallback((event: ReactMouseEvent) => {
-        if ((event.target as HTMLElement).closest("[data-node-id]")) return;
+    const handleCanvasContextMenu = useCallback((event: ReactMouseEvent) => {
+        if ((event.target as HTMLElement).closest("[data-node-id],[data-connection-id],[data-canvas-no-zoom]")) return;
         event.preventDefault();
         setContextMenu(null);
-    }, []);
+        setEntryDismissed(true);
+        setNodeCreatePosition(screenToCanvas(event.clientX, event.clientY));
+    }, [screenToCanvas]);
 
     const handleGenerateNode = useCallback(
         async (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => {
@@ -3161,7 +3176,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                         setContextMenu(null);
                         setNodeCreatePosition(screenToCanvas(event.clientX, event.clientY));
                     }}
-                    onContextMenu={preventCanvasContextMenu}
+                    onContextMenu={handleCanvasContextMenu}
                     onDrop={handleDrop}
                 >
                     <svg className="absolute left-0 top-0 h-[10000px] w-[10000px] overflow-visible" style={{ pointerEvents: "none", transform: "translateZ(0)", zIndex: 0 }}>
@@ -3195,18 +3210,19 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                     </svg>
 
                     {visibleNodes.map((node) => (
-                        <CanvasNode
-                            key={node.id}
-                            data={node}
-                            scale={viewport.k}
-                            isSelected={selectedNodeIds.has(node.id)}
+                            <CanvasNode
+                                key={node.id}
+                                data={node}
+                                scale={viewport.k}
+                                isSelected={selectedNodeIds.has(node.id)}
                             isRelated={relatedHighlight.nodeIds.has(node.id)}
                             isFocusRelated={activeNodeId === node.id}
                             isConnectionTarget={connectionTargetNodeId === node.id}
                             isConnecting={Boolean(connectingParams)}
-                            referenceSelectionState={!referencePickerNodeId ? undefined : node.id === referencePickerNodeId ? "target" : referenceConnectedNodeIds.has(node.id) || !isCanvasReferenceNode(node, nodes) ? "disabled" : "available"}
-                            showPanel={!isNodeResizing && dialogNodeId === node.id && !selectionBox && !getNodeDefinition(node.type)?.hidePanel}
-                            groupChildCount={groupChildCountById.get(node.id) || 0}
+                                referenceSelectionState={!referencePickerNodeId ? undefined : node.id === referencePickerNodeId ? "target" : referenceConnectedNodeIds.has(node.id) || !isCanvasReferenceNode(node, nodes) ? "disabled" : "available"}
+                                showPanel={!isNodeResizing && dialogNodeId === node.id && !selectionBox && !getNodeDefinition(node.type)?.hidePanel}
+                                panelPlacement={nodePanelPlacement(node)}
+                                groupChildCount={groupChildCountById.get(node.id) || 0}
                             isGroupDropTarget={dropTargetGroupId === node.id}
                             batchExpanded={expandedBatchNodeIds.has(node.id)}
                             showImageInfo={showImageInfo}

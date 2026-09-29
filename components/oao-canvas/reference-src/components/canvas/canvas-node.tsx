@@ -14,6 +14,7 @@ import type { CanvasResourceReference } from "@/components/oao-canvas/reference-
 import { useTranslation } from "react-i18next";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+export type CanvasNodePanelPlacement = "right" | "left" | "below";
 const selectionBlue = "#2f80ff";
 
 type CanvasNodeProps = {
@@ -26,6 +27,7 @@ type CanvasNodeProps = {
     isConnecting: boolean;
     referenceSelectionState?: "target" | "disabled" | "available";
     showPanel: boolean;
+    panelPlacement?: CanvasNodePanelPlacement;
     showImageInfo: boolean;
     mentionReferences?: CanvasResourceReference[];
     pluginHost?: CanvasPluginHost;
@@ -91,6 +93,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     isConnecting,
     referenceSelectionState,
     showPanel,
+    panelPlacement = "below",
     showImageInfo,
     mentionReferences = [],
     pluginHost,
@@ -442,7 +445,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             {!referenceSelectionState && !isGroup ? <ConnectionHandleDot side="left" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "target")} /> : null}
             {!referenceSelectionState && (definition?.hasSourceHandle ?? true) && !isGroup ? <ConnectionHandleDot side="right" visible={hovered || isSelected || isConnecting} onMouseDown={(event) => onConnectStart(event, data.id, "source")} /> : null}
 
-            {showPanel && !isGroup && renderPanel ? <div className="absolute left-1/2 top-full z-[70] w-[600px] -translate-x-1/2 pt-4">{renderPanel(data)}</div> : null}
+            {showPanel && !isGroup && renderPanel ? <div className={`canvas-node-floating-panel canvas-node-floating-panel-${panelPlacement}`} data-canvas-no-zoom>{renderPanel(data)}</div> : null}
         </div>
     );
 });

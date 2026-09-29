@@ -144,8 +144,8 @@ function Hero() {
   const imageProgress = reduced ? 0 : clamp((progress - 0.2) / 0.8)
   const parallaxProgress = reduced ? 0 : clamp(progress / 0.8)
   const textOpacity = reduced ? 1 : clamp(1 - (progress - 0.08) / 0.24)
-  const backgroundShift = parallaxProgress * -2
-  const wordmarkShift = parallaxProgress * -7
+  const backgroundShift = parallaxProgress * -1.5
+  const brandmarkShift = parallaxProgress * -7
   const foregroundShift = parallaxProgress * -12
   return (
     <section id="hero" ref={ref} className={styles.hero} aria-label="OAO 创作平台">
@@ -154,9 +154,18 @@ function Hero() {
           {(['left', 'center', 'right'] as const).map((side) => side === 'center' ? (
             <div key={side} className={styles.heroCenter} style={{ width: (100 - imageProgress * 80) + '%' }}>
               <Image src="/media/generated/ai-creative-hero-background-clean-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} style={{ transform: `scale(1.06) translateY(${backgroundShift}%)` }} />
-              <div className={styles.wordmark} style={{ opacity: textOpacity, transform: `translateY(${wordmarkShift}%)` }} aria-hidden="true">
-                <h1 aria-label="OAO">{'OAO'.split('').map((letter, index) => <span key={index} style={{ animationDelay: 160 + index * 120 + 'ms' }}>{letter}</span>)}</h1>
-              </div>
+              <Image
+                src="/media/brand/oao-logo-transparent.png"
+                alt=""
+                aria-hidden="true"
+                data-hero-brandmark
+                width={1221}
+                height={292}
+                preload
+                sizes="min(82vw, 1120px)"
+                className={styles.brandmark}
+                style={{ opacity: textOpacity, transform: `translate(-50%, ${brandmarkShift}%)` }}
+              />
               <Image src="/media/generated/ai-creative-hero-user-v3.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} style={{ transform: `translate(-50%, ${foregroundShift}%)` }} />
             </div>
           ) : (

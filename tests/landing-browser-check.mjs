@@ -66,7 +66,7 @@ try {
   await page.goto(base, { waitUntil: 'networkidle' })
   await page.locator('[data-landing-version="oao-zh-v8-landscape-layered"]').waitFor()
   check('Chinese page metadata', (await page.title()) === 'OAO · 图片、视频与故事创作')
-  check('Hero does not render a duplicate text wordmark', await page.locator('[data-hero-brandmark]').count() === 0)
+  check('Hero uses one transparent brand mark behind the subject', await page.locator('[data-hero-brandmark]').count() === 1 && await page.locator('[data-hero-brandmark]').evaluate(image => image.getAttribute('src').includes('oao-logo-transparent.png')))
   await page.waitForFunction(() => {
     const header = document.querySelector('header')
     const style = getComputedStyle(header)
@@ -82,30 +82,30 @@ try {
   const heroCenter = page.locator('img[alt="旷野中进行绘画与影像记录的 OAO 创作现场"]').locator('..')
   check('Hero starts full width', await heroCenter.evaluate(el => el.style.width) === '100%')
   check('No remote template video is embedded', await page.locator('video').count() === 0)
-  check('Clean background and extracted foreground are active', await page.locator('#hero img[aria-hidden="true"]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-background-clean-v1.png')) && await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v3.png')) && await page.locator('[data-hero-canvas]').count() === 0)
+  check('Clean background and extracted foreground are active', await page.locator('#hero img[src*="ai-creative-hero-background-clean-v1.png"]').count() === 1 && await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v3.png')) && await page.locator('[data-hero-canvas]').count() === 0)
   await heroCenter.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
   await checkHeroComposition(page, 'desktop')
   await checkCanvasOcclusion(page, 'desktop')
   await snapshot(page, 'desktop-hero')
   const topLayerTransforms = await page.evaluate(() => ({
-    background: getComputedStyle(document.querySelector('#hero img[aria-hidden="true"]')).transform,
-    wordmark: getComputedStyle(document.querySelector('#hero h1[aria-label="OAO"]').parentElement).transform,
+    background: getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-clean-v1.png"]')).transform,
+    brandmark: getComputedStyle(document.querySelector('[data-hero-brandmark]')).transform,
     foreground: getComputedStyle(document.querySelector('[data-hero-foreground]')).transform,
   }))
   await page.evaluate(() => scrollTo(0, innerHeight * 0.1))
   await settled(page)
   check('Hero layers move as soon as scrolling begins', await page.evaluate((top) => {
     const current = {
-      background: getComputedStyle(document.querySelector('#hero img[aria-hidden="true"]')).transform,
-      wordmark: getComputedStyle(document.querySelector('#hero h1[aria-label="OAO"]').parentElement).transform,
+      background: getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-clean-v1.png"]')).transform,
+      brandmark: getComputedStyle(document.querySelector('[data-hero-brandmark]')).transform,
       foreground: getComputedStyle(document.querySelector('[data-hero-foreground]')).transform,
     }
-    return current.background !== top.background && current.wordmark !== top.wordmark && current.foreground !== top.foreground
+    return current.background !== top.background && current.brandmark !== top.brandmark && current.foreground !== top.foreground
   }, topLayerTransforms))
   check('Hero layers use different parallax speeds', await page.evaluate(() => {
     const readY = (value) => Number(value.match(/,\s*(-?[\d.]+)\)$/)?.[1] || 0)
-    const background = readY(getComputedStyle(document.querySelector('#hero img[aria-hidden="true"]')).transform)
-    const wordmark = readY(getComputedStyle(document.querySelector('#hero h1[aria-label="OAO"]').parentElement).transform)
+    const background = readY(getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-clean-v1.png"]')).transform)
+    const wordmark = readY(getComputedStyle(document.querySelector('[data-hero-brandmark]')).transform)
     const foreground = readY(getComputedStyle(document.querySelector('[data-hero-foreground]')).transform)
     return Math.abs(background) < Math.abs(wordmark) && Math.abs(wordmark) < Math.abs(foreground)
   }))
@@ -151,8 +151,8 @@ try {
     await page.evaluate(() => scrollTo(0, 0))
     await settled(page)
     check(`No overflow at ${viewport.width}px`, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
-    check(`Hero retains photograph to the bottom at ${viewport.width}px`, await page.locator('#hero img[aria-hidden="true"]').first().evaluate(image => image.getBoundingClientRect().bottom >= image.parentElement.getBoundingClientRect().bottom))
-    check(`No duplicate hero wordmark at ${viewport.width}px`, await page.locator('[data-hero-brandmark]').count() === 0)
+    check(`Hero retains photograph to the bottom at ${viewport.width}px`, await page.locator('#hero img[src*="ai-creative-hero-background-clean-v1.png"]').evaluate(image => image.getBoundingClientRect().bottom >= image.parentElement.getBoundingClientRect().bottom))
+    check(`Brand mark remains single at ${viewport.width}px`, await page.locator('[data-hero-brandmark]').count() === 1)
     await checkHeroComposition(page, `${viewport.width}px`)
     await snapshot(page, `hero-${viewport.width}`)
     if (viewport.width === 390) {

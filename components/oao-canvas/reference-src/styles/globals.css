@@ -161,13 +161,13 @@
         position: relative;
         z-index: 65;
         display: flex;
-        width: 64px;
-        flex: 0 0 64px;
+        width: 82px;
+        flex: 0 0 82px;
         flex-direction: column;
         align-items: center;
         justify-content: space-between;
         border-right: 1px solid;
-        padding: 14px 8px 12px;
+        padding: 14px 10px 12px;
     }
 
     .canvas-workspace-rail-main {
@@ -180,16 +180,17 @@
 
     .canvas-workspace-rail-button {
         display: flex;
-        width: 48px;
-        min-height: 48px;
+        width: 62px;
+        min-height: 52px;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: 4px;
         border-radius: 12px;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 600;
         line-height: 1;
+        white-space: nowrap;
         transition: background 160ms ease, color 160ms ease, transform 160ms ease;
     }
 
@@ -207,21 +208,51 @@
 
     .canvas-workspace-rail-toggle {
         display: flex;
-        width: 48px;
+        width: 62px;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         gap: 4px;
         border-radius: 12px;
         padding: 7px 0;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 600;
         line-height: 1;
+        white-space: nowrap;
         transition: background 160ms ease, opacity 160ms ease;
     }
 
     .canvas-workspace-rail-toggle:hover {
         background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+
+    .canvas-node-floating-panel {
+        position: absolute;
+        z-index: 70;
+        width: min(440px, calc(100vw - 128px));
+        max-height: min(620px, calc(100vh - 104px));
+        overflow: auto;
+        filter: drop-shadow(0 18px 38px rgba(0, 0, 0, 0.24));
+    }
+
+    .canvas-node-floating-panel-right {
+        top: 0;
+        left: calc(100% + 18px);
+    }
+
+    .canvas-node-floating-panel-left {
+        top: 0;
+        right: calc(100% + 18px);
+    }
+
+    .canvas-node-floating-panel-below {
+        top: calc(100% + 16px);
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .canvas-node-floating-panel > * {
+        max-height: min(620px, calc(100vh - 104px));
     }
 
     .canvas-entry-state {
@@ -399,6 +430,10 @@
         .canvas-workspace-rail-button,
         .canvas-workspace-rail-toggle {
             width: 40px;
+        }
+
+        .canvas-node-floating-panel {
+            width: min(360px, calc(100vw - 72px));
         }
 
         .canvas-entry-state {

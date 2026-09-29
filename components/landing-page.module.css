@@ -67,29 +67,19 @@
   object-position: center center;
   will-change: transform;
 }
-.wordmark {
+.brandmark {
   position: absolute;
   z-index: 1;
-  inset: clamp(112px, 15vh, 160px) 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #0a0a0a;
+  top: clamp(132px, 20vh, 210px);
+  left: 50%;
+  width: min(82vw, 1120px);
+  height: auto;
   pointer-events: none;
   mix-blend-mode: multiply;
+  object-fit: contain;
+  object-position: center;
+  filter: saturate(0);
   will-change: opacity, transform;
-}
-.wordmark h1 {
-  display: flex;
-  justify-content: center;
-  white-space: nowrap;
-  font-size: clamp(280px, 32vw, 504px);
-  font-weight: 800;
-  letter-spacing: -0.06em;
-  line-height: .8;
-}
-.wordmark span {
-  animation: letter-in 1200ms cubic-bezier(.22,.61,.36,1) both;
 }
 .heroForeground {
   position: absolute;
@@ -105,11 +95,6 @@
 .heroCaption { position: absolute; z-index: 4; inset: auto 24px 56px; text-align: center; color: white; }
 .heroCaption p { font-size: 36px; font-weight: 400; line-height: 1.5; text-shadow: 0 1px 12px rgb(0 0 0 / 48%); }
 .heroCaption a { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 32px; margin-top: 14px; }
-
-@keyframes letter-in {
-  from { opacity: 0; transform: translateY(70%); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
 .philosophyScroll { position: relative; height: 200svh; }
 .philosophyStage { position: sticky; top: 0; height: 100svh; display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -202,8 +187,7 @@
 
 @media (min-width: 768px) and (max-width: 1199px) {
   .landing { --page-gutter: 48px; }
-  .wordmark { top: 14vh; }
-  .wordmark h1 { font-size: min(42vw, 360px); }
+  .brandmark { top: 15vh; width: min(82vw, 760px); }
   .rotatingTitles h2, .sceneTitle h2 { font-size: 48px; }
   .sketchGrid { grid-auto-rows: 180px; }
   .aboutText p { font-size: 28px; }
@@ -220,8 +204,7 @@
   .mobileNav { display: flex; flex-direction: column; padding: 16px 24px 24px; gap: 22px; border-top: 1px solid #eee; }
   .mobileNav a { font-size: 16px; }
   .mobileNav a:last-child { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 0; border-top: 1px solid #eee; }
-  .wordmark { top: max(100px, calc(44svh - 100px)); }
-  .wordmark h1 { font-size: min(42vw, 180px); }
+  .brandmark { top: max(100px, calc(44svh - 100px)); width: 82vw; }
   .heroForeground { height: 60%; }
   .heroCaption { bottom: 44px; inset-inline: 20px; }
   .heroCaption p { font-size: 23px; line-height: 1.65; }
@@ -254,7 +237,6 @@
   .footerBottom { align-items: flex-start; gap: 16px; }
 }
 @media (max-width: 359px) {
-  .wordmark h1 { font-size: 144px; }
   .heroCaption p { font-size: 20px; }
   .rotatingTitles h2 { font-size: 26px; }
   .sceneTitle h2 { font-size: 24px; }
@@ -266,7 +248,6 @@
   .hero, .philosophyScroll, .technologyScroll { height: auto; }
   .heroStage, .philosophyStage, .technologyStage { position: relative; }
   .philosophyStage { height: 55svh; }
-  .wordmark span { opacity: 1; }
   .gallery { height: auto; padding: 32px 16px; }
   .galleryStage { position: relative; height: auto; overflow: visible; padding: 0; }
   .galleryStack { display: grid; gap: 24px; height: auto; }
