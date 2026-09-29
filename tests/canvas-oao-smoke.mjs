@@ -41,6 +41,10 @@ try {
 
     const pane = page.locator('[data-oao-canvas-surface="free-canvas"]');
     check("OAO 自由画布平面已挂载", await pane.count() === 1);
+    check("OAO 画布主容器已启用", await page.locator(".oao-canvas-editor").count() === 1);
+    check("工具栏采用 OAO 命令列布局", await page.locator(".oao-command-strip .oao-command-strip-inner").count() === 1);
+    check("左侧使用 OAO 章节索引按钮", await page.locator(".oao-canvas-rail-index-button").count() >= 3);
+    check("节点使用 OAO 黑白卡片结构", await page.locator(".oao-node-card").count() >= 1);
     const blankPoint = await page.evaluate(() => {
         for (let y = 180; y < window.innerHeight - 120; y += 48) {
             for (let x = 420; x < window.innerWidth - 80; x += 48) {

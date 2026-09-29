@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 export type CanvasNodePanelPlacement = "right" | "left" | "below";
-const selectionBlue = "#2f80ff";
+const selectionBlue = "#f5f5f5";
 
 type CanvasNodeProps = {
     data: CanvasNodeData;
@@ -360,7 +360,8 @@ export const CanvasNode = React.memo(function CanvasNode({
             )}
 
             <div
-                className="relative h-full w-full overflow-visible rounded-[18px] border"
+                className={`oao-node-card relative h-full w-full overflow-visible rounded-[18px] border ${isGroup ? "is-group" : hasImageContent || hasVideoContent || hasAudioContent ? "is-media" : "is-process"}`}
+                data-oao-node-kind={data.type}
                 style={{
                     background: isGroup ? "transparent" : hasImageContent || hasVideoContent || transparentBg ? "transparent" : theme.node.fill,
                     borderColor: isGroup ? (isGroupDropTarget || isActive ? selectionBlue : theme.node.stroke) : hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : transparentBg ? "transparent" : theme.node.stroke,
@@ -394,7 +395,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 }}
             >
                 <div
-                    className={`relative flex h-full w-full items-center justify-center rounded-[inherit] ${isBatchRoot ? "overflow-visible" : "overflow-hidden"}`}
+                    className={`oao-node-content relative flex h-full w-full items-center justify-center rounded-[inherit] ${isBatchRoot ? "overflow-visible" : "overflow-hidden"}`}
                     style={
                         {
                             background: isGroup ? "transparent" : hasImageContent || hasVideoContent || transparentBg ? "transparent" : theme.node.fill,

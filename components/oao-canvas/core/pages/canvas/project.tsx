@@ -240,7 +240,7 @@ function OaoCanvasPage({ projectId }: { projectId: string }) {
     const [nodeCreatePosition, setNodeCreatePosition] = useState<Position | null>(null);
     const [runningNodeId, setRunningNodeId] = useState<string | null>(null);
     const [isMiniMapOpen, setIsMiniMapOpen] = useState(false);
-    const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("lines");
+    const [backgroundMode, setBackgroundMode] = useState<CanvasBackgroundMode>("blank");
     const [showImageInfo, setShowImageInfo] = useState(false);
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
@@ -468,7 +468,8 @@ function OaoCanvasPage({ projectId }: { projectId: string }) {
             setConnections(project.connections);
             setChatSessions(restoredSessions);
             setActiveChatId(project.activeChatId || null);
-            setBackgroundMode(project.backgroundMode);
+            // Migrate the former grid default to OAO's open work surface once.
+            setBackgroundMode(project.backgroundMode === "lines" ? "blank" : project.backgroundMode);
             setShowImageInfo(project.showImageInfo || false);
             setViewport(project.viewport);
             historyRef.current = { past: [], future: [] };
@@ -3123,7 +3124,7 @@ function OaoCanvasPage({ projectId }: { projectId: string }) {
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
-        <main className="flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
+        <main className="oao-canvas-editor flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
             <CanvasWorkspaceRail
                 panelOpen={sidePanelOpen}
                 activeTab={sidePanelTab}

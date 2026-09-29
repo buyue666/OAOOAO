@@ -179,7 +179,7 @@ export const useCanvasStore = create<CanvasStore>()(
             createProject: async (title = "未命名画布") => {
                 const now = new Date().toISOString();
                 const id = `canvas-${nanoid(10)}`;
-                const project: CanvasProject = { id, title, createdAt: now, updatedAt: now, nodes: [], connections: [], chatSessions: [], activeChatId: null, backgroundMode: "lines", showImageInfo: false, viewport: initialViewport };
+                const project: CanvasProject = { id, title, createdAt: now, updatedAt: now, nodes: [], connections: [], chatSessions: [], activeChatId: null, backgroundMode: "blank", showImageInfo: false, viewport: initialViewport };
                 set((state) => ({ projects: [project, ...state.projects] }));
                 try {
                     const remote = await createCanvasProject({ title });

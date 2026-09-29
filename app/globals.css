@@ -2867,3 +2867,247 @@
 .oao-canvas-editor .oao-canvas-inspector-field textarea { background: #0b0b0b; }
 .oao-canvas-editor .oao-canvas-generate-button { border-radius: 4px; background: #ffffff; color: #090909; box-shadow: none; }
 .oao-canvas-editor .oao-canvas-agent-orb { border-radius: 4px; background: #ffffff; box-shadow: 0 12px 24px rgb(0 0 0 / 45%); color: #0b0b0b; }
+
+/* --------------------------------------------------------------------------
+   OAO canvas layout pass
+   The editor uses a chapter index, a command column, and attached node cards.
+   These are intentionally different from the familiar bottom-dock canvas
+   composition while keeping every existing action in place.
+   -------------------------------------------------------------------------- */
+.oao-canvas-editor .canvas-workspace-rail {
+  width: 128px !important;
+  flex: 0 0 128px !important;
+  align-items: stretch;
+  border-right: 1px solid #242424 !important;
+  background: #0b0b0b !important;
+  padding: 18px 12px 14px;
+}
+.oao-canvas-editor .canvas-workspace-rail-main {
+  align-items: stretch;
+  gap: 6px;
+}
+.oao-canvas-editor .canvas-workspace-rail-divider {
+  width: 100%;
+  height: 1px;
+  margin: 8px 0 10px;
+  background: #242424 !important;
+}
+.oao-canvas-editor .canvas-workspace-rail-button,
+.oao-canvas-editor .canvas-workspace-rail-toggle {
+  width: 100% !important;
+  min-height: 42px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 11px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 560;
+  text-align: left;
+}
+.oao-canvas-editor .canvas-workspace-rail-button svg,
+.oao-canvas-editor .canvas-workspace-rail-toggle svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.oao-canvas-editor .canvas-workspace-rail-button:hover,
+.oao-canvas-editor .canvas-workspace-rail-button:focus-visible {
+  border-color: #333333;
+  background: #171717 !important;
+  color: #ffffff !important;
+  transform: none;
+  outline: none;
+}
+.oao-canvas-editor .canvas-workspace-rail-button.is-active {
+  border-color: #474747;
+  border-left: 3px solid #ffffff;
+  background: #1d1d1d !important;
+  color: #ffffff !important;
+  box-shadow: none;
+}
+.oao-canvas-editor .canvas-workspace-rail-toggle {
+  min-height: 38px;
+  border-top: 1px solid #242424;
+  border-radius: 0;
+  padding-inline: 4px;
+  color: #8d8d8d !important;
+}
+.oao-canvas-editor .canvas-workspace-rail-toggle:hover { background: #151515; color: #ffffff !important; }
+
+.oao-canvas-editor .oao-canvas-header {
+  height: 62px !important;
+  border-bottom: 1px solid #242424;
+  background: #070707;
+  padding: 0 22px !important;
+}
+.oao-canvas-editor .oao-canvas-header-leading,
+.oao-canvas-editor .oao-canvas-header-actions { gap: 10px; }
+.oao-canvas-editor .oao-canvas-header-leading > button {
+  border-radius: 3px !important;
+  color: #aaaaaa !important;
+}
+.oao-canvas-editor .oao-canvas-header-leading > button:hover { background: #1b1b1b !important; color: #ffffff !important; }
+.oao-canvas-editor .oao-canvas-header-leading > div > button {
+  border-radius: 2px;
+  color: #f1f1f1 !important;
+}
+.oao-canvas-editor .oao-canvas-header-leading > div > button:hover { border-color: #575757; }
+.oao-canvas-editor .oao-canvas-header-actions > span { background: #2a2a2a !important; }
+.oao-canvas-editor .oao-canvas-agent-button {
+  border: 1px solid #424242 !important;
+  border-radius: 3px !important;
+  background: #f2f2f2 !important;
+  color: #0b0b0b !important;
+  box-shadow: none !important;
+}
+.oao-canvas-editor .oao-canvas-agent-button:hover { border-color: #ffffff !important; background: #ffffff !important; }
+
+.oao-canvas-editor .oao-command-strip {
+  top: 88px !important;
+  right: 20px !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 112px;
+  display: block !important;
+}
+.oao-canvas-editor .oao-command-strip-inner {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 112px;
+  height: auto !important;
+  max-height: calc(100dvh - 132px);
+  align-items: center;
+  justify-items: center;
+  gap: 5px;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  border: 1px solid #2d2d2d !important;
+  border-radius: 3px !important;
+  background: #101010 !important;
+  padding: 8px !important;
+  box-shadow: 10px 10px 0 #050505, 0 0 0 1px #1c1c1c !important;
+  backdrop-filter: none !important;
+}
+.oao-canvas-editor .oao-command-strip-inner > .ant-btn {
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 38px !important;
+  border: 1px solid transparent;
+  border-radius: 2px !important;
+  color: #a7a7a7 !important;
+}
+.oao-canvas-editor .oao-command-strip-inner > .ant-btn:hover,
+.oao-canvas-editor .oao-command-strip-inner > .ant-btn:focus-visible {
+  border-color: #4b4b4b;
+  background: #242424 !important;
+  color: #ffffff !important;
+}
+.oao-canvas-editor .oao-command-strip-inner > .oao-command-divider {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 1px;
+  margin: 3px 0;
+  background: #2b2b2b !important;
+}
+.oao-canvas-editor .oao-command-panel {
+  right: calc(100% + 12px) !important;
+  bottom: 0 !important;
+  left: auto !important;
+  transform: none !important;
+  width: 260px !important;
+  border-radius: 3px !important;
+  border-color: #383838 !important;
+  background: #111111 !important;
+  box-shadow: 10px 10px 0 #050505, 0 0 0 1px #1c1c1c !important;
+  backdrop-filter: none !important;
+}
+.oao-canvas-editor .oao-command-strip > span {
+  right: calc(100% + 10px) !important;
+  bottom: 0 !important;
+  left: auto !important;
+  transform: none !important;
+  border-radius: 2px !important;
+  background: #ffffff !important;
+  color: #0b0b0b !important;
+  white-space: nowrap;
+}
+
+.oao-canvas-editor .oao-node-card {
+  border-radius: 4px !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.oao-canvas-editor .oao-node-card.is-process {
+  border-color: #3b3b3b !important;
+  background: #151515 !important;
+  box-shadow: 14px 14px 0 #0d0d0d, 0 0 0 1px #242424;
+}
+.oao-canvas-editor .oao-node-card.is-process::before {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 3px;
+  background: #eeeeee;
+  content: "";
+  pointer-events: none;
+}
+.oao-canvas-editor .oao-node-card.is-process:hover { border-color: #707070 !important; transform: translate(-2px, -2px); }
+.oao-canvas-editor .oao-node-card.is-media {
+  border-radius: 4px !important;
+  border-color: #d7d7d7 !important;
+  box-shadow: 12px 12px 0 #0d0d0d, 0 0 0 1px #363636;
+}
+.oao-canvas-editor .oao-node-card.is-group {
+  border-radius: 4px !important;
+  border-color: #555555 !important;
+  background: rgb(255 255 255 / 2%) !important;
+}
+.oao-canvas-editor .oao-node-content { border-radius: 0 !important; }
+.oao-canvas-editor .canvas-node-floating-panel { filter: drop-shadow(12px 12px 0 rgb(0 0 0 / 60%)); }
+.oao-canvas-editor .oao-node-generation-panel {
+  border-radius: 4px !important;
+  border-color: #454545 !important;
+  background: #101010 !important;
+  box-shadow: 12px 12px 0 #050505, 0 0 0 1px #202020 !important;
+  backdrop-filter: none !important;
+}
+.oao-canvas-editor .oao-node-generation-panel > textarea,
+.oao-canvas-editor .oao-node-generation-panel [class*="rounded-full"] { border-radius: 3px !important; }
+.oao-canvas-editor .oao-canvas-side-panel { border-color: #242424 !important; background: #0b0b0b !important; }
+.oao-canvas-editor .oao-canvas-context-menu {
+  border-radius: 3px !important;
+  border-color: #414141 !important;
+  background: #101010 !important;
+  box-shadow: 10px 10px 0 #050505 !important;
+  backdrop-filter: none !important;
+}
+.oao-canvas-editor [data-oao-canvas-surface="free-canvas"] { background: #070707 !important; }
+.oao-canvas-editor .oao-canvas-scale-strip { bottom: 18px; left: 18px; }
+.oao-canvas-editor .oao-canvas-scale-strip-inner {
+  height: 42px !important;
+  border-color: #303030 !important;
+  border-radius: 3px !important;
+  background: #101010 !important;
+  box-shadow: 8px 8px 0 #050505 !important;
+  backdrop-filter: none !important;
+}
+.oao-canvas-editor .oao-canvas-scale-strip-inner .ant-btn { border-radius: 2px !important; }
+.oao-canvas-editor .oao-canvas-scale-strip-inner input[type="range"] { accent-color: #ffffff !important; }
+
+@media (max-width: 900px) {
+  .oao-canvas-editor .canvas-workspace-rail { width: 76px !important; flex-basis: 76px !important; padding-inline: 8px; }
+  .oao-canvas-editor .canvas-workspace-rail-button,
+  .oao-canvas-editor .canvas-workspace-rail-toggle { justify-content: center; gap: 5px; padding-inline: 3px; font-size: 10px; }
+  .oao-canvas-editor .oao-command-strip { right: 10px !important; }
+  .oao-canvas-editor .oao-canvas-header { padding-inline: 12px !important; }
+}
+
+@media (max-width: 620px) {
+  .oao-canvas-editor .canvas-workspace-rail { width: 54px !important; flex-basis: 54px !important; padding-inline: 5px; }
+  .oao-canvas-editor .canvas-workspace-rail-button span,
+  .oao-canvas-editor .canvas-workspace-rail-toggle span { display: none; }
+  .oao-canvas-editor .canvas-workspace-rail-button,
+  .oao-canvas-editor .canvas-workspace-rail-toggle { min-height: 38px; }
+  .oao-canvas-editor .oao-command-strip { right: 6px !important; }
+  .oao-canvas-editor .oao-command-strip-inner { width: 92px; }
+  .oao-canvas-editor .oao-command-strip-inner > .ant-btn { width: 34px !important; min-width: 34px !important; }
+  .oao-canvas-editor .oao-command-panel { right: calc(100% + 8px) !important; max-width: calc(100vw - 112px); }
+  .oao-canvas-editor .oao-canvas-header-leading > div > button { max-width: 150px; }
+}
