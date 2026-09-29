@@ -6,7 +6,7 @@ export const CANVAS_SIDE_PANEL_MAX_WIDTH = 480;
 export const CANVAS_SIDE_PANEL_DEFAULT_WIDTH = 280;
 
 const WIDTH_KEY = "canvas-side-panel-width";
-const OPEN_KEY = "canvas-side-panel-open";
+const OPEN_KEY = "canvas-side-panel-open-v2";
 
 function initialWidth() {
     if (typeof window === "undefined") return CANVAS_SIDE_PANEL_DEFAULT_WIDTH;
@@ -16,8 +16,8 @@ function initialWidth() {
 }
 
 function initialOpen() {
-    if (typeof window === "undefined") return true;
-    return localStorage.getItem(OPEN_KEY) !== "0";
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(OPEN_KEY) === "1";
 }
 
 type CanvasSidePanelStore = {

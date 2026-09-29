@@ -1046,6 +1046,15 @@
   transition: box-shadow var(--lg-dur-slow) var(--lg-ease-out), border-color var(--lg-dur-base) var(--lg-ease-out);
 }
 
+/* 输入台只有外层承担边界，文本区保持真正的无框编辑面。 */
+.studio-home-prompt > textarea {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
 .studio-home-prompt:focus-within {
   border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--lg-edge));
   box-shadow:
@@ -2090,7 +2099,26 @@
   -webkit-backdrop-filter: blur(26px) saturate(180%);
   backdrop-filter: blur(26px) saturate(180%);
   box-shadow: 0 26px 80px rgba(0, 13, 18, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.62), inset 0 -1px 0 rgba(3, 24, 31, 0.2);
+  overflow: visible;
 }
+
+/* 下拉菜单是独立浮层，不能被输入台的圆角裁掉；渐变皮肤使用深色高对比表面。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-menu {
+  border-color: rgba(235, 255, 252, 0.42);
+  background: rgba(7, 28, 34, 0.97);
+  color: #f4fffc;
+  box-shadow: 0 24px 64px rgba(0, 8, 12, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(28px) saturate(175%);
+  backdrop-filter: blur(28px) saturate(175%);
+}
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-menu .text-foreground { color: #f4fffc !important; }
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-menu .text-muted-foreground { color: rgba(235, 250, 249, 0.72) !important; }
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-menu .bg-muted { background: rgba(235, 255, 252, 0.12); }
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-menu .text-studio-accent { color: #bff8ea !important; }
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-option:hover,
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-option:focus-visible { background: rgba(199, 243, 232, 0.16); }
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-option-active { background: rgba(199, 243, 232, 0.2); }
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-model-group + .studio-home-model-group { border-top-color: rgba(235, 255, 252, 0.15); }
 
 .studio-app-shell[data-studio-skin='gradient'] .studio-home-shortcut {
   background: rgba(255, 255, 255, 0.09) !important;
@@ -2289,7 +2317,7 @@
 .studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt::after {
   content: '';
   position: absolute;
-  inset: -70% auto -70% -18%;
+  inset: 0 auto 0 -18%;
   z-index: 1;
   width: 17%;
   pointer-events: none;
@@ -2305,6 +2333,9 @@
   32% { opacity: 0.58; }
   72%, 100% { transform: translateX(760%) rotate(16deg); opacity: 0; }
 }
+
+/* 放在玻璃细节规则之后，确保上方的模型菜单不再受圆角裁剪。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-home-prompt { overflow: visible; }
 
 /* 菜单图标：当前项持续呼吸，悬停时轻抬并根据工具类型做很小的差异化动作。 */
 .studio-app-shell[data-studio-skin='gradient'] .studio-nav-icon {

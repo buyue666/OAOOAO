@@ -150,11 +150,282 @@
         animation: ai-title-aurora 7s ease-in-out infinite;
     }
 
-    .dark .ai-title-aurora {
+.dark .ai-title-aurora {
         background: linear-gradient(90deg, #fafaf9 0%, #fafaf9 36%, #a8a29e 54%, #fafaf9 72%, #fafaf9 100%);
         background-size: 220% 100%;
         -webkit-background-clip: text;
         background-clip: text;
+    }
+
+    .canvas-workspace-rail {
+        position: relative;
+        z-index: 65;
+        display: flex;
+        width: 64px;
+        flex: 0 0 64px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        border-right: 1px solid;
+        padding: 14px 8px 12px;
+    }
+
+    .canvas-workspace-rail-main {
+        display: flex;
+        width: 100%;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .canvas-workspace-rail-button {
+        display: flex;
+        width: 48px;
+        min-height: 48px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1;
+        transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+    }
+
+    .canvas-workspace-rail-button:hover {
+        background: color-mix(in srgb, currentColor 12%, transparent) !important;
+        transform: translateY(-1px);
+    }
+
+    .canvas-workspace-rail-divider {
+        width: 32px;
+        height: 1px;
+        margin: 5px 0 7px;
+        opacity: 0.7;
+    }
+
+    .canvas-workspace-rail-toggle {
+        display: flex;
+        width: 48px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        border-radius: 12px;
+        padding: 7px 0;
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1;
+        transition: background 160ms ease, opacity 160ms ease;
+    }
+
+    .canvas-workspace-rail-toggle:hover {
+        background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+
+    .canvas-entry-state {
+        position: absolute;
+        inset: 0;
+        z-index: 25;
+        display: grid;
+        grid-template-columns: minmax(180px, 280px) 96px minmax(240px, 360px);
+        grid-template-rows: auto auto;
+        align-content: center;
+        justify-content: center;
+        column-gap: clamp(24px, 5vw, 72px);
+        row-gap: 28px;
+        padding: 96px 32px 120px;
+        pointer-events: none;
+    }
+
+    .canvas-entry-copy,
+    .canvas-entry-play,
+    .canvas-entry-actions,
+    .canvas-entry-shortcuts {
+        pointer-events: auto;
+    }
+
+    .canvas-entry-copy {
+        align-self: center;
+    }
+
+    .canvas-entry-kicker {
+        margin: 0 0 12px;
+        color: currentColor;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        opacity: 0.48;
+    }
+
+    .canvas-entry-copy h1 {
+        margin: 0;
+        font-size: clamp(26px, 3vw, 42px);
+        font-weight: 400;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+    }
+
+    .canvas-entry-copy h1 strong {
+        display: block;
+        font-weight: 700;
+    }
+
+    .canvas-entry-description {
+        max-width: 260px;
+        margin: 18px 0 0;
+        color: currentColor;
+        font-size: 13px;
+        line-height: 1.7;
+        opacity: 0.58;
+    }
+
+    .canvas-entry-play {
+        align-self: center;
+        justify-self: center;
+        display: grid;
+        width: 74px;
+        height: 74px;
+        place-items: center;
+        filter: drop-shadow(0 10px 18px rgba(255,255,255,.08));
+        opacity: 0.86;
+    }
+
+    .canvas-entry-play::before,
+    .canvas-entry-play::after {
+        position: absolute;
+        display: block;
+        width: 0;
+        height: 0;
+        content: "";
+        border-top: 22px solid transparent;
+        border-bottom: 22px solid transparent;
+        border-left: 36px solid currentColor;
+    }
+
+    .canvas-entry-play::after {
+        transform: translateX(-4px);
+        border-top-width: 13px;
+        border-bottom-width: 13px;
+        border-left-width: 22px;
+        border-left-color: var(--canvas-entry-bg, #000);
+    }
+
+    .canvas-entry-play span {
+        position: absolute;
+        inset: 4px;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        opacity: 0.18;
+    }
+
+    .canvas-entry-actions {
+        align-self: center;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        min-width: 0;
+    }
+
+    .canvas-entry-primary,
+    .canvas-entry-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border-radius: 999px;
+        white-space: nowrap;
+        transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .canvas-entry-primary {
+        padding: 8px 12px;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .canvas-entry-primary:hover,
+    .canvas-entry-link:hover,
+    .canvas-entry-shortcuts button:hover {
+        opacity: 0.68;
+        transform: translateY(-1px);
+    }
+
+    .canvas-entry-primary svg {
+        width: 30px;
+        height: 30px;
+        padding: 7px;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+    }
+
+    .canvas-entry-link {
+        color: currentColor;
+        font-size: 12px;
+        opacity: 0.66;
+    }
+
+    .canvas-entry-shortcuts {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding-top: 15px;
+        border-top: 1px solid;
+        color: currentColor;
+        font-size: 12px;
+        opacity: 0.7;
+    }
+
+    .canvas-entry-shortcuts button,
+    .canvas-entry-hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .canvas-entry-hint {
+        margin-left: auto;
+        opacity: 0.4;
+    }
+
+    @media (max-width: 780px) {
+        .canvas-workspace-rail {
+            width: 50px;
+            flex-basis: 50px;
+            padding-inline: 4px;
+        }
+
+        .canvas-workspace-rail-button,
+        .canvas-workspace-rail-toggle {
+            width: 40px;
+        }
+
+        .canvas-entry-state {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 20px;
+            align-content: center;
+            padding: 72px 20px 100px;
+        }
+
+        .canvas-entry-play {
+            display: none;
+        }
+
+        .canvas-entry-actions {
+            flex-wrap: wrap;
+            gap: 12px 18px;
+        }
+
+        .canvas-entry-shortcuts {
+            flex-wrap: wrap;
+            gap: 12px 18px;
+        }
+
+        .canvas-entry-hint {
+            display: none;
+        }
     }
 
     @keyframes ai-title-aurora {

@@ -57,7 +57,7 @@ export function CanvasIndexPage() {
   return (
     <div className="oao-canvas-index mx-auto flex w-full max-w-[1180px] flex-col gap-7 px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-studio-accent">创作空间</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground sm:text-3xl">自由画布</h1><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">把参考素材、文字、生成任务和 Agent 连接在同一张无限画布上。</p></div>
+        <div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-studio-accent">创作空间</p><h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground sm:text-3xl">自由画布</h1><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">把参考素材、文字、生成任务和 Agent 连接在同一张自由画布上。</p></div>
         <ControlButton variant="primary" onClick={() => { setCreateOpen((value) => !value); setTitle(''); setError('') }}><Plus className="size-4" aria-hidden="true" />新建画布</ControlButton>
       </header>
 

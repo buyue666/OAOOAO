@@ -42,10 +42,13 @@ import { CanvasNode } from "@/components/oao-canvas/reference-src/components/can
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/oao-canvas/reference-src/components/canvas/canvas-node-prompt-panel";
 import { CanvasToolbar } from "@/components/oao-canvas/reference-src/components/canvas/canvas-toolbar";
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/oao-canvas/reference-src/components/canvas/asset-picker-modal";
-import { CanvasSidePanel } from "@/components/oao-canvas/reference-src/components/canvas/canvas-side-panel";
+import { CanvasEntryState } from "@/components/oao-canvas/reference-src/components/canvas/canvas-entry-state";
+import { CanvasSidePanel, type CanvasSidePanelTab } from "@/components/oao-canvas/reference-src/components/canvas/canvas-side-panel";
+import { CanvasWorkspaceRail } from "@/components/oao-canvas/reference-src/components/canvas/canvas-workspace-rail";
 import { CanvasZoomControls } from "@/components/oao-canvas/reference-src/components/canvas/canvas-zoom-controls";
 import { useAgentStore } from "@/components/oao-canvas/reference-src/stores/use-agent-store";
 import { useCanvasStore } from "@/components/oao-canvas/reference-src/stores/canvas/use-canvas-store";
+import { useCanvasSidePanelStore } from "@/components/oao-canvas/reference-src/stores/use-canvas-side-panel-store";
 import { useAgentBridge } from "@/components/oao-canvas/reference-src/pages/canvas/hooks/use-agent-bridge";
 import { usePluginHost } from "@/components/oao-canvas/reference-src/pages/canvas/hooks/use-plugin-host";
 import { buildNodeMentionReferences, getGroupResourceNodes, isCanvasReferenceNode, type CanvasResourceReference } from "@/components/oao-canvas/reference-src/lib/canvas/canvas-resource-references";
@@ -175,6 +178,9 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     const agentPanelOpen = useAgentStore((state) => state.panelOpen);
     const toggleAgentPanel = useAgentStore((state) => state.togglePanel);
     const openAgentPanel = useAgentStore((state) => state.openPanel);
+    const sidePanelOpen = useCanvasSidePanelStore((state) => state.panelOpen);
+    const openSidePanel = useCanvasSidePanelStore((state) => state.openPanel);
+    const toggleSidePanel = useCanvasSidePanelStore((state) => state.togglePanel);
     const containerRef = useRef<HTMLDivElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const uploadTargetRef = useRef<{ nodeId?: string; position?: Position } | null>(null);
@@ -262,6 +268,16 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
     const [isNodeResizing, setIsNodeResizing] = useState(false);
     const [dropTargetGroupId, setDropTargetGroupId] = useState<string | null>(null);
     const [referencePickerNodeId, setReferencePickerNodeId] = useState<string | null>(null);
+    const [sidePanelTab, setSidePanelTab] = useState<CanvasSidePanelTab>("canvas");
+    const [entryDismissed, setEntryDismissed] = useState(false);
+
+    const openSidePanelTab = useCallback(
+        (tab: CanvasSidePanelTab) => {
+            setSidePanelTab(tab);
+            openSidePanel();
+        },
+        [openSidePanel],
+    );
 
     const nodesRef = useRef(nodes);
     const connectionsRef = useRef(connections);
@@ -461,6 +477,7 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                 showImageInfo: project.showImageInfo || false,
             };
             setHistoryState({ canUndo: false, canRedo: false });
+            setEntryDismissed(false);
             setProjectLoaded(true);
         };
         void restore();
@@ -3084,7 +3101,23 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
 
     return (
         <main className="flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
-            <CanvasSidePanel nodes={nodes} selectedNodeIds={selectedNodeIds} onFocusNode={focusNode} onPreviewNode={setPreviewNodeId} onInsertAsset={handleAssetInsert} />
+            <CanvasWorkspaceRail
+                panelOpen={sidePanelOpen}
+                activeTab={sidePanelTab}
+                onHome={() => navigate("/")}
+                onProjects={() => navigate("/canvas")}
+                onOpenTab={openSidePanelTab}
+                onTogglePanel={toggleSidePanel}
+            />
+            <CanvasSidePanel
+                nodes={nodes}
+                selectedNodeIds={selectedNodeIds}
+                onFocusNode={focusNode}
+                onPreviewNode={setPreviewNodeId}
+                onInsertAsset={handleAssetInsert}
+                activeTab={sidePanelTab}
+                onTabChange={setSidePanelTab}
+            />
             <section className="relative min-w-0 flex-1 overflow-hidden">
                 <CanvasTopBar
                     title={currentProject?.title || t("canvas.projectPage.untitledCanvas")}
@@ -3232,6 +3265,24 @@ function InfiniteCanvasPage({ projectId }: { projectId: string }) {
                         />
                     ) : null}
                 </InfiniteCanvas>
+
+                {nodes.length === 0 && !entryDismissed ? (
+                    <CanvasEntryState
+                        onOpenAgent={() => {
+                            setEntryDismissed(true);
+                            openAgentPanel();
+                        }}
+                        onCreateNode={(type) => {
+                            setEntryDismissed(true);
+                            createNode(type);
+                        }}
+                        onUpload={() => {
+                            setEntryDismissed(true);
+                            handleUploadRequest();
+                        }}
+                        onDismiss={() => setEntryDismissed(true)}
+                    />
+                ) : null}
 
                 <CanvasNodeHoverToolbar
                     node={isNodeDragging || isNodeResizing || nodeImageSettingsOpen || expandedBatchNodeIds.has(toolbarNode?.id || "") ? null : toolbarNode}

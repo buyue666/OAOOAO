@@ -190,7 +190,7 @@ export function HomePage() {
               event.preventDefault()
               startCreation()
             }}
-            className="studio-home-prompt motion-panel mx-auto mt-7 w-full max-w-[920px] p-3 text-left sm:p-4"
+            className={cn('studio-home-prompt motion-panel relative z-0 mx-auto mt-7 w-full max-w-[920px] p-3 text-left sm:p-4', modelDropdownOpen && 'z-40')}
           >
             <label htmlFor="home-prompt" className="sr-only">创作描述</label>
             <textarea
@@ -237,7 +237,7 @@ export function HomePage() {
                     <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', modelDropdownOpen && 'rotate-180')} aria-hidden="true" />
                   </button>
                   {modelDropdownOpen && (
-                    <div className="studio-home-model-menu absolute bottom-[calc(100%+8px)] left-0 z-30 w-[min(360px,calc(100vw-32px))] overflow-hidden p-1.5 text-left" role="listbox" aria-label="可选模型">
+                    <div className="studio-home-model-menu absolute bottom-[calc(100%+8px)] left-0 z-[120] w-[min(360px,calc(100vw-32px))] overflow-hidden p-1.5 text-left" role="listbox" aria-label="可选模型">
                       {modelOptions.length ? Object.entries(groupedModels).map(([provider, items]) => (
                         <div key={provider} className="studio-home-model-group">
                           <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{provider}</p>

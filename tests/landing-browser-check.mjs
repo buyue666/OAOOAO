@@ -87,8 +87,28 @@ try {
   await checkHeroComposition(page, 'desktop')
   await checkCanvasOcclusion(page, 'desktop')
   await snapshot(page, 'desktop-hero')
+  const topLayerTransforms = await page.evaluate(() => ({
+    background: getComputedStyle(document.querySelector('#hero img[aria-hidden="true"]')).transform,
+    wordmark: getComputedStyle(document.querySelector('#hero h1[aria-label="OAO"]').parentElement).transform,
+    foreground: getComputedStyle(document.querySelector('[data-hero-foreground]')).transform,
+  }))
   await page.evaluate(() => scrollTo(0, innerHeight * 0.1))
   await settled(page)
+  check('Hero layers move as soon as scrolling begins', await page.evaluate((top) => {
+    const current = {
+      background: getComputedStyle(document.querySelector('#hero img[aria-hidden="true"]')).transform,
+      wordmark: getComputedStyle(document.querySelector('#hero h1[aria-label="OAO"]').parentElement).transform,
+      foreground: getComputedStyle(document.querySelector('[data-hero-foreground]')).transform,
+    }
+    return current.background !== top.background && current.wordmark !== top.wordmark && current.foreground !== top.foreground
+  }, topLayerTransforms))
+  check('Hero layers use different parallax speeds', await page.evaluate(() => {
+    const readY = (value) => Number(value.match(/,\s*(-?[\d.]+)\)$/)?.[1] || 0)
+    const background = readY(getComputedStyle(document.querySelector('#hero img[aria-hidden="true"]')).transform)
+    const wordmark = readY(getComputedStyle(document.querySelector('#hero h1[aria-label="OAO"]').parentElement).transform)
+    const foreground = readY(getComputedStyle(document.querySelector('[data-hero-foreground]')).transform)
+    return Math.abs(background) < Math.abs(wordmark) && Math.abs(wordmark) < Math.abs(foreground)
+  }))
   await page.evaluate(() => scrollTo(0, innerHeight * 0.36))
   await settled(page)
   await snapshot(page, 'desktop-hero-partial-scroll')

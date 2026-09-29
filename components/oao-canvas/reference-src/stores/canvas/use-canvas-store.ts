@@ -224,7 +224,7 @@ export const useCanvasStore = create<CanvasStore>()(
                 // Zustand can invoke this callback while the store export is still
                 // being initialized. Defer the store write until the module exists.
                 queueMicrotask(() => {
-                    if (error) console.warn("无限画布本地数据恢复失败", error);
+                    if (error) console.warn("自由画布本地数据恢复失败", error);
                     useCanvasStore.setState({ hydrated: true });
                     void syncRemoteProjects();
                 });

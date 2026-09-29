@@ -142,15 +142,22 @@ function Hero() {
   const progress = useProgress(ref)
   const reduced = useReducedMotion()
   const imageProgress = reduced ? 0 : clamp((progress - 0.2) / 0.8)
+  const parallaxProgress = reduced ? 0 : clamp(progress / 0.8)
   const textOpacity = reduced ? 1 : clamp(1 - (progress - 0.08) / 0.24)
+  const backgroundShift = parallaxProgress * -2
+  const wordmarkShift = parallaxProgress * -7
+  const foregroundShift = parallaxProgress * -12
   return (
     <section id="hero" ref={ref} className={styles.hero} aria-label="OAO 创作平台">
       <div className={styles.heroStage}>
         <div className={styles.heroStrip} style={{ gap: imageProgress * 8 }}>
           {(['left', 'center', 'right'] as const).map((side) => side === 'center' ? (
             <div key={side} className={styles.heroCenter} style={{ width: (100 - imageProgress * 80) + '%' }}>
-              <Image src="/media/generated/ai-creative-hero-background-clean-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} />
-              <Image src="/media/generated/ai-creative-hero-user-v3.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} />
+              <Image src="/media/generated/ai-creative-hero-background-clean-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} style={{ transform: `scale(1.06) translateY(${backgroundShift}%)` }} />
+              <div className={styles.wordmark} style={{ opacity: textOpacity, transform: `translateY(${wordmarkShift}%)` }} aria-hidden="true">
+                <h1 aria-label="OAO">{'OAO'.split('').map((letter, index) => <span key={index} style={{ animationDelay: 160 + index * 120 + 'ms' }}>{letter}</span>)}</h1>
+              </div>
+              <Image src="/media/generated/ai-creative-hero-user-v3.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} style={{ transform: `translate(-50%, ${foregroundShift}%)` }} />
             </div>
           ) : (
             <div key={side} className={styles.heroSides} style={{
@@ -327,7 +334,7 @@ function About() {
 function Footer() {
   const columns = [
     { title: '探索', items: [{ label: '创作理念', href: '#create' }, { label: '作品集', href: '#gallery' }, { label: '创作方式', href: '#models' }, { label: '关于 OAO', href: '#about' }] },
-    { title: '开始创作', items: [{ label: '图片创作', href: '/image' }, { label: '视频创作', href: '/video' }, { label: '智能导演', href: '/agent' }, { label: '无限画布', href: '/canvas' }] },
+    { title: '开始创作', items: [{ label: '图片创作', href: '/image' }, { label: '视频创作', href: '/video' }, { label: '智能导演', href: '/agent' }, { label: '自由画布', href: '/canvas' }] },
     { title: '我的 OAO', items: [{ label: '工作台', href: '/studio' }, { label: '我的项目', href: '/projects' }, { label: '订阅套餐', href: '/plans' }, { label: '登录账户', href: '/login' }] },
   ]
   return <footer className={styles.footer}>
