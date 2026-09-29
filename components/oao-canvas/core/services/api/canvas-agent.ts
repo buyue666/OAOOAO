@@ -64,15 +64,15 @@ export async function postToolResult(endpoint: string, token: string, clientId: 
     await fetchAgentJson(endpoint, token, `/canvas/result?clientId=${encodeURIComponent(clientId)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 }
 
-export async function postCodexApproval(endpoint: string, token: string, requestId: string, decision: "accept" | "acceptForSession" | "decline") {
+export async function postAgentApproval(endpoint: string, token: string, requestId: string, decision: "accept" | "acceptForSession" | "decline") {
     await fetchAgentJson(endpoint, token, "/agent/codex/approval", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ requestId, decision }) });
 }
 
-export async function interruptCodexTurn(endpoint: string, token: string, threadId?: string) {
+export async function interruptAgentTurn(endpoint: string, token: string, threadId?: string) {
     await fetchAgentJson(endpoint, token, "/agent/codex/interrupt", jsonPost({ threadId }));
 }
 
-export async function acknowledgeCodexHistory(endpoint: string, token: string, threadId: string, turnIds: string[]) {
+export async function acknowledgeAgentHistory(endpoint: string, token: string, threadId: string, turnIds: string[]) {
     await fetchAgentJson(endpoint, token, "/agent/codex/history/ack", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ threadId, turnIds }) });
 }
 
@@ -87,31 +87,31 @@ export function resolveAgentMessageAssetUrl(endpoint: string, token: string, val
     return baseUrl && token ? `${baseUrl}/agent/message-assets/${match[1]}/${match[2]}?token=${encodeURIComponent(token)}` : "";
 }
 
-export function fetchCodexSkills(endpoint: string, token: string, forceReload = false) {
+export function fetchAgentSkills(endpoint: string, token: string, forceReload = false) {
     return fetchAgentJson<AgentSkillsResponse>(endpoint, token, `/agent/codex/skills${forceReload ? "?forceReload=1" : ""}`);
 }
 
-export function fetchCodexSkill(endpoint: string, token: string, name: string) {
+export function fetchAgentSkill(endpoint: string, token: string, name: string) {
     return fetchAgentJson<AgentSkillResponse>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(name)}`);
 }
 
-export function createCodexSkill(endpoint: string, token: string, input: AgentSkillInput) {
+export function createAgentSkill(endpoint: string, token: string, input: AgentSkillInput) {
     return fetchAgentJson<AgentSkillResponse>(endpoint, token, "/agent/codex/skills", jsonPost(input));
 }
 
-export function createCodexSkillDraft(endpoint: string, token: string, input: AgentSkillDraftInput) {
+export function createAgentSkillDraft(endpoint: string, token: string, input: AgentSkillDraftInput) {
     return fetchAgentJson<AgentSkillDraftResponse>(endpoint, token, "/agent/codex/skills/draft", jsonPost(input));
 }
 
-export function updateCodexSkill(endpoint: string, token: string, name: string, input: AgentSkillInput) {
+export function updateAgentSkill(endpoint: string, token: string, name: string, input: AgentSkillInput) {
     return fetchAgentJson<AgentSkillResponse>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(name)}`, jsonPost(input));
 }
 
-export function deleteCodexSkill(endpoint: string, token: string, name: string, expectedRevision: string) {
+export function deleteAgentSkill(endpoint: string, token: string, name: string, expectedRevision: string) {
     return fetchAgentJson<{ ok?: boolean }>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(name)}/delete`, jsonPost({ expectedRevision }));
 }
 
-export function setCodexSkillEnabled(endpoint: string, token: string, skill: Pick<AgentSkillSummary, "name" | "path">, enabled: boolean) {
+export function setAgentSkillEnabled(endpoint: string, token: string, skill: Pick<AgentSkillSummary, "name" | "path">, enabled: boolean) {
     return fetchAgentJson<{ ok?: boolean }>(endpoint, token, `/agent/codex/skills/${encodeURIComponent(skill.name)}/enabled`, jsonPost({ ...skill, enabled }));
 }
 

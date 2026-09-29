@@ -1283,7 +1283,7 @@
 /* ==========================================================================
    OAO 自由画布编辑器
    --------------------------------------------------------------------------
-   画布编辑器是独立的沉浸式工作区：黑色无限平面、左侧工作区轨道、
+   画布编辑器是独立的沉浸式工作区：黑白坐标平面、左侧工作区轨道、
    顶部项目状态、底部工具岛与右下角 Agent。它不复用普通工作台的浅色顶栏，
    但节点、项目同步和 Agent 仍然使用同一套业务状态。
    ========================================================================== */
@@ -2677,8 +2677,7 @@
 .oao-canvas-editor .oao-canvas-context-menu button.is-danger:hover { border-color: rgb(255 255 255 / 25%); background: rgb(255 255 255 / 12%); color: #ffffff; }
 .oao-canvas-editor .oao-canvas-context-menu button.is-danger svg { color: #ffffff; }
 
-/* 画布工具栏和媒体节点采用影策式的“画布优先”层级：内容保持原色，
-   操作界面只用黑、白、灰，避免生成卡片把画布切成几块。 */
+/* 媒体内容保持原色，操作界面使用 OAO 自己的黑白编辑语言。 */
 .oao-canvas-editor .oao-canvas-image-toolbar { border-color: rgb(255 255 255 / 18%); background: rgb(21 21 21 / 96%); }
 .oao-canvas-editor .oao-canvas-image-toolbar button:hover,
 .oao-canvas-editor .oao-canvas-image-toolbar button:focus-visible { border-color: rgb(255 255 255 / 25%); background: rgb(255 255 255 / 13%); color: #ffffff; }
@@ -2738,3 +2737,133 @@
   0%, 100% { box-shadow: 0 8px 20px rgb(0 0 0 / 32%), 0 0 0 0 rgb(255 255 255 / 0%); }
   50% { box-shadow: 0 8px 20px rgb(0 0 0 / 32%), 0 0 0 5px rgb(255 255 255 / 8%); }
 }
+
+/*
+   OAO canvas skin
+   这组规则定义产品自己的视觉层级：平直的编辑条、四角节点和明确的
+   黑白对比。它不依赖玻璃拟态，也不复用参考产品的圆角浮岛结构。
+*/
+.oao-canvas-editor {
+  --canvas-ink: #f8f8f8;
+  --canvas-muted: #b7b7b7;
+  --canvas-dim: #777777;
+  --canvas-surface: #111111;
+  --canvas-surface-soft: #0d0d0d;
+  --canvas-border: #2a2a2a;
+  --canvas-border-strong: #444444;
+  --canvas-accent: #ffffff;
+  --canvas-accent-strong: #ffffff;
+  background: #070707;
+}
+
+.oao-canvas-editor .oao-canvas-stage,
+.oao-canvas-editor .oao-canvas-flow,
+.oao-canvas-editor .react-flow__renderer {
+  background: #070707;
+}
+
+.oao-canvas-editor .oao-canvas-stage::after { display: none; }
+
+.oao-canvas-editor .oao-canvas-rail,
+.oao-canvas-editor .oao-canvas-topbar-menu,
+.oao-canvas-editor .oao-canvas-project-pill,
+.oao-canvas-editor .oao-canvas-credit-pill,
+.oao-canvas-editor .oao-canvas-topbar-actions,
+.oao-canvas-editor .oao-canvas-workspace-panel,
+.oao-canvas-editor .oao-canvas-agent-panel,
+.oao-canvas-editor .oao-canvas-inspector,
+.oao-canvas-editor .oao-canvas-generation-panel,
+.oao-canvas-editor .oao-canvas-image-toolbar,
+.oao-canvas-editor .oao-canvas-node-toolbar,
+.oao-canvas-editor .oao-canvas-context-menu,
+.oao-canvas-editor .oao-canvas-expand-menu {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-radius: 5px;
+  background: #101010;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 46%);
+}
+
+.oao-canvas-editor .oao-canvas-rail {
+  width: 68px;
+  border-right-color: #252525;
+  background: #0b0b0b;
+  padding: 12px 10px;
+}
+
+.oao-canvas-editor .oao-canvas-rail-button {
+  width: 48px;
+  min-height: 46px;
+  border-radius: 4px;
+  color: #8c8c8c;
+}
+
+.oao-canvas-editor .oao-canvas-rail-button:hover,
+.oao-canvas-editor .oao-canvas-rail-button:focus-visible,
+.oao-canvas-editor .oao-canvas-rail-button.is-active {
+  border-color: #4a4a4a;
+  background: #202020;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.oao-canvas-editor .oao-canvas-topbar { inset: 14px 18px auto 86px; }
+.oao-canvas-editor .oao-canvas-topbar-menu,
+.oao-canvas-editor .oao-canvas-project-pill,
+.oao-canvas-editor .oao-canvas-credit-pill,
+.oao-canvas-editor .oao-canvas-topbar-actions {
+  border-color: #2c2c2c;
+  box-shadow: none;
+}
+.oao-canvas-editor .oao-canvas-project-pill { border-radius: 4px; }
+.oao-canvas-editor .oao-canvas-topbar-actions { border-radius: 4px; padding: 2px; }
+.oao-canvas-editor .oao-canvas-topbar-labeled { border-radius: 3px; }
+
+.oao-canvas-editor .oao-canvas-node-shell { width: 300px; }
+.oao-canvas-editor .oao-canvas-node {
+  border-color: #383838;
+  border-radius: 4px;
+  background: #151515;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 32%);
+}
+.oao-canvas-editor .oao-canvas-node:hover { border-color: #666666; }
+.oao-canvas-editor .oao-canvas-node.is-selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px #ffffff, 0 18px 34px rgb(0 0 0 / 48%);
+}
+.oao-canvas-editor .oao-canvas-node-header { background: #1d1d1d; border-color: #303030; }
+.oao-canvas-editor .oao-canvas-node-icon { border-radius: 3px; background: #2b2b2b; color: #ffffff; }
+.oao-canvas-editor .oao-canvas-node-status { border-radius: 3px; background: #292929; color: #ffffff; }
+.oao-canvas-editor .oao-canvas-node-expand { width: 26px; height: 26px; border-radius: 4px; border-color: #666666; background: #111111; box-shadow: none; }
+.oao-canvas-editor .oao-canvas-node-expand:hover,
+.oao-canvas-editor .oao-canvas-node-expand:focus-visible { background: #ffffff; color: #080808; }
+.oao-canvas-editor .oao-canvas-node-inline-action { border-radius: 3px; background: #222222; color: #ffffff; }
+
+.oao-canvas-editor .oao-canvas-image-toolbar,
+.oao-canvas-editor .oao-canvas-node-toolbar { padding: 3px; }
+.oao-canvas-editor .oao-canvas-image-toolbar button,
+.oao-canvas-editor .oao-canvas-node-toolbar button,
+.oao-canvas-editor .oao-canvas-context-menu button,
+.oao-canvas-editor .oao-canvas-expand-menu button { border-radius: 3px; }
+.oao-canvas-editor .oao-canvas-image-toolbar button:hover,
+.oao-canvas-editor .oao-canvas-node-toolbar button:hover,
+.oao-canvas-editor .oao-canvas-context-menu button:hover,
+.oao-canvas-editor .oao-canvas-expand-menu button:hover { background: #2a2a2a; color: #ffffff; }
+
+.oao-canvas-editor .oao-canvas-generation-panel,
+.oao-canvas-editor .oao-canvas-agent-panel,
+.oao-canvas-editor .oao-canvas-workspace-panel { border-color: #3a3a3a; }
+.oao-canvas-editor .oao-canvas-generation-tabs { border-radius: 4px; background: #171717; }
+.oao-canvas-editor .oao-canvas-generation-tab,
+.oao-canvas-editor .oao-canvas-glass-select,
+.oao-canvas-editor .oao-canvas-reference-item,
+.oao-canvas-editor .oao-canvas-upload-control,
+.oao-canvas-editor .oao-canvas-generation-field textarea,
+.oao-canvas-editor .oao-canvas-inspector-field input,
+.oao-canvas-editor .oao-canvas-inspector-field textarea { border-radius: 4px; }
+.oao-canvas-editor .oao-canvas-glass-select,
+.oao-canvas-editor .oao-canvas-generation-field textarea,
+.oao-canvas-editor .oao-canvas-inspector-field input,
+.oao-canvas-editor .oao-canvas-inspector-field textarea { background: #0b0b0b; }
+.oao-canvas-editor .oao-canvas-generate-button { border-radius: 4px; background: #ffffff; color: #090909; box-shadow: none; }
+.oao-canvas-editor .oao-canvas-agent-orb { border-radius: 4px; background: #ffffff; box-shadow: 0 12px 24px rgb(0 0 0 / 45%); color: #0b0b0b; }

@@ -94,7 +94,7 @@ export function useCanvasWorkspaceController({ projectId }: { projectId?: string
     edgesRef.current = nextBoard.edges
     setNodes(nextBoard.nodes)
     setEdges(nextBoard.edges)
-    // 初次进入画布不预选节点，保持影策式的纯画布状态；用户点击节点后再显示节点工具。
+    // 初次进入画布不预选节点，让用户先看到完整的工作区；点击节点后再显示节点工具。
     setSelectedId(null)
     historyRef.current = []
     futureRef.current = []

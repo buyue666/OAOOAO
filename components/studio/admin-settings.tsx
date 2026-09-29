@@ -169,7 +169,7 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
           <AdminField label="隐私政策版本"><AdminInput name="privacyVersion" defaultValue={site.privacyVersion} /></AdminField>
         </fieldset>
       </AdminSectionCard>
-      <AdminSectionCard title="顶部通知横幅" description="像影策一样在页面最上方展示一条轻量通知。启用后会同步出现在着陆页与工作台，关闭或过期内容不会占位。">
+      <AdminSectionCard title="顶部通知横幅" description="在页面最上方展示一条轻量通知。启用后会同步出现在着陆页与工作台，关闭或过期内容不会占位。">
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
             <input name="announcementEnabled" type="checkbox" defaultChecked={site.announcementBar?.enabled === true} className="mt-0.5" />

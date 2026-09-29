@@ -5,7 +5,7 @@ import { Check, ChevronDown, CircleAlert, FilePenLine, LoaderCircle, LockKeyhole
 import { useTranslation } from "react-i18next";
 
 import { canvasThemes } from "@/components/oao-canvas/core/lib/canvas-theme";
-import { createCodexSkill, createCodexSkillDraft, deleteCodexSkill, fetchCodexSkill, postState, setCodexSkillEnabled, updateCodexSkill, type AgentSkillDetail, type AgentSkillDraft, type AgentSkillInterface, type AgentSkillScope, type AgentSkillSummary } from "@/components/oao-canvas/core/services/api/canvas-agent";
+import { createAgentSkill, createAgentSkillDraft, deleteAgentSkill, fetchAgentSkill, postState, setAgentSkillEnabled, updateAgentSkill, type AgentSkillDetail, type AgentSkillDraft, type AgentSkillInterface, type AgentSkillScope, type AgentSkillSummary } from "@/components/oao-canvas/core/services/api/canvas-agent";
 import { useAgentSkillStore } from "@/components/oao-canvas/core/stores/use-agent-skill-store";
 import { useAgentStore, type AgentChatItem } from "@/components/oao-canvas/core/stores/use-agent-store";
 import { useThemeStore } from "@/components/oao-canvas/core/stores/use-theme-store";
@@ -102,7 +102,7 @@ export function AgentSkillsView({ clientId }: { clientId: string }) {
                 if (!synced) throw new Error(t("agent.skillManager.syncFailed"));
             }
             if (!connectionIsCurrent(connectionRevision)) return;
-            const response = await createCodexSkillDraft(endpoint, token, {
+            const response = await createAgentSkillDraft(endpoint, token, {
                 source,
                 threadId: agent.activeThreadId,
                 clientId,
@@ -124,7 +124,7 @@ export function AgentSkillsView({ clientId }: { clientId: string }) {
         const connectionRevision = useAgentSkillStore.getState().connectionRevision;
         setBusySkill(skill.path);
         try {
-            const response = await fetchCodexSkill(endpoint, token, skill.name);
+            const response = await fetchAgentSkill(endpoint, token, skill.name);
             if (!connectionIsCurrent(connectionRevision)) return;
             if (!response.data) throw new Error(t("agent.skillManager.contentMissing"));
             setEditor({ mode: "edit", detail: response.data });
@@ -158,8 +158,8 @@ export function AgentSkillsView({ clientId }: { clientId: string }) {
         setSaving(true);
         try {
             const input = { description: values.description.trim(), instructions: values.instructions.trim(), interface: skillInterface || null };
-            if (editor.mode === "create") await createCodexSkill(endpoint, token, { name, ...input });
-            else await updateCodexSkill(endpoint, token, name, { ...input, expectedRevision: editor.detail.revision });
+            if (editor.mode === "create") await createAgentSkill(endpoint, token, { name, ...input });
+            else await updateAgentSkill(endpoint, token, name, { ...input, expectedRevision: editor.detail.revision });
             if (!connectionIsCurrent(connectionRevision)) return;
             setDraft(null);
             setEditor(null);
@@ -185,10 +185,10 @@ export function AgentSkillsView({ clientId }: { clientId: string }) {
                 if (!connectionIsCurrent(connectionRevision)) return;
                 setBusySkill(skill.path);
                 try {
-                    const response = await fetchCodexSkill(endpoint, token, skill.name);
+                    const response = await fetchAgentSkill(endpoint, token, skill.name);
                     if (!connectionIsCurrent(connectionRevision)) return;
                     if (!response.data) throw new Error(t("agent.skillManager.contentMissing"));
-                    await deleteCodexSkill(endpoint, token, skill.name, response.data.revision);
+                    await deleteAgentSkill(endpoint, token, skill.name, response.data.revision);
                     if (!connectionIsCurrent(connectionRevision)) return;
                     if (selectedSkill?.name === skill.name && selectedSkill.path === skill.path) clearSelection();
                     await refresh();
@@ -212,7 +212,7 @@ export function AgentSkillsView({ clientId }: { clientId: string }) {
         if (!connectionIsCurrent(connectionRevision)) return;
         setBusySkill(skill.path);
         try {
-            await setCodexSkillEnabled(endpoint, token, skill, enabled);
+            await setAgentSkillEnabled(endpoint, token, skill, enabled);
             if (!connectionIsCurrent(connectionRevision)) return;
             if (!enabled && selectedSkill?.name === skill.name && selectedSkill.path === skill.path) clearSelection();
             await refresh();

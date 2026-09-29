@@ -29,8 +29,9 @@ type AgentBridgeParams = {
 };
 
 /**
- * Bridge between the canvas and local Agent: publish the current snapshot and apply/undo capabilities
- * to the Agent store for the local Codex panel. All members except applyAgentOps are internal.
+ * Bridge between the OAO canvas document and the Agent panel. The Agent only
+ * receives a snapshot and returns OAO canvas actions; React state stays owned
+ * by this page.
  */
 export function useAgentBridge(params: AgentBridgeParams) {
     const { projectId, title, nodes, connections, selectedNodeIds, viewport, nodesRef, connectionsRef, selectedNodeIdsRef, viewportRef, generateNodeRef, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId, setViewport, setContextMenu } =

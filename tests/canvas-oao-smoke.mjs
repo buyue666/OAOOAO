@@ -41,7 +41,17 @@ try {
 
     const pane = page.locator('[data-oao-canvas-surface="free-canvas"]');
     check("OAO 自由画布平面已挂载", await pane.count() === 1);
-    await pane.click({ button: "right", position: { x: 180, y: 220 } });
+    const blankPoint = await page.evaluate(() => {
+        for (let y = 180; y < window.innerHeight - 120; y += 48) {
+            for (let x = 420; x < window.innerWidth - 80; x += 48) {
+                const element = document.elementFromPoint(x, y);
+                if (element?.closest('[data-oao-canvas-surface="free-canvas"]') && !element.closest("[data-node-id],[data-connection-id],[data-canvas-no-zoom]")) return { x, y };
+            }
+        }
+        return null;
+    });
+    check("找到画布空白交互区域", Boolean(blankPoint));
+    await page.mouse.click(blankPoint.x, blankPoint.y, { button: "right" });
     check("空白处右键打开节点菜单", await page.locator('[data-canvas-create-menu="node"]').isVisible());
     const nodeCountBeforeCreate = await page.locator("[data-node-id]").count();
     await page.locator('[data-canvas-create-menu="node"] button').filter({ hasText: "图片" }).click();

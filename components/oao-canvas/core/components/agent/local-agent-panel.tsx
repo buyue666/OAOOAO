@@ -21,7 +21,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useAgentStore, type AgentAttachment, type AgentBootstrapStatus, type AgentCanvasContext, type AgentCanvasReference, type AgentChatItem, type AgentConversationState, type AgentModel, type AgentPendingApproval, type AgentPendingToolCall, type AgentPermissionMode, type AgentReasoningEffort, type AgentThreadSummary } from "@/components/oao-canvas/core/stores/use-agent-store";
 import { type CanvasAgentOp, type CanvasAgentSnapshot } from "@/components/oao-canvas/core/lib/canvas/canvas-agent-ops";
 import { isSiteTool, runSiteTool } from "@/components/oao-canvas/core/lib/agent/agent-site-tools";
-import { acknowledgeCodexHistory, activateAgentClient, AgentApiError, discoverAgentConfig, fetchAgentJson, interruptCodexTurn, postCodexApproval, postState, postToolResult } from "@/components/oao-canvas/core/services/api/canvas-agent";
+import { acknowledgeAgentHistory, activateAgentClient, AgentApiError, discoverAgentConfig, fetchAgentJson, interruptAgentTurn, postAgentApproval, postState, postToolResult } from "@/components/oao-canvas/core/services/api/canvas-agent";
 import { AgentChatTimeline, AgentTaskProgress, AgentUsageBar } from "./agent-chat";
 import { AgentChatComposer } from "./agent-chat-composer";
 import { AgentConnectView } from "./agent-connect-view";
@@ -83,8 +83,8 @@ type AgentThreadResponse = { ok?: boolean; workspace?: AgentWorkspace; conversat
 type AgentWorkspaceResponse = { ok?: boolean; workspace?: AgentWorkspace; conversation?: AgentConversationState };
 type AgentTurnResponse = { ok?: boolean; threadId?: string };
 type AgentModelsResponse = { ok?: boolean; data?: AgentModel[] };
-type AgentCodexState = { busy?: boolean; threadId?: string; turnId?: string };
-type AgentHelloEvent = { ok?: boolean; protocolVersion?: number; clientId?: string; workspace?: { activeThreadId?: string }; conversation?: AgentConversationState; codex?: AgentCodexState; pendingApprovals?: AgentPendingApproval[] };
+type AgentRuntimeState = { busy?: boolean; threadId?: string; turnId?: string };
+type AgentHelloEvent = { ok?: boolean; protocolVersion?: number; clientId?: string; workspace?: { activeThreadId?: string }; conversation?: AgentConversationState; codex?: AgentRuntimeState; pendingApprovals?: AgentPendingApproval[] };
 type AgentWorkspaceEvent = { activeThreadId?: string; threadId?: string; sourceClientId?: string; emptyThread?: boolean; draftThread?: boolean; conversation?: AgentConversationState };
 type AgentChatEvent = { threadId?: string; turnId?: string; sourceClientId?: string; replayed?: boolean; message?: AgentChatItem };
 type AgentBootstrapEvent = { type?: "codex.preparing" | "codex.prepare_failed" | "mcp.startup" | "mcp.complete"; phase?: "preheat" | "runtime"; threadId?: string; name?: string; status?: "starting" | "ready" | "failed" | "cancelled"; error?: string | null; failureReason?: string | null };
@@ -238,7 +238,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             threadMessagesRef.current.set(threadId, messages);
             setAgentState({ messages, connectError: "" });
             const coveredTurnIds = [...historyTurns].map((key) => key.slice(threadId.length + 1));
-            if (coveredTurnIds.length) void acknowledgeCodexHistory(endpoint, token, threadId, coveredTurnIds).catch(() => undefined);
+            if (coveredTurnIds.length) void acknowledgeAgentHistory(endpoint, token, threadId, coveredTurnIds).catch(() => undefined);
             if (hasExpectedTurn && (thread.historyReady !== false || Boolean(expectedTurnId))) return true;
             thread = undefined;
         }
@@ -422,7 +422,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             }
         });
         source.addEventListener("codex_state", (event) => {
-            const data = parseEventData<AgentCodexState>(event);
+            const data = parseEventData<AgentRuntimeState>(event);
             if (!data) return;
             enqueueEvent(async () => {
                 const busy = Boolean(data.busy);
@@ -754,7 +754,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
         if (!connected || (!sending && !waiting)) return;
         setAgentState({ activity: rt("stopping") });
         try {
-            await interruptCodexTurn(endpoint, token, useAgentStore.getState().activeThreadId || undefined);
+            await interruptAgentTurn(endpoint, token, useAgentStore.getState().activeThreadId || undefined);
             addEventLog(rt("stopTask"), rt("taskStopped"));
         } catch (error) {
             setAgentState({ activity: rt("stopFailed") });
@@ -881,7 +881,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
         if (!pending || pending.deciding) return;
         setAgentState({ pendingApprovals: current.pendingApprovals.map((item) => item.requestId === approval.requestId ? { ...item, deciding: decision } : item), activity: rt("submittingApproval") });
         try {
-            await postCodexApproval(endpoint, token, approval.requestId, decision);
+            await postAgentApproval(endpoint, token, approval.requestId, decision);
             const latest = useAgentStore.getState();
             if (latest.pendingApprovals.some((item) => item.requestId === approval.requestId)) setAgentState({ activity: rt("waitingCodexApproval") });
         } catch (error) {
@@ -1244,7 +1244,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             return;
         }
         if (event.type === "item.completed" && event.item?.type === "agent_message" && event.item.id) {
-            const scoped = scopeEventChatItem(event, { id: event.item.id, role: "assistant", title: "Codex", text: stringText(event.item.text) }, event.item.id);
+            const scoped = scopeEventChatItem(event, { id: event.item.id, role: "assistant", title: "OAO Agent", text: stringText(event.item.text) }, event.item.id);
             const currentMessages = useAgentStore.getState().messages;
             const index = currentMessages.findIndex((message) => message.id === scoped.id);
             if (index >= 0) {
@@ -1313,7 +1313,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
         if (!text) return;
         const itemId = event.item?.id;
         if (!itemId) return;
-        const scoped = scopeEventChatItem(event, { id: itemId, role: "assistant", title: "Codex", text, streamId: itemId }, itemId);
+        const scoped = scopeEventChatItem(event, { id: itemId, role: "assistant", title: "OAO Agent", text, streamId: itemId }, itemId);
         const currentMessages = useAgentStore.getState().messages;
         const index = currentMessages.findIndex((message) => message.id === scoped.id);
         if (index < 0) {

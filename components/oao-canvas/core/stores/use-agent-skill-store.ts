@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import i18n from "@/components/oao-canvas/core/i18n";
 
-import { fetchCodexSkills, type AgentSkillDraft, type AgentSkillSummary } from "@/components/oao-canvas/core/services/api/canvas-agent";
+import { fetchAgentSkills, type AgentSkillDraft, type AgentSkillSummary } from "@/components/oao-canvas/core/services/api/canvas-agent";
 import { useAgentStore } from "@/components/oao-canvas/core/stores/use-agent-store";
 
 let loadSequence = 0;
@@ -40,7 +40,7 @@ export const useAgentSkillStore = create<AgentSkillStore>((set, get) => ({
         const sequence = ++loadSequence;
         set({ loading: true });
         try {
-            const response = await fetchCodexSkills(endpoint, token, forceReload);
+            const response = await fetchAgentSkills(endpoint, token, forceReload);
             if (sequence !== loadSequence) return;
             const skills = response.data || [];
             const current = get();
