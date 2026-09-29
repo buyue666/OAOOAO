@@ -71,8 +71,8 @@ export function AgentConnectView({
                                 {t("agent.connect.autoDiscover")}
                             </div>
                         </div>
-                        <Button className="!h-8 !px-3" type={enabled ? "default" : "primary"} icon={<PlugZap className="size-4" />} onClick={onToggleEnabled}>
-                            {t(enabled ? "agent.connect.disconnect" : "agent.connect.connect")}
+                        <Button className="!h-8 !px-3" type="primary" icon={<PlugZap className="size-4" />} onClick={onToggleEnabled}>
+                            {enabled ? "重新连接" : t("agent.connect.connect")}
                         </Button>
                     </div>
                     <div className="mt-3 grid gap-2.5">

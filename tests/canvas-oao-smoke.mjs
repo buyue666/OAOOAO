@@ -42,7 +42,11 @@ try {
     const pane = page.locator('[data-oao-canvas-surface="free-canvas"]');
     check("OAO 自由画布平面已挂载", await pane.count() === 1);
     check("OAO 画布主容器已启用", await page.locator(".oao-canvas-editor").count() === 1);
-    check("工具栏采用 OAO 命令列布局", await page.locator(".oao-command-strip .oao-command-strip-inner").count() === 1);
+    check("工具栏采用 OAO 操作架布局", await page.locator(".oao-canvas-actions .oao-canvas-actions-create").count() === 1);
+    await page.locator(".oao-canvas-actions .oao-canvas-actions-create").click();
+    const primaryCreateText = await page.locator('[role="menu"]:visible').last().innerText();
+    check("主创建入口只保留图片、视频、文本", /图片/.test(primaryCreateText) && /视频/.test(primaryCreateText) && /文本/.test(primaryCreateText) && !/音频|配置|分组/.test(primaryCreateText));
+    await page.keyboard.press("Escape");
     check("左侧使用 OAO 章节索引按钮", await page.locator(".oao-canvas-rail-index-button").count() >= 3);
     check("节点使用 OAO 黑白卡片结构", await page.locator(".oao-node-card").count() >= 1);
     const blankPoint = await page.evaluate(() => {
@@ -70,6 +74,8 @@ try {
     check("节点提供动态后续节点入口", await expand.count() >= 1 && await expand.first().isVisible());
     await expand.first().evaluate((button) => button.click());
     check("后续节点菜单由画布内提供", await page.locator("[data-connection-create-menu]").isVisible());
+    const connectionCreateText = await page.locator("[data-connection-create-menu]").innerText();
+    check("后续节点只允许进入创作链路", /图片/.test(connectionCreateText) && /视频/.test(connectionCreateText) && /文本/.test(connectionCreateText) && !/音频|配置/.test(connectionCreateText));
     await page.screenshot({ path: ".codex-tmp/canvas-oao-smoke.png", animations: "disabled" });
     check("画布无未捕获浏览器异常", errors.length === 0);
     console.log(`CANVAS_SMOKE_OK ${checks.length}`);

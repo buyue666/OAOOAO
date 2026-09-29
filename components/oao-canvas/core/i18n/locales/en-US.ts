@@ -252,7 +252,7 @@ export default {
         connecting: "Connecting",
         openAgent: "Open local OAO Agent panel",
         nodeTypes: { image: "Image", text: "Text", config: "Generation config", video: "Video", audio: "Audio", group: "Group" },
-        entry: { kicker: "Free canvas", titleLead: "Let ideas", titleAccent: "become scenes.", description: "Start with a thought and create with Agent.", agent: "Hand off to Agent", create: "Create yourself", blank: "Blank canvas", import: "Import media", text: "New text", storyboard: "Blank storyboard", dropHint: "Drop media to begin" },
+        entry: { kicker: "Free canvas", titleLead: "Let ideas", titleAccent: "become scenes.", description: "Start with a thought and create with Agent.", agent: "Hand off to Agent", create: "Create yourself", image: "New image", video: "New video", blank: "Blank canvas", import: "Import media", text: "New text", storyboard: "Blank storyboard", dropHint: "Drop media to begin" },
         toolbar: {
             select: "Select", pan: "Move", text: "Text", image: "Image", video: "Video", audio: "Audio", config: "Generation config", group: "Group", upload: "Upload assets", appearance: "Canvas appearance", clear: "Clear canvas",
             themeMode: "Theme", light: "Light", dark: "Dark", gridStyle: "Grid style", dots: "Dots", lines: "Lines", blank: "Blank", imageInfo: "Image info",

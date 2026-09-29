@@ -916,8 +916,8 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
 
     const toggleAgentConnection = async ({ silent = false }: { silent?: boolean } = {}) => {
         if (enabled) {
-            clearAgentSession({ enabled: false, connected: false, activity: rt("offline"), connectError: "" });
-            return;
+            clearAgentSession({ enabled: false, connected: false, activity: rt("connecting"), connectError: "" });
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
         }
         const urlToken = searchParams.get("agentToken") || "";
         const urlEndpoint = searchParams.get("agentUrl") || "";

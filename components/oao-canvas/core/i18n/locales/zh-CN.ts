@@ -252,7 +252,7 @@ export default {
         connecting: "连接中",
         openAgent: "打开本地 OAO Agent 面板",
         nodeTypes: { image: "图片", text: "文本", config: "生成配置", video: "视频", audio: "音频", group: "组" },
-        entry: { kicker: "自由画布", titleLead: "让灵感，", titleAccent: "开始成片。", description: "从一句想法开始，和 Agent 一起创作。", agent: "交给 Agent", create: "自己创作", blank: "空白画布", import: "导入素材", text: "新建文本", storyboard: "空白分镜", dropHint: "拖入素材即可开始" },
+        entry: { kicker: "自由画布", titleLead: "让灵感，", titleAccent: "开始成片。", description: "从一句想法开始，和 Agent 一起创作。", agent: "交给 Agent", create: "自己创作", image: "新建图片", video: "新建视频", blank: "空白画布", import: "导入素材", text: "新建文本", storyboard: "空白分镜", dropHint: "拖入素材即可开始" },
         toolbar: {
             select: "选择", pan: "移动", text: "文本", image: "图片", video: "视频", audio: "音频", config: "生成配置", group: "组", upload: "上传资产", appearance: "画布外观", clear: "清空画布",
             themeMode: "主题模式", light: "浅色", dark: "深色", gridStyle: "网格样式", dots: "点", lines: "线", blank: "空白", imageInfo: "图片信息",

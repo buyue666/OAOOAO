@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clapperboard, FileText, ImagePlus, Upload } from "lucide-react";
+import { ArrowUpRight, FileText, ImageIcon, Upload, Video } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { canvasThemes } from "@/components/oao-canvas/core/lib/canvas-theme";
@@ -34,14 +34,14 @@ export function CanvasEntryState({ onOpenAgent, onCreateNode, onUpload, onDismis
                     <span>{t("canvas.entry.agent")}</span>
                     <ArrowUpRight className="size-4" />
                 </button>
-                <button type="button" className="canvas-entry-link" onClick={() => { onCreateNode(CanvasNodeType.Config); onDismiss(); }}>{t("canvas.entry.create")}</button>
-                <button type="button" className="canvas-entry-link" onClick={onDismiss}>{t("canvas.entry.blank")}</button>
+                <button type="button" className="canvas-entry-link" onClick={() => { onCreateNode(CanvasNodeType.Image); onDismiss(); }}><ImageIcon className="size-3.5" />{t("canvas.entry.image")}</button>
+                <button type="button" className="canvas-entry-link" onClick={() => { onCreateNode(CanvasNodeType.Video); onDismiss(); }}><Video className="size-3.5" />{t("canvas.entry.video")}</button>
             </div>
             <div className="canvas-entry-shortcuts" style={{ borderColor: theme.toolbar.border }}>
                 <button type="button" onClick={onUpload}><Upload className="size-3.5" />{t("canvas.entry.import")}</button>
                 <button type="button" onClick={() => { onCreateNode(CanvasNodeType.Text); onDismiss(); }}><FileText className="size-3.5" />{t("canvas.entry.text")}</button>
-                <button type="button" onClick={() => { onCreateNode(CanvasNodeType.Group); onDismiss(); }}><Clapperboard className="size-3.5" />{t("canvas.entry.storyboard")}</button>
-                <span className="canvas-entry-hint"><ImagePlus className="size-3.5" />{t("canvas.entry.dropHint")}</span>
+                <button type="button" onClick={onDismiss}>{t("canvas.entry.blank")}</button>
+                <span className="canvas-entry-hint">{t("canvas.entry.dropHint")}</span>
             </div>
         </div>
     );
