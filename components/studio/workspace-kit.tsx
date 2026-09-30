@@ -73,7 +73,7 @@ export function WorkspaceShell({
               <h2 className="text-sm font-semibold text-foreground">{paramsTitle}</h2>
               {paramsHint && <span className="truncate text-[11px] text-muted-foreground">{paramsHint}</span>}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{params}</div>
+            <div className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{params}</div>
             <div className="shrink-0 border-t border-border px-4 py-3">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-muted-foreground">预计消耗</span>
@@ -535,8 +535,8 @@ export function ReferencePicker({
   /** 缩略图加载失败的素材不渲染成占位块，直接跳过并如实计数。 */
   const [brokenIds, setBrokenIds] = useState<string[]>([])
 
-  // 已加载的素材变多/换了一批时重置分页，避免停留在「上次加载更多」的位置。
-  useEffect(() => { setVisible(REFERENCE_PAGE_SIZE) }, [assets])
+  // 刷新或追加素材不能收起用户已展开的列表；只在搜索条件变化时回到第一页。
+  useEffect(() => { setVisible(REFERENCE_PAGE_SIZE) }, [keyword])
 
   /**
    * 提交搜索（回车 / 清除按钮）。
@@ -574,14 +574,14 @@ export function ReferencePicker({
   return (
     <div className="flex flex-col gap-2" data-testid="reference-picker">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground" data-testid="reference-picker-status">
+        <p className="min-w-0 flex-1 text-[11px] text-muted-foreground" data-testid="reference-picker-status">
           从素材库选择 · 已选 {selectedIds.length}/{maxReferences} · 可选 {shown.length}{total > shown.length ? `/${total}` : ''}
         </p>
         {onReload && (
           <button
             type="button"
             onClick={onReload}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
+            className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
           >
             <RefreshCw className={cn('size-3', loading && 'animate-spin')} aria-hidden="true" />
             刷新素材
@@ -637,7 +637,7 @@ export function ReferencePicker({
                     : 'border-border hover:-translate-y-0.5 hover:border-studio-accent/50 hover:shadow-[var(--lg-shadow-2)]',
                 )}
               >
-                <MediaThumb onLoadError={() => setBrokenIds((current) => (current.includes(asset.id) ? current : [...current, asset.id]))} src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="size-full" />
+                <MediaThumb loading="lazy" onLoadError={() => setBrokenIds((current) => (current.includes(asset.id) ? current : [...current, asset.id]))} src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="size-full" />
                 {selected && (
                   <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-studio-accent text-studio-accent-foreground">
                     <Check className="size-2.5" aria-hidden="true" />

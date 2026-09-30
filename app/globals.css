@@ -1737,6 +1737,35 @@
   animation: liquid-wallpaper-drift 28s ease-in-out infinite alternate;
 }
 
+/* 工作台滚动时避免同时重绘环境滤镜和壁纸动画，降低合成层闪烁风险。
+   同时保留实色兜底，环境层尚未绘制时也不会露出 body 的白底。 */
+.studio-app-shell[data-studio-skin='gradient'][data-studio-route='workspace'] {
+  background: #10252c !important;
+}
+
+.studio-app-shell[data-studio-route='workspace']::before {
+  animation: none;
+  filter: none;
+  background-size: cover;
+  will-change: auto;
+}
+
+.workspace-params-scroll,
+.studio-workspace-shell > .grid,
+.studio-workspace-shell > .grid > section {
+  overflow-anchor: none;
+}
+
+.workspace-params-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(235 255 252 / 32%) transparent;
+}
+
+.workspace-params-scroll::-webkit-scrollbar { width: 6px; }
+.workspace-params-scroll::-webkit-scrollbar-thumb { border-radius: 3px; background: rgb(235 255 252 / 32%); }
+.workspace-params-scroll::-webkit-scrollbar-track { background: transparent; }
+.workspace-params-scroll::-webkit-scrollbar-button { display: none; }
+
 .studio-app-shell[data-studio-skin='gradient']::after {
   content: '';
   position: fixed;

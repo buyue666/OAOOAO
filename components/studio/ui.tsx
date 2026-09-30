@@ -20,7 +20,7 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
       type="button"
       className={cn(
         'studio-control inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 disabled:pointer-events-none disabled:opacity-45',
-        variant === 'primary' && 'border-foreground bg-foreground text-background shadow-[var(--lg-shadow-2)] hover:opacity-90',
+        variant === 'primary' && 'studio-control-primary border-foreground bg-foreground text-background shadow-[var(--lg-shadow-2)] hover:opacity-90 disabled:border-foreground/30 disabled:bg-foreground/55 disabled:text-background/90 disabled:opacity-100',
         variant === 'secondary' && 'border-border bg-card text-foreground shadow-[var(--lg-shadow-1)] hover:bg-muted',
         variant === 'glass' && 'lg-button-glass text-foreground',
         variant === 'ghost' && 'border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -152,15 +152,16 @@ export function StatBlock({ label, value, detail, tone = 'neutral' }: { label: s
   )
 }
 
-export function MediaThumb({ src, poster, alt, fallback, kind = 'image', className, overlay, onLoadError }: { src?: string; poster?: string; alt: string; fallback: string; kind?: 'image' | 'video'; className?: string; overlay?: ReactNode; onLoadError?: () => void }) {
+export function MediaThumb({ src, poster, alt, fallback, kind = 'image', className, overlay, onLoadError, loading = 'eager' }: { src?: string; poster?: string; alt: string; fallback: string; kind?: 'image' | 'video'; className?: string; overlay?: ReactNode; onLoadError?: () => void; loading?: 'lazy' | 'eager' }) {
   const [failed, setFailed] = useState(false)
+  useEffect(() => { setFailed(false) }, [src, poster, kind])
   const fail = () => { setFailed(true); onLoadError?.() }
   return (
     <div className={cn('relative min-h-0 overflow-hidden bg-muted', className)}>
       {!failed && kind === 'video' && src ? (
         <video className="size-full object-cover" src={src} poster={poster} muted playsInline preload="metadata" onError={fail} aria-label={alt} />
       ) : !failed && (src || poster) ? (
-        <img className="size-full object-cover" src={src || poster} alt={alt} onError={fail} />
+        <img className="size-full object-cover" src={src || poster} alt={alt} loading={loading} decoding="async" onError={fail} />
       ) : (
         <div className="flex size-full min-h-24 items-center justify-center bg-secondary px-4 text-center text-xs text-muted-foreground"><ImageIcon className="mr-2 size-4" aria-hidden="true" />{fallback}</div>
       )}
