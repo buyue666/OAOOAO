@@ -47,11 +47,12 @@
 .heroBackground { z-index: 0; object-fit: cover; object-position: center center; will-change: transform; }
 .brandmark { position: absolute; z-index: 1; top: clamp(132px, 20vh, 210px); left: 50%; width: min(82vw, 1120px); height: auto; pointer-events: none; mix-blend-mode: multiply; object-fit: contain; object-position: center; filter: saturate(0); opacity: .42; will-change: opacity, transform; }
 .heroForeground { position: absolute; z-index: 2; left: 50%; bottom: 0; width: auto; max-width: none; height: 66%; transform: translateX(-50%); will-change: transform; }
-.heroMessage { position: absolute; z-index: 4; top: clamp(156px, 25vh, 265px); left: clamp(24px, 7vw, 110px); width: min(420px, 35vw); color: #111315; transition: opacity 180ms linear; }
+.heroMessage { position: absolute; z-index: 4; top: clamp(156px, 25vh, 265px); left: clamp(24px, 7vw, 110px); width: min(420px, 35vw); color: #111315; transition: opacity 180ms linear; isolation: isolate; }
+.heroMessage::before { content: ''; position: absolute; z-index: -1; inset: -28px -34px -24px; border-radius: 28px; background: linear-gradient(90deg, rgb(255 255 255 / 78%), rgb(255 255 255 / 48%) 72%, transparent); filter: blur(16px); pointer-events: none; }
 .heroEyebrow, .sectionEyebrow { display: inline-flex; align-items: center; gap: 8px; color: #566067; font-size: 12px; font-weight: 700; letter-spacing: .08em !important; text-transform: uppercase; }
 .heroEyebrow::before, .sectionEyebrow::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #28736c; }
 .heroMessage h1 { margin-top: 18px; font-size: clamp(38px, 4vw, 66px); font-weight: 500; line-height: 1.13; letter-spacing: -.02em !important; }
-.heroMessage p { max-width: 360px; margin-top: 24px; color: #4d5559; font-size: 15px; line-height: 1.8; }
+.heroMessage p { max-width: 360px; margin-top: 24px; color: #283236; font-size: 15px; line-height: 1.8; text-shadow: 0 1px 1px rgb(255 255 255 / 42%); }
 .heroActions { display: flex; align-items: center; gap: 18px; margin-top: 28px; }
 .heroPrimary { padding: 13px 18px; }
 .heroSecondary, .textLink, .outlineLink { display: inline-flex; align-items: center; gap: 8px; color: #3e464b; font-size: 14px; font-weight: 600; }
