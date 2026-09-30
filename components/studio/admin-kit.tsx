@@ -155,7 +155,7 @@ export function AdminDrawer({ open, title, description, onClose, children, foote
   if (!open) return null
   return (
     <div className="studio-sidepanel-backdrop motion-fade fixed inset-0 z-50 flex justify-end bg-studio-ink/50" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={containerRef} role="dialog" aria-modal="true" aria-label={title} className={cn('lg-glass-overlay motion-panel flex h-full w-full flex-col overflow-hidden border-l border-border shadow-2xl', width)}>
+      <section ref={containerRef} role="dialog" aria-modal="true" aria-label={title} className={cn('admin-drawer-surface motion-panel flex h-full w-full flex-col overflow-hidden border-l border-border shadow-2xl', width)}>
         <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{title}</h2>{description && <p className="mt-1 truncate text-xs text-muted-foreground">{description}</p>}</div>
           <ControlButton variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><X className="size-4" /></ControlButton>
@@ -236,9 +236,9 @@ export function AdminDefinition({ label, value, mono }: { label: string; value: 
 
 export function AdminStat({ label, value, detail, tone = 'neutral' }: { label: string; value: string; detail?: string; tone?: Tone }) {
   return (
-    <div className="studio-surface p-4">
+    <div className="studio-surface min-w-0 p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={cn('mt-2 text-xl font-semibold tracking-tight', tone === 'success' && 'text-success', tone === 'danger' && 'text-destructive', tone === 'warning' && 'text-studio-warn')}>{value}</p>
+      <p className={cn('mt-2 text-xl font-semibold tracking-tight tabular-nums', tone === 'success' && 'text-success', tone === 'danger' && 'text-destructive', tone === 'warning' && 'text-studio-warn')}>{value}</p>
       {detail && <p className="mt-1 truncate text-xs text-muted-foreground" title={detail}>{detail}</p>}
     </div>
   )

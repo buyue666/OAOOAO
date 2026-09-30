@@ -201,9 +201,9 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
   const navigate = useCallback((value: AdminSection) => { setMobileOpen(false); onNavigate(value) }, [onNavigate])
 
   return (
-    <div className="admin-console flex min-h-dvh bg-background text-foreground">
+    <div className="admin-console flex min-h-dvh bg-background text-foreground" data-admin-section={section}>
       {/* 后台侧栏：玻璃表面。注意不能给它加 position/transform，否则内部 fixed 抽屉会错位。 */}
-      <aside className="admin-sidebar hidden w-[232px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+      <aside className="admin-sidebar sticky top-0 hidden h-dvh w-[232px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b border-border px-5">
           <Link href="/studio" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
             <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background"><Zap className="size-4" /></span>
@@ -217,16 +217,17 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="admin-topbar flex min-h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 py-3 md:px-7">
+        <header className="admin-topbar sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 py-3 md:px-7">
           <div className="flex min-w-0 items-center gap-3">
             <ControlButton variant="ghost" size="sm" className="lg:hidden" aria-label="打开后台导航" onClick={() => setMobileOpen(true)}><Menu className="size-4" /></ControlButton>
             <Link href="/studio" className="flex items-center gap-2 lg:hidden" aria-label="OAOOAO 控制中心">
               <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background"><Zap className="size-4" /></span>
               <span className="text-sm font-semibold tracking-tight">OAOOAO</span>
             </Link>
-            <div className="hidden min-w-0 lg:block">
-              <p className="truncate text-sm font-semibold text-foreground">{meta.title}</p>
-              <p className="truncate text-xs text-muted-foreground">{meta.description}</p>
+            <div className="hidden min-w-0 items-center gap-2 lg:flex">
+              <span className="text-xs text-muted-foreground">控制中心</span>
+              <span className="text-border" aria-hidden="true">/</span>
+              <span className="truncate text-sm font-semibold text-foreground">{meta.title}</span>
             </div>
             <div className="min-w-0 lg:hidden">
               <p className="truncate text-sm font-semibold text-foreground">{meta.title}</p>
@@ -243,7 +244,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
           </div>
         </header>
 
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 lg:hidden">
+        <div className="admin-mobile-nav sticky top-16 z-20 flex items-center gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2 lg:hidden">
           {items.map(([value, label, Icon]) => (
             <Link key={value} href={adminSectionHref(value)} className={cn('inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs', section === value ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted')}>
               <Icon className="size-3.5" />{label}
@@ -265,7 +266,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
         )}
 
         <main className="mx-auto w-full max-w-[1540px] px-4 py-5 md:px-7 md:py-7">
-          <PageHeader title={meta.title} description={meta.description} />
+          <PageHeader eyebrow="控制中心" title={meta.title} description={meta.description} />
           <div className="mt-5">{children}</div>
         </main>
       </div>

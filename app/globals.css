@@ -1156,6 +1156,18 @@
   backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
 }
 
+/* 后台抽屉不复用创作区的动态玻璃覆盖层：管理表单需要稳定的背景、
+   清晰的滚动边界和可预测的截图/无障碍结果。 */
+.admin-drawer-surface {
+  background: var(--lg-pane-bg);
+  border-color: var(--lg-edge);
+  box-shadow: -18px 0 48px rgba(0, 10, 15, 0.24), inset 1px 0 0 var(--lg-highlight-soft);
+}
+
+.admin-console .admin-mobile-nav {
+  box-shadow: 0 8px 22px rgba(0, 10, 15, 0.12);
+}
+
 /* 后台表格：保持高密度与可比较性，表头吸顶但**不做玻璃化**。 */
 .admin-table-scroll {
   border-radius: var(--radius-lg);
@@ -1997,6 +2009,28 @@
   background: rgba(255, 255, 255, 0.19);
   color: #ffffff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.admin-console .studio-page-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--lg-edge) 72%, transparent);
+  padding-bottom: 1.1rem;
+}
+
+.admin-console .studio-page-header > div > p:first-child {
+  letter-spacing: 0.12em;
+}
+
+.admin-console .admin-table-scroll {
+  scrollbar-color: color-mix(in srgb, var(--foreground) 28%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.admin-console .admin-table-scroll table {
+  table-layout: auto;
+}
+
+.admin-console .admin-table-scroll tbody tr:focus-within {
+  background: color-mix(in srgb, var(--studio-accent) 10%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
