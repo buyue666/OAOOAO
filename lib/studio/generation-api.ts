@@ -311,6 +311,8 @@ export type CreateAgentRunInput = {
   skillIds?: string[]
   modelIds?: string[]
   publicPrompt?: string
+  snapshot?: unknown
+  preferences?: { mode: 'image' | 'video'; image?: { size?: string; quality?: string; count?: number }; video?: { size?: string; quality?: string; seconds?: number } }
   /** 幂等标识：网络失败后重试必须复用，后端据此返回原运行而不是新建。 */
   clientRequestId?: string
 }
@@ -328,12 +330,14 @@ export function createAgentRun(input: CreateAgentRunInput) {
       ...(input.skillIds?.length ? { skillIds: input.skillIds } : {}),
       ...(input.modelIds?.length ? { modelIds: input.modelIds } : {}),
       ...(input.publicPrompt ? { publicPrompt: input.publicPrompt } : {}),
+      ...(input.snapshot !== undefined ? { snapshot: input.snapshot } : {}),
+      ...(input.preferences ? { preferences: input.preferences } : {}),
     }),
   })
 }
 
-/** Agent 支持 pause / resume / retry / cancel 四个动作。 */
-export function controlAgentRun(id: string, action: 'pause' | 'resume' | 'retry' | 'cancel') {
+/** Agent 支持暂停、恢复、重试、取消及计划确认。 */
+export function controlAgentRun(id: string, action: 'pause' | 'resume' | 'retry' | 'cancel' | 'approve') {
   return generate<{ run: AgentRun }>(`/api/agent/runs/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: JSON.stringify({}) })
 }
 

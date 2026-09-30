@@ -48,6 +48,7 @@ interface AgentMessage {
 
 const runStatusMeta: Record<AgentRun['status'], { label: string; tone: Tone }> = {
   planning: { label: '规划中', tone: 'accent' },
+  awaiting_approval: { label: '待确认', tone: 'warning' },
   running: { label: '执行中', tone: 'accent' },
   paused: { label: '已暂停', tone: 'warning' },
   completed: { label: '已完成', tone: 'success' },

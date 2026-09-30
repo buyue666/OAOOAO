@@ -150,7 +150,7 @@ export type TextGenerationInput = {
 
 /* --------------------------------- Agent --------------------------------- */
 
-export type AgentRunStatus = 'planning' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+export type AgentRunStatus = 'planning' | 'awaiting_approval' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
 
 export type AgentRunTask = {
   id: string
@@ -182,6 +182,8 @@ export type AgentRun = {
   tasks: AgentRunTask[]
   cancellation?: { pendingCount: number }
   pointsCost?: number
+  failure?: string
+  planApproval?: { totalPoints: number; estimated: boolean; approvedAt?: number; steps: Array<{ id: string; title: string; model?: string; count: number; estimatedPoints?: number }> }
   timings?: Record<string, number>
   createdAt: number
   updatedAt: number

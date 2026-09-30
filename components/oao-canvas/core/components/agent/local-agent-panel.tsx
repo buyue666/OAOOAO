@@ -407,6 +407,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
                 activeTurnId,
                 messages,
                 pendingApprovals,
+                activeTab: "chat",
             });
             if (!headless) message.success(rt("localAgentConnected"));
             void postState(endpoint, token, clientId, canvasContextRef.current?.snapshot || null);

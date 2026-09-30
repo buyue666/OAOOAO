@@ -30,7 +30,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
    */
   if (isLanding || isAuthPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isAdmin) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
-  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 flex-col overflow-hidden bg-black text-white"><SiteAnnouncementBar announcement={state.sessionSettings?.site?.announcementBar} placement="workbench" /><div className="min-h-0 flex-1">{children}</div></div>
+  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-black text-white"><SiteAnnouncementBar announcement={state.sessionSettings?.site?.announcementBar} placement="workbench" /><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
 
   return (
     <>

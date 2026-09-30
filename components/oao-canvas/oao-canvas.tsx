@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { App as AntApp, ConfigProvider } from "antd";
+import { App as AntApp, ConfigProvider, theme as antTheme } from "antd";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useStudio } from "@/lib/studio/store";
 import CanvasPage from "@/components/oao-canvas/core/pages/canvas/project";
 import CanvasIndexPage from "@/components/oao-canvas/core/pages/canvas/index";
+import { AgentPanel } from "@/components/oao-canvas/core/components/agent/agent-panel";
 import { encodeChannelModel, useConfigStore, type ChannelModel, type ModelCapability, type ModelChannel } from "@/components/oao-canvas/core/stores/use-config-store";
 import "antd/dist/reset.css";
 import "@/components/oao-canvas/core/styles/globals.css";
@@ -71,7 +72,12 @@ export function OaoCanvas({ projectId }: { projectId: string }) {
     return (
         <CanvasRuntime>
             <CanvasConfigBridge />
-            <CanvasPage projectId={projectId} />
+            <div className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+                <div className="min-h-0 min-w-0 w-0 basis-0 flex-1 overflow-hidden">
+                    <CanvasPage projectId={projectId} />
+                </div>
+                <AgentPanel projectId={projectId} />
+            </div>
         </CanvasRuntime>
     );
 }
@@ -89,8 +95,8 @@ function CanvasRuntime({ children }: { children: ReactNode }) {
     const [queryClient] = useState(() => new QueryClient());
     return (
         <QueryClientProvider client={queryClient}>
-            <div className="h-full min-h-0">
-                <ConfigProvider theme={{ token: { colorPrimary: "#f5f5f4", colorInfo: "#f5f5f4", colorTextLightSolid: "#171717", borderRadius: 12 } }}>
+            <div className="h-full min-h-0 min-w-0 w-full overflow-hidden">
+                <ConfigProvider theme={{ algorithm: antTheme.darkAlgorithm, token: { colorPrimary: "#f5f5f4", colorInfo: "#f5f5f4", colorTextLightSolid: "#171717", colorText: "#f5f5f4", colorTextSecondary: "#b8b8b8", colorBgContainer: "#171717", colorBgElevated: "#202020", borderRadius: 8 } }}>
                     <AntApp className="h-full min-h-0">{children}</AntApp>
                 </ConfigProvider>
             </div>

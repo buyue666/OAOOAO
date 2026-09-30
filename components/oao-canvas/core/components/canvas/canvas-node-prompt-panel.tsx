@@ -126,8 +126,9 @@ export function CanvasNodePromptPanel({ node, nodes, isRunning, onPromptChange, 
                     )}
                 </div>
                 <Button
-                    type="primary"
-                    className="!h-10 !min-w-16 shrink-0 !rounded-full !px-3"
+                    type="text"
+                    className="!h-10 !min-w-16 shrink-0 !rounded-full !border !px-3"
+                    style={{ background: isRunning ? "rgba(220,38,38,.16)" : theme.toolbar.activeBg, borderColor: isRunning ? "rgba(220,38,38,.5)" : theme.toolbar.border, color: isRunning ? "#f87171" : theme.toolbar.activeText }}
                     danger={isRunning}
                     disabled={!isRunning && !prompt.trim()}
                     onClick={() => (isRunning ? onStop(node.id) : submit())}

@@ -263,6 +263,7 @@ function OaoCanvasPage({ projectId }: { projectId: string }) {
     const [referencePickerNodeId, setReferencePickerNodeId] = useState<string | null>(null);
     const [sidePanelTab, setSidePanelTab] = useState<CanvasSidePanelTab>("canvas");
     const [entryDismissed, setEntryDismissed] = useState(false);
+    const [droppedAssetId, setDroppedAssetId] = useState<string | null>(null);
 
     const openSidePanelTab = useCallback(
         (tab: CanvasSidePanelTab) => {
@@ -2270,6 +2271,11 @@ function OaoCanvasPage({ projectId }: { projectId: string }) {
     const handleDrop = useCallback(
         (event: ReactDragEvent<HTMLDivElement>) => {
             event.preventDefault();
+            const assetId = event.dataTransfer.getData("application/x-oao-asset-id");
+            if (assetId) {
+                setDroppedAssetId(assetId);
+                return;
+            }
             const files = Array.from(event.dataTransfer.files).filter(
                 (item) => item.type.startsWith("image/") || item.type.startsWith("video/") || isAudioFile(item),
             );
@@ -3022,6 +3028,16 @@ function OaoCanvasPage({ projectId }: { projectId: string }) {
         [insertAssistantImage, insertAssistantText, screenToCanvas, size.height, size.width],
     );
 
+    useEffect(() => {
+        if (!droppedAssetId) return;
+        const asset = useAssetStore.getState().assets.find((item) => item.id === droppedAssetId);
+        setDroppedAssetId(null);
+        if (!asset) return;
+        if (asset.kind === "text") handleAssetInsert({ kind: "text", content: asset.data.content, title: asset.title });
+        else if (asset.kind === "video") handleAssetInsert({ kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height });
+        else handleAssetInsert({ kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title });
+    }, [droppedAssetId, handleAssetInsert]);
+
     // Memoize every callback and render function passed to CanvasNode.
     // CanvasNode uses React.memo, but new prop references would invalidate it on every render and rerender every node
     // during click, hover, or viewport changes, which is especially expensive for Markdown. These useCallback values
@@ -3115,7 +3131,7 @@ function OaoCanvasPage({ projectId }: { projectId: string }) {
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
-        <main className="oao-canvas-editor flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
+        <main className="oao-canvas-editor relative flex h-full min-h-0 overflow-hidden" style={{ background: theme.canvas.background, color: theme.node.text }}>
             <CanvasWorkspaceRail
                 panelOpen={sidePanelOpen}
                 activeTab={sidePanelTab}

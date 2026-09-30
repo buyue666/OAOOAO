@@ -24,6 +24,18 @@ import type { InsertAssetPayload } from "./asset-picker-modal";
 const PANEL_MOTION_SECONDS = CANVAS_SIDE_PANEL_MOTION_MS / 1000;
 const PANEL_EASE = [0.22, 1, 0.36, 1] as const;
 
+type AssetCategory = "all" | "character" | "scene" | "prop" | "general";
+const ASSET_CATEGORY_KEYS: AssetCategory[] = ["all", "character", "scene", "prop", "general"];
+
+function assetCategory(asset: Asset): Exclude<AssetCategory, "all"> {
+    const explicit = typeof asset.metadata?.category === "string" ? asset.metadata.category.toLowerCase() : "";
+    const searchable = [asset.title, ...(asset.tags || []), asset.note || "", explicit].join(" ").toLowerCase();
+    if (explicit === "character" || /人物|角色|character|person|portrait/.test(searchable)) return "character";
+    if (explicit === "scene" || /场景|环境|scene|background|location/.test(searchable)) return "scene";
+    if (explicit === "prop" || /道具|物件|prop|object/.test(searchable)) return "prop";
+    return "general";
+}
+
 export type CanvasSidePanelTab = "canvas" | "assets";
 
 type Props = {
@@ -89,7 +101,7 @@ export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onPreview
 
     return (
         <motion.div
-            className="relative z-[60] flex h-full shrink-0"
+            className="oao-canvas-side-panel-wrap relative z-[60] flex h-full shrink-0"
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: panelOpen ? width + 1 : 0, opacity: panelOpen ? 1 : 0 }}
             transition={{ duration: resizing ? 0 : PANEL_MOTION_SECONDS, ease: PANEL_EASE }}
@@ -317,6 +329,7 @@ const CanvasAssetsTab = memo(function CanvasAssetsTab({ onInsert, theme }: { onI
     const removeAsset = useAssetStore((state) => state.removeAsset);
     const [keyword, setKeyword] = useState("");
     const [tagFilter, setTagFilter] = useState<string>("all");
+    const [categoryFilter, setCategoryFilter] = useState<AssetCategory>("all");
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -325,8 +338,8 @@ const CanvasAssetsTab = memo(function CanvasAssetsTab({ onInsert, theme }: { onI
 
     const filtered = useMemo(() => {
         const query = keyword.trim().toLowerCase();
-        return assets.filter((asset) => (tagFilter === "all" || (asset.tags || []).includes(tagFilter)) && (!query || [asset.title, ...(asset.tags || [])].join(" ").toLowerCase().includes(query)));
-    }, [assets, keyword, tagFilter]);
+        return assets.filter((asset) => (categoryFilter === "all" || assetCategory(asset) === categoryFilter) && (tagFilter === "all" || (asset.tags || []).includes(tagFilter)) && (!query || [asset.title, ...(asset.tags || [])].join(" ").toLowerCase().includes(query)));
+    }, [assets, categoryFilter, keyword, tagFilter]);
 
     const groups = useMemo(() => ASSET_GROUPS.map((group) => ({ ...group, items: filtered.filter((asset) => asset.kind === group.kind) })).filter((group) => group.items.length > 0), [filtered]);
 
@@ -376,6 +389,24 @@ const CanvasAssetsTab = memo(function CanvasAssetsTab({ onInsert, theme }: { onI
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => void handleFiles(e.target.files)} />
             </div>
+            <div className="flex flex-wrap gap-1 px-3 pb-2" aria-label={t("canvas.sidePanel.assetCategories") }>
+                {ASSET_CATEGORY_KEYS.map((category) => (
+                    <button
+                        key={category}
+                        type="button"
+                        aria-pressed={categoryFilter === category}
+                        className="rounded-full border px-2.5 py-1 text-[11px] font-medium transition"
+                        style={{
+                            borderColor: categoryFilter === category ? theme.node.activeStroke : theme.node.stroke,
+                            background: categoryFilter === category ? theme.toolbar.activeBg : "transparent",
+                            color: categoryFilter === category ? theme.toolbar.activeText : theme.node.muted,
+                        }}
+                        onClick={() => setCategoryFilter(category)}
+                    >
+                        {t(`canvas.sidePanel.categories.${category}`)}
+                    </button>
+                ))}
+            </div>
             {allTags.length ? (
                 <div className="flex flex-wrap gap-1.5 px-3 pb-2">
                     <Tag.CheckableTag checked={tagFilter === "all"} className={cn("prompt-filter-tag", tagFilter === "all" && "is-active")} onChange={() => setTagFilter("all")}>
@@ -388,6 +419,10 @@ const CanvasAssetsTab = memo(function CanvasAssetsTab({ onInsert, theme }: { onI
                     ))}
                 </div>
             ) : null}
+            <div className="flex items-center justify-between px-3 pb-1 text-[11px]" style={{ color: theme.node.muted }}>
+                <span>{t("canvas.sidePanel.assetCount", { count: filtered.length })}</span>
+                <span>{t("canvas.sidePanel.assetHint")}</span>
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
                 {groups.length ? (
                     <div className="space-y-1">
@@ -427,9 +462,19 @@ const CanvasAssetsTab = memo(function CanvasAssetsTab({ onInsert, theme }: { onI
 function AssetCard({ asset, theme, onInsert, onRemove }: { asset: Asset; theme: CanvasTheme; onInsert: () => void; onRemove: () => void }) {
     const { t } = useTranslation();
     return (
-        <div className="group relative aspect-square overflow-hidden rounded-xl border transition duration-200 hover:-translate-y-0.5 hover:shadow-lg" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
-            <AssetCover asset={asset} />
-            <div className="absolute inset-0 flex items-center justify-center gap-2.5 opacity-0 transition duration-200 group-hover:opacity-100">
+        <div
+            className="group relative overflow-hidden rounded-xl border transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+            style={{ borderColor: theme.node.stroke, background: theme.node.panel }}
+            draggable
+            onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "copy";
+                event.dataTransfer.setData("application/x-oao-asset-id", asset.id);
+            }}
+            title={t("canvas.sidePanel.dragAsset")}
+        >
+            <div className="relative aspect-[1.18] overflow-hidden">
+                <AssetCover asset={asset} />
+                <div className="absolute inset-0 flex items-center justify-center gap-2.5 bg-black/35 opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
                 <button
                     type="button"
                     onClick={onInsert}
@@ -447,6 +492,14 @@ function AssetCard({ asset, theme, onInsert, onRemove }: { asset: Asset; theme: 
                         <Trash2 className="size-4" />
                     </button>
                 </Popconfirm>
+                </div>
+            </div>
+            <div className="min-w-0 px-2.5 py-2">
+                <div className="truncate text-xs font-semibold" title={asset.title}>{asset.title || t("assets.untitled")}</div>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[10px]" style={{ color: theme.node.muted }}>
+                    <span>{t(`assets.kinds.${asset.kind}`)}</span>
+                    <span className="truncate">{asset.tags?.[0] || t(`canvas.sidePanel.categories.${assetCategory(asset)}`)}</span>
+                </div>
             </div>
         </div>
     );

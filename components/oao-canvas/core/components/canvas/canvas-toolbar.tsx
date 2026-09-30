@@ -4,6 +4,8 @@ import {
     Trash2, Type, Undo2, Upload, Video,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { canvasThemes } from "@/components/oao-canvas/core/lib/canvas-theme";
+import { useThemeStore } from "@/components/oao-canvas/core/stores/use-theme-store";
 
 type CanvasToolbarProps = {
     selectedCount: number;
@@ -27,6 +29,7 @@ export function CanvasToolbar({
     onUndo, onRedo, onUpload, onDelete, onClear, onCanvasToolChange,
 }: CanvasToolbarProps) {
     const { t } = useTranslation();
+    const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     const createItems = [
         { key: "image", icon: <ImageIcon size={16} />, label: t("canvas.toolbar.image"), onClick: onAddImage },
@@ -46,7 +49,7 @@ export function CanvasToolbar({
     return (
         <div className="oao-canvas-actions" data-canvas-no-zoom>
             <Dropdown menu={{ items: createItems }} trigger={["click"]} overlayClassName="oao-canvas-action-menu" placement="bottomLeft">
-                <Button type="primary" icon={<Plus size={16} />} className="oao-canvas-actions-create" aria-label="新建节点">
+                <Button type="text" icon={<Plus size={16} />} className="oao-canvas-actions-create !border" style={{ background: theme.toolbar.activeBg, borderColor: theme.toolbar.border, color: theme.toolbar.activeText }} aria-label="新建节点">
                     新建节点
                 </Button>
             </Dropdown>

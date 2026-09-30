@@ -112,8 +112,9 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
             </div>
 
             <Button
-                type="primary"
+                type="text"
                 className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"
+                style={{ background: isRunning ? "rgba(220,38,38,.16)" : theme.toolbar.activeBg, borderColor: isRunning ? "rgba(220,38,38,.5)" : theme.toolbar.border, color: isRunning ? "#f87171" : theme.toolbar.activeText }}
                 danger={isRunning}
                 disabled={!isRunning && !canGenerate}
                 onMouseDown={(event) => event.stopPropagation()}

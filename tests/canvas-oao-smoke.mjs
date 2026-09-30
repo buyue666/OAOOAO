@@ -21,7 +21,8 @@ function check(label, value) {
 let originalProject = null;
 try {
     await page.goto(`${base}/canvas/canvas-aurora`, { waitUntil: "domcontentloaded", timeout: 15000 });
-    await page.waitForTimeout(650);
+    await page.getByText("开始生成", { exact: true }).first().waitFor({ state: "visible", timeout: 15000 });
+    await page.waitForTimeout(250);
     originalProject = await page.evaluate(async () => (await fetch("/api/canvas/projects/canvas-aurora", { cache: "no-store" })).json()).then((result) => result.data?.project || null);
 
     const body = await page.locator("body").innerText();
@@ -31,6 +32,14 @@ try {
     check("画布保留节点生成入口", await page.locator("button").filter({ hasText: "开始生成" }).count() >= 1);
     check("节点与资产是画布的两个工作区", rail.includes("节点") && rail.includes("资产") && !rail.includes("提示词"));
     check("界面使用 OAO Agent 品牌", body.includes("OAO Agent") && !body.includes("Codex"));
+    const agentButton = page.getByRole("button", { name: "OAO Agent" });
+    check("OAO Agent 入口已挂载", await agentButton.count() === 1);
+    await agentButton.click();
+    await page.waitForTimeout(650);
+    const agentPanelMetrics = await page.locator("[data-canvas-shortcuts-ignore]").last().evaluate((element) => ({ parentWidth: element.parentElement?.getBoundingClientRect().width || 0, panelWidth: element.getBoundingClientRect().width || 0 }));
+    check("点击 OAO Agent 会打开内置创作面板", agentPanelMetrics.parentWidth >= 360 && agentPanelMetrics.panelWidth >= 360 && (await page.locator("body").innerText()).includes("把想法变成画布节点"));
+    await page.getByRole("button", { name: /收起 Agent/ }).click();
+    await page.waitForTimeout(550);
     check("运行时不暴露旧项目或插件入口", !/Infinite Canvas|infinite-canvas|basketikun|reference-src|插件市场|官方插件|GitHub/i.test(body));
     check("运行时没有加载外部插件清单", resources.every((url) => !/infinite-canvas|plugin-registry|plugin-loader|basketikun/i.test(url)));
 
@@ -44,7 +53,7 @@ try {
     check("OAO 画布主容器已启用", await page.locator(".oao-canvas-editor").count() === 1);
     check("工具栏采用 OAO 操作架布局", await page.locator(".oao-canvas-actions .oao-canvas-actions-create").count() === 1);
     await page.locator(".oao-canvas-actions .oao-canvas-actions-create").click();
-    const primaryCreateText = await page.locator('[role="menu"]:visible').last().innerText();
+    const primaryCreateText = await page.locator(".oao-canvas-action-menu:visible .ant-dropdown-menu").last().innerText();
     check("主创建入口只保留图片、视频、文本", /图片/.test(primaryCreateText) && /视频/.test(primaryCreateText) && /文本/.test(primaryCreateText) && !/音频|配置|分组/.test(primaryCreateText));
     await page.keyboard.press("Escape");
     check("左侧使用 OAO 章节索引按钮", await page.locator(".oao-canvas-rail-index-button").count() >= 3);
