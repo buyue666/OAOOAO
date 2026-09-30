@@ -82,13 +82,13 @@ try {
   const heroCenter = page.locator('img[alt="旷野中进行绘画与影像记录的 OAO 创作现场"]').locator('..')
   check('Hero starts full width', await heroCenter.evaluate(el => el.style.width) === '100%')
   check('No remote template video is embedded', await page.locator('video').count() === 0)
-  check('Clean background and extracted foreground are active', await page.locator('#hero img[src*="ai-creative-hero-background-clean-v1.png"]').count() === 1 && await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v3.png')) && await page.locator('[data-hero-canvas]').count() === 0)
+  check('AI platform background and unchanged artist foreground are active', await page.locator('#hero img[src*="ai-creative-hero-background-platform-v1.png"]').count() === 1 && await page.locator('[data-hero-foreground]').evaluate(image => image.getAttribute('src').includes('ai-creative-hero-user-v3.png')) && await page.locator('[data-hero-canvas]').count() === 0)
   await heroCenter.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())))
   await checkHeroComposition(page, 'desktop')
   await checkCanvasOcclusion(page, 'desktop')
   await snapshot(page, 'desktop-hero')
   const topLayerTransforms = await page.evaluate(() => ({
-    background: getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-clean-v1.png"]')).transform,
+    background: getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-platform-v1.png"]')).transform,
     brandmark: getComputedStyle(document.querySelector('[data-hero-brandmark]')).transform,
     foreground: getComputedStyle(document.querySelector('[data-hero-foreground]')).transform,
   }))
@@ -96,7 +96,7 @@ try {
   await settled(page)
   check('Hero layers move as soon as scrolling begins', await page.evaluate((top) => {
     const current = {
-      background: getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-clean-v1.png"]')).transform,
+      background: getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-platform-v1.png"]')).transform,
       brandmark: getComputedStyle(document.querySelector('[data-hero-brandmark]')).transform,
       foreground: getComputedStyle(document.querySelector('[data-hero-foreground]')).transform,
     }
@@ -104,7 +104,7 @@ try {
   }, topLayerTransforms))
   check('Hero layers use different parallax speeds', await page.evaluate(() => {
     const readY = (value) => Number(value.match(/,\s*(-?[\d.]+)\)$/)?.[1] || 0)
-    const background = readY(getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-clean-v1.png"]')).transform)
+    const background = readY(getComputedStyle(document.querySelector('#hero img[src*="ai-creative-hero-background-platform-v1.png"]')).transform)
     const wordmark = readY(getComputedStyle(document.querySelector('[data-hero-brandmark]')).transform)
     const foreground = readY(getComputedStyle(document.querySelector('[data-hero-foreground]')).transform)
     return Math.abs(background) < Math.abs(wordmark) && Math.abs(wordmark) < Math.abs(foreground)
@@ -137,7 +137,7 @@ try {
     await page.evaluate(() => scrollTo(0, 0))
     await settled(page)
     check(`No overflow at ${viewport.width}px`, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
-    check(`Hero retains photograph to the bottom at ${viewport.width}px`, await page.locator('#hero img[src*="ai-creative-hero-background-clean-v1.png"]').evaluate(image => image.getBoundingClientRect().bottom >= image.parentElement.getBoundingClientRect().bottom))
+    check(`Hero retains photograph to the bottom at ${viewport.width}px`, await page.locator('#hero img[src*="ai-creative-hero-background-platform-v1.png"]').evaluate(image => image.getBoundingClientRect().bottom >= image.parentElement.getBoundingClientRect().bottom))
     check(`Brand mark remains single at ${viewport.width}px`, await page.locator('[data-hero-brandmark]').count() === 1)
     await checkHeroComposition(page, `${viewport.width}px`)
     await snapshot(page, `hero-${viewport.width}`)
