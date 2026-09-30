@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, Layers3, Pencil, Plus, RefreshCw, ServerCog, Trash2, Zap } from 'lucide-react'
+import { Download, Layers3, Pencil, Plus, RefreshCw, Search, ServerCog, Trash2, Zap } from 'lucide-react'
 import { fetchChannelModels, getAdminSettings, listGenerationOperations, saveChannels, saveRouting } from '@/lib/studio/admin-api'
 import { collectAliasIssues, formatAliasInput, normalizeAliases, normalizeModelKey, parseAliasInput, requestNamesOf, validateAlias } from '@/lib/studio/model-alias'
 import type { AdminGenerationChannel, AdminSettings, ChannelModelConfig, LogicalModel, SystemChannel, SystemChannelModelFetchResult } from '@/lib/studio/admin-types'
@@ -444,9 +444,20 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
   const [costs, setCosts] = useState<Record<string, number>>(settings.modelPointCosts || {})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [capabilityFilter, setCapabilityFilter] = useState<'all' | Capability>('all')
+  const [enabledOnly, setEnabledOnly] = useState(false)
 
   const channelIds = useMemo(() => settings.systemChannels.map((channel) => channel.id), [settings.systemChannels])
   const channelModels = useMemo(() => new Map(settings.systemChannels.map((channel) => [channel.id, channel.models])), [settings.systemChannels])
+  const filteredModels = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    return models.filter((model) => {
+      const matchesQuery = !normalized || [model.id, model.name, ...(model.aliases || [])].some((value) => value.toLowerCase().includes(normalized))
+      const matchesCapability = capabilityFilter === 'all' || model.capability === capabilityFilter
+      return matchesQuery && matchesCapability && (!enabledOnly || model.enabled)
+    })
+  }, [capabilityFilter, enabledOnly, models, query])
 
   /**
    * 别名输入框是**本地草稿**：只有点「保存别名」才写进 `models`。
@@ -464,6 +475,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
   function patchModel(id: string, patch: Partial<LogicalModel>) {
     setModels((current) => current.map((model) => model.id === id ? { ...model, ...patch } : model))
   }
+
 
   /** 校验并写入别名；冲突时只提示、不写入。 */
   function applyAliasDraft(modelId: string) {
@@ -512,7 +524,8 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
       open
       onClose={onClose}
       title="逻辑模型与路由"
-      description="设置显示名称、能力类型、渠道绑定优先级与默认模型。权重与并发由渠道优先级决定。"
+      description="先按名称或能力筛选模型，再编辑别名、价格和渠道绑定；保存时一次提交当前配置。"
+      width="sm:max-w-6xl"
       footer={<>
         <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
         <ControlButton variant="primary" onClick={() => void submit()} disabled={busy}>{busy ? '保存中' : '保存路由配置'}</ControlButton>
@@ -536,9 +549,26 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           </div>
         </AdminSectionCard>
 
+        <AdminSectionCard title="模型筛选" description="模型较多时先缩小范围，再编辑下方结果；未匹配的模型不会被修改或删除。" className="p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="studio-field flex h-9 min-w-0 flex-1 items-center gap-2 border border-border bg-card px-3 text-muted-foreground sm:max-w-sm">
+              <Search className="size-4 shrink-0" aria-hidden="true" />
+              <input aria-label="搜索逻辑模型" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、标识或别名" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" />
+            </label>
+            <AdminSelect aria-label="按能力筛选模型" className="w-32" value={capabilityFilter} onChange={(event) => setCapabilityFilter(event.target.value as 'all' | Capability)}>
+              <option value="all">全部能力</option>
+              {capabilities.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </AdminSelect>
+            <label className="flex h-9 items-center gap-2 rounded-md border border-border px-3 text-xs text-muted-foreground">
+              <input type="checkbox" checked={enabledOnly} onChange={(event) => setEnabledOnly(event.target.checked)} />仅看启用
+            </label>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">显示 {filteredModels.length} / {models.length}</span>
+          </div>
+        </AdminSectionCard>
+
         <AdminSectionCard title="模型价格" description="每个逻辑模型的单次调用积分。0 表示使用生成倍率与上游价格计算。" className="p-4">
           <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
-            {models.map((model) => (
+            {filteredModels.map((model) => (
               <div key={model.id} className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-xs">{model.name || model.id}</span>
                 <AdminInput
@@ -553,14 +583,19 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           </div>
         </AdminSectionCard>
 
-        {models.map((model) => (
-          <AdminSectionCard
-            key={model.id}
-            title={`${model.name || model.id}`}
-            description={`标识 ${model.id} · 能力 ${capabilityLabel(model.capability)}`}
-            action={<ControlButton variant="ghost" size="sm" onClick={() => setModels((current) => current.filter((item) => item.id !== model.id))} aria-label={`删除 ${model.id}`}><Trash2 className="size-3.5" /></ControlButton>}
-            className="p-4"
-          >
+        {filteredModels.map((model) => (
+          <details key={model.id} open={model.id === settings.defaultModels.imageModel} className="admin-model-editor overflow-hidden rounded-lg border border-border bg-card/25">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0 truncate">{model.name || model.id}<span className="ml-2 font-mono text-[11px] font-normal text-muted-foreground">{model.id} · {capabilityLabel(model.capability)} · {model.bindings.length} 个绑定</span></span>
+              <span className="shrink-0 text-xs text-muted-foreground">展开编辑</span>
+            </summary>
+            <div className="border-t border-border p-4">
+              <AdminSectionCard
+                title={`${model.name || model.id}`}
+                description={`标识 ${model.id} · 能力 ${capabilityLabel(model.capability)}`}
+                action={<ControlButton variant="ghost" size="sm" onClick={() => setModels((current) => current.filter((item) => item.id !== model.id))} aria-label={`删除 ${model.id}`}><Trash2 className="size-3.5" /></ControlButton>}
+                className="p-4"
+              >
             <div className="grid gap-3 sm:grid-cols-2">
               <AdminField label="显示名称" hint="只影响界面展示，不能用于请求"><AdminInput aria-label={`${model.id} 显示名称`} value={model.name} onChange={(event) => patchModel(model.id, { name: event.target.value })} /></AdminField>
               <AdminField label="能力类型">
@@ -638,9 +673,12 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                 onClick={() => patchModel(model.id, { bindings: [...model.bindings, { id: `new-${Date.now()}`, channelId: channelIds[0] || '', upstreamModel: model.id, enabled: true, priority: model.bindings.length + 1 }] })}
               ><Plus className="size-3.5" />添加绑定</ControlButton>
             </div>
-          </AdminSectionCard>
+              </AdminSectionCard>
+            </div>
+          </details>
         ))}
 
+        {!filteredModels.length && <AdminEmpty title="没有匹配的逻辑模型" description="调整搜索关键字、能力筛选或“仅看启用”条件后继续。" />}
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       </div>
     </AdminDrawer>

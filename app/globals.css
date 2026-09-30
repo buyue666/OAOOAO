@@ -2033,6 +2033,16 @@
   background: color-mix(in srgb, var(--studio-accent) 10%, transparent);
 }
 
+.admin-console .admin-model-editor > summary {
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.admin-console .admin-model-editor > summary:hover,
+.admin-console .admin-model-editor[open] > summary {
+  background: color-mix(in srgb, var(--studio-accent) 10%, transparent);
+  color: var(--foreground);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .studio-app-shell[data-studio-skin='gradient']::before { animation: none; }
 }
