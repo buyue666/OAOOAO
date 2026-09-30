@@ -17,10 +17,10 @@ const navigation = [
   { key: 'landingAbout', href: '#about' },
 ] as const
 const scenes = [
-  { src: '/media/generated/hero-film-v2.png', alt: '片场里的镜头与光线', title: '镜头先于答案' },
-  { src: '/media/generated/scene-storyboard-v2.png', alt: '从分镜草图展开的故事', title: '把故事拆成画面' },
-  { src: '/media/generated/video-aurora-poster-v2.png', alt: '视频创作中的极光画面', title: '让静止的画面流动' },
-  { src: '/media/generated/studio-still-life-v2.png', alt: '桌面上的分镜与创作素材', title: '把素材留在同一处' },
+  { src: '/media/generated/landing-drama-v1.png', alt: '连接人物、场景与镜头的短剧画面', title: '镜头先于答案' },
+  { src: '/media/generated/landing-agent-v1.png', alt: '由灵感和素材组成的创意工作桌', title: '把故事拆成画面' },
+  { src: '/media/generated/landing-video-v1.png', alt: '用光线和时间表现运动的视频画面', title: '让静止的画面流动' },
+  { src: '/media/generated/landing-canvas-v1.png', alt: '自由画布中的素材与节点关系', title: '把素材留在同一处' },
 ]
 
 function useReducedMotion() {
@@ -125,7 +125,7 @@ function Hero() {
       <Image src="/media/generated/ai-creative-hero-user-v3.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} style={{ transform: `translate(-50%, ${foregroundShift}%)` }} />
       <div className={styles.heroMessage} style={{ opacity: textOpacity }}><span className={styles.heroEyebrow}>{t('heroEyebrow')}</span><h1>{t('heroCaption').split('\n').map((line) => <span key={line}>{line}<br /></span>)}</h1><p>{t('heroDescription')}</p><div className={styles.heroActions}><Link href="/studio" className={styles.heroPrimary}>{t('heroPrimary')} <ArrowRight size={17} /></Link><a href="#create" className={styles.heroSecondary}>{t('heroSecondary')}</a></div></div>
     </div> : <div key={side} className={styles.heroSides} style={{ width: imageProgress * 40 + '%', gap: imageProgress * 8, opacity: imageProgress, transform: 'translate(' + (side === 'left' ? -100 + imageProgress * 100 : 100 - imageProgress * 100) + '%, ' + (-imageProgress * 15) + '%)' }}>
-      {(side === 'left' ? [1, 2] : [3, 4]).map((number) => <div key={number} className={styles.heroPanel}><Image src={(side === 'left' ? ['/media/generated/hero-film-v2.png', '/media/generated/scene-character-v2.png'] : ['/media/generated/scene-product-v2.png', '/media/generated/video-aurora-poster-v2.png'])[number - (side === 'left' ? 1 : 3)]} alt={['片场镜头参考', '角色设计参考', '故事道具参考', '极光影像参考'][number - 1]} fill sizes="20vw" className={styles.cover} /></div>)}
+      {(side === 'left' ? [1, 2] : [3, 4]).map((number) => <div key={number} className={styles.heroPanel}><Image src={(side === 'left' ? ['/media/generated/landing-image-v1.png', '/media/generated/landing-agent-v1.png'] : ['/media/generated/landing-canvas-v1.png', '/media/generated/landing-video-v1.png'])[number - (side === 'left' ? 1 : 3)]} alt={['图片创作视觉参考', 'Agent 创意组织参考', '自由画布视觉参考', '视频创作视觉参考'][number - 1]} fill sizes="20vw" className={styles.cover} /></div>)}
     </div>)}
   </div><div className={styles.heroScrollHint} style={{ opacity: textOpacity }}><span>{t('exploreCreation')}</span><ArrowDown size={17} /></div></div></section>
 }
@@ -140,11 +140,11 @@ function Capabilities() {
   const { locale, t } = useLocale()
   const isChinese = locale === 'zh-CN'
   const items = [
-    { name: t('imageCreation'), description: isChinese ? '从一句提示词到一组可用画面。' : 'Turn one prompt into a set of usable frames.', image: '/media/generated/studio-still-life-v2.png', href: '/image', Icon: ImageIcon, accent: 'image' },
-    { name: t('videoCreation'), description: isChinese ? '让画面拥有节奏、镜头与时间。' : 'Give an image rhythm, shots and time.', image: '/media/generated/video-aurora-poster-v2.png', href: '/video', Icon: Video, accent: 'video' },
-    { name: t('directorCreation'), description: isChinese ? '让 Agent 帮你梳理创意与下一步。' : 'Let Agent help shape the idea and next step.', image: '/media/generated/scene-storyboard-v2.png', href: '/agent', Icon: Bot, accent: 'agent' },
-    { name: t('canvasCreation'), description: isChinese ? '把素材、节点与想法放在一张画布上。' : 'Keep references, nodes and ideas on one canvas.', image: '/media/generated/action-reference-v2.png', href: '/canvas', Icon: LayoutPanelTop, accent: 'canvas' },
-    { name: t('dramaCreation'), description: isChinese ? '从人物、场景到镜头，组织完整短剧。' : 'Shape characters, scenes and shots into a short drama.', image: '/media/generated/scene-character-v2.png', href: '/drama', Icon: Clapperboard, accent: 'drama' },
+    { name: t('imageCreation'), description: isChinese ? '从一句提示词到一组可用画面。' : 'Turn one prompt into a set of usable frames.', image: '/media/generated/landing-image-v1.png', href: '/image', Icon: ImageIcon, accent: 'image' },
+    { name: t('videoCreation'), description: isChinese ? '让画面拥有节奏、镜头与时间。' : 'Give an image rhythm, shots and time.', image: '/media/generated/landing-video-v1.png', href: '/video', Icon: Video, accent: 'video' },
+    { name: t('directorCreation'), description: isChinese ? '让 Agent 帮你梳理创意与下一步。' : 'Let Agent help shape the idea and next step.', image: '/media/generated/landing-agent-v1.png', href: '/agent', Icon: Bot, accent: 'agent' },
+    { name: t('canvasCreation'), description: isChinese ? '把素材、节点与想法放在一张画布上。' : 'Keep references, nodes and ideas on one canvas.', image: '/media/generated/landing-canvas-v1.png', href: '/canvas', Icon: LayoutPanelTop, accent: 'canvas' },
+    { name: t('dramaCreation'), description: isChinese ? '从人物、场景到镜头，组织完整短剧。' : 'Shape characters, scenes and shots into a short drama.', image: '/media/generated/landing-drama-v1.png', href: '/drama', Icon: Clapperboard, accent: 'drama' },
   ]
   return <section id="models" className={styles.capabilities} aria-label="创作能力"><div className={styles.sectionHeading}><div><span className={styles.sectionEyebrow}>{t('landingModels')}</span><h2>{t('capabilityTitle')}</h2><p>{t('capabilityDescription')}</p></div><Link href="/studio" className={styles.outlineLink}>{t('viewAllCreation')} <ArrowRight size={17} /></Link></div><div className={styles.capabilityGrid}>{items.map(({ name, description, image, href, Icon, accent }) => <Link href={href} key={href} className={styles.capabilityCard} data-accent={accent}><div className={styles.capabilityImage}><Image src={image} alt={name} fill sizes="(max-width: 767px) 84vw, 30vw" className={styles.cover} /></div><div className={styles.capabilityMeta}><div className={styles.capabilityTitle}><Icon size={18} /><h3>{name}</h3></div><p>{description}</p><ArrowRight size={18} aria-hidden="true" /></div></Link>)}</div></section>
 }
@@ -175,12 +175,12 @@ function Editorial() {
   const specs = locale === 'zh-CN'
     ? [[t('platformImage'), '一张图片'], [t('platformVideo'), '一段视频'], [t('canvasCreation'), '一片画布'], [t('dramaCreation'), '一个故事']]
     : [[t('platformImage'), 'One image'], [t('platformVideo'), 'One video'], [t('canvasCreation'), 'One canvas'], [t('dramaCreation'), 'One story']]
-  return <section className={styles.editorial} aria-label="OAO 创作方式"><div className={styles.editorialMedia}><Image src="/media/generated/hero-film-v2.png" alt="OAO 创作影像中的片场与镜头" fill sizes="100vw" className={styles.cover} /></div><div className={styles.specs}>{specs.map(([label, value]) => <div key={label}><p>{label}</p><h3>{value}</h3></div>)}</div></section>
+  return <section className={styles.editorial} aria-label="OAO 创作方式"><div className={styles.editorialMedia}><Image src="/media/generated/landing-editorial-v1.png" alt="OAO 创作平台中图片、视频与故事相互连接的视觉" fill sizes="100vw" className={styles.cover} /></div><div className={styles.specs}>{specs.map(([label, value]) => <div key={label}><p>{label}</p><h3>{value}</h3></div>)}</div></section>
 }
 
 function About() {
   const { t } = useLocale()
-  return <section id="about" className={styles.about}><Image src="/media/generated/studio-still-life-v2.png" alt="OAO 创作桌面上的分镜与素材" fill sizes="100vw" className={styles.cover} /><div className={styles.aboutShade} /><div className={styles.aboutText}><span className={styles.sectionEyebrow}>{t('enterStudio')}</span><h2>{t('platformTitle').split('\n')[0]}</h2><Link href="/studio" className={styles.aboutCta}>{t('enterStudio')} <ArrowRight size={18} /></Link></div></section>
+  return <section id="about" className={styles.about}><Image src="/media/generated/landing-editorial-v1.png" alt="OAO 创作平台中的视觉素材与故事流动" fill sizes="100vw" className={styles.cover} /><div className={styles.aboutShade} /><div className={styles.aboutText}><span className={styles.sectionEyebrow}>{t('enterStudio')}</span><h2>{t('platformTitle').split('\n')[0]}</h2><Link href="/studio" className={styles.aboutCta}>{t('enterStudio')} <ArrowRight size={18} /></Link></div></section>
 }
 
 function Footer() {
