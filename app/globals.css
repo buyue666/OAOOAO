@@ -2357,6 +2357,19 @@
   animation: liquid-glass-sheen 9s ease-in-out infinite;
 }
 
+/* 参数面板是长时间滚动的实体工作区，不使用整面斜向折射高光。
+   原来的 `inset: 1px` + 116deg 渐变会在面板左侧形成一条贯穿上下的白色半透明带，
+   看起来像多了一层遮罩，也会随滚动产生明显的亮度变化；这里恢复为仅一像素的顶部边缘高光。 */
+.studio-app-shell[data-studio-skin='gradient'] .studio-workspace-shell .lg-glass::before {
+  inset: 0;
+  height: 1px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  opacity: 1;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 @keyframes liquid-glass-sheen {
   0%, 18% { transform: translateX(0) rotate(16deg); opacity: 0; }
   32% { opacity: 0.58; }
