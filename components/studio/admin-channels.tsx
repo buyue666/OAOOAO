@@ -7,6 +7,7 @@ import { collectAliasIssues, formatAliasInput, normalizeAliases, normalizeModelK
 import type { AdminGenerationChannel, AdminSettings, ChannelModelConfig, LogicalModel, SystemChannel, SystemChannelModelFetchResult } from '@/lib/studio/admin-types'
 import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
+import { ModelIcon } from './model-icon'
 import {
   AdminDefinition,
   AdminDrawer,
@@ -510,6 +511,18 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           if (!channelIds.includes(binding.channelId)) throw new Error(`模型 ${model.name || model.id} 绑定了不存在的渠道 ${binding.channelId}`)
         }
       }
+      const routeAliasOwners = new Map<string, string>()
+      for (const model of models) {
+        for (const binding of model.bindings) {
+          const alias = binding.requestAlias?.trim()
+          if (!alias) continue
+          const key = normalizeModelKey(alias)
+          const owner = routeAliasOwners.get(key)
+          const currentOwner = `${model.id}:${binding.channelId}`
+          if (owner && owner !== currentOwner) throw new Error(`请求别名 ${alias} 被多个渠道入口使用，请为每个售卖入口设置唯一别名`)
+          routeAliasOwners.set(key, currentOwner)
+        }
+      }
       // 别名冲突必须在提交前拦住：保存后行为会随数组顺序变化。
       const aliasIssues = collectAliasIssues(models)
       if (aliasIssues.length) throw new Error(aliasIssues[0])
@@ -553,7 +566,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           </div>
         </AdminSectionCard>
 
-        <AdminSectionCard title="逻辑模型目录" description="选择一个模型查看和修改它的路由设置；列表只负责定位，不会影响未选中的模型。" className="p-4 xl:order-1">
+        <AdminSectionCard title="可售模型目录" description="一个逻辑模型可以拆成多个渠道入口；每个入口可使用独立别名、价格和图标。" className="p-4 xl:order-1">
           <div className="flex flex-wrap items-center gap-2">
             <label className="studio-field flex h-9 min-w-0 flex-1 items-center gap-2 border border-border bg-card px-3 text-muted-foreground sm:max-w-sm">
               <Search className="size-4 shrink-0" aria-hidden="true" />
@@ -577,8 +590,8 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                 onClick={() => setSelectedModelId(model.id)}
                 className={cn('min-w-0 rounded-lg border px-3 py-2.5 text-left transition-colors', selectedModel?.id === model.id ? 'border-studio-accent/55 bg-studio-accent/10' : 'border-border bg-card/45 hover:bg-muted')}
               >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-xs font-semibold">{model.name || model.id}</span>
+                  <span className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2"><span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted p-1 text-studio-accent"><ModelIcon model={model} /></span><span className="min-w-0 truncate text-xs font-semibold">{model.name || model.id}</span></span>
                   <StatusBadge tone={model.enabled ? 'success' : 'muted'}>{model.enabled ? '启用' : '停用'}</StatusBadge>
                 </span>
                 <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">{model.id}</span>
@@ -604,6 +617,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               >
             <div className="grid gap-3 sm:grid-cols-2">
               <AdminField label="显示名称" hint="只影响界面展示，不能用于请求"><AdminInput aria-label={`${model.id} 显示名称`} value={model.name} onChange={(event) => patchModel(model.id, { name: event.target.value })} /></AdminField>
+              <AdminField label="默认模型图标" hint="支持站内路径或 HTTPS 图片地址；绑定可单独覆盖"><AdminInput aria-label={`${model.id} 默认模型图标`} value={model.iconUrl || ''} placeholder="/media/models/nano.png 或 https://…" onChange={(event) => patchModel(model.id, { iconUrl: event.target.value.trim() || undefined })} /></AdminField>
               <AdminField label="能力类型">
                 <AdminSelect value={model.capability} onChange={(event) => patchModel(model.id, { capability: event.target.value as LogicalModel['capability'] })}>
                   {capabilities.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -656,13 +670,19 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
             </div>
             <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
               <p className="text-xs font-medium text-muted-foreground">渠道绑定（优先级数字越小越先选中；权重决定同级流量分配；并发上限 0 表示沿用渠道默认）</p>
-              {model.bindings.map((binding, index) => (
+            {model.bindings.map((binding, index) => {
+              const requestKey = binding.requestAlias?.trim() || binding.upstreamModel
+              const routeCost = costs[requestKey] ?? costs[model.id] ?? 0
+              return (
                 <div key={binding.id || index} className="flex flex-wrap items-center gap-2">
                   <AdminSelect className="w-40" value={binding.channelId} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, channelId: event.target.value, id: `${event.target.value}:${item.upstreamModel}` } : item) })}>
                     <option value="">选择渠道</option>
                     {channelIds.map((id) => <option key={id} value={id}>{id}</option>)}
                   </AdminSelect>
                   <AdminInput className="w-44" value={binding.upstreamModel} placeholder="上游模型 ID" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, upstreamModel: event.target.value, id: `${item.channelId}:${event.target.value}` } : item) })} />
+                  <AdminInput className="w-44" value={binding.requestAlias || ''} placeholder="对外别名（可选）" aria-label={`${model.id} 渠道${index + 1} 对外别名`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, requestAlias: event.target.value.trim() || undefined } : item) })} />
+                  <AdminInput className="w-24" type="number" min="0" step="0.01" value={routeCost} aria-label={`${model.id} 渠道${index + 1} 单价`} title={binding.requestAlias ? `别名 ${binding.requestAlias} 的单次积分` : '该上游模型的单次积分'} onChange={(event) => setCosts((current) => ({ ...current, [requestKey]: Number(event.target.value) || 0 }))} />
+                  <AdminInput className="w-44" value={binding.iconUrl || ''} placeholder="入口图标 URL" aria-label={`${model.id} 渠道${index + 1} 图标`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, iconUrl: event.target.value.trim() || undefined } : item) })} />
                   <AdminInput className="w-20" type="number" min="1" value={binding.priority} aria-label="优先级" title="优先级：数字越小越先被选中" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, priority: Number(event.target.value) || 1 } : item) })} />
                   <AdminInput className="w-20" type="number" min="1" max="1000" value={binding.weight ?? 1} aria-label="权重" title="权重：同级渠道之间的流量分配比例" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, weight: Number(event.target.value) || 1 } : item) })} />
                   <AdminInput
@@ -674,7 +694,8 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                   <ControlButton variant="ghost" size="sm" aria-label="移除绑定" onClick={() => patchModel(model.id, { bindings: model.bindings.filter((_, position) => position !== index) })}><Trash2 className="size-3.5" /></ControlButton>
                   {channelModels.has(binding.channelId) && !channelModels.get(binding.channelId)?.includes(binding.upstreamModel) && <StatusBadge tone="warning">渠道未列出该模型</StatusBadge>}
                 </div>
-              ))}
+              )
+            })}
               <ControlButton
                 variant="secondary" size="sm" className="self-start"
                 onClick={() => patchModel(model.id, { bindings: [...model.bindings, { id: `new-${Date.now()}`, channelId: channelIds[0] || '', upstreamModel: model.id, enabled: true, priority: model.bindings.length + 1 }] })}

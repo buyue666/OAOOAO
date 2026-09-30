@@ -203,12 +203,15 @@ export type SessionLogicalModel = {
   name: string
   capability: 'text' | 'image' | 'video' | 'audio'
   enabled: boolean
+  iconUrl?: string
   /** 额外可请求的名字；`id` 仍是稳定标识与计价键。 */
   aliases?: string[]
   bindings: Array<{
     id: string
     channelId: string
     upstreamModel: string
+    requestAlias?: string
+    iconUrl?: string
     enabled: boolean
     priority: number
     capabilityProfile?: {

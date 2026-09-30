@@ -132,6 +132,8 @@ export interface ModelConfig {
   creditCost: number
   capabilities: ModelCapability
   status: '可用' | '演示配置' | '维护中'
+  /** 管理员配置的模型图标；没有配置时由界面按能力显示默认图标。 */
+  iconUrl?: string
 }
 
 export interface GenerationSettings {

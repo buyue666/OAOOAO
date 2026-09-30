@@ -8,6 +8,7 @@ import { useStudio } from '@/lib/studio/store'
 import { readIntentFiles, saveCreateIntent } from '@/lib/studio/create-intent'
 import { cn } from '@/lib/utils'
 import { MediaThumb, SelectField, StatusBadge, Tooltip, type Tone } from './ui'
+import { ModelIcon } from './model-icon'
 
 type CreateMode = 'agent' | 'image' | 'video' | 'text' | 'drama'
 
@@ -232,7 +233,7 @@ export function HomePage() {
                 </Tooltip>
                 <div ref={modelPickerRef} className="relative min-w-0 shrink">
                   <button type="button" onClick={() => setModelDropdownOpen((value) => !value)} aria-label="选择模型" aria-expanded={modelDropdownOpen} aria-haspopup="listbox" className="inline-flex h-9 min-w-0 max-w-[230px] items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-                    <Sparkles className="size-4 shrink-0 text-studio-accent" aria-hidden="true" />
+                    <span className="flex size-4 shrink-0 items-center justify-center text-studio-accent"><ModelIcon model={selectedModel} /></span>
                     <span className="truncate">{selectedModel ? `${selectedModel.shortName} · ${selectedModel.creditCost || 0} 积分` : mode === 'text' ? '导演 Agent 自动选择' : '选择模型'}</span>
                     <ChevronDown className={cn('size-3.5 shrink-0 transition-transform', modelDropdownOpen && 'rotate-180')} aria-hidden="true" />
                   </button>
@@ -243,7 +244,7 @@ export function HomePage() {
                           <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{provider}</p>
                           {items.map((item) => (
                             <button key={item.id} type="button" role="option" aria-selected={selectedModel?.id === item.id} onClick={() => { setSelectedModelId(item.id); setModelDropdownOpen(false) }} className={cn('studio-home-model-option flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors', selectedModel?.id === item.id && 'studio-home-model-option-active')}>
-                              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-studio-accent"><Sparkles className="size-3.5" aria-hidden="true" /></span>
+                              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted p-1 text-studio-accent"><ModelIcon model={item} /></span>
                               <span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="truncate text-xs font-semibold text-foreground">{item.name}</span>{selectedModel?.id === item.id && <Check className="size-3.5 shrink-0 text-studio-accent" aria-hidden="true" />}</span><span className="mt-0.5 block line-clamp-2 text-[11px] leading-4 text-muted-foreground">{item.description || '当前可用模型'}</span><span className="mt-1.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground"><span className="rounded-full bg-muted px-1.5 py-0.5">{item.capabilities.ratios.slice(0, 2).join(' · ') || '自动比例'}</span>{item.capabilities.durations.length > 0 && <span className="rounded-full bg-muted px-1.5 py-0.5">{item.capabilities.durations.slice(0, 2).join(' · ')}</span>}<span className="rounded-full bg-studio-accent/10 px-1.5 py-0.5 text-studio-accent">{item.creditCost || 0} 积分起</span></span></span>
                             </button>
                           ))}

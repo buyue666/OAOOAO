@@ -52,11 +52,17 @@ export function modelsFromSession(settings: SessionGenerationSettings | undefine
   const logicalModels = settings?.logicalModels ?? []
   return logicalModels
     .filter((model) => model.enabled && model.bindings.some((binding) => binding.enabled))
-    .map((model) => toModelConfig(model, settings))
+    .flatMap((model) => {
+      const bindings = model.bindings.filter((binding) => binding.enabled)
+      const aliasedBindings = bindings.filter((binding) => binding.requestAlias?.trim())
+      // 保留逻辑模型作为默认/兜底入口，同时把每个绑定别名作为独立可售入口展示。
+      return [toModelConfig(model, settings), ...aliasedBindings.map((binding) => toModelConfig(model, settings, binding))]
+    })
 }
 
-function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationSettings): ModelConfig {
-  const profile = model.bindings.find((binding) => binding.enabled)?.capabilityProfile
+function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationSettings, binding?: SessionLogicalModel['bindings'][number]): ModelConfig {
+  const selectedBinding = binding || model.bindings.find((item) => item.enabled)
+  const profile = selectedBinding?.capabilityProfile
   /**
    * 后端**明确声明**的能力：沿用「只有 profile 明确声明才算支持」的原语义。
    *
@@ -88,17 +94,22 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
   }
   const kind = kindByCapability[model.capability] ?? 'image'
   const capabilityLabel = kindLabels[model.capability] ?? model.capability
+  const requestId = selectedBinding?.requestAlias?.trim() || model.id
+  const requestName = selectedBinding?.requestAlias?.trim() || model.name || model.id
+  const configuredCost = settings?.modelPointCosts || {}
+  const cost = configuredCost[requestId] ?? (selectedBinding ? configuredCost[selectedBinding.upstreamModel] : undefined) ?? configuredCost[model.id]
   return {
-    id: model.id,
-    name: model.name || model.id,
-    shortName: model.name || model.id,
+    id: requestId,
+    name: requestName,
+    shortName: requestName,
     provider: capabilityLabel,
     kind,
     capability: model.capability,
-    description: `后台配置的${capabilityLabel}模型 · ${model.bindings.filter((binding) => binding.enabled).length} 条可用渠道`,
-    creditCost: Number(settings?.modelPointCosts?.[model.id]) || 0,
+    description: selectedBinding?.requestAlias ? `绑定 ${selectedBinding.channelId} · 上游 ${selectedBinding.upstreamModel}` : `后台配置的${capabilityLabel}模型 · ${model.bindings.filter((item) => item.enabled).length} 条可用渠道`,
+    creditCost: Number(cost) || 0,
     capabilities: capability,
     status: '可用',
+    iconUrl: selectedBinding?.iconUrl || model.iconUrl,
   }
 }
 

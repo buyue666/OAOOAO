@@ -294,6 +294,10 @@ export type LogicalModelBinding = {
   id: string
   channelId: string
   upstreamModel: string
+  /** 对外请求名；为空时沿用逻辑模型 ID。 */
+  requestAlias?: string
+  /** 该渠道入口在模型选择器中使用的图标。 */
+  iconUrl?: string
   enabled: boolean
   priority: number
   weight?: number
@@ -305,6 +309,8 @@ export type LogicalModel = {
   name: string
   capability: 'text' | 'image' | 'video' | 'audio'
   enabled: boolean
+  /** 逻辑模型的默认图标；绑定未设置图标时使用。 */
+  iconUrl?: string
   bindings: LogicalModelBinding[]
   /**
    * 可请求别名。

@@ -12,6 +12,7 @@ import type { Asset, AssetCategory, CanvasNodeData, ModelConfig } from '@/lib/st
 import { assetCategoryLabels } from '@/lib/studio/reference-assets'
 import { cn } from '@/lib/utils'
 import { IconAction, MediaThumb } from './ui'
+import { ModelIcon } from './model-icon'
 
 type CanvasGenerationMode = 'image' | 'video' | 'text' | 'agent'
 
@@ -54,7 +55,7 @@ function taskStatusLabel(task: GenerationTaskView) {
   return '生成中'
 }
 
-function GlassPicker({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
+function GlassPicker({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string; model?: Pick<ModelConfig, 'iconUrl' | 'capability'> }>; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -78,7 +79,7 @@ function GlassPicker({ label, value, options, onChange }: { label: string; value
         <div className="oao-canvas-select-menu" role="listbox" aria-label={label}>
           {options.map((option) => (
             <button key={option.value} type="button" role="option" aria-selected={option.value === value} className={cn('oao-canvas-select-option', option.value === value && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false) }}>
-              <span>{option.label}</span>{option.value === value && <Check className="size-3.5" aria-hidden="true" />}
+              <span className="flex min-w-0 items-center gap-2"><span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-black/10 p-1"><ModelIcon model={option.model} /></span><span className="truncate">{option.label}</span></span>{option.value === value && <Check className="size-3.5" aria-hidden="true" />}
             </button>
           ))}
         </div>
@@ -222,7 +223,7 @@ export function CanvasGenerationPanel({
           <label className="oao-canvas-generation-field"><span>创作描述</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === 'agent' ? '告诉 Agent 你要完成什么创作…' : '描述这个节点要生成的画面或镜头…'} rows={3} /></label>
           {mode !== 'agent' && (
             <div className="oao-canvas-generation-controls">
-              <GlassPicker label="模型" value={selectedModel?.id || ''} options={models.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost || 0} 积分` }))} onChange={setModelId} />
+              <GlassPicker label="模型" value={selectedModel?.id || ''} options={models.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost || 0} 积分`, model: item }))} onChange={setModelId} />
               {mode !== 'text' && <><GlassPicker label="比例" value={ratio} options={ratios.map((item) => ({ value: item, label: item }))} onChange={setRatio} /><GlassPicker label="清晰度" value={quality} options={qualities.map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} onChange={setQuality} /></>}
               {mode === 'video' && <GlassPicker label="时长" value={`${seconds} 秒`} options={durations.map((item) => ({ value: item, label: item }))} onChange={(value) => setSeconds(secondsOf(value) || 8)} />}
             </div>
