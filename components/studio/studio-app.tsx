@@ -58,7 +58,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
         <Topbar onMenuClick={() => setMobileNavOpen(true)} />
         <main className="min-h-[calc(100dvh-60px)]">
           {/* 路由切换时内容轻微淡入并上移，不产生累计布局偏移 */}
-          <div key={pathname} className="motion-page">{children}</div>
+          <div key={pathname} className={isWorkspace ? undefined : 'motion-page'}>{children}</div>
         </main>
       </div>
       <MobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />

@@ -66,8 +66,7 @@ export function WorkspaceShell({
     <form onSubmit={onSubmit} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 py-5 sm:px-5 md:gap-5 md:px-8 md:py-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10">
       <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="order-2 hidden min-h-0 min-w-0 xl:order-1 xl:block">
-          {/* 创作参数面板：常驻玻璃面板，让参数区与右侧预览形成明确前后景关系。 */}
-          <div className="lg-glass flex h-full min-h-0 flex-col">
+          <div className="workspace-params-glass flex h-full min-h-0 flex-col">
 
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
               <h2 className="text-sm font-semibold text-foreground">{paramsTitle}</h2>
@@ -106,7 +105,7 @@ export function WorkspaceShell({
               <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200', paramsOpen && 'rotate-180')} aria-hidden="true" />
             </button>
             {paramsOpen && (
-              <div id="workspace-mobile-params" className="studio-surface motion-panel mt-3 p-4">
+              <div id="workspace-mobile-params" className="workspace-params-glass mt-3 p-4">
                 {params}
               </div>
             )}
@@ -115,7 +114,7 @@ export function WorkspaceShell({
       </div>
 
       {/* 移动端吸底提交条：玻璃表面，始终可操作。 */}
-      <div className="lg-glass-bar fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border px-4 py-3 shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
+      <div className="workspace-submit-bar fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border px-4 py-3 shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] text-muted-foreground">预计消耗</p>
           <p className="text-sm font-semibold tabular-nums text-studio-accent">{credits} 积分</p>
