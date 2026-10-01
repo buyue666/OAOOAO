@@ -4,14 +4,16 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Cloud, Database, Gem, Mail, RefreshCw, Save, Server, Settings2, ShieldCheck, Wallet } from 'lucide-react'
 import {
   getAdminSettings,
+  getPaymentConfig,
   getObjectStorage,
   sendTestMail,
   testObjectStorage,
   updateObjectStorage,
   updateAdminSettings,
+  updatePaymentProviderConfig,
   type AdminSettingsPatch,
 } from '@/lib/studio/admin-api'
-import type { AdminSettings, GenerationConcurrencySettings, GenerationDefaultSettings, MailSettings, ObjectStorageSettings, SiteSettings } from '@/lib/studio/admin-types'
+import type { AdminPaymentConfigSummary, AdminPaymentProviderConfig, AdminSettings, GenerationConcurrencySettings, GenerationDefaultSettings, MailSettings, ObjectStorageSettings, SiteSettings } from '@/lib/studio/admin-types'
 import { ControlButton, StatusBadge } from './ui'
 import {
   AdminDefinition,
@@ -29,13 +31,14 @@ import {
 } from './admin-kit'
 import { useAdminReload, useAdminSession } from './admin-shell'
 
-type SectionId = 'site' | 'account' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
+type SectionId = 'site' | 'account' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
 
 export function AdminSettingsPanel() {
   const session = useAdminSession()
   const { reloadKey } = useAdminReload()
   const [settings, setSettings] = useState<AdminSettings | null>(null)
   const [storage, setStorage] = useState<ObjectStorageSettings | null>(null)
+  const [paymentConfig, setPaymentConfig] = useState<AdminPaymentConfigSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -49,8 +52,8 @@ export function AdminSettingsPanel() {
 
   const load = useCallback(() => {
     setLoading(true); setError('')
-    Promise.all([getAdminSettings(), canSystem ? getObjectStorage().catch(() => null) : Promise.resolve(null)])
-      .then(([next, objectStorage]) => { setSettings(next); setStorage(objectStorage) })
+    Promise.all([getAdminSettings(), canSystem ? getObjectStorage().catch(() => null) : Promise.resolve(null), canBilling ? getPaymentConfig().catch(() => null) : Promise.resolve(null)])
+      .then(([next, objectStorage, nextPaymentConfig]) => { setSettings(next); setStorage(objectStorage); setPaymentConfig(nextPaymentConfig) })
       .catch((reason) => setError(reason instanceof Error ? reason.message : '系统设置加载失败'))
       .finally(() => setLoading(false))
   }, [canSystem, reloadKey])
@@ -81,6 +84,7 @@ export function AdminSettingsPanel() {
   const sections: Array<{ id: SectionId; label: string; visible: boolean }> = [
     { id: 'site', label: '站点与品牌', visible: canSystem },
     { id: 'account', label: '注册与积分', visible: canSystem || canBilling },
+    { id: 'billing', label: '运营与支付', visible: canBilling },
     { id: 'points', label: '计费与权益', visible: canBilling },
     { id: 'generation', label: '生成限制与默认参数', visible: canUpstream },
     { id: 'mail', label: '邮件服务', visible: canSystem },
@@ -104,6 +108,7 @@ export function AdminSettingsPanel() {
 
       {active === 'site' && <SiteSection settings={settings} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} />}
       {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canBilling={canBilling} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
+      {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} onModeSave={(patch, summary) => save('运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
       {active === 'points' && <PointsSection settings={settings} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
       {active === 'generation' && <GenerationSection settings={settings} onSave={(patch, summary) => save('生成设置', patch, summary)} saving={saving} />}
       {active === 'mail' && <MailSection settings={settings} onSave={(patch, summary) => save('邮件设置', patch, summary)} saving={saving} />}
@@ -186,6 +191,128 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
   )
 }
 
+/* ------------------------------ 运营与支付 ------------------------------ */
+
+function BillingSection({
+  settings,
+  paymentConfig,
+  onModeSave,
+  onPaymentConfigChange,
+  onMessage,
+  onError,
+}: {
+  settings: AdminSettings
+  paymentConfig: AdminPaymentConfigSummary | null
+  onModeSave: (patch: AdminSettingsPatch, summary: string[]) => void
+  onPaymentConfigChange: (value: AdminPaymentConfigSummary) => void
+  onMessage: (value: string) => void
+  onError: (value: string) => void
+}) {
+  const mode = settings.operationMode === 'commercial' ? 'commercial' : 'self_use'
+  const epay = paymentConfig?.providers.find((provider) => provider.id === 'epay')
+
+  function submitMode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const nextMode = data.get('operationMode') === 'commercial' ? 'commercial' : 'self_use'
+    onModeSave({ operationMode: nextMode }, nextMode === mode ? [] : ['站点运营模式'])
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <form onSubmit={submitMode}>
+        <AdminSectionCard title="站点运营模式" description="自用模式关闭用户充值、套餐购买和在线支付；商用模式才会开放公开计费入口。模式限制由服务端同时执行，不能通过直接调用接口绕过。">
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_1fr] sm:items-end">
+            <AdminField label="当前模式">
+              <AdminSelect name="operationMode" defaultValue={mode}>
+                <option value="self_use">自用模式</option>
+                <option value="commercial">商用模式</option>
+              </AdminSelect>
+            </AdminField>
+            {mode === 'self_use'
+              ? <AdminNotice tone="warning">当前用户只能使用已有积分，前台不会显示充值入口；管理员仍可手动调整积分。</AdminNotice>
+              : <AdminNotice tone="neutral">商用模式已允许公开套餐与支付入口，但正式开放前仍需完成支付回调、退款和对账验证。</AdminNotice>}
+          </div>
+          <div className="mt-4 flex justify-end"><ControlButton type="submit" variant="primary"><Save className="size-3.5" />保存运营模式</ControlButton></div>
+        </AdminSectionCard>
+      </form>
+
+      <PaymentProviderEditor provider={epay} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />
+
+      {paymentConfig && <AdminSectionCard title="支付渠道概览" description="状态只反映当前配置是否满足下单与回调要求，不会展示任何密钥内容。">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {paymentConfig.providers.map((provider) => (
+            <div key={provider.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs">
+              <div className="min-w-0"><p className="truncate font-medium text-foreground">{provider.name}</p><p className="mt-1 truncate text-[11px] text-muted-foreground">{provider.sourceLabel || '未配置'}</p></div>
+              <StatusBadge tone={provider.ready ? 'success' : provider.enabled ? 'warning' : 'neutral'}>{provider.ready ? '可用' : provider.enabled ? '待配置' : '已关闭'}</StatusBadge>
+            </div>
+          ))}
+        </div>
+      </AdminSectionCard>}
+    </div>
+  )
+}
+
+function PaymentProviderEditor({
+  provider,
+  onSaved,
+  onMessage,
+  onError,
+}: {
+  provider?: AdminPaymentProviderConfig
+  onSaved: (value: AdminPaymentConfigSummary) => void
+  onMessage: (value: string) => void
+  onError: (value: string) => void
+}) {
+  const [enabled, setEnabled] = useState(provider?.enabled === true)
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setEnabled(provider?.enabled === true)
+    setValues(Object.fromEntries((provider?.fields ?? []).map((field) => [field.key, field.secret ? '' : field.value ?? ''])))
+  }, [provider])
+
+  if (!provider) return <AdminSectionCard title="易支付" description="正在读取支付配置。"><AdminNotice tone="warning">当前管理员没有读取支付配置的权限，或后端暂未返回易支付定义。</AdminNotice></AdminSectionCard>
+  const currentProvider = provider
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSaving(true); onError('')
+    try {
+      const next = await updatePaymentProviderConfig(currentProvider.id, enabled, values)
+      onSaved(next)
+      onMessage('易支付配置已保存')
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : '易支付配置保存失败')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <AdminSectionCard title="易支付" description={`${provider.description} 回调地址由后端生成，保存后请把下面的地址填入易支付后台。`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs"><StatusBadge tone={provider.checkoutReady ? 'success' : 'warning'}>{provider.checkoutReady ? '下单已就绪' : '缺少下单配置'}</StatusBadge><StatusBadge tone={provider.webhookReady ? 'success' : 'warning'}>{provider.webhookReady ? '回调已就绪' : '回调待配置'}</StatusBadge></div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={saving} />启用易支付</label>
+        </div>
+        <fieldset disabled={saving} className="mt-4 grid gap-4 sm:grid-cols-2">
+          {provider.fields.map((field) => (
+            <AdminField key={field.key} label={field.label} hint={field.note || (field.secret && field.configured ? '已保存密钥，留空表示保持不变。' : undefined)} className={field.kind === 'textarea' ? 'sm:col-span-2' : undefined}>
+              {field.kind === 'select'
+                ? <AdminSelect value={values[field.key] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</AdminSelect>
+                : field.kind === 'textarea'
+                  ? <AdminTextarea value={values[field.key] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.secret && field.configured ? '已配置，留空保持不变' : field.placeholder} rows={3} />
+                  : <AdminInput type={field.kind === 'secret' ? 'password' : 'text'} value={values[field.key] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.secret && field.configured ? '已配置，留空保持不变' : field.placeholder} />}
+            </AdminField>
+          ))}
+          {provider.webhookUrl && <AdminField label="异步回调地址" hint="将此地址复制到易支付商户后台，不要把商户密钥写进 URL。" className="sm:col-span-2"><AdminInput readOnly value={provider.webhookUrl} /></AdminField>}
+        </fieldset>
+        <div className="mt-4 flex items-center justify-between gap-3"><p className="text-[11px] text-muted-foreground">配置来源：{provider.sourceLabel || '未配置'}</p><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存易支付'}</ControlButton></div>
+      </AdminSectionCard>
+    </form>
+  )
+}
+
 /* ------------------------------ 注册与积分 ------------------------------ */
 
 function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { settings: AdminSettings; canSystem: boolean; canBilling: boolean; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
@@ -196,11 +323,8 @@ function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { s
     const summary: string[] = []
     if (canSystem) {
       const registration = data.has('registrationEnabled')
-      const emailRegistration = data.has('emailRegistrationEnabled')
       patch.registrationEnabled = registration
-      patch.emailRegistrationEnabled = emailRegistration
       if (registration !== settings.registrationEnabled) summary.push('开放注册')
-      if (emailRegistration !== settings.emailRegistrationEnabled) summary.push('邮箱注册')
     }
     if (canBilling) {
       const enabled = data.has('freeDailyPointsEnabled')
@@ -217,7 +341,7 @@ function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { s
       <AdminSectionCard title="注册开关" description="控制新用户注册入口。关闭后仅管理员可以创建账号。">
         <fieldset disabled={saving || !canSystem} className="flex flex-col gap-3">
           <label className="flex items-center justify-between gap-4 border-b border-border pb-3 text-sm"><span><span className="font-medium">开放注册</span><span className="mt-1 block text-xs text-muted-foreground">关闭后站点注册入口对所有访客隐藏。</span></span><input type="checkbox" name="registrationEnabled" defaultChecked={settings.registrationEnabled} /></label>
-          <label className="flex items-center justify-between gap-4 text-sm"><span><span className="font-medium">邮箱注册</span><span className="mt-1 block text-xs text-muted-foreground">要求邮箱验证码完成注册，需要先配置邮件服务。</span></span><input type="checkbox" name="emailRegistrationEnabled" defaultChecked={settings.emailRegistrationEnabled} /></label>
+          <div className="flex items-center justify-between gap-4 text-sm"><span><span className="font-medium">邮箱验证（注册必需）</span><span className="mt-1 block text-xs text-muted-foreground">普通账号注册必须通过邮箱验证码；配置并启用微信扫码登录后，微信新用户可走独立的微信身份验证。</span></span><span className="shrink-0 rounded-full border border-studio-accent/30 bg-studio-accent/10 px-2.5 py-1 text-xs font-medium text-studio-accent">固定开启</span></div>
           {!canSystem && <AdminNotice tone="warning">当前管理员没有系统设置职责，注册开关不可编辑。</AdminNotice>}
         </fieldset>
       </AdminSectionCard>

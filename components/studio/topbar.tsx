@@ -94,6 +94,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const crumbs = buildCrumbs(pathname, projectTitle)
   const themeLabel = state.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'
   const isConnected = state.backendStatus === 'connected'
+  const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   const notificationCount = isConnected ? 0 : state.notifications
 
   // 点击外部或按 Esc 关闭账户菜单。
@@ -161,7 +162,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-        {isConnected && <Link href="/plans" className="lg-button-glass inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-semibold text-foreground" aria-label={`${state.credits} 可用积分，查看套餐`}><Coins className="size-3.5 text-studio-accent" aria-hidden="true" /><span className="tabular-nums">{state.credits.toLocaleString()}</span></Link>}
+        {isConnected && (rechargeEnabled ? <Link href="/plans" className="lg-button-glass inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-semibold text-foreground" aria-label={`${state.credits} 可用积分，查看套餐`}><Coins className="size-3.5 text-studio-accent" aria-hidden="true" /><span className="tabular-nums">{state.credits.toLocaleString()}</span></Link> : <span className="lg-button-glass inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-semibold text-foreground" aria-label={`${state.credits} 可用积分`}><Coins className="size-3.5 text-studio-accent" aria-hidden="true" /><span className="tabular-nums">{state.credits.toLocaleString()}</span></span>)}
         <Tooltip label={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')}>
           <button type="button" onClick={toggleLocale} aria-label={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"><Languages className="size-4" aria-hidden="true" /><span>{locale === 'zh-CN' ? 'EN' : '中'}</span></button>
         </Tooltip>

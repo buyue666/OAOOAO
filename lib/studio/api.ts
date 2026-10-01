@@ -42,6 +42,7 @@ export type SessionGenerationDefaults = {
 
 export type SessionSettings = {
   site?: { title?: string; logoUrl?: string; iconUrl?: string; announcementBar?: SiteAnnouncementBar; [key: string]: unknown }
+  operationMode?: 'self_use' | 'commercial'
   modelPointCosts?: Record<string, number>
   generationPointMultipliers?: { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
   generationConcurrency?: Record<string, number>
@@ -89,6 +90,8 @@ export type BillingProduct = {
   metadata?: unknown
   pricing?: { listUnitAmountCents: number; saleUnitAmountCents: number; discountCents: number; promotion?: { label: string } }
 }
+
+export type BillingAccess = { mode: 'self_use' | 'commercial'; rechargeEnabled: boolean }
 
 export type CanvasBackendNode = {
   id: string
@@ -210,8 +213,36 @@ export async function login(username: string, password: string, totpCode?: strin
   })
 }
 
+export type WechatLoginStatus = {
+  status: 'pending' | 'unlinked' | 'authorized' | 'consumed' | 'expired'
+  nickname: string | null
+  avatarUrl: string | null
+  returnTo: string | null
+}
+
+export type WechatLoginSession = {
+  sessionId: string
+  qrCodeUrl: string
+  expiresAt: string
+}
+
+export function createWechatLoginSession(returnTo?: string) {
+  return request<WechatLoginSession>('/api/auth/wechat-official/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ returnTo }),
+  })
+}
+
+export function getWechatLoginStatus(sessionId: string) {
+  return request<WechatLoginStatus>(`/api/auth/wechat-official/sessions/${encodeURIComponent(sessionId)}`)
+}
+
+export function consumeWechatLoginSession(sessionId: string) {
+  return request<{ user: BackendUser; returnTo: string }>(`/api/auth/wechat-official/sessions/${encodeURIComponent(sessionId)}/consume`, { method: 'POST' })
+}
+
 export function listBillingProducts() {
-  return request<{ products: BillingProduct[]; paymentProviders: string[] }>('/api/billing/products')
+  return request<{ products: BillingProduct[]; paymentProviders: string[]; billing?: BillingAccess }>('/api/billing/products')
 }
 
 export function listBillingOrders() {

@@ -239,7 +239,9 @@ export function GalleryPage() {
     let active_ = true
     setLoadState('loading')
     // 公开接口不需要登录；失败时明确说明，不用私有作品冒充公开内容。
-    fetch('/api/public/works?page=1&pageSize=24', { credentials: 'include', cache: 'no-store' })
+    // The public gallery backend exposes the paginated list at /api/public/gallery.
+    // /api/public/works is reserved for an individual published work and returns 404 here.
+    fetch('/api/public/gallery?limit=24&sort=featured', { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
         const payload = await response.json().catch(() => null)
         if (!response.ok) throw new Error(payload?.msg || payload?.error || `请求失败（${response.status}）`)
@@ -306,9 +308,10 @@ export function AccountPage() {
   const { state } = useStudio()
   const [tab, setTab] = useState('profile')
   const [notice, setNotice] = useState('')
+  const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   return (
     <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader eyebrow="账户" title="账户与套餐" description="管理个人信息、安全、积分和消费记录。" actions={<Link href="/plans" className="inline-flex h-9 items-center gap-2 rounded-lg border border-foreground bg-foreground px-3 text-sm font-medium text-background shadow-[var(--lg-shadow-2)] transition-opacity duration-150 hover:opacity-90"><CircleDollarSign className="size-4" />购买套餐</Link>} />
+      <PageHeader eyebrow="账户" title="账户与套餐" description="管理个人信息、安全、积分和消费记录。" actions={rechargeEnabled ? <Link href="/plans" className="inline-flex h-9 items-center gap-2 rounded-lg border border-foreground bg-foreground px-3 text-sm font-medium text-background shadow-[var(--lg-shadow-2)] transition-opacity duration-150 hover:opacity-90"><CircleDollarSign className="size-4" />购买套餐</Link> : undefined} />
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* 账户分区导航：桌面为纵向列表，移动端横向滚动；选中态与侧栏导航保持同一语言。 */}
         <nav className="flex gap-1 overflow-x-auto lg:flex-col" data-mobile-scroll aria-label="账户分区">
@@ -331,7 +334,7 @@ export function AccountPage() {
         </nav>
         <section className="min-w-0">
           {tab === 'profile' && <ProfilePanel state={state} onNotice={setNotice} />}
-          {tab === 'credits' && <CreditsPanel state={state} />}
+          {tab === 'credits' && <CreditsPanel state={state} rechargeEnabled={rechargeEnabled} />}
           {tab === 'orders' && <OrdersPanel />}
           {tab === 'invite' && <InvitePanel onNotice={setNotice} />}
           {notice && <Notice tone="accent"><Check className="mt-0.5 size-3.5 shrink-0" />{notice}</Notice>}
@@ -489,7 +492,7 @@ function ProfilePanel({ state, onNotice }: { state: ReturnType<typeof useStudio>
  * 因此 80 条记录全部被算成 0。现在按后端给出的 type 分类统计，
  * 并且逐页聚合，不只统计第一页。
  */
-function CreditsPanel({ state }: { state: ReturnType<typeof useStudio>['state'] }) {
+function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof useStudio>['state']; rechargeEnabled: boolean }) {
   const connected = state.backendStatus === 'connected'
   const { summary, state: loadState, message, reload } = useLedgerSummary({ maxPages: 40 })
   const [records, setRecords] = useState<PointRecord[]>([])
@@ -523,7 +526,7 @@ function CreditsPanel({ state }: { state: ReturnType<typeof useStudio>['state'] 
     <div className="flex flex-col gap-4">
       {message && <Notice tone="warning"><span className="min-w-0 flex-1">积分统计暂时不可用：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice>}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">可用积分</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-studio-accent">{connected ? state.credits.toLocaleString() : '—'}</p><Link href="/plans" className="mt-3 inline-flex text-xs font-medium text-studio-accent hover:underline">购买套餐 <ArrowUpRight className="ml-1 size-3.5" /></Link></div>
+        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">可用积分</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-studio-accent">{connected ? state.credits.toLocaleString() : '—'}</p>{rechargeEnabled ? <Link href="/plans" className="mt-3 inline-flex text-xs font-medium text-studio-accent hover:underline">购买套餐 <ArrowUpRight className="ml-1 size-3.5" /></Link> : <p className="mt-3 text-xs text-muted-foreground">自用模式暂不开放充值</p>}</div>
         <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已消费</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthConsume)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水统计' : connected ? '统计暂时不可用' : '登录后显示真实统计'}</p></div>
         <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已退回</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthRefund)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水类型统计，不按金额正负推断' : connected ? '统计暂时不可用' : '登录后显示真实统计'}</p></div>
       </div>

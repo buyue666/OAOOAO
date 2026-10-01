@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MembershipPurchaseView } from './membership-purchase-view'
 import { billingOptions, toMembershipPlans } from '@/lib/studio/membership'
-import { createBillingOrder, createCheckout, listBillingProducts, request, type BillingProduct, type Checkout } from '@/lib/studio/api'
+import { createBillingOrder, createCheckout, listBillingProducts, request, type BillingProduct, type BillingAccess, type Checkout } from '@/lib/studio/api'
 import { useStudio } from '@/lib/studio/store'
 import type { MembershipSelection } from './types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -24,15 +25,18 @@ export function PlansPage() {
   const [orderStatus, setOrderStatus] = useState('')
   const [qrImage, setQrImage] = useState('')
   const [pendingOrder, setPendingOrder] = useState<{ id: string; productId: string; provider: string } | null>(null)
+  // 默认按自用模式处理，避免计费接口异常时把充值入口误开放。
+  const [billing, setBilling] = useState<BillingAccess>({ mode: 'self_use', rechargeEnabled: false })
   const load = useCallback(async () => {
     setStatus('loading')
     try {
       const result = await listBillingProducts()
       setProducts(result.products)
       setProviders(result.paymentProviders)
+      setBilling(result.billing ?? { mode: 'self_use', rechargeEnabled: false })
       setProvider(current => result.paymentProviders.includes(current) ? current : result.paymentProviders[0] || '')
       setStatus('ready')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '套餐加载失败'); setStatus('error') }
+    } catch (reason) { setBilling({ mode: 'self_use', rechargeEnabled: false }); setError(reason instanceof Error ? reason.message : '套餐加载失败'); setStatus('error') }
   }, [])
   useEffect(() => { void load() }, [load])
   useEffect(() => {
@@ -96,14 +100,25 @@ export function PlansPage() {
   }
   return <div className="min-h-dvh bg-black text-zinc-100">
     <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 pr-16 text-sm">
-      <Link href="/" className="font-semibold">OAOOAO</Link>
+      <Link href="/" aria-label="OAO 首页" className="inline-flex items-center"><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={112} height={27} className="h-7 w-auto invert" /></Link>
       <div className="flex flex-wrap items-center gap-4">
         {providers.length > 0 && <label>支付方式 <select aria-label="支付方式" value={provider} onChange={e => setProvider(e.target.value)} className="ml-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1">{providers.map(p => <option key={p} value={p}>{({manual:'人工支付', epay:'在线支付', stripe:'银行卡', ciyuan:'词元余额'} as Record<string,string>)[p] || p}</option>)}</select></label>}
         <Link href={state.backendStatus === 'connected' ? '/account' : '/login?next=/plans'}>{state.backendStatus === 'connected' ? '账户与订单' : '登录'}</Link>
         {state.backendStatus === 'connected' && state.user.role === 'admin' && <Link href="/admin/products">管理套餐</Link>}
       </div>
     </div>
-    <MembershipPurchaseView key={options.map(o => o.value).join(',')} products={plans} billingOptions={options} initialBillingCycle={options[0].value} generationColumns={[]} generationRows={[]} faqItems={[]} status={status} errorMessage={error} onRetry={load} onSelectPlan={purchase} onClose={() => router.push('/')} />
+    {!billing.rechargeEnabled ? (
+      <div className="mx-auto flex min-h-[70dvh] w-full max-w-2xl items-center justify-center px-6 py-16">
+        <section className="w-full rounded-3xl border border-white/15 bg-white/[0.06] p-8 text-center shadow-2xl shadow-black/20 backdrop-blur-xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">自用模式</p>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight">充值与在线支付暂未开放</h1>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/60">当前站点用于内部创作与测试，用户充值、套餐购买和在线支付入口已关闭。已有积分仍可正常使用。</p>
+          <Link href="/studio" className="mt-7 inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-85">返回工作台</Link>
+        </section>
+      </div>
+    ) : (
+      <MembershipPurchaseView key={options.map(o => o.value).join(',')} products={plans} billingOptions={options} initialBillingCycle={options[0].value} generationColumns={[]} generationRows={[]} faqItems={[]} status={status} errorMessage={error} onRetry={load} onSelectPlan={purchase} onClose={() => router.push('/')} />
+    )}
     <Dialog open={!!checkout} onOpenChange={open => { if (!open) setCheckout(null) }}>
       <DialogContent><DialogHeader><DialogTitle>支付订单</DialogTitle><DialogDescription>{checkout?.orderNo} · {orderStatus}</DialogDescription></DialogHeader>
         {checkout?.kind === 'manual' && <p>订单已创建，请联系管理员完成支付。</p>}

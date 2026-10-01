@@ -415,6 +415,7 @@ export type GenerationPointMultipliers = { imageQuality?: Record<string, number>
 
 export type AdminSettings = {
   site: SiteSettings
+  operationMode: 'self_use' | 'commercial'
   registrationEnabled: boolean
   emailRegistrationEnabled: boolean
   freeDailyPointsEnabled: boolean
@@ -431,6 +432,48 @@ export type AdminSettings = {
   systemChannels: SystemChannel[]
   logicalModels: LogicalModel[]
   defaultModels: SystemDefaultModels
+}
+
+/* ------------------------------ 支付配置 ------------------------------ */
+
+export type AdminPaymentConfigField = {
+  key: string
+  label: string
+  kind: 'text' | 'url' | 'secret' | 'textarea' | 'select'
+  required?: boolean
+  advanced?: boolean
+  secret?: boolean
+  placeholder?: string
+  note?: string
+  configured: boolean
+  value?: string
+  sourceLabel?: string
+  options?: Array<{ label: string; value: string }>
+}
+
+export type AdminPaymentProviderConfig = {
+  id: string
+  name: string
+  description: string
+  checkoutKind: string
+  checkoutReady: boolean
+  webhookReady: boolean
+  ready: boolean
+  enabled: boolean
+  sourceLabel?: string
+  webhookOptional?: boolean
+  webhookPath?: string
+  webhookUrl?: string
+  fields: AdminPaymentConfigField[]
+  checkoutRequirements?: Array<{ label: string; configured: boolean; note?: string }>
+  webhookRequirements?: Array<{ label: string; configured: boolean; note?: string }>
+}
+
+export type AdminPaymentConfigSummary = {
+  origin: string
+  readyProviders: number
+  providers: AdminPaymentProviderConfig[]
+  generatedAt: string
 }
 
 export type ObjectStorageSettings = {

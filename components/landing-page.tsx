@@ -185,9 +185,14 @@ function About() {
 
 function Footer() {
   const { locale, t } = useLocale()
+  const { state } = useStudio()
+  const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
+  const accountItems = locale === 'zh-CN'
+    ? [{ label: '工作台', href: '/studio' }, { label: '我的作品', href: '/works' }, ...(rechargeEnabled ? [{ label: '订阅套餐', href: '/plans' }] : []), { label: '登录账户', href: '/login' }]
+    : [{ label: 'Workspace', href: '/studio' }, { label: 'My works', href: '/works' }, ...(rechargeEnabled ? [{ label: 'Plans', href: '/plans' }] : []), { label: 'Sign in', href: '/login' }]
   const columns = locale === 'zh-CN'
-    ? [{ title: '探索', items: [{ label: '创作能力', href: '#models' }, { label: '作品展示', href: '#gallery' }, { label: '关于 OAO', href: '#about' }] }, { title: '开始创作', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: '我的 OAO', items: [{ label: '工作台', href: '/studio' }, { label: '我的作品', href: '/works' }, { label: '订阅套餐', href: '/plans' }, { label: '登录账户', href: '/login' }] }]
-    : [{ title: 'Explore', items: [{ label: 'Capabilities', href: '#models' }, { label: 'Works', href: '#gallery' }, { label: 'About OAO', href: '#about' }] }, { title: 'Create', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: 'My OAO', items: [{ label: 'Workspace', href: '/studio' }, { label: 'My works', href: '/works' }, { label: 'Plans', href: '/plans' }, { label: 'Sign in', href: '/login' }] }]
+    ? [{ title: '探索', items: [{ label: '创作能力', href: '#models' }, { label: '作品展示', href: '#gallery' }, { label: '关于 OAO', href: '#about' }] }, { title: '开始创作', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: '我的 OAO', items: accountItems }]
+    : [{ title: 'Explore', items: [{ label: 'Capabilities', href: '#models' }, { label: 'Works', href: '#gallery' }, { label: 'About OAO', href: '#about' }] }, { title: 'Create', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: 'My OAO', items: accountItems }]
   return <footer className={styles.footer}><div className={styles.footerGrid}><div className={styles.footerBrand}><a href="#hero" aria-label="OAO 首页"><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={126} height={30} className={styles.footerLogo} /></a><p>{t('footerDescription')}</p></div>{columns.map((column) => <div key={column.title}><h3>{column.title}</h3><ul>{column.items.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></div>)}</div><div className={styles.footerBottom}><p>{locale === 'zh-CN' ? '© 2026 OAO。保留所有权利。' : '© 2026 OAO. All rights reserved.'}</p><a href="#hero">{locale === 'zh-CN' ? '返回顶部' : 'Back to top'} <ArrowDown size={14} className={styles.up} /></a></div></footer>
 }
 

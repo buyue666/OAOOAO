@@ -180,8 +180,10 @@ try {
   await page.goto(base, { waitUntil: 'networkidle' })
   await page.getByRole('navigation', { name: '首页导航', exact: true }).waitFor()
   await page.locator('header').getByRole('link', { name: '进入创作' }).click()
-  await page.waitForURL('**/studio')
-  check('Enter studio CTA preserves original workbench', await page.locator('[data-studio-route="home"]').count() === 1)
+  await page.waitForURL('**/login**')
+  await settled(page)
+  await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible' })
+  check('Enter studio CTA requires login before opening the workbench', await page.locator('input[autocomplete="username"]').count() === 1)
   for (const path of ['/image', '/video', '/projects', '/plans', '/admin']) {
     const response = await page.goto(base + path, { waitUntil: 'domcontentloaded' })
     check(`Existing route ${path} returns 200`, response.status() === 200)

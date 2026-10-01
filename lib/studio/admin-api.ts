@@ -7,6 +7,7 @@ import type {
   AdminGenerationOperations,
   AdminGenerationOverview,
   AdminGenerationTask,
+  AdminPaymentConfigSummary,
   AdminSettings,
   AdminUser,
   AdminUserListPayload,
@@ -192,6 +193,21 @@ export type AdminSettingsPatch = Partial<Omit<AdminSettings, 'defaultModels'>> &
 
 export function updateAdminSettings(patch: AdminSettingsPatch) {
   return request<{ settings: AdminSettings }>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+/** 读取支付渠道状态；后端只返回非敏感字段，密钥字段只返回 configured 标记。 */
+export async function getPaymentConfig(): Promise<AdminPaymentConfigSummary> {
+  const payload = await request<{ paymentConfig: AdminPaymentConfigSummary }>('/api/admin/billing/payment-config')
+  return payload.paymentConfig
+}
+
+/** 保存支付渠道配置；secret 字段留空时由后端保留已存密钥。 */
+export async function updatePaymentProviderConfig(providerId: string, enabled: boolean, values: Record<string, string>) {
+  const payload = await request<{ paymentConfig: AdminPaymentConfigSummary }>('/api/admin/billing/payment-config', {
+    method: 'PATCH',
+    body: JSON.stringify({ providerId, enabled, values }),
+  })
+  return payload.paymentConfig
 }
 
 export function updateSiteSettings(site: SiteSettings) {

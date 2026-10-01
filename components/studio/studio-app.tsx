@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useStudio } from '@/lib/studio/store'
 import { MobileNav } from './mobile-nav'
 import { Sidebar } from './sidebar'
@@ -9,16 +9,50 @@ import { Topbar } from './topbar'
 import { cn } from '@/lib/utils'
 import { SiteAnnouncementBar } from '@/components/site-announcement-bar'
 
+function isProtectedStudioRoute(pathname: string) {
+  return pathname === '/studio'
+    || pathname === '/agent'
+    || pathname.startsWith('/agent/')
+    || pathname === '/image'
+    || pathname.startsWith('/image/')
+    || pathname === '/video'
+    || pathname.startsWith('/video/')
+    || pathname === '/drama'
+    || pathname.startsWith('/drama/')
+    || pathname === '/canvas'
+    || pathname.startsWith('/canvas/')
+    || pathname === '/projects'
+    || pathname.startsWith('/projects/')
+    || pathname === '/assets'
+    || pathname === '/tasks'
+    || pathname === '/account'
+    || pathname === '/settings'
+}
+
 export function StudioApp({ children }: { children: React.ReactNode }) {
   const { state } = useStudio()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
 
   const isLanding = pathname === '/'
   const isAuthPage = pathname === '/login' || pathname === '/plans'
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isWorkspace = pathname === '/image' || pathname === '/video'
   const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/')
+  const isProtectedRoute = isProtectedStudioRoute(pathname)
+  const authChecking = isProtectedRoute && (!state.hydrated || state.backendStatus === 'checking')
+  const authRedirecting = isProtectedRoute && state.hydrated && (state.backendStatus === 'unauthenticated' || state.backendStatus === 'offline')
+
+  useEffect(() => {
+    if (!authRedirecting) return
+    const next = `${pathname}${window.location.search}`
+    router.replace(`/login?next=${encodeURIComponent(next)}`)
+  }, [authRedirecting, pathname, router])
+
+  if (authChecking || authRedirecting) {
+    return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{authRedirecting ? '正在前往登录页…' : '正在检查登录状态…'}</main>
+  }
 
   /**
    * 着陆页、登录、套餐与后台都自带独立版式，不套工作台外壳：

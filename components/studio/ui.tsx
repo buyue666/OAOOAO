@@ -1,9 +1,10 @@
 'use client'
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Image as ImageIcon, Search, X } from 'lucide-react'
+import { Tooltip as RadixTooltip } from 'radix-ui'
 import { cn } from '@/lib/utils'
 
 export type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'muted'
@@ -36,44 +37,31 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
 }
 
 /**
- * 轻量 Tooltip：通过 portal 渲染到 body，避免被侧栏 / 缩略图容器的 overflow 裁切。
- * 同时保留原生 title，保证在无 JS 或触屏场景下仍有提示。
+ * 通过 Radix 的浮层定位渲染提示：自动翻转、避让视口边缘，并通过 portal
+ * 脱离侧栏和缩略图容器的 overflow。顶部工具栏尤其需要这个碰撞处理。
  */
 export function Tooltip({ label, side = 'top', className, children }: { label: string; side?: 'top' | 'right'; className?: string; children: ReactNode }) {
-  const anchorRef = useRef<HTMLSpanElement>(null)
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
-
-  const show = useCallback(() => {
-    const element = anchorRef.current
-    if (!element) return
-    const rect = element.getBoundingClientRect()
-    setCoords(
-      side === 'right'
-        ? { top: rect.top + rect.height / 2, left: rect.right + 8 }
-        : { top: rect.top - 8, left: rect.left + rect.width / 2 },
-    )
-  }, [side])
-
-  const hide = useCallback(() => setCoords(null), [])
-
   return (
-    <span ref={anchorRef} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide} className={cn('inline-flex', className)}>
-      {children}
-      {coords &&
-        createPortal(
-          <span
+    <RadixTooltip.Provider delayDuration={100} skipDelayDuration={100}>
+      <RadixTooltip.Root disableHoverableContent>
+        <span className={cn('inline-flex', className)}>
+          <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
+        </span>
+        <RadixTooltip.Portal>
+          <RadixTooltip.Content
             role="tooltip"
-            style={{ top: coords.top, left: coords.left }}
-            className={cn(
-              'lg-glass-overlay motion-fade pointer-events-none fixed z-[60] whitespace-nowrap rounded-md border border-border px-2 py-1 text-xs font-medium text-popover-foreground shadow-md',
-              side === 'right' ? '-translate-y-1/2' : '-translate-x-1/2 -translate-y-full',
-            )}
+            data-tooltip-content="true"
+            side={side}
+            sideOffset={8}
+            collisionPadding={8}
+            avoidCollisions
+            className="lg-tooltip-surface lg-glass-overlay motion-fade pointer-events-none z-[60] max-w-[calc(100vw-16px)] whitespace-normal rounded-md border px-2 py-1 text-center text-xs font-medium shadow-md"
           >
             {label}
-          </span>,
-          document.body,
-        )}
-    </span>
+          </RadixTooltip.Content>
+        </RadixTooltip.Portal>
+      </RadixTooltip.Root>
+    </RadixTooltip.Provider>
   )
 }
 

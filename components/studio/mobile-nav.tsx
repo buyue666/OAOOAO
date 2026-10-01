@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { Suspense, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { Bot, Clapperboard, GalleryHorizontalEnd, Image as ImageIcon, LayoutDashboard, ListChecks, Palette, PanelsTopLeft, Settings, Sparkles, Video, X } from 'lucide-react'
@@ -43,8 +44,8 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
       <aside role="dialog" aria-modal="true" aria-labelledby="mobile-nav-title" className="motion-drawer-left flex h-full w-full max-w-72 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="flex h-[60px] shrink-0 items-center justify-between border-b border-sidebar-border px-4">
           <Link href="/studio" onClick={onClose} className="flex items-center gap-2 text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-foreground text-[11px] font-bold text-background">OA</span>
-            <span id="mobile-nav-title" className="text-sm font-bold tracking-[-0.02em]">OAOOAO</span>
+            <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} priority className="h-5 w-auto brightness-0 invert" />
+            <span id="mobile-nav-title" className="sr-only">OAO 工作台导航</span>
           </Link>
           <button type="button" onClick={onClose} aria-label="关闭导航" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:text-sidebar-foreground"><X className="size-4" aria-hidden="true" /></button>
         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
@@ -19,7 +20,6 @@ import {
   Users,
   WalletCards,
   X,
-  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { ControlButton, PageHeader } from './ui'
@@ -206,8 +206,8 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
       <aside className="admin-sidebar sticky top-0 hidden h-dvh w-[232px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b border-border px-5">
           <Link href="/studio" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background"><Zap className="size-4" /></span>
-            OAOOAO <span className="text-muted-foreground">/ 控制中心</span>
+            <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={104} height={25} className="h-6 w-auto max-w-[104px] dark:invert" />
+            <span className="text-muted-foreground">/ 控制中心</span>
           </Link>
         </div>
         <AdminNavList section={section} items={items} onNavigate={navigate} />
@@ -221,8 +221,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
           <div className="flex min-w-0 items-center gap-3">
             <ControlButton variant="ghost" size="sm" className="lg:hidden" aria-label="打开后台导航" onClick={() => setMobileOpen(true)}><Menu className="size-4" /></ControlButton>
             <Link href="/studio" className="flex items-center gap-2 lg:hidden" aria-label="OAOOAO 控制中心">
-              <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background"><Zap className="size-4" /></span>
-              <span className="text-sm font-semibold tracking-tight">OAOOAO</span>
+              <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={92} height={22} className="h-5 w-auto max-w-[92px] dark:invert" />
             </Link>
             <div className="hidden min-w-0 items-center gap-2 lg:flex">
               <span className="text-xs text-muted-foreground">控制中心</span>
@@ -257,7 +256,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
             <div className="absolute inset-0 bg-studio-ink/50" onClick={() => setMobileOpen(false)} />
             <nav className="relative flex w-[248px] max-w-[80vw] flex-col overflow-y-auto border-r border-border bg-card" aria-label="后台导航">
               <div className="flex h-16 items-center justify-between border-b border-border px-4">
-                <span className="flex items-center gap-2 text-sm font-semibold"><Zap className="size-4" />OAOOAO 控制中心</span>
+                <span className="flex items-center gap-2 text-sm font-semibold"><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={92} height={22} className="h-5 w-auto max-w-[92px] dark:invert" />控制中心</span>
                 <ControlButton variant="ghost" size="sm" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X className="size-4" /></ControlButton>
               </div>
               <AdminNavList section={section} items={items} onNavigate={navigate} />

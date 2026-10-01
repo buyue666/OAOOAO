@@ -1,9 +1,11 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, LockKeyhole, Mail, Send, Sparkles, UserRound } from 'lucide-react'
+import { FormEvent, useState, type ChangeEvent } from 'react'
+import { useEffect } from 'react'
+import Image from 'next/image'
+import { ArrowLeft, ArrowRight, Check, Eye, EyeOff, LockKeyhole, Mail, QrCode, Send, UserRound } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { login } from '@/lib/studio/api'
+import { consumeWechatLoginSession, createWechatLoginSession, getWechatLoginStatus, login, StudioApiError, type WechatLoginSession, type WechatLoginStatus } from '@/lib/studio/api'
 import { registerAccount, requestEmailCode, resetPasswordByEmail } from '@/lib/studio/account-api'
 import { useStudio } from '@/lib/studio/store'
 import { ControlButton, Notice } from './ui'
@@ -33,15 +35,83 @@ export function LoginPage() {
   const [policyAccepted, setPolicyAccepted] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [mfaRequired, setMfaRequired] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [wechatSession, setWechatSession] = useState<WechatLoginSession | null>(null)
+  const [wechatStatus, setWechatStatus] = useState<WechatLoginStatus['status']>('pending')
+  const [wechatLoading, setWechatLoading] = useState(false)
+  const [wechatError, setWechatError] = useState('')
 
   function switchMode(next: Mode) {
     setMode(next)
     setError('')
     setNotice('')
+    setMfaRequired(false)
+    setTotpCode('')
+    setShowPassword(false)
+    setShowNewPassword(false)
+    setShowConfirmPassword(false)
   }
+
+  function closeWechatLogin() {
+    if (wechatLoading) return
+    setWechatSession(null)
+    setWechatStatus('pending')
+    setWechatError('')
+  }
+
+  async function beginWechatLogin() {
+    setWechatError('')
+    setWechatLoading(true)
+    try {
+      const next = searchParams.get('next')
+      const result = await createWechatLoginSession(next?.startsWith('/') && !next.startsWith('//') ? next : '/')
+      setWechatSession(result)
+      setWechatStatus('pending')
+    } catch (reason) {
+      setWechatError(reason instanceof StudioApiError && reason.status === 501 ? '微信扫码登录尚未开启，请使用账号密码登录。' : reason instanceof Error ? reason.message : '微信二维码生成失败')
+    } finally {
+      setWechatLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (mode !== 'login' || !wechatSession || wechatStatus !== 'pending') return
+    let active = true
+    const poll = async () => {
+      try {
+        const result = await getWechatLoginStatus(wechatSession.sessionId)
+        if (active) setWechatStatus(result.status)
+      } catch (reason) {
+        if (active) setWechatError(reason instanceof Error ? reason.message : '微信登录状态读取失败')
+      }
+    }
+    void poll()
+    const timer = window.setInterval(() => void poll(), 2000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [mode, wechatSession, wechatStatus])
+
+  useEffect(() => {
+    if (mode !== 'login' || !wechatSession || wechatStatus !== 'authorized' || wechatLoading) return
+    let active = true
+    setWechatLoading(true)
+    void consumeWechatLoginSession(wechatSession.sessionId)
+      .then(async (result) => {
+        if (!active) return
+        setWechatStatus('consumed')
+        await refreshSession()
+        const target = result.returnTo?.startsWith('/') && !result.returnTo.startsWith('//') && !result.returnTo.includes('\\') ? result.returnTo : '/'
+        router.replace(target)
+      })
+      .catch((reason) => { if (active) setWechatError(reason instanceof Error ? reason.message : '微信登录失败') })
+      .finally(() => { if (active) setWechatLoading(false) })
+    return () => { active = false }
+  }, [mode, refreshSession, router, wechatLoading, wechatSession, wechatStatus])
 
   async function sendCode(purpose: 'register' | 'password-reset') {
     if (!email.trim()) { setError('请先填写邮箱。'); return }
@@ -62,10 +132,13 @@ export function LoginPage() {
     setError(''); setNotice('')
     if (mode === 'login') {
       if (!username.trim() || !password) { setError('请输入用户名和密码。'); return }
+      if (mfaRequired && !totpCode.trim()) { setError('请输入管理员动态验证码。'); return }
     } else if (mode === 'register') {
       if (!username.trim() || !password) { setError('请输入用户名和密码。'); return }
       if (password.length < 8) { setError('密码至少 8 位。'); return }
       if (!policyAccepted) { setError('请先同意服务条款与隐私政策。'); return }
+      if (!email.trim()) { setError('注册必须填写邮箱地址。'); return }
+      if (!emailCode.trim()) { setError('请先获取并填写邮箱验证码。'); return }
     } else {
       if (!email.trim() || !emailCode.trim() || !newPassword) { setError('请填写邮箱、验证码和新密码。'); return }
       if (newPassword !== confirmPassword) { setError('两次输入的新密码不一致。'); return }
@@ -75,7 +148,7 @@ export function LoginPage() {
     setLoading(true)
     try {
       if (mode === 'login') {
-        await login(username.trim(), password, totpCode.trim() || undefined)
+        await login(username.trim(), password, mfaRequired ? totpCode.trim() : undefined)
         // 登录成功后立即在客户端同步会话、模型目录与积分。
         // 只 dispatch 用户不够：模型目录为空会让工作台继续显示演示模型与「本地预览」。
         await refreshSession()
@@ -104,6 +177,12 @@ export function LoginPage() {
         setMode('login')
       }
     } catch (reason) {
+      const payload = reason instanceof StudioApiError && reason.payload && typeof reason.payload === 'object' ? reason.payload as { mfaRequired?: unknown } : undefined
+      if (mode === 'login' && reason instanceof StudioApiError && reason.status === 401 && payload?.mfaRequired === true) {
+        setMfaRequired(true)
+        setError('该管理员账号已启用动态安全验证，请输入验证码后再次登录。')
+        return
+      }
       setError(reason instanceof Error ? reason.message : mode === 'login' ? '登录失败，请稍后重试。' : mode === 'register' ? '注册失败，请稍后重试。' : '密码重置失败，请稍后重试。')
     } finally {
       setLoading(false)
@@ -126,9 +205,9 @@ export function LoginPage() {
         style={{ background: 'radial-gradient(760px 420px at 50% -10%, color-mix(in srgb, var(--studio-accent) 10%, transparent), transparent 70%)' }}
       />
       <section className="relative w-full max-w-md">
-        <div className="mb-8 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-foreground text-background shadow-[var(--lg-shadow-2)]"><Sparkles className="size-5" /></span>
-          <div><p className="text-lg font-semibold tracking-[-0.02em]">OAOOAO Studio</p><p className="text-xs text-muted-foreground">连接你的真实创作账户</p></div>
+        <div className="mb-8 flex items-center gap-4">
+          <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={126} height={30} priority className="h-8 w-auto max-w-[150px] dark:invert" />
+          <p className="text-xs text-muted-foreground">连接你的真实创作账户</p>
         </div>
         <div className="lg-glass motion-panel p-6 sm:p-8">
           <div className="mb-6">
@@ -151,23 +230,18 @@ export function LoginPage() {
 
             {mode === 'login' && (
               <>
-                <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium">密码</span>
-                  <input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
-                </label>
-                <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium">管理员 MFA（如启用）</span>
-                  <input inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} placeholder="可留空" className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
-                </label>
+                <PasswordField label="密码" autoComplete="current-password" value={password} visible={showPassword} onChange={(event) => setPassword(event.target.value)} onToggle={() => setShowPassword((value) => !value)} />
+                {mfaRequired && <label className="flex flex-col gap-2">
+                  <span className="text-xs font-medium">管理员动态验证码</span>
+                  <input inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} placeholder="请输入 6 位验证码" className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
+                  <span className="text-[11px] leading-5 text-muted-foreground">只有启用了管理员 MFA 的账号才需要填写。</span>
+                </label>}
               </>
             )}
 
             {mode === 'register' && (
               <>
-                <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium">密码（至少 8 位）</span>
-                  <input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
-                </label>
+                <PasswordField label="密码（至少 8 位）" autoComplete="new-password" value={password} visible={showPassword} onChange={(event) => setPassword(event.target.value)} onToggle={() => setShowPassword((value) => !value)} />
                 <label className="flex flex-col gap-2">
                   <span className="text-xs font-medium">邀请码（可选）</span>
                   <input value={referralCode} onChange={(event) => setReferralCode(event.target.value)} placeholder="填写后奖励由服务端结算" className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
@@ -178,14 +252,14 @@ export function LoginPage() {
             {(mode === 'register' || mode === 'reset') && (
               <>
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium">邮箱{mode === 'register' ? '（可选，填写后需验证码）' : ''}</span>
+                  <span className="text-xs font-medium">邮箱{mode === 'register' ? '（必填，用于验证账号）' : ''}</span>
                   <span className="relative">
                     <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="studio-field h-11 w-full border border-border bg-background pl-10 pr-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
                   </span>
                 </label>
                 <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium">邮箱验证码</span>
+                  <span className="text-xs font-medium">邮箱验证码{mode === 'register' ? '（必填）' : ''}</span>
                   <span className="flex gap-2">
                     <input inputMode="numeric" autoComplete="one-time-code" value={emailCode} onChange={(event) => setEmailCode(event.target.value)} className="studio-field h-11 min-w-0 flex-1 border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
                     <ControlButton type="button" variant="secondary" className="h-11 shrink-0" onClick={() => void sendCode(mode === 'register' ? 'register' : 'password-reset')} disabled={loading || !email.trim()}>
@@ -198,14 +272,8 @@ export function LoginPage() {
 
             {mode === 'reset' && (
               <>
-                <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium">新密码（至少 8 位）</span>
-                  <input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
-                </label>
-                <label className="flex flex-col gap-2">
-                  <span className="text-xs font-medium">确认新密码</span>
-                  <input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
-                </label>
+                <PasswordField label="新密码（至少 8 位）" autoComplete="new-password" value={newPassword} visible={showNewPassword} onChange={(event) => setNewPassword(event.target.value)} onToggle={() => setShowNewPassword((value) => !value)} />
+                <PasswordField label="确认新密码" autoComplete="new-password" value={confirmPassword} visible={showConfirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} onToggle={() => setShowConfirmPassword((value) => !value)} />
               </>
             )}
 
@@ -221,6 +289,25 @@ export function LoginPage() {
               {!loading && <ArrowRight className="size-4" />}
             </ControlButton>
           </form>
+
+          {mode === 'login' && (
+            <div className="mt-5 border-t border-border pt-5">
+              {!wechatSession ? (
+                <ControlButton type="button" variant="secondary" className="h-11 w-full" onClick={() => void beginWechatLogin()} disabled={loading || wechatLoading}>
+                  <QrCode className="size-4" />{wechatLoading ? '正在准备二维码…' : '微信扫码登录'}
+                </ControlButton>
+              ) : (
+                <div className="rounded-xl border border-border bg-muted/30 p-4">
+                  <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium">微信扫码登录</p><p className="mt-1 text-xs text-muted-foreground">{wechatStatus === 'pending' ? '请使用微信扫描二维码' : wechatStatus === 'authorized' || wechatStatus === 'consumed' ? '授权成功，正在登录…' : wechatStatus === 'unlinked' ? '该微信尚未关联账号' : '二维码已过期，请重新获取'}</p></div><button type="button" onClick={closeWechatLogin} className="text-xs text-muted-foreground hover:text-foreground" disabled={wechatLoading}>关闭</button></div>
+                  <div className="mx-auto mt-4 flex size-56 items-center justify-center overflow-hidden rounded-lg border border-border bg-white p-2">{wechatSession.qrCodeUrl && <img src={wechatSession.qrCodeUrl} alt="微信登录二维码" className="size-full object-contain" referrerPolicy="no-referrer" />}</div>
+                  {wechatStatus === 'unlinked' && <p className="mt-3 text-center text-xs text-muted-foreground">请先使用账号密码登录；管理员开启自动注册后，新微信可直接创建账户。</p>}
+                  {wechatStatus === 'expired' && <ControlButton type="button" variant="secondary" className="mt-3 h-9 w-full" onClick={() => { closeWechatLogin(); void beginWechatLogin() }}>重新获取二维码</ControlButton>}
+                  {wechatError && <p role="alert" className="mt-3 text-xs text-destructive">{wechatError}</p>}
+                </div>
+              )}
+              {wechatError && !wechatSession && <p role="alert" className="mt-2 text-xs text-destructive">{wechatError}</p>}
+            </div>
+          )}
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4 text-xs">
             {mode === 'login' ? (
@@ -238,5 +325,33 @@ export function LoginPage() {
         <p className="mt-4 text-center text-xs text-muted-foreground">未配置后端时仍可浏览本地预览；真实数据需要登录。</p>
       </section>
     </main>
+  )
+}
+
+function PasswordField({
+  label,
+  autoComplete,
+  value,
+  visible,
+  onChange,
+  onToggle,
+}: {
+  label: string
+  autoComplete: string
+  value: string
+  visible: boolean
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onToggle: () => void
+}) {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="text-xs font-medium">{label}</span>
+      <span className="relative">
+        <input type={visible ? 'text' : 'password'} autoComplete={autoComplete} value={value} onChange={onChange} className="studio-field h-11 w-full border border-border bg-background px-3 pr-11 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
+        <button type="button" onClick={onToggle} aria-label={visible ? '隐藏密码' : '显示密码'} title={visible ? '隐藏密码' : '显示密码'} aria-pressed={visible} className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/50">
+          {visible ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+        </button>
+      </span>
+    </label>
   )
 }

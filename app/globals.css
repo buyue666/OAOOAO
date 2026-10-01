@@ -230,6 +230,24 @@
   backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate));
 }
 
+/* Tooltip 通过 portal 挂在 body，不能继承工作台外壳的局部玻璃令牌；
+   单独给明暗主题一组对比更明确的表面，避免两种主题看起来几乎一样。 */
+.lg-tooltip-surface {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(24, 24, 27, 0.2);
+  color: #18181b;
+  box-shadow: 0 8px 22px rgba(24, 24, 27, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  backdrop-filter: blur(28px) saturate(165%);
+}
+
+.dark .lg-tooltip-surface {
+  background: rgba(20, 21, 26, 0.94);
+  border-color: rgba(244, 244, 245, 0.28);
+  color: #f4f4f5;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
 /* 用户要求减少透明度 / 减少动态效果：全部退化为实心表面，且不做动画。 */
 @media (prefers-reduced-transparency: reduce) {
   .lg-glass,
