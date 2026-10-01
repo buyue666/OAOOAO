@@ -570,7 +570,7 @@ export function DirectorAgent({
       {
         id: `msg-agent-${now}`,
         role: 'agent',
-        text: `本地预览：我把这个想法拆成了 ${plan.steps.length} 个步骤，不会调用真实模型。登录后 Agent 会创建真实任务并消耗积分。`,
+        text: `已将这个想法整理为 ${plan.steps.length} 个步骤，你可以先查看并调整创作计划。`,
         planId: plan.id,
         createdAt: now + 1,
       },
@@ -727,8 +727,8 @@ export function DirectorAgent({
                       {onOpenPlan ? (
                         <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                           <div className="min-w-0">
-                            <p className="truncate text-xs font-medium text-foreground">本地预览计划已生成</p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">不会调用真实模型。登录后 Agent 会创建真实任务。</p>
+                            <p className="truncate text-xs font-medium text-foreground">创作计划已生成</p>
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">已根据当前输入整理创作步骤。</p>
                           </div>
                           <ControlButton size="sm" variant="secondary" onClick={() => onOpenPlan(message.planId!)}>查看计划</ControlButton>
                         </div>

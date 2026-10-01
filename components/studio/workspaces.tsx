@@ -442,7 +442,7 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
 }
 
 export function ImageWorkspace() {
-  const { state, estimateCredits, addDemoTask, liveModels, liveReady, defaultModels } = useStudio()
+  const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
   const generation = useGeneration()
   const router = useRouter()
   const [prompt, setPrompt] = useState('极夜小镇的女孩站在雪地里，远处的极光像一条缓慢移动的河，低饱和、电影写实、留出字幕空间。')
@@ -553,8 +553,8 @@ export function ImageWorkspace() {
     }
     return parameters
   }, [advancedValues.kind, model?.capabilities.editing])
-  const imageWorks = useMemo(() => state.works.filter((work) => work.kind === 'image'), [state.works])
-  const imageTasks = state.tasks.filter((task) => task.type === 'image')
+  const imageWorks = useMemo(() => liveReady ? state.works.filter((work) => work.kind === 'image') : [], [liveReady, state.works])
+  const imageTasks = liveReady ? state.tasks.filter((task) => task.type === 'image') : []
   const activeTask = imageTasks.find((task) => task.status === 'processing' || task.status === 'queued')
   const latestTask = imageTasks[0]
   const liveImageTasks = generation.tasks.filter((task) => task.kind === 'image')
@@ -567,7 +567,7 @@ export function ImageWorkspace() {
    * 这里把后端结果放在前面，本地条目仅用于未登录预览。
    */
   const stageWorks = useMemo<Work[]>(() => {
-    if (serverWorksResult.state === 'unauthenticated') return imageWorks
+    if (serverWorksResult.state === 'unauthenticated') return []
     return serverWorksResult.works.map((work) => ({
       id: work.id,
       kind: (work.kind === 'video' ? 'video' : 'image') as Work['kind'],
@@ -681,10 +681,10 @@ export function ImageWorkspace() {
   const libraryUsable = serverLibrary.state !== 'idle' && serverLibrary.state !== 'unauthenticated'
 
   const referencePool = useMemo<Asset[]>(() => {
-    const pool = libraryUsable ? serverReferenceAssets : state.assets
+    const pool = libraryUsable ? serverReferenceAssets : []
     // 图片工作台的参考素材只能是图片：视频/音频选了也不能作为参考图提交。
     return pool.filter((asset) => asset.kind === 'image' || asset.kind === 'scene')
-  }, [libraryUsable, serverReferenceAssets, state.assets])
+  }, [libraryUsable, serverReferenceAssets])
 
   /**
    * **已选素材的存活校验**（按来源分别判定）。
@@ -1026,20 +1026,7 @@ export function ImageWorkspace() {
       }
       return
     }
-    const taskId = addDemoTask({
-      type: 'image',
-      title: `图片生成 · ${prompt.trim().slice(0, 18)}`,
-      status: 'queued',
-      stage: '等待生成',
-      expectedCredits: credits,
-      actualCredits: null,
-      input: prompt.trim(),
-      projectId: state.selectedProjectId,
-      resultAssetIds: [],
-      retryCount: 0,
-      settings: { modelId: model?.id ?? modelId, ratio, quality, count: Number(count) },
-    })
-    setNotice(taskId ? { tone: 'accent', text: '任务已加入队列，结果会自动出现在右侧预览。' } : { tone: 'warning', text: '积分不足，无法创建这次演示任务。' })
+    setNotice({ tone: 'warning', text: '生成服务暂时不可用，请稍后重试。' })
   }
 
   /**
@@ -1069,7 +1056,7 @@ export function ImageWorkspace() {
 
       <ParamSection title="模型">
         <SelectField value={model?.id ?? ''} onChange={setModelId} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))} />
-        {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">模型来自后台配置，提交后由后端按渠道优先级路由；实际扣费以任务结果为准。</p>}
+        {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">模型与计费以当前账户配置为准；实际扣费以任务结果为准。</p>}
       </ParamSection>
 
       <ParamSection title="输出">
@@ -1081,7 +1068,7 @@ export function ImageWorkspace() {
           ) : (
             <div className="col-span-2 rounded-lg border border-border bg-muted/40 p-3">
               <p className="text-xs font-medium text-foreground">生成数量固定为 1 张</p>
-              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">当前模型未配置批量能力，后端每次请求只产出一张结果。需要多张请更换支持批量的模型。</p>
+              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">当前模型每次只产出一张结果，需要多张请更换支持批量的模型。</p>
             </div>
           )}
         </div>
@@ -1265,12 +1252,12 @@ export function ImageWorkspace() {
 
       <section aria-labelledby="image-queue" className="studio-surface px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="image-queue" className="text-xs font-semibold text-foreground">{liveReady ? '真实生成任务' : '生成队列（本地预览）'}</h2>
-          <span className="text-[11px] text-muted-foreground">{liveReady ? `${liveImageTasks.length} 条后端任务` : `${imageTasks.length} 条本地任务`}</span>
+          <h2 id="image-queue" className="text-xs font-semibold text-foreground">生成任务</h2>
+          <span className="text-[11px] text-muted-foreground">{liveReady ? `${liveImageTasks.length} 条任务` : `${imageTasks.length} 条任务`}</span>
         </div>
         <div className="mt-2">
           {liveReady ? (
-            <LiveTaskList kinds={['image']} limit={4} compact emptyHint="还没有真实图片任务" />
+            <LiveTaskList kinds={['image']} limit={4} compact emptyHint="还没有图片任务" />
           ) : (
             <TaskQueue
               tasks={imageTasks.slice(0, 4).map((task) => ({ id: task.id, title: task.title, status: task.status, stage: task.stage, credits: task.expectedCredits }))}
@@ -1314,7 +1301,7 @@ export function ImageWorkspace() {
 }
 
 export function VideoWorkspace() {
-  const { state, estimateCredits, addDemoTask, liveModels, liveReady, defaultModels } = useStudio()
+  const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
   const generation = useGeneration()
   const router = useRouter()
   const [prompt, setPrompt] = useState('女孩在雪地中回头，远处的极光开始移动，镜头缓慢向前推进。')
@@ -1418,11 +1405,11 @@ export function VideoWorkspace() {
      *  - 搜索触发的 loading 窗口里切回演示素材，把已选素材误清空。
      */
     const libraryUsable = serverLibrary.state !== 'idle' && serverLibrary.state !== 'unauthenticated'
-    const pool = libraryUsable ? serverReferenceAssets : state.assets
+    const pool = libraryUsable ? serverReferenceAssets : []
     if (mode === 'edit') return pool.filter((asset) => asset.kind === 'video')
     if (mode === 'references') return pool.filter((asset) => ['image', 'video', 'scene'].includes(asset.kind))
     return pool.filter((asset) => ['image', 'scene'].includes(asset.kind))
-  }, [mode, serverLibrary.state, serverReferenceAssets, state.assets])
+  }, [mode, serverLibrary.state, serverReferenceAssets])
   const referenceSelectionLimit = mode === 'first' || mode === 'edit' ? 1 : mode === 'ends' ? 2 : capabilities.maxReferences
 
   useEffect(() => {
@@ -1578,8 +1565,8 @@ export function VideoWorkspace() {
 
   const settings: GenerationSettings = { modelId: model?.id ?? modelId, ratio, quality, duration, mode }
   const credits = estimateCredits(model?.id ?? modelId, settings)
-  const videoWorks = useMemo<Work[]>(() => (serverWorksResult.state === 'unauthenticated'
-    ? state.works.filter((work) => work.kind === 'video')
+  const videoWorks = useMemo<Work[]>(() => (!liveReady || serverWorksResult.state === 'unauthenticated'
+    ? []
     : serverWorksResult.works.map((work) => ({
         id: work.id,
         kind: 'video' as Work['kind'],
@@ -1594,8 +1581,8 @@ export function VideoWorkspace() {
         createdAt: work.createdAt ?? new Date().toISOString(),
         updatedAt: work.createdAt ?? new Date().toISOString(),
         duration: work.durationMs ? `${Math.round(work.durationMs / 1000)} 秒` : undefined,
-      }))), [ratio, serverWorksResult.state, serverWorksResult.works, state.works])
-  const videoTasks = state.tasks.filter((task) => task.type === 'video')
+      }))), [liveReady, ratio, serverWorksResult.state, serverWorksResult.works])
+  const videoTasks = liveReady ? state.tasks.filter((task) => task.type === 'video') : []
   const activeTask = videoTasks.find((task) => task.status === 'processing' || task.status === 'queued')
   const latestTask = videoTasks[0]
   const liveVideoTasks = generation.tasks.filter((task) => task.kind === 'video')
@@ -1762,20 +1749,7 @@ export function VideoWorkspace() {
       }
       return
     }
-    const taskId = addDemoTask({
-      type: 'video',
-      title: `视频生成 · ${prompt.trim().slice(0, 18)}`,
-      status: 'queued',
-      stage: '排队中',
-      expectedCredits: credits,
-      actualCredits: null,
-      input: prompt.trim(),
-      projectId: state.selectedProjectId,
-      resultAssetIds: [],
-      retryCount: 0,
-      settings,
-    })
-    setNotice(taskId ? { tone: 'warning', text: '当前为本地预览，任务没有提交到后端。' } : { tone: 'warning', text: '积分不足，无法创建这次演示任务。' })
+    setNotice({ tone: 'warning', text: '生成服务暂时不可用，请稍后重试。' })
   }
 
   /**
@@ -2030,12 +2004,12 @@ export function VideoWorkspace() {
 
       <section aria-labelledby="video-queue" className="studio-surface px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="video-queue" className="text-xs font-semibold text-foreground">{liveReady ? '真实生成任务' : '生成队列（本地预览）'}</h2>
-          <span className="text-[11px] text-muted-foreground">{liveReady ? `${liveVideoTasks.length} 条后端任务` : `${videoTasks.length} 条本地任务`}</span>
+          <h2 id="video-queue" className="text-xs font-semibold text-foreground">生成任务</h2>
+          <span className="text-[11px] text-muted-foreground">{liveReady ? `${liveVideoTasks.length} 条任务` : `${videoTasks.length} 条任务`}</span>
         </div>
         <div className="mt-2">
           {liveReady ? (
-            <LiveTaskList kinds={['video']} limit={4} compact emptyHint="还没有真实视频任务" />
+            <LiveTaskList kinds={['video']} limit={4} compact emptyHint="还没有视频任务" />
           ) : (
             <TaskQueue
               tasks={videoTasks.slice(0, 4).map((task) => ({ id: task.id, title: task.title, status: task.status, stage: task.stage, credits: task.expectedCredits }))}

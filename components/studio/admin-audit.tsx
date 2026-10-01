@@ -96,7 +96,7 @@ export function AdminAuditPanel() {
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <AdminStat label="日志总数" value={formatAdminNumber(data.total)} detail="当前筛选范围" />
-        <AdminStat label="本页失败操作" value={formatAdminNumber(failures)} detail="被后端拒绝或执行出错" tone={failures ? 'danger' : 'neutral'} />
+        <AdminStat label="本页失败操作" value={formatAdminNumber(failures)} detail="被系统拒绝或执行出错" tone={failures ? 'danger' : 'neutral'} />
         <AdminStat label="本页登录记录" value={formatAdminNumber(logins)} detail="管理员登录事件" />
       </div>
 

@@ -130,7 +130,7 @@ export function AdminGenerationPanel() {
         <AdminStat label="积分消耗" value={formatAdminNumber(summary?.totalPointsCost)} detail="实际记录的消耗合计" />
       </div>
 
-      <AdminSectionCard title="查询条件" description="按用户、模型、渠道、任务类型、状态和时间筛选。时间与渠道为本地过滤，其余条件由后端过滤。">
+      <AdminSectionCard title="查询条件" description="按用户、模型、渠道、任务类型、状态和时间筛选。筛选条件会统一应用到结果列表。">
         <div className="flex flex-wrap items-end gap-2">
           <AdminField label="关键词" className="w-full sm:w-64">
             <AdminInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="用户、模型或提示词" onKeyDown={(event) => { if (event.key === 'Enter') { setPage(1); setQuery(search) } }} />

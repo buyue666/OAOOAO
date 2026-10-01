@@ -180,7 +180,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           </Tooltip>
           {notificationsOpen && <div role="dialog" aria-label="通知" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-64 rounded-lg border border-border p-3 text-left shadow-xl">
             <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-foreground">通知</p><button type="button" onClick={() => setNotificationsOpen(false)} className="text-[11px] text-muted-foreground hover:text-foreground">关闭</button></div>
-            <p className="mt-3 text-xs leading-5 text-muted-foreground">{isConnected ? '暂无新的系统通知。' : '当前为本地预览，登录后读取真实通知。'}</p>
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">{isConnected ? '暂无新的系统通知。' : '暂时无法读取系统通知，请稍后重试。'}</p>
           </div>}
         </div>
         <div className="relative" ref={accountRef}>

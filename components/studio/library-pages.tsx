@@ -360,7 +360,7 @@ export function AssetsPage() {
       {visible.length === 0 ? (
         <EmptyState
           title={serverLibrary.state === 'error' ? '素材库暂时无法读取' : '没有找到素材'}
-          description={serverLibrary.state === 'error' ? '接口不可用时不会用演示数据填充素材库，请稍后重试。' : '上传一个文件或更换当前筛选条件。'}
+          description={serverLibrary.state === 'error' ? '当前无法读取素材库，请稍后重试。' : '上传一个文件或更换当前筛选条件。'}
           action={<ControlButton variant="primary" onClick={() => fileRef.current?.click()}><Upload className="size-3.5" />上传素材</ControlButton>}
         />
       ) : view === 'grid' ? (
@@ -394,7 +394,7 @@ export function AssetsPage() {
         )}
       >
         <Notice tone="warning">
-          这里删除的是**素材库记录**；素材文件若仍被其他项目引用，后端会保留文件，不会影响那些项目。
+          这里删除的是**素材库记录**；素材文件若仍被其他项目引用，系统会保留文件，不会影响那些项目。
           只想解除本项目的使用请用「移除引用」。
         </Notice>
       </Modal>
@@ -512,7 +512,7 @@ export function TasksPage() {
         <PageHeader
           eyebrow="工作区"
           title="任务"
-          description="进行中的任务来自后端实时状态，历史记录由服务端分页提供；刷新或换浏览器后仍可恢复。"
+          description="进行中的任务会实时更新，历史记录支持分页查看；刷新或换浏览器后仍可恢复。"
           actions={
             <ControlButton variant="secondary" size="sm" onClick={refreshAll} disabled={generation.loading || history.state === 'loading'}>
               <RefreshCw className={cn('size-3.5', (generation.loading || history.state === 'loading') && 'animate-spin')} />刷新状态
@@ -539,7 +539,7 @@ export function TasksPage() {
         {history.message && <Notice tone="warning"><span className="min-w-0 flex-1">历史记录暂时无法读取：{history.message}</span><button type="button" onClick={() => void history.reload()} className="shrink-0 text-[11px] underline">重试</button></Notice>}
 
         {filtered.length === 0 && historyFiltered.length === 0 ? (
-          <EmptyState title={generation.loading || history.state === 'loading' ? '正在读取后端任务' : '没有符合条件的任务'} description={generation.loading || history.state === 'loading' ? '正在从后端拉取任务状态。' : '在图片或视频工作台提交生成后，任务会出现在这里。'} />
+          <EmptyState title={generation.loading || history.state === 'loading' ? '正在读取任务' : '没有符合条件的任务'} description={generation.loading || history.state === 'loading' ? '正在同步任务状态。' : '在图片或视频工作台提交生成后，任务会出现在这里。'} />
         ) : (
           <div className="flex flex-col gap-4">
             {filtered.length > 0 && (
@@ -550,7 +550,7 @@ export function TasksPage() {
             )}
             {historyFiltered.length > 0 && (
               <section className="flex flex-col gap-3">
-                <h2 className="text-sm font-semibold text-foreground">历史记录（服务端共 {history.total} 条）</h2>
+                <h2 className="text-sm font-semibold text-foreground">历史记录（共 {history.total} 条）</h2>
                 {historyFiltered.map((item) => <HistoryTaskCard key={item.id} item={item} />)}
                 {history.hasMore && (
                   <ControlButton variant="secondary" onClick={() => void history.loadMore()} disabled={history.loadingMore}>
@@ -565,7 +565,12 @@ export function TasksPage() {
     )
   }
 
-  return <LocalTasksPage />
+  return (
+    <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-5 px-4 py-5 sm:px-5 md:px-8 md:py-6 xl:px-10">
+      <PageHeader eyebrow="工作区" title="任务" description="任务记录暂时无法读取，请稍后重试。" />
+      <LocalPreviewNotice what="任务记录" />
+    </div>
+  )
 }
 
 /** 服务端历史任务卡片：展示状态、模型、耗时、结果与失败原因。 */
@@ -625,7 +630,7 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
   )
 }
 
-/** 未登录或后端不可用时的本地预览任务页，明确标注为本地预览。 */
+/** 任务数据暂不可用时的兜底页面。 */
 function LocalTasksPage() {
   const { state, dispatch } = useStudio()
   const router = useRouter()
@@ -647,7 +652,7 @@ function LocalTasksPage() {
       <PageHeader
         eyebrow="工作区"
         title="任务"
-        description="当前为本地预览任务，未提交到后端。登录后可查看真实生成记录。"
+        description="任务记录暂时无法读取，请稍后重试。"
         actions={<ControlButton variant="secondary" size="sm" onClick={() => dispatch({ type: 'TICK_TASKS' })}><RefreshCw className="size-3.5" />刷新状态</ControlButton>}
       />
       <LocalPreviewNotice what="任务记录" />

@@ -29,7 +29,7 @@ export function createAgentPlan(context: string, title = '导演 Agent 计划'):
   const steps: AgentStep[] = [
     { id: 'step-01', label: '理解当前素材', detail: '读取项目、镜头与参考素材关系', status: 'pending' },
     { id: 'step-02', label: '整理生成参数', detail: '根据模型能力选择比例与时长', status: 'pending' },
-    { id: 'step-03', label: '执行候选生成', detail: '创建演示任务，不会调用真实供应商', status: 'pending' },
+    { id: 'step-03', label: '执行候选生成', detail: '创建候选任务并等待结果', status: 'pending' },
     { id: 'step-04', label: '回写项目结果', detail: '保留已完成候选，避免重复添加', status: 'pending' },
   ]
   return {
@@ -73,7 +73,7 @@ export function demoResultForTask(task: Task) {
     kind: (task.type === 'video' ? 'video' : 'image') as Work['kind'],
     src: task.type === 'video' ? media.video : media.auroraCover,
     poster: task.type === 'video' ? media.videoPoster : undefined,
-    fallback: '演示生成结果',
+    fallback: '生成结果',
     projectId: task.projectId,
     status: '草稿' as const,
     updatedAt: '刚刚',

@@ -166,7 +166,7 @@ export function AdminOverviewPanel() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)]">
-        <AdminSectionCard title="调用趋势" description={`近 ${overview?.windowDays ?? days} 天的生成请求数量`} action={<StatusBadge tone="success">真实接口数据</StatusBadge>}>
+        <AdminSectionCard title="调用趋势" description={`近 ${overview?.windowDays ?? days} 天的生成请求数量`} action={<StatusBadge tone="success">实时数据</StatusBadge>}>
           {daily.length ? (
             <div className="flex h-48 items-end gap-2 border-b border-l border-border px-3 pt-4 sm:gap-4">
               {daily.map((item, index) => (
@@ -259,7 +259,7 @@ export function AdminOverviewPanel() {
           </AdminTable>
         </AdminSectionCard>
 
-        <AdminSectionCard title="运营健康" description="基于真实接口的关键风险指标">
+        <AdminSectionCard title="运营健康" description="基于实时数据的关键风险指标">
           <div className="flex flex-col gap-3 text-xs">
             <HealthRow icon={CheckCircle2} label="生成成功率" value={`${successRate.toFixed(1)}%`} tone={successRate >= 90 ? 'success' : successRate >= 70 ? 'warning' : 'danger'} />
             <HealthRow icon={Clock} label="平均响应时间" value={formatAdminDuration(summary.averageDurationMs)} tone="neutral" />

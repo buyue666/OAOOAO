@@ -26,17 +26,14 @@ function formatTime(value: number) {
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('zh-CN', { hour12: false })
 }
 
-/** 本地预览提示：未登录或后端不可用时明确告知，不伪装成真实结果。 */
+/** 生成服务暂不可用时的统一提示。 */
 export function LocalPreviewNotice({ what = '生成' }: { what?: string }) {
-  const { localOnly } = useGeneration()
   return (
     <Notice tone="warning">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       <span>
-        当前处于<strong className="font-medium">本地预览</strong>：后端不可用或未登录，{what}不会真正提交。
-        下方示例结果仅用于界面预览，登录后才会调用真实模型并扣除积分。
+        当前暂时无法提交{what}，请稍后重试。
       </span>
-      {localOnly && <span className="sr-only">后端连接已标记为不可用</span>}
     </Notice>
   )
 }
@@ -337,7 +334,7 @@ export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint }: {
 
       {loading && !visible.length && (
         <div className="studio-surface flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground" role="status">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />正在读取后端任务
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />正在读取任务
         </div>
       )}
 
@@ -345,8 +342,8 @@ export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint }: {
 
       {!loading && !visible.length && (
         <div className="studio-surface flex flex-col items-center justify-center border-dashed py-8 text-center">
-          <p className="text-xs font-medium">{emptyHint || '还没有真实生成任务'}</p>
-          <p className="mt-1 max-w-sm text-[11px] leading-5 text-muted-foreground">填写参数并点击生成后，任务会提交到后端并在这里显示进度、结果与积分消耗。</p>
+          <p className="text-xs font-medium">{emptyHint || '还没有生成任务'}</p>
+          <p className="mt-1 max-w-sm text-[11px] leading-5 text-muted-foreground">填写参数并点击生成后，任务会在这里显示进度、结果与积分消耗。</p>
         </div>
       )}
     </div>

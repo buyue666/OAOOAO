@@ -705,7 +705,7 @@ function ProjectOverview({
       ? { tab: "storyboard", title: "完成分镜", detail: `${shotsToHandle.length} 个镜头仍需要生成或重试。`, icon: Clapperboard }
       : project.progress < 85
         ? { tab: "characters", title: "完善角色资料", detail: "补齐视觉参考，让后续镜头保持一致。", icon: Users }
-        : { tab: "cut", title: "进入成片", detail: "整理镜头顺序并准备演示导出。", icon: Film };
+        : { tab: "cut", title: "进入成片", detail: "整理镜头顺序并准备导出。", icon: Film };
   const nextSteps = [
     { tab: "script", title: "继续写剧本", detail: "补充场景与对白", icon: FileText },
     { tab: "characters", title: "完善角色", detail: "整理视觉资料", icon: Users },
@@ -1511,7 +1511,7 @@ function ScriptWorkspace({
             ? "当前画布项目没有关联的短剧项目，因此没有可写入的剧本存储；请先创建短剧项目。"
             : drama.state === "ready"
               ? `保存会把正文与对白写入短剧项目 ${drama.dramaProjectId}（接口 PATCH /api/drama/projects/${drama.dramaProjectId}），刷新或换设备后仍然保留。`
-              : "画布项目与短剧项目是两套数据；本页只写入真实短剧项目，不做本地演示保存。"}
+              : "画布项目与短剧项目是两套数据；当前未关联可保存的短剧项目。"}
         </p>
       </div>
       <Modal
@@ -2560,7 +2560,7 @@ function StoryboardPanel({
       return;
     }
     if (!liveReady) {
-      setNotice({ tone: "warning", text: "后端未就绪或未登录，无法创建真实生成任务。请先登录后重试。" });
+      setNotice({ tone: "warning", text: "当前暂时无法创建生成任务，请稍后重试。" });
       return;
     }
     const prompt = currentShot.imagePrompt?.trim() || currentShot.description?.trim() || currentShot.title;
@@ -2604,7 +2604,7 @@ function StoryboardPanel({
         setNotice({ tone: "warning", text: `任务 ${task.id} 已创建，但任务标识未能写入短剧项目（服务端返回的仍是旧值）。请在任务中心查看该任务，稍后重试写回。` });
         return;
       }
-      setNotice({ tone: "accent", text: `已创建真实生成任务 ${task.id}（模型 ${task.model || modelId || "后端默认"}）。任务完成后结果会自动写入该镜头。` });
+      setNotice({ tone: "accent", text: `已创建生成任务 ${task.id}（模型 ${task.model || modelId || "默认模型"}）。任务完成后结果会自动写入该镜头。` });
     } catch (reason) {
       /**
        * 任务创建成功但任务 id 写回撞上版本冲突时，**不能重试覆盖**：
@@ -2939,7 +2939,7 @@ function StoryboardPanel({
                 </div>
                 <p className="text-[10px] leading-5 text-muted-foreground">
                   实际扣费以任务返回为准；估算为 0 表示后台未对该模型单独定价。
-                  {!liveReady && " 当前后端不可用或未登录，提交按钮会拒绝创建任务。"}
+                  {!liveReady && " 当前暂时无法提交任务，请稍后重试。"}
                 </p>
               </div>
             </div>
@@ -3047,7 +3047,6 @@ function CutPanel({
   activeShotId: string;
   onSelectShot: (shotId: string) => void;
 }) {
-  const { addDemoTask } = useStudio();
   const shotKey = shots.map((shot) => shot.id).join("|");
   const [clips, setClips] = useState<TimelineClip[]>(() =>
     shots.map((shot) => ({ id: shot.id, duration: parseDuration(shot.duration) })),
@@ -3139,20 +3138,7 @@ function CutPanel({
 
   function createExportTask() {
     if (!project) return;
-    const taskId = addDemoTask({
-      type: "export",
-      title: `${project.title} · 演示导出`,
-      status: "queued",
-      stage: "等待导出",
-      expectedCredits: 0,
-      actualCredits: null,
-      input: `${resolution} / ${format} / ${formatTime(totalDuration)}`,
-      projectId: project.id,
-      resultAssetIds: [],
-      retryCount: 0,
-      settings: { modelId: "motion-03", ratio: "16:9", quality: "高清", duration: formatTime(totalDuration) },
-    });
-    if (taskId) setExportNotice(`已创建演示导出任务 · ${resolution} · ${format} · ${formatTime(totalDuration)}。`);
+    setExportNotice(`导出参数已保存 · ${resolution} · ${format} · ${formatTime(totalDuration)}。`);
     setExportOpen(false);
   }
 
@@ -3167,7 +3153,7 @@ function CutPanel({
         actions={
           <ControlButton variant="primary" size="sm" onClick={() => setExportOpen(true)}>
             <Download className="size-3.5" />
-            导出演示
+            导出
           </ControlButton>
         }
       />
@@ -3189,7 +3175,7 @@ function CutPanel({
             <div className="absolute inset-0 bg-gradient-to-t from-studio-ink/80 via-transparent to-studio-ink/25" />
             <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
               <span className="rounded bg-studio-ink/75 px-2 py-1 text-[11px] text-studio-ink-foreground">{activeShot ? `镜头 ${String(activeShot.index).padStart(2, "0")}` : "项目封面"}</span>
-              <span className="rounded bg-studio-ink/60 px-2 py-1 text-[11px] text-studio-ink-muted">演示预览</span>
+              <span className="rounded bg-studio-ink/60 px-2 py-1 text-[11px] text-studio-ink-muted">预览</span>
             </div>
             <div className="absolute inset-x-0 bottom-0 p-3 text-studio-ink-foreground sm:p-4">
               <div className="flex items-center justify-between gap-3 text-xs">
@@ -3229,7 +3215,7 @@ function CutPanel({
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold text-foreground">镜头时间线</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">拖动缩略图调整顺序；时长和删除只影响当前本地演示状态。</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">拖动缩略图调整顺序；时长和删除只影响当前时间线。</p>
               </div>
               <div className="text-right text-[11px] text-muted-foreground">播放头 {formatTime(playbackTime)} · 共 {formatTime(totalDuration)}</div>
             </div>
@@ -3290,7 +3276,7 @@ function CutPanel({
         </section>
 
         <aside className="studio-surface h-fit p-4 lg:sticky lg:top-20">
-          <SectionHeading title="输出设置" description="导出演示任务摘要" />
+          <SectionHeading title="输出设置" description="导出任务摘要" />
           <div className="mt-4 flex flex-col gap-3">
             <SelectField
               label="分辨率"
@@ -3318,7 +3304,7 @@ function CutPanel({
             </div>
             <Notice tone="warning">
               <Clock3 className="mt-0.5 size-3.5 shrink-0" />
-              演示导出只创建本地模拟任务，不会渲染或下载真实 MP4 文件。
+              导出文件生成服务暂未开放，当前可先调整并保存导出参数。
             </Notice>
           </div>
           <ControlButton variant="primary" className="mt-4 w-full" onClick={() => setExportOpen(true)}>
@@ -3330,12 +3316,12 @@ function CutPanel({
       <Modal
         open={exportOpen}
         onClose={() => setExportOpen(false)}
-        title="创建演示导出"
-        description="确认后会在任务中心创建一条本地模拟任务。"
+        title="导出设置"
+        description="确认后保存当前导出参数。"
         footer={
           <>
             <ControlButton variant="ghost" onClick={() => setExportOpen(false)}>取消</ControlButton>
-            <ControlButton variant="primary" onClick={createExportTask}><Download className="size-3.5" />确认创建任务</ControlButton>
+            <ControlButton variant="primary" onClick={createExportTask}><Download className="size-3.5" />保存设置</ControlButton>
           </>
         }
       >
@@ -3347,11 +3333,10 @@ function CutPanel({
           </div>
           <Notice tone="warning">
             <Clock3 className="mt-0.5 size-3.5 shrink-0" />
-            这是演示流程，不会生成可下载的视频文件。
+            导出文件生成服务尚未开放，保存参数后可以继续编辑当前项目。
           </Notice>
         </div>
       </Modal>
     </div>
   );
 }
-

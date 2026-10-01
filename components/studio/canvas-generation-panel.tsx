@@ -243,7 +243,7 @@ export function CanvasGenerationPanel({
           )}
           {mode === 'agent' && <div className="oao-canvas-agent-hint"><Sparkles className="size-4" aria-hidden="true" /><span>Agent 会在当前画布创建任务，并根据画布节点、素材和你的描述拆解后续步骤。</span></div>}
           {error && <p className="oao-canvas-generation-error" role="alert">{error}</p>}
-          <div className="oao-canvas-generation-submit"><span><Coins className="size-3.5" aria-hidden="true" />{mode === 'agent' ? '提交后按 Agent 任务计费' : estimatedCredits ? `预计 ${estimatedCredits} 积分` : '费用以后端返回为准'}</span><button type="submit" disabled={!prompt.trim() || submitting} className="oao-canvas-generate-button">{submitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}{submitting ? '提交中' : '开始生成'}</button></div>
+          <div className="oao-canvas-generation-submit"><span><Coins className="size-3.5" aria-hidden="true" />{mode === 'agent' ? '提交后按 Agent 任务计费' : estimatedCredits ? `预计 ${estimatedCredits} 积分` : '实际费用以任务结果为准'}</span><button type="submit" disabled={!prompt.trim() || submitting} className="oao-canvas-generate-button">{submitting ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}{submitting ? '提交中' : '开始生成'}</button></div>
         </form>
       </div>
     </aside>

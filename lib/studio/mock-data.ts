@@ -281,7 +281,7 @@ export const models: ModelConfig[] = [
     capability: 'video',
     description: '轻量快速预览，不支持首尾帧',
     creditCost: 24,
-    status: '演示配置',
+    status: '维护中',
     capabilities: {
       textToMedia: true,
       firstFrame: true,
@@ -468,13 +468,13 @@ export const tasks: Task[] = [
     projectId: 'quiet-room',
     resultAssetIds: [],
     retryCount: 1,
-    error: '演示通道暂时没有可用容量，请稍后重试。',
+    error: '生成服务暂时没有可用容量，请稍后重试。',
     settings: { modelId: 'line-art', ratio: '4:5', quality: '标准', count: 2 },
   },
   {
     id: 'task-export-01',
     type: 'export',
-    title: '极光之后 · 演示导出',
+    title: '极光之后 · 成片导出',
     status: 'queued',
     stage: '等待导出',
     createdAt: Date.parse('2026-09-14T08:59:30.000Z'),
@@ -567,7 +567,7 @@ export const adminUsers: AdminUser[] = [
 ]
 
 export const adminChannels: AdminChannel[] = [
-  { id: 'channel-main', name: '默认生成通道', protocol: 'HTTPS / REST', mapping: 'Nova Image 2 · Motion 03', priority: 1, weight: 100, status: '演示配置', latency: '—' },
+  { id: 'channel-main', name: '默认生成通道', protocol: 'HTTPS / REST', mapping: 'Nova Image 2 · Motion 03', priority: 1, weight: 100, status: '已停用', latency: '—' },
   { id: 'channel-fallback', name: '备用预览通道', protocol: 'HTTPS / REST', mapping: 'Line Art · Motion Lite', priority: 2, weight: 40, status: '已停用', latency: '—' },
 ]
 

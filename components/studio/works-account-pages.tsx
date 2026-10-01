@@ -45,7 +45,7 @@ export function WorksPage() {
         <PageHeader eyebrow="作品" title="我的作品" description="生成结果、项目关系和发布状态都在这里继续管理。" />
         <Notice tone="warning">
           <LockKeyhole className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1">登录后才会显示属于你的作品。未登录时不会用演示数据填充。</span>
+          <span className="min-w-0 flex-1">登录后才会显示属于你的作品。</span>
           <Link href="/login?next=/works" className="shrink-0 text-[11px] underline">前往登录</Link>
         </Notice>
       </div>
@@ -57,7 +57,7 @@ export function WorksPage() {
       <PageHeader
         eyebrow="作品"
         title="我的作品"
-        description="结果来自后端生成记录中成功且带结果资产的任务。"
+        description="这里集中管理已经生成并保存结果的作品。"
         actions={(
           <>
             <ControlButton variant="secondary" onClick={() => { setLoading(true); void reload().finally(() => setLoading(false)) }} disabled={loading || state === 'loading'}>
@@ -75,7 +75,7 @@ export function WorksPage() {
       </div>
       {state === 'loading' && !works.length ? (
         <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status">
-          <Loader2 className="size-4 animate-spin" />正在读取后端生成结果
+          <Loader2 className="size-4 animate-spin" />正在读取生成结果
         </div>
       ) : state === 'error' && !works.length ? (
         <Notice tone="warning">
@@ -85,7 +85,7 @@ export function WorksPage() {
       ) : visible.length === 0 ? (
         <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center">
           <p className="text-sm font-medium">还没有生成成功的作品</p>
-          <p className="max-w-sm text-xs leading-5 text-muted-foreground">在图片或视频工作台提交生成后，成功的结果会自动出现在这里。后端记录共 {total} 条。</p>
+          <p className="max-w-sm text-xs leading-5 text-muted-foreground">在图片或视频工作台提交生成后，成功的结果会自动出现在这里。当前记录共 {total} 条。</p>
           <Link href="/image" className="mt-2 text-xs text-studio-accent underline">前往图片工作台</Link>
         </div>
       ) : (
@@ -279,7 +279,7 @@ export function GalleryPage() {
       ) : gallery.length === 0 ? (
         <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center">
           <p className="text-sm font-medium">{loadState === 'error' ? '公开作品暂时无法读取' : '还没有公开作品'}</p>
-          <p className="max-w-sm text-xs leading-5 text-muted-foreground">{loadState === 'error' ? '接口不可用时不会用本地演示作品填充广场。' : '作品被发布后才会出现在这里。'}</p>
+          <p className="max-w-sm text-xs leading-5 text-muted-foreground">{loadState === 'error' ? '当前无法读取公开作品，请稍后重试。' : '作品被发布后才会出现在这里。'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -431,14 +431,14 @@ function ProfilePanel({ state, onNotice }: { state: ReturnType<typeof useStudio>
       <div className="studio-surface p-5">
         <SectionHeading
           title="个人资料"
-          description={connected ? '资料来自当前登录账户。' : '未登录时没有真实账户资料。'}
+          description={connected ? '资料来自当前登录账户。' : '登录后即可查看和管理账户资料。'}
           action={connected ? <ControlButton variant="secondary" size="sm" onClick={() => setEditing((value) => !value)} disabled={busy}><Pencil className="size-3.5" />{editing ? '取消编辑' : '编辑'}</ControlButton> : <Link href="/login?next=/account" className="text-xs underline">前往登录</Link>}
         />
         <div className="mt-5 flex items-center gap-4">
           <img src={state.user.avatar} alt={state.user.name} className="size-16 rounded-full object-cover" />
           <div>
             <p className="text-base font-semibold text-foreground">{connected ? state.user.name : '未登录'}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{connected ? (state.user.email || '未设置邮箱') : '登录后显示真实账户'}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{connected ? (state.user.email || '未设置邮箱') : '登录后显示账户邮箱'}</p>
             <div className="mt-2"><StatusBadge tone="accent">{connected ? state.user.plan : '未登录'}</StatusBadge></div>
           </div>
         </div>
@@ -452,7 +452,7 @@ function ProfilePanel({ state, onNotice }: { state: ReturnType<typeof useStudio>
               <div className="flex items-end"><ControlButton variant="secondary" size="sm" onClick={sendEmailCode} disabled={busy || !newEmail.trim()}><Send className="size-3.5" />获取验证码</ControlButton></div>
             </div>
             {codeSent && <p className="text-[11px] text-muted-foreground">{codeSent}</p>}
-            <Notice tone="neutral"><Mail className="mt-0.5 size-3.5 shrink-0" />邮箱状态由后端确认；前端不会在验证码通过前显示「已验证」。</Notice>
+            <Notice tone="neutral"><Mail className="mt-0.5 size-3.5 shrink-0" />邮箱状态将在验证码通过后更新。</Notice>
             <div className="flex justify-end gap-2"><ControlButton variant="ghost" onClick={() => setEditing(false)} disabled={busy}>取消</ControlButton><ControlButton variant="primary" onClick={saveProfile} disabled={busy}>{busy ? '保存中…' : '保存资料'}</ControlButton></div>
           </div>
         ) : (
@@ -464,9 +464,9 @@ function ProfilePanel({ state, onNotice }: { state: ReturnType<typeof useStudio>
       </div>
 
       <div className="studio-surface p-5">
-        <SectionHeading title="安全" description={connected ? '登录状态由后端会话管理。' : '登录后可使用真实账户安全设置。'} />
+        <SectionHeading title="安全" description={connected ? '登录状态已受保护。' : '登录后可管理账户安全设置。'} />
         <div className="mt-3 border-t border-border">
-          <KeyValue label="修改密码" value={connected ? <ControlButton variant="ghost" size="sm" onClick={() => setPasswordOpen((value) => !value)}><LockKeyhole className="size-3.5" />{passwordOpen ? '收起' : '修改密码'}</ControlButton> : <span className="text-xs text-muted-foreground">登录后可用</span>} />
+          <KeyValue label="修改密码" value={connected ? <ControlButton variant="ghost" size="sm" onClick={() => setPasswordOpen((value) => !value)}><LockKeyhole className="size-3.5" />{passwordOpen ? '收起' : '修改密码'}</ControlButton> : <span className="text-xs text-muted-foreground">需要登录</span>} />
           <KeyValue label="找回密码" value={<Link href="/login?mode=reset" className="text-xs text-studio-accent underline">通过邮箱重置</Link>} />
         </div>
         {passwordOpen && (
@@ -527,8 +527,8 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
       {message && <Notice tone="warning"><span className="min-w-0 flex-1">积分统计暂时不可用：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice>}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">可用积分</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-studio-accent">{connected ? state.credits.toLocaleString() : '—'}</p>{rechargeEnabled ? <Link href="/plans" className="mt-3 inline-flex text-xs font-medium text-studio-accent hover:underline">购买套餐 <ArrowUpRight className="ml-1 size-3.5" /></Link> : <p className="mt-3 text-xs text-muted-foreground">自用模式暂不开放充值</p>}</div>
-        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已消费</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthConsume)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水统计' : connected ? '统计暂时不可用' : '登录后显示真实统计'}</p></div>
-        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已退回</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthRefund)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水类型统计，不按金额正负推断' : connected ? '统计暂时不可用' : '登录后显示真实统计'}</p></div>
+        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已消费</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthConsume)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水统计' : '统计暂时不可用'}</p></div>
+        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已退回</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthRefund)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水类型统计，不按金额正负推断' : '统计暂时不可用'}</p></div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}充值</p><p className="mt-1.5 text-xl font-semibold text-foreground">{display(monthRecharge)}</p></div>
@@ -536,7 +536,7 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
       </div>
 
       <div className="studio-surface p-5">
-        <SectionHeading title="流水明细" description="记录来自后端积分流水接口，类型区分消费、退款、充值、赠送与过期。" />
+        <SectionHeading title="流水明细" description="按消费、退款、充值、赠送与过期分类查看积分变化。" />
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[560px] text-left">
             <thead className="border-b border-border text-xs text-muted-foreground"><tr><th className="py-3 font-medium">说明</th><th className="py-3 font-medium">类型</th><th className="py-3 font-medium">金额</th><th className="py-3 font-medium">时间</th></tr></thead>
@@ -556,7 +556,7 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
           </table>
           {recordsState === 'loading' && <p className="py-6 text-center text-xs text-muted-foreground">正在读取积分流水…</p>}
           {recordsState === 'error' && <p className="py-6 text-center text-xs text-destructive">{recordsMessage}</p>}
-          {recordsState === 'ready' && !records.length && <p className="py-6 text-center text-xs text-muted-foreground">{connected ? '暂无积分流水' : '登录后显示真实积分流水'}</p>}
+          {recordsState === 'ready' && !records.length && <p className="py-6 text-center text-xs text-muted-foreground">暂无积分流水</p>}
         </div>
         {summary && (
           <p className="mt-3 text-[11px] text-muted-foreground">
@@ -566,7 +566,7 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
           </p>
         )}
       </div>
-      <Notice tone="neutral"><CreditCard className="mt-0.5 size-3.5 shrink-0" />实际扣费与退款以服务端积分流水为准。</Notice>
+      <Notice tone="neutral"><CreditCard className="mt-0.5 size-3.5 shrink-0" />实际扣费与退款以积分流水为准。</Notice>
     </div>
   )
 }
@@ -660,10 +660,10 @@ function OrdersPanel() {
       <Modal open={Boolean(checkout)} onClose={() => setCheckout(null)} title="继续支付" description={checkout?.orderNo} footer={<ControlButton variant="ghost" onClick={() => setCheckout(null)}>关闭</ControlButton>}>
         {checkout && (
           <div className="flex flex-col gap-3">
-            <KeyValue label="支付方式" value={checkout.kind === 'manual' ? '人工确认（本地环境）' : checkout.kind} />
+            <KeyValue label="支付方式" value={checkout.kind === 'manual' ? '人工确认' : checkout.kind} />
             {checkout.url && <a href={checkout.url} target="_blank" rel="noopener noreferrer" className="text-xs text-studio-accent underline">打开支付页面</a>}
             {checkout.qrContent && <p className="break-all rounded-md border border-border bg-muted/40 p-2 font-mono text-[11px]">{checkout.qrContent}</p>}
-            <Notice tone="neutral">本地环境只启用人工支付渠道。真实在线支付需要在具备支付资质后单独开通。</Notice>
+            <Notice tone="neutral">当前订单需要人工确认支付，请按页面提示完成后等待处理。</Notice>
           </div>
         )}
       </Modal>
@@ -720,7 +720,7 @@ function InvitePanel({ onNotice }: { onNotice: (value: string) => void }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="studio-surface p-5">
-        <SectionHeading title="邀请好友" description="邀请码、链接与奖励规则全部来自服务端。" />
+        <SectionHeading title="邀请好友" description="邀请码、链接与奖励规则会随账户状态同步。" />
         {message && <Notice tone="warning">{message}</Notice>}
         {loadState === 'unauthenticated' ? (
           <Notice tone="neutral"><span className="min-w-0 flex-1">登录后才会显示属于你的邀请码。</span><Link href="/login?next=/account" className="shrink-0 text-[11px] underline">前往登录</Link></Notice>
@@ -732,7 +732,7 @@ function InvitePanel({ onNotice }: { onNotice: (value: string) => void }) {
           <div className="mt-5 flex flex-col gap-3">
             <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3">
               <Link2 className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{link || '服务端未返回邀请链接'}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{link || '暂未生成邀请链接'}</span>
               <ControlButton variant="secondary" size="sm" onClick={copyLink} disabled={!link}><Copy className="size-3.5" />复制</ControlButton>
             </div>
             {copyState && <p className="text-[11px] text-muted-foreground" aria-live="polite">{copyState}</p>}
@@ -751,7 +751,7 @@ function InvitePanel({ onNotice }: { onNotice: (value: string) => void }) {
           </div>
         )}
       </div>
-      <Notice tone="neutral"><Users className="mt-0.5 size-3.5 shrink-0" />奖励只在被邀请人完成有效支付后由服务端结算，前端不会自行发放。</Notice>
+      <Notice tone="neutral"><Users className="mt-0.5 size-3.5 shrink-0" />奖励会在被邀请人完成有效支付后结算。</Notice>
     </div>
   )
 }
@@ -769,7 +769,7 @@ export function SettingsPage() {
     setRefreshing(true); setNotice('')
     try {
       await refreshSession()
-      setNotice('已从后端重新读取账户、模型目录与积分。')
+      setNotice('已重新同步账户、模型目录与积分。')
     } catch (reason) {
       setNotice(reason instanceof Error ? `同步失败：${reason.message}` : '同步失败，请稍后重试。')
     } finally {
@@ -789,14 +789,14 @@ export function SettingsPage() {
           </div>
         </div>
         <div className="studio-surface p-5">
-          <SectionHeading title="账户与数据" description={connected ? '数据来自后端账户，本地只缓存界面偏好。' : '未登录，界面使用本地预览数据。'} />
+          <SectionHeading title="账户与数据" description={connected ? '账户数据与界面偏好。' : '登录后即可查看账户数据。'} />
           <div className="mt-4 border-t border-border pt-2">
-            <KeyValue label="账户状态" value={<StatusBadge tone={connected ? 'success' : 'neutral'}>{connected ? '已连接后端' : '未登录'}</StatusBadge>} />
-            <KeyValue label="模型目录" value={state.liveModels.length ? `${state.liveModels.length} 个后端模型` : '未获取到后端模型'} />
+            <KeyValue label="账户状态" value={<StatusBadge tone={connected ? 'success' : 'neutral'}>{connected ? '已同步' : '未登录'}</StatusBadge>} />
+            <KeyValue label="模型目录" value={state.liveModels.length ? `${state.liveModels.length} 个可用模型` : '暂未获取模型'} />
             <KeyValue label="可用积分" value={connected ? state.credits.toLocaleString() : '—'} />
             <KeyValue label="重新同步" value={<ControlButton variant="ghost" size="sm" onClick={sync} disabled={refreshing}><RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />{refreshing ? '同步中…' : '立即同步'}</ControlButton>} />
           </div>
-          {!connected && <Notice tone="neutral">未登录时工作台显示本地预览，真实数据需要登录后读取。</Notice>}
+          {!connected && <Notice tone="neutral">登录后可查看完整账户数据。</Notice>}
         </div>
       </div>
       <div className="studio-surface p-5">

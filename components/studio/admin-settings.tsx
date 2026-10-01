@@ -221,7 +221,7 @@ function BillingSection({
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={submitMode}>
-        <AdminSectionCard title="站点运营模式" description="自用模式关闭用户充值、套餐购买和在线支付；商用模式才会开放公开计费入口。模式限制由服务端同时执行，不能通过直接调用接口绕过。">
+        <AdminSectionCard title="站点运营模式" description="自用模式关闭用户充值、套餐购买和在线支付；商用模式才会开放公开计费入口。模式限制由系统同时执行。">
           <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_1fr] sm:items-end">
             <AdminField label="当前模式">
               <AdminSelect name="operationMode" defaultValue={mode}>
@@ -273,7 +273,7 @@ function PaymentProviderEditor({
     setValues(Object.fromEntries((provider?.fields ?? []).map((field) => [field.key, field.secret ? '' : field.value ?? ''])))
   }, [provider])
 
-  if (!provider) return <AdminSectionCard title="易支付" description="正在读取支付配置。"><AdminNotice tone="warning">当前管理员没有读取支付配置的权限，或后端暂未返回易支付定义。</AdminNotice></AdminSectionCard>
+  if (!provider) return <AdminSectionCard title="易支付" description="正在读取支付配置。"><AdminNotice tone="warning">当前管理员没有读取支付配置的权限，或系统暂未返回易支付定义。</AdminNotice></AdminSectionCard>
   const currentProvider = provider
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -290,7 +290,7 @@ function PaymentProviderEditor({
 
   return (
     <form onSubmit={submit}>
-      <AdminSectionCard title="易支付" description={`${provider.description} 回调地址由后端生成，保存后请把下面的地址填入易支付后台。`}>
+      <AdminSectionCard title="易支付" description={`${provider.description} 回调地址由系统生成，保存后请把下面的地址填入易支付后台。`}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
           <div className="flex flex-wrap items-center gap-2 text-xs"><StatusBadge tone={provider.checkoutReady ? 'success' : 'warning'}>{provider.checkoutReady ? '下单已就绪' : '缺少下单配置'}</StatusBadge><StatusBadge tone={provider.webhookReady ? 'success' : 'warning'}>{provider.webhookReady ? '回调已就绪' : '回调待配置'}</StatusBadge></div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={saving} />启用易支付</label>
@@ -413,7 +413,7 @@ function PointsSection({ settings, onSave, saving }: { settings: AdminSettings; 
                 </AdminField>
               </div>
             ))}
-            {!plans.length && <AdminEmpty title="暂无权益方案" description="后端尚未返回任何套餐方案定义。" />}
+            {!plans.length && <AdminEmpty title="暂无权益方案" description="系统尚未返回任何套餐方案定义。" />}
           </div>
         </fieldset>
       </AdminSectionCard>
@@ -645,8 +645,8 @@ function LifecycleSection({ settings, onSave, saving }: { settings: AdminSetting
           <AdminField label="单批处理条数" className="sm:w-56"><AdminInput type="number" min="1" max="10000" value={lifecycle.maintenanceBatchSize} onChange={(event) => setLifecycle({ ...lifecycle, maintenanceBatchSize: Number(event.target.value) || 1 })} /></AdminField>
         </fieldset>
       </AdminSectionCard>
-      <AdminSectionCard title="备份与恢复" description="当前后台未开放网页端备份下载与恢复入口，避免在本地预览环境误覆盖生产数据。">
-        <div className="flex items-start gap-2 text-xs text-muted-foreground"><Database className="mt-0.5 size-3.5 shrink-0" /><span>数据备份由部署层负责。如需导出或恢复数据，请使用服务器上的备份流程，不要在预览环境执行覆盖操作。</span></div>
+      <AdminSectionCard title="备份与恢复" description="网页端备份下载与恢复入口暂未开放，避免误覆盖线上数据。">
+        <div className="flex items-start gap-2 text-xs text-muted-foreground"><Database className="mt-0.5 size-3.5 shrink-0" /><span>数据备份由部署层负责。如需导出或恢复数据，请使用服务器上的受控备份流程。</span></div>
       </AdminSectionCard>
       <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Settings2 className="size-3.5" />{saving ? '保存中' : '保存数据保留设置'}</ControlButton></div>
     </form>

@@ -502,7 +502,7 @@ export function createProjectFromTitle(title: string): Project {
     tags: ['新项目'],
     shotCount: 0,
     chapterCount: 1,
-    description: '由演示工作区创建的新项目。',
+    description: '新建项目。',
     favorite: false,
   }
 }
