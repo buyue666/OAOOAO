@@ -44,6 +44,7 @@ export type SessionSettings = {
   site?: { title?: string; logoUrl?: string; iconUrl?: string; announcementBar?: SiteAnnouncementBar; [key: string]: unknown }
   operationMode?: 'self_use' | 'commercial'
   modelPointCosts?: Record<string, number>
+  wechatLoginEnabled?: boolean
   generationPointMultipliers?: { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
   generationConcurrency?: Record<string, number>
   generationDefaults?: SessionGenerationDefaults

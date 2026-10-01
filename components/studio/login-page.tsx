@@ -23,7 +23,7 @@ type Mode = 'login' | 'register' | 'reset'
 export function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { refreshSession } = useStudio()
+  const { refreshSession, state } = useStudio()
   const initialMode: Mode = searchParams.get('mode') === 'reset' ? 'reset' : searchParams.get('mode') === 'register' ? 'register' : 'login'
   const [mode, setMode] = useState<Mode>(initialMode)
   const [username, setUsername] = useState('')
@@ -39,6 +39,7 @@ export function LoginPage() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [mfaRequired, setMfaRequired] = useState(false)
+  const wechatLoginEnabled = state.sessionSettings?.wechatLoginEnabled === true
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
@@ -290,7 +291,7 @@ export function LoginPage() {
             </ControlButton>
           </form>
 
-          {mode === 'login' && (
+          {mode === 'login' && wechatLoginEnabled && (
             <div className="mt-5 border-t border-border pt-5">
               {!wechatSession ? (
                 <ControlButton type="button" variant="secondary" className="h-11 w-full" onClick={() => void beginWechatLogin()} disabled={loading || wechatLoading}>

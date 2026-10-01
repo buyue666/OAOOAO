@@ -90,6 +90,7 @@ async function checkLoginFlows(browser) {
   check((await desktop.getByRole('button', { name: '显示密码', exact: true }).count()) === 1, '登录页：密码显示按钮存在')
   check((await desktop.getByRole('button', { name: '登录', exact: true }).count()) === 1, '登录页：登录按钮存在')
   check((await desktop.getByRole('button', { name: '注册新账户', exact: true }).count()) === 1, '登录页：注册入口存在')
+  check((await desktop.getByRole('button', { name: '微信扫码登录', exact: true }).count()) === 0, '登录页：未配置微信凭证时隐藏微信登录入口')
 
   await desktop.getByRole('button', { name: '登录', exact: true }).click()
   await desktop.waitForTimeout(300)
