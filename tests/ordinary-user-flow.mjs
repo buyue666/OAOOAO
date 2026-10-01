@@ -32,6 +32,11 @@ async function visibleText(page) {
   return page.locator('body').innerText({ timeout: 5000 }).catch(() => '')
 }
 
+async function assertCustomerFacingAuthCopy(page, label) {
+  const text = await visibleText(page)
+  check(!/本地预览|开发预览|未配置后端|真实数据|真实创作账户|真实模型|服务端|前端不会|联系管理员获取验证码/.test(text), `${label}: 无开发预览说明或内部实现文案`)
+}
+
 async function assertNoHorizontalOverflow(page, label) {
   const overflow = await page.evaluate(() =>
     Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth || 0) - window.innerWidth,
@@ -74,7 +79,7 @@ async function checkUnauthenticatedCreationRoutes(browser) {
     await page.goto(`${BASE_URL}${path}`, { waitUntil: 'domcontentloaded', timeout: 15000 })
     await waitForSettled(page)
     check(page.url().includes('/login'), `${path}: 未登录访问会先进入登录页`)
-    check(/登录|连接你的真实创作账户/.test(await visibleText(page)), `${path}: 登录页内容可见`)
+    check(/登录/.test(await visibleText(page)), `${path}: 登录页内容可见`)
   }
   await page.close()
 }
@@ -85,6 +90,7 @@ async function checkLoginFlows(browser) {
 
   await desktop.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 15000 })
   await waitForSettled(desktop)
+  await assertCustomerFacingAuthCopy(desktop, '登录页')
   check((await desktop.locator('input[autocomplete="username"]').count()) === 1, '登录页：用户名输入框存在')
   check((await desktop.locator('input[autocomplete="current-password"]').count()) === 1, '登录页：密码输入框存在')
   check((await desktop.getByRole('button', { name: '显示密码', exact: true }).count()) === 1, '登录页：密码显示按钮存在')
@@ -102,6 +108,7 @@ async function checkLoginFlows(browser) {
   await desktop.getByRole('button', { name: '注册新账户', exact: true }).click()
   await desktop.waitForTimeout(150)
   check(/创建账户/.test(await visibleText(desktop)), '注册页：可从登录页切换')
+  await assertCustomerFacingAuthCopy(desktop, '注册页')
   check((await desktop.locator('input[autocomplete="new-password"]').count()) === 1, '注册页：新密码输入框存在')
   check((await desktop.getByRole('button', { name: '显示密码', exact: true }).count()) === 1, '注册页：密码显示按钮存在')
   check((await desktop.getByRole('button', { name: '获取验证码', exact: true }).count()) === 1, '注册页：邮箱验证码入口存在')
@@ -117,11 +124,17 @@ async function checkLoginFlows(browser) {
   await desktop.getByRole('button', { name: '注册并登录', exact: true }).click()
   await desktop.waitForTimeout(150)
   check(/邮箱地址|邮箱验证码/.test(await visibleText(desktop)), '注册页：同意协议后仍要求邮箱验证')
+  await desktop.route('**/api/auth/email-code', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }))
+  await desktop.locator('input[autocomplete="email"]').fill('auth-copy-check@example.com')
+  await desktop.getByRole('button', { name: '获取验证码', exact: true }).click()
+  await desktop.getByText('验证码请求已提交，请查看邮箱。', { exact: true }).waitFor({ state: 'visible' })
+  await assertCustomerFacingAuthCopy(desktop, '注册验证码反馈')
 
   await desktop.getByRole('button', { name: '返回登录', exact: true }).click()
   await desktop.getByRole('button', { name: '忘记密码', exact: true }).click()
   await desktop.waitForTimeout(150)
   check(/重置密码/.test(await visibleText(desktop)), '找回密码页：可从登录页进入')
+  await assertCustomerFacingAuthCopy(desktop, '找回密码页')
   await desktop.getByRole('button', { name: '重置密码', exact: true }).click()
   await desktop.waitForTimeout(250)
   const resetError = await visibleText(desktop)
@@ -140,6 +153,7 @@ async function checkLoginFlows(browser) {
 
   await mobile.goto(`${BASE_URL}/login?mode=register`, { waitUntil: 'domcontentloaded', timeout: 15000 })
   await waitForSettled(mobile)
+  await assertCustomerFacingAuthCopy(mobile, '注册页移动端')
   await assertNoHorizontalOverflow(mobile, '注册页移动端')
   const mobileRegisterButton = mobile.getByRole('button', { name: '注册并登录', exact: true })
   check(await mobileRegisterButton.isVisible(), '注册页移动端：主要操作可见')

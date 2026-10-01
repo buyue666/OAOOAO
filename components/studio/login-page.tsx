@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { consumeWechatLoginSession, createWechatLoginSession, getWechatLoginStatus, login, StudioApiError, type WechatLoginSession, type WechatLoginStatus } from '@/lib/studio/api'
 import { registerAccount, requestEmailCode, resetPasswordByEmail } from '@/lib/studio/account-api'
 import { useStudio } from '@/lib/studio/store'
+import { useLocale } from '@/lib/studio/i18n'
 import { ControlButton, Notice } from './ui'
 
 type Mode = 'login' | 'register' | 'reset'
@@ -24,6 +25,7 @@ export function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { refreshSession, state } = useStudio()
+  const { t } = useLocale()
   const initialMode: Mode = searchParams.get('mode') === 'reset' ? 'reset' : searchParams.get('mode') === 'register' ? 'register' : 'login'
   const [mode, setMode] = useState<Mode>(initialMode)
   const [username, setUsername] = useState('')
@@ -119,8 +121,7 @@ export function LoginPage() {
     setLoading(true); setError(''); setNotice('')
     try {
       await requestEmailCode({ purpose, email: email.trim() })
-      // 后端不会把验证码回传给浏览器；这里只说明请求已发出，不声称邮箱已验证。
-      setNotice('验证码发送请求已提交。若站点未配置邮件服务，请联系管理员获取验证码。')
+      setNotice(t('authEmailCodeRequested'))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '验证码发送失败')
     } finally {
@@ -192,10 +193,10 @@ export function LoginPage() {
 
   const title = mode === 'login' ? '登录' : mode === 'register' ? '创建账户' : '重置密码'
   const description = mode === 'login'
-    ? '登录后可同步画布、套餐、订单和积分。'
+    ? t('authLoginDescription')
     : mode === 'register'
-      ? '注册后即可使用真实模型生成，并获得新用户额度（以服务端配置为准）。'
-      : '通过邮箱验证码重置密码。验证码由服务端校验，前端不会跳过验证。'
+      ? t('authRegisterDescription')
+      : t('authResetDescription')
 
   return (
     <main className="oao-auth-page flex min-h-dvh items-center justify-center bg-background px-5 py-10 text-foreground">
@@ -208,7 +209,6 @@ export function LoginPage() {
       <section className="relative w-full max-w-md">
         <div className="mb-8 flex items-center gap-4">
           <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={126} height={30} priority className="h-8 w-auto max-w-[150px] dark:invert" />
-          <p className="text-xs text-muted-foreground">连接你的真实创作账户</p>
         </div>
         <div className="lg-glass motion-panel p-6 sm:p-8">
           <div className="mb-6">
@@ -235,7 +235,7 @@ export function LoginPage() {
                 {mfaRequired && <label className="flex flex-col gap-2">
                   <span className="text-xs font-medium">管理员动态验证码</span>
                   <input inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} placeholder="请输入 6 位验证码" className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
-                  <span className="text-[11px] leading-5 text-muted-foreground">只有启用了管理员 MFA 的账号才需要填写。</span>
+                  <span className="text-[11px] leading-5 text-muted-foreground">{t('authMfaHelp')}</span>
                 </label>}
               </>
             )}
@@ -245,7 +245,7 @@ export function LoginPage() {
                 <PasswordField label="密码（至少 8 位）" autoComplete="new-password" value={password} visible={showPassword} onChange={(event) => setPassword(event.target.value)} onToggle={() => setShowPassword((value) => !value)} />
                 <label className="flex flex-col gap-2">
                   <span className="text-xs font-medium">邀请码（可选）</span>
-                  <input value={referralCode} onChange={(event) => setReferralCode(event.target.value)} placeholder="填写后奖励由服务端结算" className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
+                  <input value={referralCode} onChange={(event) => setReferralCode(event.target.value)} placeholder={t('authReferralPlaceholder')} className="studio-field h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
                 </label>
               </>
             )}
@@ -301,7 +301,7 @@ export function LoginPage() {
                 <div className="rounded-xl border border-border bg-muted/30 p-4">
                   <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-medium">微信扫码登录</p><p className="mt-1 text-xs text-muted-foreground">{wechatStatus === 'pending' ? '请使用微信扫描二维码' : wechatStatus === 'authorized' || wechatStatus === 'consumed' ? '授权成功，正在登录…' : wechatStatus === 'unlinked' ? '该微信尚未关联账号' : '二维码已过期，请重新获取'}</p></div><button type="button" onClick={closeWechatLogin} className="text-xs text-muted-foreground hover:text-foreground" disabled={wechatLoading}>关闭</button></div>
                   <div className="mx-auto mt-4 flex size-56 items-center justify-center overflow-hidden rounded-lg border border-border bg-white p-2">{wechatSession.qrCodeUrl && <img src={wechatSession.qrCodeUrl} alt="微信登录二维码" className="size-full object-contain" referrerPolicy="no-referrer" />}</div>
-                  {wechatStatus === 'unlinked' && <p className="mt-3 text-center text-xs text-muted-foreground">请先使用账号密码登录；管理员开启自动注册后，新微信可直接创建账户。</p>}
+                  {wechatStatus === 'unlinked' && <p className="mt-3 text-center text-xs text-muted-foreground">{t('authWechatUnlinked')}</p>}
                   {wechatStatus === 'expired' && <ControlButton type="button" variant="secondary" className="mt-3 h-9 w-full" onClick={() => { closeWechatLogin(); void beginWechatLogin() }}>重新获取二维码</ControlButton>}
                   {wechatError && <p role="alert" className="mt-3 text-xs text-destructive">{wechatError}</p>}
                 </div>
@@ -323,7 +323,6 @@ export function LoginPage() {
             )}
           </div>
         </div>
-        <p className="mt-4 text-center text-xs text-muted-foreground">未配置后端时仍可浏览本地预览；真实数据需要登录。</p>
       </section>
     </main>
   )
