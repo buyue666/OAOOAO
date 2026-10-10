@@ -15,6 +15,7 @@ import {
   Megaphone,
   Menu,
   RefreshCw,
+  Search,
   Settings2,
   ShieldCheck,
   Users,
@@ -31,14 +32,12 @@ type AdminNavItem = readonly [AdminSection, string, LucideIcon, AdminPermission[
 
 export const adminNavGroups: ReadonlyArray<{ label: string; items: ReadonlyArray<AdminNavItem> }> = [
   { label: '运营', items: [
-    ['overview', '运营总览', BarChart3, ['analytics.read']],
+    ['overview', '运营总览', BarChart3, ['analytics.read', 'generation.read', 'billing.read']],
     ['users', '用户与权限', Users, ['users.read']],
-    ['generation', '生成运维', Activity, ['generation.read']],
   ] as const },
   { label: '上游', items: [['channels', '模型与渠道', Layers3, ['upstream.manage']]] as const },
   { label: '商业', items: [
     ['products', '商品与套餐', WalletCards, ['commerce.manage']],
-    ['orders', '订单与财务', CircleDollarSign, ['billing.read']],
   ] as const },
   { label: '治理', items: [
     ['content', '内容与公告', Megaphone, ['content.manage']],
@@ -46,6 +45,14 @@ export const adminNavGroups: ReadonlyArray<{ label: string; items: ReadonlyArray
     ['audit', '审计日志', ShieldCheck, ['audit.read']],
   ] as const },
 ] as const
+
+/* 生成运营与财务订单已收进「运营总览」分区；保留独立路由与权限映射，但不再占用侧栏入口。 */
+const embeddedSectionItems: ReadonlyArray<AdminNavItem> = [
+  ['generation', '生成运营', Activity, ['generation.read']],
+  ['orders', '财务订单', CircleDollarSign, ['billing.read']],
+]
+
+const allAdminNavItems: ReadonlyArray<AdminNavItem> = [...adminNavGroups.flatMap((group) => group.items), ...embeddedSectionItems]
 
 export const adminSectionMeta: Record<AdminSection, { title: string; description: string }> = {
   overview: { title: '运营总览', description: '今日与近 7 日调用、成功率、分布、渠道健康与收入摘要。' },
@@ -113,7 +120,7 @@ export function AdminAccessBoundary({ section, children }: { section: AdminSecti
     user,
     permissions,
     isAdmin,
-    allowed: adminNavGroups.flatMap((group) => group.items).filter(([, , , required]) => isAdmin && required.some((permission) => permissions.includes(permission))).map(([value]) => value),
+    allowed: allAdminNavItems.filter(([, , , required]) => isAdmin && required.some((permission) => permissions.includes(permission))).map(([value]) => value),
     can: (permission) => isAdmin && permissions.includes(permission),
     canAny: (required) => isAdmin && required.some((permission) => permissions.includes(permission)),
   }), [isAdmin, permissions, user])
@@ -133,7 +140,7 @@ export function AdminAccessBoundary({ section, children }: { section: AdminSecti
   if (!user) {
     return (
       <CenteredCard title="需要登录">
-        <p className="mt-2 text-sm text-muted-foreground">请使用管理员账号登录后再访问 OAOOAO 控制中心。</p>
+        <p className="mt-2 text-sm text-muted-foreground">请使用管理员账号登录后再访问 OAO 控制中心。</p>
         <Link href={`/login?next=${encodeURIComponent(adminSectionHref(section))}`} className="mt-5 inline-flex h-9 items-center rounded-md bg-foreground px-4 text-sm text-background">前往登录</Link>
       </CenteredCard>
     )
@@ -142,13 +149,13 @@ export function AdminAccessBoundary({ section, children }: { section: AdminSecti
   if (!isAdmin) {
     return (
       <CenteredCard title="需要管理员权限">
-        <p className="mt-2 text-sm text-muted-foreground">当前账号不是管理员，无法访问 OAOOAO 控制中心。</p>
+        <p className="mt-2 text-sm text-muted-foreground">当前账号不是管理员，无法访问 OAO 控制中心。</p>
         <Link href="/studio" className="mt-5 inline-flex h-9 items-center rounded-md border border-border px-4 text-sm">返回创作工作台</Link>
       </CenteredCard>
     )
   }
 
-  const required = adminNavGroups.flatMap((group) => group.items).find(([value]) => value === section)?.[3] ?? []
+  const required = allAdminNavItems.find(([value]) => value === section)?.[3] ?? []
   const permitted = session.canAny(required)
 
   return (
@@ -202,12 +209,12 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
 
   return (
     <div className="admin-console flex min-h-dvh bg-background text-foreground" data-admin-section={section}>
-      {/* 后台侧栏：玻璃表面。注意不能给它加 position/transform，否则内部 fixed 抽屉会错位。 */}
+      {/* 侧栏为实色表面；不要给它加 transform，否则其内部 fixed 抽屉会错位。 */}
       <aside className="admin-sidebar sticky top-0 hidden h-dvh w-[232px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b border-border px-5">
-          <Link href="/studio" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={104} height={25} className="h-6 w-auto max-w-[104px] dark:invert" />
-            <span className="text-muted-foreground">/ 控制中心</span>
+          <Link href="/studio" className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
+            <Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6" />
+            <span>控制中心</span>
           </Link>
         </div>
         <AdminNavList section={section} items={items} onNavigate={navigate} />
@@ -220,8 +227,8 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
         <header className="admin-topbar sticky top-0 z-30 flex min-h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 py-3 md:px-7">
           <div className="flex min-w-0 items-center gap-3">
             <ControlButton variant="ghost" size="sm" className="lg:hidden" aria-label="打开后台导航" onClick={() => setMobileOpen(true)}><Menu className="size-4" /></ControlButton>
-            <Link href="/studio" className="flex items-center gap-2 lg:hidden" aria-label="OAOOAO 控制中心">
-              <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={92} height={22} className="h-5 w-auto max-w-[92px] dark:invert" />
+            <Link href="/studio" className="flex items-center lg:hidden" aria-label="OAO 控制中心">
+              <Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6" />
             </Link>
             <div className="hidden min-w-0 items-center gap-2 lg:flex">
               <span className="text-xs text-muted-foreground">控制中心</span>
@@ -230,12 +237,14 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
             </div>
             <div className="min-w-0 lg:hidden">
               <p className="truncate text-sm font-semibold text-foreground">{meta.title}</p>
-              <p className="truncate text-[11px] text-muted-foreground">OAOOAO 控制中心</p>
+              <p className="truncate text-[11px] text-muted-foreground">控制中心</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <AdminModuleSearch items={items} onNavigate={navigate} />
             <ControlButton variant="ghost" size="sm" onClick={refresh} title="刷新当前页面"><RefreshCw className="size-4" /></ControlButton>
             <Link href="/studio" className="hidden items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:inline-flex"><ExternalLink className="size-3.5" />工作台</Link>
+            <span className="hidden items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground xl:inline-flex"><span className="size-1.5 rounded-full bg-success" aria-hidden="true" />服务已连接</span>
             <div className="flex items-center gap-2 border-l border-border pl-3">
               <span className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-medium">{(session.user?.displayName || session.user?.username || 'A').slice(0, 1).toUpperCase()}</span>
               <span className="hidden max-w-32 truncate text-xs font-medium md:block">{session.user?.displayName || session.user?.username || '管理员'}</span>
@@ -256,7 +265,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
             <div className="absolute inset-0 bg-studio-ink/50" onClick={() => setMobileOpen(false)} />
             <nav className="relative flex w-[248px] max-w-[80vw] flex-col overflow-y-auto border-r border-border bg-card" aria-label="后台导航">
               <div className="flex h-16 items-center justify-between border-b border-border px-4">
-                <span className="flex items-center gap-2 text-sm font-semibold"><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={92} height={22} className="h-5 w-auto max-w-[92px] dark:invert" />控制中心</span>
+                <span className="flex items-center gap-2.5 text-sm font-semibold"><Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6" />控制中心</span>
                 <ControlButton variant="ghost" size="sm" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X className="size-4" /></ControlButton>
               </div>
               <AdminNavList section={section} items={items} onNavigate={navigate} />
@@ -266,9 +275,46 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
 
         <main className="mx-auto w-full max-w-[1540px] px-4 py-5 md:px-7 md:py-7">
           <PageHeader eyebrow="控制中心" title={meta.title} description={meta.description} />
-          <div className="mt-5">{children}</div>
+          <div key={section} className="motion-page mt-5">{children}</div>
         </main>
       </div>
+    </div>
+  )
+}
+
+function AdminModuleSearch({ items, onNavigate }: { items: ReadonlyArray<AdminNavItem>; onNavigate: (value: AdminSection) => void }) {
+  const [query, setQuery] = useState('')
+  const keyword = query.trim().toLowerCase()
+  const matches = keyword ? items.filter(([, label]) => label.toLowerCase().includes(keyword)) : []
+
+  const open = (value: AdminSection) => { setQuery(''); onNavigate(value) }
+
+  return (
+    <div className="relative hidden w-56 md:block">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      <input
+        type="search"
+        aria-label="搜索后台模块"
+        placeholder="搜索后台模块"
+        autoComplete="off"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) return
+          if (event.key === 'Enter' && matches[0]) open(matches[0][0])
+          if (event.key === 'Escape') setQuery('')
+        }}
+        className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-3 text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+      />
+      {matches.length > 0 && (
+        <ul aria-label="匹配的后台模块" className="absolute left-0 top-full z-40 mt-1 w-full overflow-hidden rounded-md border border-border bg-card p-1 shadow-md">
+          {matches.map(([value, label]) => (
+            <li key={value}>
+              <button type="button" onClick={() => open(value)} className="flex h-8 w-full items-center rounded-sm px-2 text-left text-xs text-foreground transition-colors hover:bg-muted">{label}</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

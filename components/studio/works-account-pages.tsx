@@ -272,7 +272,7 @@ export function GalleryPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader eyebrow="发现" title="广场" description="浏览 OAOOAO 社区中的公开作品。" actions={<SegmentedControl value={filter} onChange={setFilter} options={[{ value: '精选', label: '精选' }, { value: '全部', label: '全部' }, { value: 'image', label: '图片' }, { value: 'video', label: '视频' }]} />} />
+      <PageHeader eyebrow="发现" title="广场" description="浏览 OAO 社区中的公开作品。" actions={<SegmentedControl value={filter} onChange={setFilter} options={[{ value: '精选', label: '精选' }, { value: '全部', label: '全部' }, { value: 'image', label: '图片' }, { value: 'video', label: '视频' }]} />} />
       {message && <Notice tone="warning">{message}</Notice>}
       {loadState === 'loading' ? (
         <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取公开作品</div>
@@ -745,7 +745,7 @@ function InvitePanel({ onNotice }: { onNotice: (value: string) => void }) {
             <div className="border-t border-border pt-2">
               <KeyValue label="邀请人奖励" value={center.program.enabled ? `${center.program.inviterPoints} 积分` : '邀请计划未启用'} />
               <KeyValue label="被邀请人奖励" value={center.program.enabled ? `${center.program.inviteePoints} 积分（${center.program.inviteeRewardType === 'daily' ? '每日' : '永久'}）` : '—'} />
-              <KeyValue label="最低有效支付" value={`${moneyLabel(center.program.minimumPaidCents, 'CNY')}`} />
+              <KeyValue label="最���有效支付" value={`${moneyLabel(center.program.minimumPaidCents, 'CNY')}`} />
               <KeyValue label="冷却期" value={`${center.program.coolingOffDays} 天`} />
             </div>
           </div>

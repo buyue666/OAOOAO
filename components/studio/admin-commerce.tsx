@@ -694,7 +694,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
     >
       <form onSubmit={submit} className="flex flex-col gap-5">
         {/* 桌面：表单与预览并排；手机：单列，预览在表单下方，操作仍易触达。 */}
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
+        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,560px)]">
           <div className="flex min-w-0 flex-col gap-5">
             <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
               <legend className="sr-only">商品基础信息</legend>

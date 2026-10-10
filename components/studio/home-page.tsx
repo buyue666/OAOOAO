@@ -151,7 +151,7 @@ export function HomePage() {
    *
    * 早先这里只 `router.push(activeMode.href)`，**提示词、参考文件、模式全部丢失**：
    * 用户到工作台看到的是写死的示例提示词，自己刚输入的内容被静默替换。
-   * 现在把意图写入 `create-intent`，工作台读取后套用到表单。
+   * 现在把意图写��� `create-intent`，工作台读取后套用到表单。
    */
   async function startCreation() {
     if (starting) return
@@ -194,7 +194,7 @@ export function HomePage() {
       <section aria-labelledby="home-title" className="mx-auto flex w-full max-w-[880px] flex-col items-center px-4 pb-10 pt-10 sm:pt-14">
         <h1 id="home-title" className="text-center text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">从一个想法开始</h1>
 
-        <div role="tablist" aria-label="创作模式" className="studio-scroll-x mt-6 inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1 shadow-[var(--lg-shadow-1)]">
+        <div role="tablist" aria-label="创作模式" className="mt-6 grid w-full grid-cols-4 gap-1 rounded-lg border border-border bg-card p-1 shadow-[var(--lg-shadow-1)] sm:inline-flex sm:w-auto sm:items-center">
           {visibleModes.map((item) => {
             const Icon = item.icon
             const active = mode === item.id
@@ -206,7 +206,7 @@ export function HomePage() {
                 aria-selected={active}
                 onClick={() => setMode(item.id)}
                 className={cn(
-                  'inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-3.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40',
+                  'inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40 sm:gap-2 sm:px-3.5',
                   active ? 'bg-studio-accent/12 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
               >

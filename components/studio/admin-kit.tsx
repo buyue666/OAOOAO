@@ -49,7 +49,7 @@ export function AdminEmpty({ title, description, action }: { title: string; desc
 /* --------------------------------- 表格 --------------------------------- */
 
 export function AdminTableShell({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('admin-table-scroll studio-surface max-w-full overflow-x-auto', className)}>{children}</div>
+  return <div className={cn('admin-table-scroll studio-surface max-h-[min(70dvh,680px)] max-w-full overflow-auto', className)}>{children}</div>
 }
 
 export function AdminTable({ columns, children, minWidth = 760, caption }: { columns: string[]; children: ReactNode; minWidth?: number; caption?: string }) {

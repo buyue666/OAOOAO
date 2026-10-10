@@ -7,7 +7,7 @@
   background: var(--paper);
   color: var(--ink);
   color-scheme: light;
-  font-family: Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: 0;
   overflow: clip;
 }
@@ -166,7 +166,9 @@
   .mobileNav { display: flex; flex-direction: column; gap: 22px; padding: 16px 24px 24px; border-top: 1px solid #eee; }
   .mobileNav a { font-size: 16px; }
   .mobileNav a:last-child { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid #eee; }
-    .heroMessage { top: 18%; left: 24px; width: min(320px, calc(100% - 48px)); }
+    .heroMessage { top: 18%; left: 24px; width: min(300px, calc(100% - 48px)); }
+  .heroMessage h1 { text-wrap: balance; }
+  .heroMessage p { max-width: 15.5rem; text-wrap: pretty; }
   .heroMessage h1 { margin-top: 14px; font-size: 38px; }
   .heroMessage p { margin-top: 16px; font-size: 14px; line-height: 1.7; }
   .heroActions { flex-wrap: wrap; margin-top: 20px; }

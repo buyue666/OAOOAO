@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Activity, AlertTriangle, CheckCircle2, CircleDollarSign, Clock, Layers3, TrendingUp, Users } from 'lucide-react'
 import { getFinanceSummary, getGenerationOverview, getLaunchReadiness, listBillingOrders, listGenerationOperations, type LaunchReadinessReport } from '@/lib/studio/admin-api'
-import type { AdminGenerationChannel, AdminGenerationOverview, AdminGenerationSummary, BillingOrder, FinanceSummary } from '@/lib/studio/admin-types'
+import type { AdminGenerationChannel, AdminGenerationOverview, AdminGenerationSummary, AdminPermission, BillingOrder, FinanceSummary } from '@/lib/studio/admin-types'
+import { cn } from '@/lib/utils'
 import { StatusBadge } from './ui'
 import {
   AdminCell,
@@ -24,7 +25,9 @@ import {
   orderStatusLabels,
   statusTone,
 } from './admin-kit'
-import { useAdminReload } from './admin-shell'
+import { AdminGenerationPanel } from './admin-generation'
+import { AdminOrdersPanel } from './admin-commerce'
+import { useAdminReload, useAdminSession } from './admin-shell'
 
 type Loaded = {
   overview: AdminGenerationOverview
@@ -36,22 +39,65 @@ type Loaded = {
 
 const emptySummary: AdminGenerationSummary = { total: 0, active: 0, success: 0, failed: 0, averageDurationMs: 0, totalPointsCost: 0, byType: {}, byStatus: {} }
 
+type OverviewTab = 'overview' | 'generation' | 'orders' | 'readiness'
+
+const overviewTabs: ReadonlyArray<{ value: OverviewTab; label: string; permissions: AdminPermission[] }> = [
+  { value: 'overview', label: '概览', permissions: ['analytics.read'] },
+  { value: 'generation', label: '生成运营', permissions: ['generation.read'] },
+  { value: 'orders', label: '财务订单', permissions: ['billing.read'] },
+  { value: 'readiness', label: '上线检查', permissions: ['analytics.read'] },
+]
+
+/**
+ * 运营总览按分区承载。只挂载当前分区，避免进入页面时一次性请求全部接口；
+ * 没有对应职责的分区直接不显示，而不是展示一个会报权限错误的空面板。
+ */
 export function AdminOverviewPanel() {
+  const { canAny } = useAdminSession()
+  const availableTabs = overviewTabs.filter((tab) => canAny(tab.permissions))
+  const [requestedTab, setRequestedTab] = useState<OverviewTab>('overview')
+  const activeTab = availableTabs.find((tab) => tab.value === requestedTab)?.value ?? availableTabs[0]?.value
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div role="tablist" aria-label="运营总览分区" className="flex gap-1 overflow-x-auto border-b border-border">
+        {availableTabs.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            role="tab"
+            id={`overview-tab-${tab.value}`}
+            aria-selected={activeTab === tab.value}
+            aria-controls={`overview-panel-${tab.value}`}
+            onClick={() => setRequestedTab(tab.value)}
+            className={cn(
+              '-mb-px h-10 shrink-0 border-b-2 px-3 text-sm transition-colors duration-150',
+              activeTab === tab.value ? 'border-foreground font-semibold text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab && (
+        <div key={activeTab} role="tabpanel" id={`overview-panel-${activeTab}`} aria-labelledby={`overview-tab-${activeTab}`} className="motion-page">
+          {activeTab === 'overview' && <OverviewMetrics />}
+          {activeTab === 'generation' && <AdminGenerationPanel />}
+          {activeTab === 'orders' && <AdminOrdersPanel />}
+          {activeTab === 'readiness' && <LaunchReadinessPanel />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OverviewMetrics() {
   const { reloadKey } = useAdminReload()
   const [data, setData] = useState<Loaded | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [days, setDays] = useState(7)
-  /** 上线前检查：独立加载，失败不影响其它运营数据展示。 */
-  const [readiness, setReadiness] = useState<LaunchReadinessReport | null>(null)
-  const [readinessError, setReadinessError] = useState('')
-
-  const loadReadiness = useCallback(() => {
-    setReadinessError('')
-    getLaunchReadiness()
-      .then(setReadiness)
-      .catch((reason) => setReadinessError(reason instanceof Error ? reason.message : '上线检查加载失败'))
-  }, [])
 
   const load = useCallback(() => {
     setLoading(true); setError('')
@@ -67,7 +113,6 @@ export function AdminOverviewPanel() {
   }, [days, reloadKey])
 
   useEffect(() => { void load() }, [load])
-  useEffect(() => { loadReadiness() }, [loadReadiness, reloadKey])
 
   if (loading && !data) return <AdminLoading label="正在加载运营数据" rows={5} />
   if (error && !data) return <AdminError message={error} retry={load} />
@@ -95,53 +140,6 @@ export function AdminOverviewPanel() {
   return (
     <div className="flex flex-col gap-5">
       {error && <AdminError message={error} retry={load} />}
-
-      {/**
-        * 上线前检查。
-        *
-        * 与「运营健康」的区别：运营健康看运行数据，上线检查看**配置是否具备收费条件**。
-        * 明确区分 error（阻断收费上线）与 warning（需人工确认），
-        * 并给出每一项的可执行动作；本面板只读，不会自动修改任何配置。
-        */}
-      <AdminSectionCard
-        title="上线前检查"
-        description="收费上线前的配置体检：区分错误（阻断上线）与警告（需人工确认）。本检查只读，不会修改任何配置。"
-        action={(
-          <div className="flex items-center gap-2">
-            {readiness && (
-              <StatusBadge tone={readiness.errors ? 'danger' : readiness.warnings ? 'warning' : 'success'}>
-                {readiness.errors ? `${readiness.errors} 项错误` : readiness.warnings ? `${readiness.warnings} 项警告` : '全部通过'}
-              </StatusBadge>
-            )}
-            <button type="button" onClick={loadReadiness} className="h-8 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted">重新检查</button>
-          </div>
-        )}
-      >
-        {readinessError && <AdminError message={readinessError} retry={loadReadiness} />}
-        {!readiness && !readinessError && <AdminLoading label="正在执行上线检查" rows={3} />}
-        {readiness && (
-          <div className="flex flex-col gap-2" data-testid="launch-readiness">
-            {readiness.items.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-start gap-2 border-b border-border pb-2 last:border-b-0" data-testid={`readiness-${item.id}`} data-level={item.level}>
-                <StatusBadge tone={item.level === 'error' ? 'danger' : item.level === 'warning' ? 'warning' : 'success'}>
-                  {item.level === 'error' ? '错误' : item.level === 'warning' ? '警告' : '正常'}
-                </StatusBadge>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-foreground">{item.title}</p>
-                  <p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">{item.detail}</p>
-                  {item.action && <p className="mt-0.5 text-[11px] leading-5 text-studio-warn">建议：{item.action}</p>}
-                </div>
-              </div>
-            ))}
-            <p className="text-[11px] leading-5 text-muted-foreground">
-              检查时间：{formatAdminDate(readiness.checkedAt)}。
-              {readiness.passed
-                ? '没有发现阻断上线的配置错误；警告项请结合业务确认。'
-                : `存在 ${readiness.errors} 项阻断上线的错误，请先处理后再开始收费。`}
-            </p>
-          </div>
-        )}
-      </AdminSectionCard>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">统计窗口：近 {overview?.windowDays ?? days} 天 · 平均耗时 {formatAdminDuration(summary.averageDurationMs)}</p>
@@ -275,6 +273,70 @@ export function AdminOverviewPanel() {
         </AdminSectionCard>
       </div>
     </div>
+  )
+}
+
+/**
+ * 上线前检查。
+ *
+ * 与「运营健康」的区别：运营健康看运行数据，上线检查看**配置是否具备收费条件**。
+ * 明确区分 error（阻断收费上线）与 warning（需人工确认），
+ * 并给出每一项的可执行动作；本面板只读，不会自动修改任何配置。
+ */
+function LaunchReadinessPanel() {
+  const { reloadKey } = useAdminReload()
+  const [readiness, setReadiness] = useState<LaunchReadinessReport | null>(null)
+  const [error, setError] = useState('')
+
+  const load = useCallback(() => {
+    setError('')
+    getLaunchReadiness()
+      .then(setReadiness)
+      .catch((reason) => setError(reason instanceof Error ? reason.message : '上线检查加载失败'))
+  }, [])
+
+  useEffect(() => { load() }, [load, reloadKey])
+
+  return (
+    <AdminSectionCard
+      title="上线前检查"
+      description="收费上线前的配置体检：区分错误（阻断上线）与警告（需人工确认）。本检查只读，不会修改任何配置。"
+      action={(
+        <div className="flex items-center gap-2">
+          {readiness && (
+            <StatusBadge tone={readiness.errors ? 'danger' : readiness.warnings ? 'warning' : 'success'}>
+              {readiness.errors ? `${readiness.errors} 项错误` : readiness.warnings ? `${readiness.warnings} 项警告` : '全部通过'}
+            </StatusBadge>
+          )}
+          <button type="button" onClick={load} className="h-8 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted">重新检查</button>
+        </div>
+      )}
+    >
+      {error && <AdminError message={error} retry={load} />}
+      {!readiness && !error && <AdminLoading label="正在执行上线检查" rows={3} />}
+      {readiness && (
+        <div className="flex flex-col gap-2" data-testid="launch-readiness">
+          {readiness.items.map((item) => (
+            <div key={item.id} className="flex flex-wrap items-start gap-2 border-b border-border pb-2 last:border-b-0" data-testid={`readiness-${item.id}`} data-level={item.level}>
+              <StatusBadge tone={item.level === 'error' ? 'danger' : item.level === 'warning' ? 'warning' : 'success'}>
+                {item.level === 'error' ? '错误' : item.level === 'warning' ? '警告' : '正常'}
+              </StatusBadge>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-foreground">{item.title}</p>
+                <p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">{item.detail}</p>
+                {item.action && <p className="mt-0.5 text-[11px] leading-5 text-studio-warn">建议：{item.action}</p>}
+              </div>
+            </div>
+          ))}
+          <p className="text-[11px] leading-5 text-muted-foreground">
+            检查时间：{formatAdminDate(readiness.checkedAt)}。
+            {readiness.passed
+              ? '没有发现阻断上线的配置错误；警告项请结合业务确认。'
+              : `存在 ${readiness.errors} 项阻断上线的错误，请先处理后再开始收费。`}
+          </p>
+        </div>
+      )}
+    </AdminSectionCard>
   )
 }
 

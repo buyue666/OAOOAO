@@ -26,7 +26,7 @@ function CanvasConfigBridge() {
         const source = state.liveModels.length ? state.liveModels : state.models;
         if (!source.length) return;
         const models: ChannelModel[] = source.map((item) => ({ name: item.id, capability: item.capability === "image" || item.capability === "video" || item.capability === "audio" || item.capability === "text" ? item.capability : capabilityOf(item.id) }));
-        const channel: ModelChannel = { id: "oaooao", name: "OAOOAO", baseUrl: "/api", apiKey: "server-managed", apiFormat: "openai", models };
+        const channel: ModelChannel = { id: "oaooao", name: "OAO", baseUrl: "/api", apiKey: "server-managed", apiFormat: "openai", models };
         const values = new Set(models.map((item) => item.name));
         const choose = (capability: ModelCapability, preferred?: string) => {
             if (preferred && values.has(preferred)) return encodeChannelModel(channel.id, preferred);

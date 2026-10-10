@@ -1037,18 +1037,15 @@
   background: var(--background);
 }
 
+/* 管理后台是实色控制台：顶栏与侧栏不做玻璃化，让表格与表单保持稳定的对比。 */
 .admin-console .admin-topbar {
-  background: var(--lg-glass-strong);
-  border-bottom: 1px solid var(--lg-edge);
-  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
-  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
 }
 
 .admin-console .admin-sidebar {
-  background: color-mix(in srgb, var(--sidebar) 86%, transparent);
-  border-right: 1px solid var(--lg-edge);
-  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
-  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  background: var(--sidebar);
+  border-right: 1px solid var(--border);
 }
 
 /* 后台抽屉不复用创作区的动态玻璃覆盖层：管理表单需要稳定的背景、
@@ -1063,7 +1060,7 @@
   box-shadow: 0 8px 22px rgba(0, 10, 15, 0.12);
 }
 
-/* 后台表格：保持高密度与可比较性，表头吸顶但**不做玻璃化**。 */
+/* 后台表格：容器限定高度后，表头相对容器吸顶（sticky 只在滚动祖先内生效）；表头不做玻璃化。 */
 .admin-table-scroll {
   border-radius: var(--radius-lg);
 }
@@ -1072,16 +1069,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: color-mix(in srgb, var(--muted) 96%, transparent);
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .admin-console .admin-topbar,
-  .admin-console .admin-sidebar {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    background: var(--lg-pane-bg) !important;
-  }
+  background: var(--muted);
 }
 
 /* --------------------------------------------------------------------------
@@ -1844,66 +1832,28 @@
   background-color: transparent;
 }
 
-/* 后台保持数据密度，但换成同一套深色玻璃环境，避免进入后台时突然回到白页。 */
-.admin-console {
-  --background: #10252c;
-  --foreground: #f4fbfb;
-  --card: rgba(11, 30, 37, 0.58);
-  --card-foreground: #f4fbfb;
-  --popover: rgba(13, 28, 35, 0.94);
-  --popover-foreground: #f4fbfb;
-  --primary: #f5ffff;
-  --primary-foreground: #0e2026;
-  --secondary: rgba(255, 255, 255, 0.12);
-  --secondary-foreground: #f4fbfb;
-  --muted: rgba(255, 255, 255, 0.1);
-  --muted-foreground: rgba(239, 250, 250, 0.72);
-  --accent: rgba(255, 255, 255, 0.14);
-  --accent-foreground: #ffffff;
-  --border: rgba(235, 255, 252, 0.2);
-  --input: rgba(235, 255, 252, 0.22);
-  --ring: #e9fffb;
-  --studio-accent: #eafffb;
-  --studio-accent-foreground: #0d2026;
-  --studio-warn: #ffd38a;
-  --sidebar: rgba(7, 31, 39, 0.58);
-  --sidebar-foreground: #f5ffff;
-  --sidebar-accent: rgba(255, 255, 255, 0.14);
-  --sidebar-accent-foreground: #ffffff;
-  --lg-pane-bg: rgba(11, 29, 36, 0.72);
-  --lg-pane-bg-soft: rgba(255, 255, 255, 0.09);
-  --lg-glass-strong: rgba(11, 31, 38, 0.6);
-  --lg-glass-base: rgba(17, 43, 49, 0.38);
-  --lg-glass-soft: rgba(255, 255, 255, 0.1);
-  --lg-edge: rgba(235, 255, 252, 0.24);
-  --lg-highlight: rgba(255, 255, 255, 0.4);
-  --lg-highlight-soft: rgba(255, 255, 255, 0.15);
-  --lg-wallpaper: radial-gradient(1100px 680px at 10% -12%, rgba(2, 147, 173, 0.68), transparent 68%), radial-gradient(960px 700px at 86% 0%, rgba(117, 122, 33, 0.6), transparent 67%), radial-gradient(1060px 720px at 58% 112%, rgba(26, 126, 151, 0.66), transparent 70%), linear-gradient(135deg, #0b1f2a 0%, #285254 43%, #112d38 100%);
-  background: var(--lg-wallpaper) !important;
-  background-attachment: fixed;
-  color-scheme: dark;
-}
 
+
+/* 后台界面统一使用实色表面，只保留边界，不叠加玻璃高光与大阴影。 */
 .admin-console .studio-surface,
 .admin-console .lg-pane,
 .admin-console .lg-raised {
-  background: var(--lg-pane-bg);
-  border-color: var(--lg-edge);
-  box-shadow: 0 14px 38px rgba(0, 10, 15, 0.18), inset 0 1px 0 var(--lg-highlight-soft);
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
 .admin-console .admin-topbar,
-.admin-console .admin-sidebar,
 .admin-console .admin-sidebar + div > div:first-of-type {
-  background: var(--lg-glass-strong);
-  border-color: var(--lg-edge);
-  box-shadow: 0 1px 0 var(--lg-highlight-soft), 0 14px 38px rgba(0, 10, 15, 0.16);
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
-.admin-console .admin-sidebar button[aria-current='page'] {
-  background: rgba(255, 255, 255, 0.19);
-  color: #ffffff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+.admin-console .admin-sidebar {
+  background: var(--sidebar);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
 .admin-console .studio-page-header {
@@ -1955,51 +1905,7 @@
   .studio-app-shell[data-studio-skin='gradient']::before { animation: none; }
 }
 
-/* 登录与后台权限门页也使用同一套环境层，避免从创作区跳转时突然闪回纯白。 */
-.oao-auth-page,
-.admin-gate {
-  --background: #10252c;
-  --foreground: #f4fbfb;
-  --card: rgba(11, 30, 37, 0.62);
-  --card-foreground: #f4fbfb;
-  --popover: rgba(13, 28, 35, 0.94);
-  --popover-foreground: #f4fbfb;
-  --primary: #f5ffff;
-  --primary-foreground: #0e2026;
-  --secondary: rgba(255, 255, 255, 0.13);
-  --secondary-foreground: #f4fbfb;
-  --muted: rgba(255, 255, 255, 0.11);
-  --muted-foreground: rgba(239, 250, 250, 0.75);
-  --accent: rgba(255, 255, 255, 0.14);
-  --accent-foreground: #ffffff;
-  --border: rgba(235, 255, 252, 0.24);
-  --input: rgba(235, 255, 252, 0.22);
-  --ring: #e9fffb;
-  --studio-accent: #eafffb;
-  --studio-accent-foreground: #0d2026;
-  --studio-warn: #ffd38a;
-  --lg-glass-strong: rgba(11, 31, 38, 0.62);
-  --lg-glass-base: rgba(17, 43, 49, 0.42);
-  --lg-glass-soft: rgba(255, 255, 255, 0.11);
-  --lg-pane-bg: rgba(11, 29, 36, 0.74);
-  --lg-pane-bg-soft: rgba(255, 255, 255, 0.1);
-  --lg-edge: rgba(235, 255, 252, 0.28);
-  --lg-highlight: rgba(255, 255, 255, 0.45);
-  --lg-highlight-soft: rgba(255, 255, 255, 0.16);
-  background:
-    radial-gradient(1050px 680px at 8% -12%, rgba(2, 147, 173, 0.72), transparent 68%),
-    radial-gradient(940px 680px at 90% 0%, rgba(117, 122, 33, 0.62), transparent 67%),
-    radial-gradient(900px 620px at 70% 106%, rgba(195, 92, 73, 0.38), transparent 70%),
-    linear-gradient(135deg, #0b1f2a 0%, #285254 43%, #112d38 100%) !important;
-  color: var(--foreground);
-  color-scheme: dark;
-}
 
-.oao-auth-page > .lg-glass {
-  background: var(--lg-glass-strong);
-  border-color: var(--lg-edge);
-  box-shadow: 0 24px 72px rgba(0, 8, 12, 0.32), inset 0 1px 0 var(--lg-highlight);
-}
 
 .oao-auth-page input,
 .oao-auth-page textarea,
