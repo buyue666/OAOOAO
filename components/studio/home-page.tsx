@@ -3,12 +3,13 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Bot, Check, ChevronDown, Coins, Image as ImageIcon, MessageSquareText, Paperclip, Puzzle, Sparkles, Video } from 'lucide-react'
+import { Bot, Image as ImageIcon, MessageSquareText, Puzzle, Sparkles, Video } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { readIntentFiles, saveCreateIntent } from '@/lib/studio/create-intent'
 import { cn } from '@/lib/utils'
-import { MediaThumb, StatusBadge, Tooltip, type Tone } from './ui'
-import { ModelIcon } from './model-icon'
+import { InspirationShortcuts, PromptComposer, ReferenceMaterials } from './home-composer'
+import { GenerationPanel } from './home-generation-panel'
+import { RecentWorks } from './home-recent-works'
 
 type CreateMode = 'agent' | 'image' | 'video' | 'text' | 'drama'
 
@@ -51,28 +52,6 @@ const sceneShortcuts: Array<{ title: string; description: string; src: string; p
   },
 ]
 
-/**
- * 演示项目的封面映射。
- *
- * **只对演示项目 ID 生效**：真实项目（后端返回的 UUID）没有本地封面，
- * 直接用项目自带的 `cover`，不会因为「名字碰巧相同」而套上别人的图片。
- */
-const demoProjectCovers: Record<string, string> = {
-  aurora: '/media/project-aurora.png',
-  northline: '/media/project-northline.png',
-  'quiet-room': '/media/project-quiet-room.png',
-  'red-shift': '/media/project-red-shift.png',
-}
-
-const projectTones: Record<string, Tone> = {
-  进行中: 'accent',
-  已完成: 'success',
-  已归档: 'muted',
-}
-
-const selectClass = 'h-8 min-w-0 cursor-pointer rounded-md border border-transparent bg-transparent px-2 text-sm text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:border-studio-accent/60 focus-visible:ring-2 focus-visible:ring-studio-accent/25'
-const toolbarButtonClass = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/25'
-
 /** 把形如「4-12 秒」「4~12」的时长描述解析为可连续取值的范围；枚举值返回 null。 */
 function parseDurationRange(options: string[]) {
   for (const option of options) {
@@ -95,7 +74,6 @@ export function HomePage() {
   const [seconds, setSeconds] = useState(8)
   /** 跳转中：避免重复点击创建出多个项目。 */
   const [starting, setStarting] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const modelPickerRef = useRef<HTMLDivElement>(null)
   const activeMode = modes.find((item) => item.id === mode) ?? modes[0]
   const runningTask = state.tasks.find((task) => task.status === 'processing' || task.status === 'queued')
@@ -151,7 +129,7 @@ export function HomePage() {
    *
    * 早先这里只 `router.push(activeMode.href)`，**提示词、参考文件、模式全部丢失**：
    * 用户到工作台看到的是写死的示例提示词，自己刚输入的内容被静默替换。
-   * 现在把意图写��� `create-intent`，工作台读取后套用到表单。
+   * 现在把意图写入 `create-intent`，工作台读取后套用到表单。
    */
   async function startCreation() {
     if (starting) return
@@ -190,281 +168,88 @@ export function HomePage() {
   }
 
   return (
-    <div className="studio-home flex min-h-[calc(100dvh-56px)] flex-col">
-      <section aria-labelledby="home-title" className="mx-auto flex w-full max-w-[880px] flex-col items-center px-4 pb-10 pt-10 sm:pt-14">
-        <h1 id="home-title" className="text-center text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">从一个想法开始</h1>
-
-        <div role="tablist" aria-label="创作模式" className="mt-6 grid w-full grid-cols-4 gap-1 rounded-lg border border-border bg-card p-1 shadow-[var(--lg-shadow-1)] sm:inline-flex sm:w-auto sm:items-center">
-          {visibleModes.map((item) => {
-            const Icon = item.icon
-            const active = mode === item.id
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setMode(item.id)}
-                className={cn(
-                  'inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40 sm:gap-2 sm:px-3.5',
-                  active ? 'bg-studio-accent/12 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {item.label}
-                {item.id === 'agent' && <span className="size-1.5 rounded-full bg-studio-accent" aria-hidden="true" />}
-              </button>
-            )
-          })}
+    <div className="studio-home mx-auto flex w-full max-w-[1120px] flex-col gap-8 px-4 pb-12 pt-8 sm:px-6 lg:px-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted-foreground">创作工作台</p>
+          <h1 id="home-title" className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">从一个想法开始</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">选择创作类型，描述画面与镜头，确认模型与参数后开始生成。</p>
         </div>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            void startCreation()
-          }}
-          className="mt-6 w-full rounded-xl border border-border bg-card shadow-[var(--lg-shadow-2)] transition-[border-color,box-shadow] duration-150 focus-within:border-studio-accent/50 focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--studio-accent)_12%,transparent)]"
+        <Link
+          href="/skills"
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         >
-          <label htmlFor="home-prompt" className="sr-only">创作描述</label>
-          <textarea
-            id="home-prompt"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
-                event.preventDefault()
-                void startCreation()
-              }
-            }}
-            placeholder="描述你想创作的画面、镜头或故事……"
-            className="block min-h-[104px] w-full resize-none rounded-t-xl bg-transparent px-4 pb-2 pt-4 text-base leading-7 text-foreground outline-none placeholder:text-muted-foreground sm:min-h-[120px]"
-          />
-          {files.length > 0 && (
-            <ul aria-label="已添加的参考素材" className="flex flex-wrap gap-1.5 px-4 pb-3">
-              {files.map((file) => (
-                <li key={`${file.name}-${file.size}`} className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{file.name}</li>
-              ))}
-            </ul>
-          )}
+          <Puzzle className="size-4" aria-hidden="true" />技能库
+        </Link>
+      </header>
 
-          <div className="flex flex-wrap items-center gap-1 border-t border-border px-3 py-2">
-            <input ref={fileInputRef} type="file" multiple className="hidden" tabIndex={-1} aria-hidden="true" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
-            <button type="button" onClick={() => fileInputRef.current?.click()} className={toolbarButtonClass}>
-              <Paperclip className="size-4" aria-hidden="true" />
-              参考素材{files.length > 0 && <span className="tabular-nums">· {files.length}</span>}
-            </button>
-            <Link href="/skills" className={toolbarButtonClass}>
-              <Puzzle className="size-4" aria-hidden="true" />
-              技能
-            </Link>
-
-            <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
-
-            {mode === 'text' || mode === 'agent' ? (
-              <span className="px-2 text-sm text-muted-foreground">由导演 Agent 自动编排</span>
-            ) : (
-              <>
-                <div ref={modelPickerRef} className="relative min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setModelDropdownOpen((value) => !value)}
-                    aria-label="选择模型"
-                    aria-expanded={modelDropdownOpen}
-                    aria-haspopup="listbox"
-                    className={cn(toolbarButtonClass, 'max-w-[260px] text-foreground')}
-                  >
-                    <span className="flex size-4 shrink-0 items-center justify-center text-studio-accent"><ModelIcon model={selectedModel} /></span>
-                    <span className="truncate whitespace-nowrap">{selectedModel ? selectedModel.shortName || selectedModel.name : '选择模型'}</span>
-                    <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-150', modelDropdownOpen && 'rotate-180')} aria-hidden="true" />
-                  </button>
-                  {modelDropdownOpen && (
-                    <div role="listbox" aria-label="可选模型" className="lg-glass-overlay motion-panel absolute bottom-[calc(100%+8px)] left-0 z-50 max-h-[min(420px,60dvh)] w-[min(360px,calc(100vw-32px))] overflow-y-auto rounded-lg border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]">
-                      {modelOptions.length ? Object.entries(groupedModels).map(([provider, items]) => (
-                        <div key={provider} className="border-b border-border/70 pb-1 last:border-b-0 last:pb-0">
-                          <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{provider}</p>
-                          {items.map((item) => {
-                            const selected = selectedModel?.id === item.id
-                            return (
-                              <button
-                                key={item.id}
-                                type="button"
-                                role="option"
-                                aria-selected={selected}
-                                onClick={() => { setSelectedModelId(item.id); setModelDropdownOpen(false) }}
-                                className={cn('flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors duration-150 hover:bg-muted focus-visible:bg-muted focus-visible:outline-none', selected && 'bg-studio-accent/10')}
-                              >
-                                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-studio-accent"><ModelIcon model={item} /></span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="flex items-center gap-2">
-                                    <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
-                                    {selected && <Check className="size-3.5 shrink-0 text-studio-accent" aria-hidden="true" />}
-                                  </span>
-                                  <span className="mt-0.5 block line-clamp-2 text-xs leading-5 text-muted-foreground">{item.description || '当前可用模型'}</span>
-                                  <span className="mt-1 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
-                                    {item.capabilities.ratios.length > 0 && <span className="rounded bg-muted px-1.5 py-0.5">{item.capabilities.ratios.slice(0, 3).join(' / ')}</span>}
-                                    {item.capabilities.durations.length > 0 && <span className="rounded bg-muted px-1.5 py-0.5">{item.capabilities.durations.slice(0, 3).join(' / ')}</span>}
-                                    <span className="rounded bg-studio-accent/10 px-1.5 py-0.5 text-studio-accent">{item.creditCost || 0} 积分起</span>
-                                  </span>
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )) : <div className="px-3 py-4 text-xs leading-5 text-muted-foreground">当前模式暂无可用模型，请检查后台渠道配置。</div>}
-                    </div>
-                  )}
-                </div>
-
-                {ratioOptions.length > 0 && (
-                  <label className="inline-flex items-center">
-                    <span className="sr-only">比例</span>
-                    <select value={ratio} onChange={(event) => setRatio(event.target.value)} className={selectClass}>
-                      {ratioOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </label>
-                )}
-                {qualityOptions.length > 0 && (
-                  <label className="inline-flex items-center">
-                    <span className="sr-only">清晰度</span>
-                    <select value={quality} onChange={(event) => setQuality(event.target.value)} className={selectClass}>
-                      {qualityOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </label>
-                )}
-
-                {mode === 'video' && (fixedDuration ? (
-                  <span className="px-2 text-sm text-foreground tabular-nums">{fixedDuration}</span>
-                ) : durationRange ? (
-                  <label className="inline-flex items-center gap-1.5 px-1 text-sm text-foreground">
-                    <span className="sr-only">时长（秒）</span>
-                    <input
-                      type="number"
-                      min={durationRange.min}
-                      max={durationRange.max}
-                      step={1}
-                      value={seconds}
-                      onChange={(event) => setSeconds(Number(event.target.value))}
-                      onBlur={() => setSeconds((current) => Math.min(durationRange.max, Math.max(durationRange.min, Number.isFinite(current) ? current : durationRange.min)))}
-                      className="h-8 w-16 rounded-md border border-border bg-background px-2 text-sm tabular-nums outline-none focus-visible:border-studio-accent/60 focus-visible:ring-2 focus-visible:ring-studio-accent/25"
-                    />
-                    <span className="whitespace-nowrap text-xs text-muted-foreground">秒（{durationRange.min}–{durationRange.max} 秒）</span>
-                  </label>
-                ) : (
-                  <label className="inline-flex items-center">
-                    <span className="sr-only">时长</span>
-                    <select value={`${seconds} 秒`} onChange={(event) => setSeconds(Number(event.target.value.match(/\d+(?:\.\d+)?/)?.[0] || 8))} className={selectClass}>
-                      {durationOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                  </label>
-                ))}
-              </>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-border bg-muted/50 px-4 py-3">
-            <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-              <Coins className="size-4 shrink-0 text-studio-accent" aria-hidden="true" />
-              {estimatedCredits !== null ? (
-                <span>预计消耗 <span className="font-semibold tabular-nums text-foreground">{estimatedCredits.toLocaleString()} 积分</span></span>
-              ) : (
-                <span>{mode === 'drama' ? '分镜与成片按实际生成计费' : '按实际运行计费'}</span>
-              )}
-              <span className="hidden text-xs text-muted-foreground lg:inline">· ⌘/Ctrl + Enter</span>
-            </p>
+      <div role="tablist" aria-label="创作模式" className="flex gap-6 overflow-x-auto border-b border-border">
+        {visibleModes.map((item) => {
+          const Icon = item.icon
+          const active = mode === item.id
+          return (
             <button
-              type="submit"
-              disabled={starting}
-              aria-label="开始创作"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-5 text-sm font-semibold text-background transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-60"
-            >
-              <span>开始创作</span>
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </button>
-          </div>
-        </form>
-
-        <section aria-label="灵感模板" className="mt-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
-          {sceneShortcuts.map((scene) => (
-            <button
-              key={scene.title}
+              key={item.id}
               type="button"
-              onClick={() => selectScene(scene)}
-              className="group flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card p-2 pr-3 text-left transition-colors duration-150 hover:border-studio-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setMode(item.id)}
+              className={cn(
+                '-mb-px inline-flex h-11 shrink-0 items-center gap-2 border-b-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40',
+                active ? 'border-studio-accent text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
             >
-              <MediaThumb
-                src={scene.src}
-                alt=""
-                fallback={scene.title}
-                className="size-10 shrink-0 rounded-md [&_img]:transition-transform [&_img]:duration-300 group-hover:[&_img]:scale-105"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-foreground">{scene.title}</span>
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">{scene.description}</span>
-              </span>
-              <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-foreground" aria-hidden="true" />
+              <Icon className="size-4" aria-hidden="true" />
+              {item.label}
+              {item.id === 'agent' && <span className="size-1.5 rounded-full bg-studio-accent" aria-hidden="true" />}
             </button>
-          ))}
-        </section>
-      </section>
+          )
+        })}
+      </div>
 
-      <section aria-labelledby="recent-title" className="mx-auto w-full max-w-[1120px] px-4 pb-10 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between gap-4 border-t border-border pt-8">
-          <h2 id="recent-title" className="text-lg font-semibold tracking-[-0.02em] text-foreground">最近作品</h2>
-          <Link href="/works" className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-            全部作品
-            <ArrowRight className="size-3.5" aria-hidden="true" />
-          </Link>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          void startCreation()
+        }}
+        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start"
+      >
+        <div className="flex min-w-0 flex-col gap-6">
+          <PromptComposer value={prompt} onChange={setPrompt} onSubmitShortcut={() => void startCreation()} />
+          <ReferenceMaterials files={files} onFilesChange={setFiles} />
+          <InspirationShortcuts scenes={sceneShortcuts} onSelect={selectScene} />
         </div>
 
-        {recentProjects.length ? (
-          <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-6 lg:grid-cols-4" aria-label="最近作品列表">
-            {recentProjects.map((project) => (
-              <li key={project.id} className="min-w-0">
-                <Link href={`/projects/${project.id}`} className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
-                  <span className="relative block overflow-hidden rounded-lg border border-border bg-card">
-                    <MediaThumb
-                      src={demoProjectCovers[project.id] ?? project.cover}
-                      alt=""
-                      fallback={project.title}
-                      className="aspect-[4/3] w-full [&_img]:transition-transform [&_img]:duration-300 [&_img]:ease-out group-hover:[&_img]:scale-[1.03]"
-                    />
-                    <span className="absolute left-2 top-2">
-                      <StatusBadge solid tone={projectTones[project.status] ?? 'neutral'}>{project.status}</StatusBadge>
-                    </span>
-                  </span>
-                  <span className="mt-2.5 flex min-w-0 flex-col gap-1">
-                    <span className="truncate text-sm font-medium text-foreground">{project.title}</span>
-                    <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="shrink-0">{project.type}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="truncate">{project.updatedAt} 更新</span>
-                      {project.status === '进行中' && (
-                        <Tooltip label={`完成度 ${project.progress}%`}>
-                          <span className="ml-auto shrink-0 tabular-nums text-xs font-medium text-foreground">{project.progress}%</span>
-                        </Tooltip>
-                      )}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="mt-5 flex min-h-40 flex-col items-center justify-center rounded-lg border border-dashed border-border px-5 text-center">
-            <p className="text-sm font-medium text-foreground">还没有作品</p>
-            <p className="mt-1 text-xs text-muted-foreground">从上方输入一个想法，生成的作品会出现在这里。</p>
-          </div>
-        )}
+        <GenerationPanel
+          mode={mode}
+          modeLabel={activeMode.label}
+          selectedModel={selectedModel}
+          modelOptions={modelOptions}
+          groupedModels={groupedModels}
+          dropdownOpen={modelDropdownOpen}
+          pickerRef={modelPickerRef}
+          onToggleDropdown={() => setModelDropdownOpen((value) => !value)}
+          onSelectModel={(id) => {
+            setSelectedModelId(id)
+            setModelDropdownOpen(false)
+          }}
+          ratioOptions={ratioOptions}
+          ratio={ratio}
+          onRatioChange={setRatio}
+          qualityOptions={qualityOptions}
+          quality={quality}
+          onQualityChange={setQuality}
+          durationOptions={durationOptions}
+          durationRange={durationRange}
+          fixedDuration={fixedDuration}
+          seconds={seconds}
+          onSecondsChange={setSeconds}
+          estimatedCredits={estimatedCredits}
+          starting={starting}
+        />
+      </form>
 
-        {runningTask && (
-          <Link href="/tasks" aria-live="polite" className="studio-surface mt-6 flex min-w-0 items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-            <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-studio-accent motion-reduce:animate-none" aria-hidden="true" />
-            <span className="truncate text-foreground">{runningTask.title}</span>
-            <span className="hidden shrink-0 sm:inline">· {runningTask.stage}</span>
-            <span className="ml-auto shrink-0">查看任务</span>
-          </Link>
-        )}
-      </section>
+      <RecentWorks projects={recentProjects} runningTask={runningTask} />
     </div>
   )
 }
