@@ -8,7 +8,7 @@ import '@xyflow/react/dist/style.css'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'OAOOAO Studio · AI 创作工作台',
+  title: 'OAO · AI 创作工作台',
   description: '在一个工作台中完成 AI 图片、视频、短剧与导演 Agent 创作。',
   generator: 'v0.app',
   icons: {
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: 'light dark',
-  themeColor: '#fafafa',
+  themeColor: '#f4f5f7',
   userScalable: true,
 }
 

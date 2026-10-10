@@ -2,31 +2,16 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { Suspense, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { Bot, Clapperboard, GalleryHorizontalEnd, Image as ImageIcon, LayoutDashboard, ListChecks, Palette, PanelsTopLeft, Settings, Sparkles, Video, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
-
-const studioNavGroups = [
-  { label: '创作', items: [
-    { label: '导演 Agent', href: '/agent', icon: Bot },
-    { label: '图片生成', href: '/image', icon: ImageIcon },
-    { label: '视频生成', href: '/video', icon: Video },
-    { label: '短剧制作', href: '/drama', icon: Clapperboard },
-  ] },
-  { label: '工具', items: [
-    { label: '自由画布', href: '/canvas', icon: PanelsTopLeft },
-    { label: '任务中心', href: '/tasks', icon: ListChecks },
-  ] },
-  { label: '管理', items: [
-    { label: '素材库', href: '/assets', icon: GalleryHorizontalEnd },
-    { label: '我的作品', href: '/works', icon: Palette },
-    { label: '广场', href: '/gallery', icon: LayoutDashboard },
-  ] },
-]
+import { Suspense, useEffect } from 'react'
+import { X } from 'lucide-react'
+import { useStudio } from '@/lib/studio/store'
+import { StudioNavLink, studioAdminNav, studioPrimaryNav, studioSettingsNav } from './studio-nav'
 
 function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
+  const { state } = useStudio()
+  const showAdmin = state.backendStatus === 'connected' && state.user.role === 'admin'
 
   useEffect(() => {
     if (!open) return
@@ -40,36 +25,30 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
   if (!open) return null
 
   return (
-    <div className="studio-mobile-nav motion-fade fixed inset-0 z-50 bg-studio-ink/60 lg:hidden" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}>
-      <aside role="dialog" aria-modal="true" aria-labelledby="mobile-nav-title" className="motion-drawer-left flex h-full w-full max-w-72 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex h-[60px] shrink-0 items-center justify-between border-b border-sidebar-border px-4">
-          <Link href="/studio" onClick={onClose} className="flex items-center gap-2 text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-            <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} priority className="h-5 w-auto brightness-0 invert" />
-            <span id="mobile-nav-title" className="sr-only">OAO 工作台导航</span>
+    <div
+      className="studio-mobile-nav motion-fade fixed inset-0 z-50 bg-studio-ink/50 lg:hidden"
+      onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}
+    >
+      <aside role="dialog" aria-modal="true" aria-label="工作台导航" className="motion-drawer-left flex h-full w-64 max-w-[85vw] flex-col border-r border-sidebar-border">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-3">
+          <Link href="/studio" onClick={onClose} aria-label="返回工作台" className="flex size-9 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+            <Image src="/media/brand/oao-mark.png" alt="" width={512} height={512} className="size-7 dark:invert" />
           </Link>
-          <button type="button" onClick={onClose} aria-label="关闭导航" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:text-sidebar-foreground"><X className="size-4" aria-hidden="true" /></button>
+          <button type="button" onClick={onClose} aria-label="关闭导航" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+            <X className="size-4" aria-hidden="true" />
+          </button>
         </div>
 
-        <nav aria-label="移动端主导航" className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
-          <Link href="/studio" onClick={onClose} data-active={pathname === '/studio'} className={cn('studio-nav-item flex h-10 shrink-0 items-center gap-3 rounded-lg px-3 text-sm font-medium', pathname === '/studio' ? 'text-studio-accent' : 'text-muted-foreground')}><Sparkles className="size-4" />工作台</Link>
-          {studioNavGroups.map((group) => (
-            <section key={group.label}>
-              <h2 className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">{group.label}</h2>
-              <div className="flex flex-col gap-0.5">
-                {group.items.map((item) => {
-                  const Icon = item.icon
-                  const active = item.href === '/drama'
-                    ? pathname === '/drama' || pathname.startsWith('/drama/')
-                    : item.href === '/canvas'
-                    ? pathname === '/canvas' || pathname.startsWith('/canvas/')
-                    : pathname === item.href || pathname.startsWith(`${item.href}/`)
-                  return <Link key={item.href} href={item.href} onClick={onClose} data-active={active} className={cn('studio-nav-item flex h-10 shrink-0 items-center gap-3 rounded-lg px-3 text-sm font-medium', active ? 'text-studio-accent' : 'text-muted-foreground')}><Icon className="size-4" />{item.label}</Link>
-                })}
-              </div>
-            </section>
+        <nav aria-label="移动端主导航" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+          {studioPrimaryNav.map((item) => (
+            <StudioNavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
           ))}
         </nav>
-        <div className="border-t border-sidebar-border p-3"><Link href="/settings" onClick={onClose} className="studio-nav-item flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground"><Settings className="size-4" />设置</Link></div>
+
+        <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2">
+          {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} onNavigate={onClose} />}
+          <StudioNavLink item={studioSettingsNav} pathname={pathname} onNavigate={onClose} />
+        </div>
       </aside>
     </div>
   )

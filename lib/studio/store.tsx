@@ -45,7 +45,7 @@ function getInitialState(): StudioState {
     hydrated: false,
     backendStatus: 'checking',
     theme: 'light',
-    skin: 'gradient',
+    skin: 'minimal',
     sidebarCollapsed: false,
     user: demoUser,
     credits: demoUser.credits,
@@ -104,7 +104,7 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
       return { ...state, theme: action.theme }
     case 'SET_SKIN':
       // 旧版本仍可能从缓存或外部调用发来 SET_SKIN，但当前产品只保留液态玻璃。
-      return { ...state, skin: 'gradient' }
+      return { ...state, skin: 'minimal' }
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarCollapsed: !state.sidebarCollapsed }
     case 'SET_SELECTED_PROJECT':
@@ -229,7 +229,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(raw) as Partial<StudioState>
         const theme = parsed.theme === 'dark' ? 'dark' : 'light'
         // 玻璃质感是当前唯一公开皮肤；保留旧字段只为兼容历史缓存，不再允许旧缓存把界面切回去。
-        const skin: StudioSkin = 'gradient'
+        const skin: StudioSkin = 'minimal'
         dispatch({ type: 'HYDRATE', payload: { ...parsed, theme, skin } })
       } catch {
         dispatch({ type: 'HYDRATE', payload: { tasks: getLiveDemoTasks() } })
@@ -341,7 +341,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const setTheme = useCallback((theme: Theme) => dispatch({ type: 'SET_THEME', theme }), [])
-  const setSkin = useCallback((_skin: StudioSkin) => dispatch({ type: 'SET_SKIN', skin: 'gradient' }), [])
+  const setSkin = useCallback((_skin: StudioSkin) => dispatch({ type: 'SET_SKIN', skin: 'minimal' }), [])
   const toggleTheme = useCallback(() => dispatch({ type: 'SET_THEME', theme: state.theme === 'dark' ? 'light' : 'dark' }), [state.theme])
   const toggleSidebar = useCallback(() => dispatch({ type: 'TOGGLE_SIDEBAR' }), [])
   /** 有真实模型目录时用后端定价估算，否则退回演示估算并明确标注为本地预览。 */

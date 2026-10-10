@@ -66,14 +66,14 @@ try {
   await page.goto(base, { waitUntil: 'networkidle' })
   await page.locator('[data-landing-version="oao-zh-v9-ai-platform"]').waitFor()
   check('Chinese page metadata', (await page.title()) === 'OAO · 图片、视频与故事创作')
-  check('Hero uses one transparent brand mark behind the subject', await page.locator('[data-hero-brandmark]').count() === 1 && await page.locator('[data-hero-brandmark]').evaluate(image => image.getAttribute('src').includes('oao-logo-transparent.png')))
+  check('Hero has no background brand mark competing with the subject', await page.locator('[data-hero-brandmark]').count() === 0)
   await page.waitForFunction(() => {
     const header = document.querySelector('header')
     const style = getComputedStyle(header)
     return header.dataset.ready === 'true' && Number(style.opacity) > 0.99 && style.backgroundColor !== 'rgba(0, 0, 0, 0)'
   })
   check('Navigation appears without scrolling', await page.evaluate(() => scrollY === 0))
-  check('User brand image appears in header and footer', await page.locator('header img[alt="OAO"], footer img[alt="OAO"]').evaluateAll(images => images.length === 2 && images.every(image => image.getAttribute('src').includes('oao-logo-transparent.png'))))
+  check('Single brand icon appears in header and footer', await page.locator('header img[src*="oao-mark.png"], footer img[src*="oao-mark.png"]').count() === 2)
   const words = await page.locator('main').innerText()
   check('Landing has no legacy product copy', !/(VOZEB|NewAPI|Vozeb|new-api)/.test(words))
   check('Nine platform sections, including footer', await page.locator('main > section, main > footer').count() === 9)

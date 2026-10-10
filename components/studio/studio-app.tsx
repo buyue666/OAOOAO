@@ -25,6 +25,8 @@ function isProtectedStudioRoute(pathname: string) {
     || pathname.startsWith('/projects/')
     || pathname === '/assets'
     || pathname === '/tasks'
+    || pathname === '/works'
+    || pathname === '/skills'
     || pathname === '/account'
     || pathname === '/settings'
 }
@@ -36,7 +38,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   const isLanding = pathname === '/'
-  const isAuthPage = pathname === '/login' || pathname === '/plans'
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/plans'
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isWorkspace = pathname === '/image' || pathname === '/video'
   const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/')
@@ -74,14 +76,6 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
         data-studio-skin={state.skin}
         className="studio-app-shell relative min-h-dvh text-foreground"
       >
-      {/* 只给玻璃伪元素使用的边缘折射滤镜；不放在 root 上，避免影响 fixed/sticky 定位。 */}
-      <svg aria-hidden="true" width="0" height="0" className="pointer-events-none fixed opacity-0" style={{ overflow: 'hidden' }}>
-        <defs>
-          <filter id="oao-liquid-edge" x="-12%" y="-12%" width="124%" height="124%" filterUnits="objectBoundingBox" colorInterpolationFilters="sRGB">
-            <feDisplacementMap scale="72" />
-          </filter>
-        </defs>
-      </svg>
       <Sidebar />
       {/*
         内容列只做左侧内边距过渡。这里**不能**加 filter / backdrop-filter /

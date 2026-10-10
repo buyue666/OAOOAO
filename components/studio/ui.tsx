@@ -442,8 +442,21 @@ export function SidePanel({ open, onClose, title, description, children, footer,
   )
 }
 
-export function Notice({ children, tone = 'neutral' }: { children: ReactNode; tone?: Tone }) {
-  return <div className={cn('studio-notice flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5 shadow-sm', tone === 'warning' && 'border-studio-warn/30 bg-studio-warn/10 text-studio-warn', tone === 'accent' && 'border-studio-accent/25 bg-studio-accent/10 text-foreground', tone === 'neutral' && 'border-border bg-muted text-muted-foreground')}>{children}</div>
+export function Notice({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }) {
+  return (
+    <div
+      className={cn(
+        'studio-notice flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs leading-5',
+        tone === 'neutral' && 'border-border bg-muted text-foreground',
+        tone === 'accent' && 'border-studio-accent/30 bg-studio-accent/10 text-foreground',
+        tone === 'success' && 'border-success/30 bg-success/10 text-foreground',
+        tone === 'warning' && 'border-studio-warn/30 bg-studio-warn/10 text-studio-warn',
+        tone === 'danger' && 'border-destructive/30 bg-destructive/10 text-destructive',
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 
 export function KeyValue({ label, value }: { label: string; value: ReactNode }) {

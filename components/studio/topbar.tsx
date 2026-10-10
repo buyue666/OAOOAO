@@ -3,81 +3,21 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Bell, ChevronRight, Coins, Languages, LogIn, LogOut, Menu, Moon, Sun, UserRound } from 'lucide-react'
+import { Bell, Coins, Languages, LogIn, LogOut, Menu, Moon, Sun, UserRound } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { logout } from '@/lib/studio/account-api'
-import { Tooltip } from './ui'
-import { cn } from '@/lib/utils'
 import { useLocale } from '@/lib/studio/i18n'
+import { Tooltip } from './ui'
+import { studioPageTitle } from './studio-nav'
+import { cn } from '@/lib/utils'
 
-const rootLabels: Record<string, string> = {
-  agent: '导演 Agent',
-  image: '图片',
-  video: '视频',
-  tasks: '任务',
-  assets: '素材',
-  works: '我的作品',
-  gallery: '广场',
-  projects: '项目',
-  account: '账户',
-  settings: '设置',
-  plans: '套餐',
-  admin: '管理后台',
-  canvas: '自由画布',
-  drama: '短剧制作',
-}
-
-const sectionLabels: Record<string, string> = {
-  products: '订阅与商品',
-  orders: '订单管理',
-  script: '短剧制作',
-  storyboard: '分镜',
-  shots: '镜头',
-  overview: '概览',
-  assets: '素材',
-  characters: '角色与场景',
-  cut: '成片',
-  canvas: '画布',
-  settings: '设置',
-}
-
-interface Crumb {
-  label: string
-  href?: string
-}
+const creditChipClass = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)]'
+const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70'
 
 /**
- * 顶栏只承担导航上下文（面包屑），页面主标题由各页面的 PageHeader 唯一呈现，
- * 因此这里不再重复渲染标题与副标题。
+ * 顶栏只承担三件事：当前页面名称、积分余额、通知与账户入口。
+ * 主题与语言切换放进账户菜单，避免顶栏堆叠多个工具按钮。
  */
-function buildCrumbs(pathname: string, projectTitle?: string): Crumb[] {
-  const segments = pathname.split('/').filter(Boolean)
-  if (segments.length === 0) return []
-
-  if (segments[0] === 'projects') {
-    const crumbs: Crumb[] = [{ label: '项目', href: '/projects' }]
-    if (segments[1]) {
-      crumbs.push({ label: projectTitle ?? '项目', href: `/projects/${segments[1]}` })
-      if (segments[2]) crumbs.push({ label: sectionLabels[segments[2]] ?? segments[2] })
-    }
-    return crumbs
-  }
-
-  if (segments[0] === 'admin') {
-    const crumbs: Crumb[] = [{ label: '管理后台', href: '/admin' }]
-    if (segments[1]) crumbs.push({ label: sectionLabels[segments[1]] ?? segments[1] })
-    return crumbs
-  }
-
-  if (segments[0] === 'drama') {
-    const crumbs: Crumb[] = [{ label: '短剧制作', href: '/drama' }]
-    if (segments[1]) crumbs.push({ label: projectTitle ?? '短剧项目' })
-    return crumbs
-  }
-
-  return [{ label: rootLabels[segments[0]] ?? 'OAOOAO' }]
-}
-
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -87,24 +27,32 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const [accountOpen, setAccountOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState('')
+  const notificationsRef = useRef<HTMLDivElement>(null)
   const accountRef = useRef<HTMLDivElement>(null)
 
   const projectId = pathname.startsWith('/projects/') ? pathname.split('/')[2] : undefined
   const projectTitle = projectId ? state.projects.find((project) => project.id === projectId)?.title : undefined
-  const crumbs = buildCrumbs(pathname, projectTitle)
+  const pageTitle = studioPageTitle(pathname, projectTitle)
   const themeLabel = state.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'
+  const localeLabel = locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')
   const isConnected = state.backendStatus === 'connected'
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   const notificationCount = isConnected ? 0 : state.notifications
+  const creditsLabel = `${state.credits.toLocaleString()} 积分`
 
-  // 点击外部或按 Esc 关闭账户菜单。
+  // 通知与账户菜单共用一套关闭规则：点击外部或按 Esc 关闭。
   useEffect(() => {
-    if (!accountOpen) return
+    if (!accountOpen && !notificationsOpen) return
     function onPointerDown(event: MouseEvent) {
-      if (accountRef.current && !accountRef.current.contains(event.target as Node)) setAccountOpen(false)
+      const target = event.target as Node
+      if (accountRef.current && !accountRef.current.contains(target)) setAccountOpen(false)
+      if (notificationsRef.current && !notificationsRef.current.contains(target)) setNotificationsOpen(false)
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setAccountOpen(false)
+      if (event.key === 'Escape') {
+        setAccountOpen(false)
+        setNotificationsOpen(false)
+      }
     }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -112,7 +60,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [accountOpen])
+  }, [accountOpen, notificationsOpen])
 
   /**
    * 退出登录。
@@ -137,52 +85,48 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   }
 
   return (
-    <header className="studio-topbar sticky top-0 z-30 flex h-[60px] items-center justify-between gap-4 border-b border-border px-4 md:px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        <button type="button" onClick={onMenuClick} aria-label="打开导航" className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:text-foreground lg:hidden">
+    <header className="studio-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3 md:px-5">
+      <div className="flex min-w-0 items-center gap-2">
+        <button type="button" onClick={onMenuClick} aria-label="打开导航" className={cn(iconButtonClass, 'lg:hidden')}>
           <Menu className="size-5" aria-hidden="true" />
         </button>
-        {crumbs.length > 0 && (
-          <nav aria-label="面包屑" className="flex min-w-0 items-center gap-1.5 text-xs">
-            {crumbs.map((crumb, index) => {
-              const isLast = index === crumbs.length - 1
-              return (
-                <span key={`${crumb.label}-${index}`} className={cn('min-w-0 items-center gap-1.5', isLast ? 'flex' : 'hidden sm:flex')}>
-                  {index > 0 && <ChevronRight className="hidden size-3 shrink-0 text-muted-foreground/60 sm:block" aria-hidden="true" />}
-                  {crumb.href && !isLast ? (
-                    <Link href={crumb.href} className="truncate text-muted-foreground transition-colors duration-150 hover:text-foreground">{crumb.label}</Link>
-                  ) : (
-                    <span aria-current={isLast ? 'page' : undefined} className={cn('truncate', isLast ? 'font-medium text-foreground' : 'text-muted-foreground')}>{crumb.label}</span>
-                  )}
-                </span>
-              )
-            })}
-          </nav>
-        )}
+        <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground" aria-current="page">{pageTitle}</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-        {isConnected && (rechargeEnabled ? <Link href="/plans" className="lg-button-glass inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-semibold text-foreground" aria-label={`${state.credits} 可用积分，查看套餐`}><Coins className="size-3.5 text-studio-accent" aria-hidden="true" /><span className="tabular-nums">{state.credits.toLocaleString()}</span></Link> : <span className="lg-button-glass inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-semibold text-foreground" aria-label={`${state.credits} 可用积分`}><Coins className="size-3.5 text-studio-accent" aria-hidden="true" /><span className="tabular-nums">{state.credits.toLocaleString()}</span></span>)}
-        <Tooltip label={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')}>
-          <button type="button" onClick={toggleLocale} aria-label={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"><Languages className="size-4" aria-hidden="true" /><span>{locale === 'zh-CN' ? 'EN' : '中'}</span></button>
-        </Tooltip>
-        <Tooltip label={themeLabel}>
-          <button type="button" onClick={toggleTheme} aria-label={themeLabel} className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:text-foreground">
-            {state.theme === 'dark' ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
-          </button>
-        </Tooltip>
-        <div className="relative">
+        {isConnected && (rechargeEnabled ? (
+          <Link href="/plans" aria-label={`${creditsLabel}，查看套餐`} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
+            <Coins className="size-4 text-studio-accent" aria-hidden="true" />
+            <span className="tabular-nums">{creditsLabel}</span>
+          </Link>
+        ) : (
+          <span aria-label={creditsLabel} className={creditChipClass}>
+            <Coins className="size-4 text-studio-accent" aria-hidden="true" />
+            <span className="tabular-nums">{creditsLabel}</span>
+          </span>
+        ))}
+
+        <div className="relative" ref={notificationsRef}>
           <Tooltip label={`通知，${notificationCount} 条未读`}>
-            <button type="button" onClick={() => setNotificationsOpen((value) => !value)} aria-expanded={notificationsOpen} aria-label={`通知，${notificationCount} 条未读`} className="relative flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:text-foreground">
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen((value) => !value)}
+              aria-expanded={notificationsOpen}
+              aria-label={`通知，${notificationCount} 条未读`}
+              className={cn(iconButtonClass, 'relative')}
+            >
               <Bell className="size-4" aria-hidden="true" />
-              {notificationCount > 0 && <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-studio-accent" />}
+              {notificationCount > 0 && <span className="absolute right-2 top-2 size-1.5 rounded-full bg-studio-accent" />}
             </button>
           </Tooltip>
-          {notificationsOpen && <div role="dialog" aria-label="通知" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-64 rounded-lg border border-border p-3 text-left shadow-xl">
-            <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-foreground">通知</p><button type="button" onClick={() => setNotificationsOpen(false)} className="text-[11px] text-muted-foreground hover:text-foreground">关闭</button></div>
-            <p className="mt-3 text-xs leading-5 text-muted-foreground">{isConnected ? '暂无新的系统通知。' : '暂时无法读取系统通知，请稍后重试。'}</p>
-          </div>}
+          {notificationsOpen && (
+            <div role="dialog" aria-label="通知" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-72 max-w-[calc(100vw-24px)] rounded-lg border border-border p-3 text-left shadow-[var(--lg-shadow-4)]">
+              <p className="text-sm font-semibold text-foreground">通知</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">{isConnected ? '暂无新的系统通知。' : '登录后可查看系统通知。'}</p>
+            </div>
+          )}
         </div>
+
         <div className="relative" ref={accountRef}>
           <Tooltip label={isConnected ? '账户' : '登录'}>
             <button
@@ -194,31 +138,33 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               aria-expanded={isConnected ? accountOpen : undefined}
               aria-haspopup={isConnected ? 'menu' : undefined}
               aria-label={isConnected ? '打开账户菜单' : '登录'}
-              className="flex size-8 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-foreground transition-colors duration-150 hover:border-studio-accent/60"
+              className="flex size-9 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-foreground transition-colors duration-150 hover:border-studio-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             >
-              {isConnected ? state.user.name.split(/\s+/).map((item) => item[0]).join('').slice(0, 2).toUpperCase() : <LogIn className="size-4" />}
+              {isConnected ? state.user.name.split(/\s+/).map((item) => item[0]).join('').slice(0, 2).toUpperCase() : <LogIn className="size-4" aria-hidden="true" />}
             </button>
           </Tooltip>
           {isConnected && accountOpen && (
-            <div role="menu" aria-label="账户菜单" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-56 rounded-lg border border-border p-1.5 text-left shadow-xl">
-              <div className="border-b border-border px-2.5 pb-2 pt-1.5">
-                <p className="truncate text-xs font-semibold text-foreground">{state.user.name}</p>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{state.user.email || '未设置邮箱'}</p>
-                <p className="mt-1 text-[11px] text-studio-accent">{state.credits.toLocaleString()} 积分 · {state.user.plan}</p>
+            <div role="menu" aria-label="账户菜单" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-60 max-w-[calc(100vw-24px)] rounded-lg border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]">
+              <div className="border-b border-border px-2.5 pb-2.5 pt-1.5">
+                <p className="truncate text-sm font-semibold text-foreground">{state.user.name}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{state.user.email || '未设置邮箱'}</p>
+                <p className="mt-1.5 text-xs font-medium text-studio-accent">{creditsLabel} · {state.user.plan}</p>
               </div>
-              <Link href="/account" role="menuitem" onClick={() => setAccountOpen(false)} className="mt-1 flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-muted-foreground hover:text-foreground">
-                <UserRound className="size-3.5" aria-hidden="true" />账户与套餐
-              </Link>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => void signOut()}
-                disabled={signingOut}
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-muted-foreground hover:text-foreground disabled:opacity-60"
-              >
-                <LogOut className="size-3.5" aria-hidden="true" />{signingOut ? '正在退出…' : '退出登录'}
-              </button>
-              {signOutError && <p role="alert" className="px-2.5 pb-1.5 pt-1 text-[11px] text-destructive">{signOutError}</p>}
+              <div className="mt-1 flex flex-col gap-0.5">
+                <Link href="/account" role="menuitem" onClick={() => setAccountOpen(false)} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted">
+                  <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />账户与套餐
+                </Link>
+                <button type="button" role="menuitem" onClick={() => { toggleTheme(); setAccountOpen(false) }} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted">
+                  {state.theme === 'dark' ? <Sun className="size-4 text-muted-foreground" aria-hidden="true" /> : <Moon className="size-4 text-muted-foreground" aria-hidden="true" />}{themeLabel}
+                </button>
+                <button type="button" role="menuitem" onClick={() => { toggleLocale(); setAccountOpen(false) }} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted">
+                  <Languages className="size-4 text-muted-foreground" aria-hidden="true" />{localeLabel}
+                </button>
+                <button type="button" role="menuitem" onClick={() => void signOut()} disabled={signingOut} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted disabled:opacity-60">
+                  <LogOut className="size-4 text-muted-foreground" aria-hidden="true" />{signingOut ? '正在退出…' : '退出登录'}
+                </button>
+              </div>
+              {signOutError && <p role="alert" className="px-2.5 pb-1.5 pt-1 text-xs text-destructive">{signOutError}</p>}
             </div>
           )}
         </div>

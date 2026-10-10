@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
@@ -47,31 +47,22 @@
   --color-studio-workspace: var(--studio-workspace);
   --color-studio-grid: var(--studio-grid);
   --color-studio-map-mask: var(--studio-map-mask);
-  /* 液态玻璃圆角阶梯：控件紧凑、面板舒展，避免"所有东西同一圆角" */
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --radius-2xl: 24px;
+  /* 圆角阶梯：普通卡片与控件不超过 8px，只有浮层使用 12px */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+  --radius-2xl: 12px;
 }
 
 /* ==========================================================================
-   液态玻璃设计系统（Liquid Glass）
+   设计令牌与表面层级
    --------------------------------------------------------------------------
-   分三层，职责严格区分，避免"把一切都塞进玻璃卡片"：
-
-   1. 令牌层 `--lg-*`：颜色、玻璃透明度、边框、高光、阴影、模糊、层级、
-      间距、圆角、动效时长。浅色与深色各一套，是所有组件唯一的事实来源。
-   2. 表面层 `.lg-pane / .lg-glass / .lg-raised`：
-      - `lg-pane`   实心可读表面（列表、表格、表单容器、密集数据）——**不带模糊**；
-      - `lg-glass`  真正的玻璃表面（导航、浮动工具条、模型选择器、弹层）——带模糊；
-      - `lg-raised` 仅靠阴影与高光表达层级，零模糊。
-   3. 兼容层：既有 `studio-*` 类全部映射到上面两层，
-      因此页面组件无需逐个改写即可获得新视觉。
-
-   模糊只允许出现在**独立表面**上。绝不给 html/body/应用根容器或
-   任何 fixed/portal 元素的祖先添加 filter/backdrop-filter，
-   否则菜单、弹窗、下拉与固定工具条会错位或被裁切。
+   - 令牌层 `--lg-*`：颜色、边框、阴影与动效的唯一事实来源，浅色与深色各一套。
+   - 页面表面（侧栏、顶栏、卡片、表单、表格）全部实心，保证对比度与可扫描性。
+   - 玻璃只属于浮层：下拉、菜单、通知、工具提示、模型选择器使用 `.lg-glass-overlay`。
+   - 模糊不能加在 html/body/应用根容器或 fixed/portal 元素的祖先上，
+     否则菜单与弹窗会错位或被裁切。
    ========================================================================== */
 
 :root {
@@ -98,34 +89,32 @@
   --lg-saturate: 165%;
 
   /* —— 玻璃表面 —— */
-  --lg-glass-strong: rgba(255, 255, 255, 0.78);
-  --lg-glass-base: rgba(255, 255, 255, 0.62);
-  --lg-glass-soft: rgba(255, 255, 255, 0.46);
-  --lg-glass-quiet: rgba(255, 255, 255, 0.34);
+  --lg-glass-strong: rgba(255, 255, 255, 0.94);
+  --lg-glass-base: rgba(255, 255, 255, 0.9);
+  --lg-glass-soft: rgba(255, 255, 255, 0.76);
+  --lg-glass-quiet: rgba(255, 255, 255, 0.6);
   --lg-pane-bg: #ffffff;
-  --lg-pane-bg-soft: #fbfbfd;
+  --lg-pane-bg-soft: #f7f8fa;
 
   /* —— 玻璃边缘：上半高光 + 整体细边，制造"厚度" —— */
-  --lg-edge: rgba(24, 24, 27, 0.1);
-  --lg-edge-strong: rgba(24, 24, 27, 0.16);
+  --lg-edge: rgba(17, 18, 20, 0.09);
+  --lg-edge-strong: rgba(17, 18, 20, 0.16);
   --lg-highlight: rgba(255, 255, 255, 0.72);
   --lg-highlight-soft: rgba(255, 255, 255, 0.4);
   --lg-refract: rgba(255, 255, 255, 0.55);
 
   /* —— 阴影：近距离接触阴影 + 远距离扩散，避免"糊成一团黑" —— */
-  --lg-shadow-1: 0 1px 2px rgba(24, 24, 27, 0.05), 0 1px 1px rgba(24, 24, 27, 0.03);
-  --lg-shadow-2: 0 2px 6px rgba(24, 24, 27, 0.06), 0 8px 24px rgba(24, 24, 27, 0.05);
-  --lg-shadow-3: 0 4px 12px rgba(24, 24, 27, 0.08), 0 18px 44px rgba(24, 24, 27, 0.09);
-  --lg-shadow-4: 0 8px 22px rgba(24, 24, 27, 0.1), 0 32px 80px rgba(24, 24, 27, 0.16);
+  --lg-shadow-1: 0 1px 2px rgba(17, 18, 20, 0.04);
+  --lg-shadow-2: 0 2px 8px rgba(17, 18, 20, 0.06), 0 1px 2px rgba(17, 18, 20, 0.04);
+  --lg-shadow-3: 0 6px 18px rgba(17, 18, 20, 0.08), 0 2px 4px rgba(17, 18, 20, 0.04);
+  --lg-shadow-4: 0 12px 32px rgba(17, 18, 20, 0.14), 0 2px 6px rgba(17, 18, 20, 0.06);
   --lg-shadow-inset-top: inset 0 1px 0 var(--lg-highlight);
   --lg-glow: 0 0 0 1px color-mix(in srgb, var(--studio-accent) 12%, transparent),
     0 8px 30px color-mix(in srgb, var(--studio-accent) 14%, transparent);
 
   /* —— 环境光：极轻、缓慢、可关闭的背景层次 —— */
-  --lg-ambient:
-    radial-gradient(1100px 620px at 12% -8%, color-mix(in srgb, var(--studio-accent) 8%, transparent), transparent 62%),
-    radial-gradient(900px 520px at 92% 4%, color-mix(in srgb, var(--ring) 7%, transparent), transparent 58%);
-  --lg-ambient-opacity: 1;
+  --lg-ambient: none;
+  --lg-ambient-opacity: 0;
 }
 
 .dark {
@@ -162,25 +151,12 @@
     box-shadow: var(--lg-shadow-1);
   }
 
-  /* 真正的玻璃表面：仅用于导航、浮动工具条、模型选择器、创作输入区、弹层。
-     带上下高光与折射描边，且只在支持 backdrop-filter 时生效。 */
+  /* 兼容类名：现在是实心卡片。真正的玻璃只用于浮层，见 `.lg-glass-overlay`。 */
   .lg-glass {
-    position: relative;
     border: 1px solid var(--lg-edge);
     border-radius: var(--radius-lg);
-    background: var(--lg-glass-base);
-    box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
-  }
-
-  /* 玻璃"厚度"高光：顶部一条渐隐亮线，模拟光线在边缘的折射。 */
-  .lg-glass::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 1px;
-    border-radius: inherit;
-    background: linear-gradient(90deg, transparent, var(--lg-highlight), transparent);
-    pointer-events: none;
+    background: var(--lg-pane-bg);
+    box-shadow: var(--lg-shadow-1);
   }
 
   /* 仅靠阴影与高光表达层级，零模糊：用于大量重复出现的卡片。 */
@@ -188,7 +164,7 @@
     border: 1px solid var(--lg-edge);
     border-radius: var(--radius-lg);
     background: var(--lg-pane-bg);
-    box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
+    box-shadow: var(--lg-shadow-1);
   }
 
   /* 内凹表面：输入框、代码块、只读区域。 */
@@ -205,15 +181,13 @@
 }
 
 /* 玻璃模糊本身。
-   这里**刻意不套 `@supports`**，且把无前缀属性写在**最后**：
+   这里**���意不套 `@supports`**，且把无前缀属性写在**最后**：
    Lightning CSS（Tailwind 4 / Next 16 的 CSS 管线）会把
    `-webkit-backdrop-filter` 与 `backdrop-filter` 视为同一逻辑属性并只保留最后一条，
    若把无前缀写在前面就会被删掉，Chrome 下玻璃完全失效（实测 computed = none）。
    两个前缀都声明即可达到渐进增强：不支持者忽略，基础样式仍是实心表面。 */
 .lg-glass {
-  background: var(--lg-glass-base);
-  -webkit-backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
-  backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
+  background: var(--lg-pane-bg);
 }
 
 /* 导航与固定工具条用较轻的模糊：它们是长期驻留的大面积元素。 */
@@ -363,30 +337,29 @@
 .studio-home-model-option:focus-visible { background: rgb(24 24 27 / 6%); outline: none; }
 .studio-home-model-option-active { background: rgb(88 92 220 / 10%); }
 .studio-select-trigger {
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgb(255 255 255 / 19%), rgb(255 255 255 / 7%));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 24%), 0 8px 20px rgb(6 27 31 / 8%);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  box-shadow: var(--lg-shadow-1);
 }
 .studio-select-trigger:hover,
 .studio-select-trigger[aria-expanded='true'] {
-  border-color: rgb(199 243 232 / 66%);
-  background: linear-gradient(135deg, rgb(199 243 232 / 24%), rgb(255 255 255 / 10%));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 32%), 0 0 0 3px rgb(199 243 232 / 10%);
+  border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-accent) 12%, transparent);
 }
 .studio-select-menu {
   position: fixed;
   z-index: 200;
   overflow-y: auto;
-  border: 1px solid rgb(199 243 232 / 42%);
-  border-radius: 13px;
-  background: rgb(10 26 29 / 97%);
-  padding: 5px;
-  box-shadow: 0 22px 48px rgb(0 0 0 / 42%), inset 0 1px 0 rgb(255 255 255 / 14%);
-  color: #f4fffc;
-  -webkit-backdrop-filter: blur(24px) saturate(145%);
-  backdrop-filter: blur(24px) saturate(145%);
+  border: 1px solid var(--lg-edge);
+  border-radius: var(--radius-md);
+  background: var(--lg-glass-strong);
+  padding: 4px;
+  box-shadow: var(--lg-shadow-4);
+  color: var(--foreground);
+  -webkit-backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate));
+  backdrop-filter: blur(var(--lg-blur-overlay)) saturate(var(--lg-saturate));
   scrollbar-width: thin;
-  scrollbar-color: rgb(199 243 232 / 30%) transparent;
+  scrollbar-color: var(--lg-edge-strong) transparent;
 }
 .studio-select-option {
   display: flex;
@@ -396,20 +369,21 @@
   justify-content: space-between;
   gap: 10px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 6px;
   padding: 7px 9px;
-  color: rgb(233 247 244 / 84%);
-  font-size: 12px;
+  color: var(--foreground);
+  font-size: 13px;
   text-align: left;
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 .studio-select-option:hover,
-.studio-select-option:focus-visible,
-.studio-select-option.is-selected {
-  border-color: rgb(199 243 232 / 24%);
-  background: rgb(199 243 232 / 14%);
-  color: #ffffff;
+.studio-select-option:focus-visible {
+  background: var(--muted);
   outline: none;
+}
+.studio-select-option.is-selected {
+  color: var(--studio-accent);
+  font-weight: 600;
 }
 .studio-home-param-select { min-width: 0; gap: 0; }
 .studio-home-param-select .studio-select-trigger { height: 28px; min-width: 74px; border: 0; border-radius: 7px; background: transparent; box-shadow: none; padding: 0 4px; font-size: 11px; }
@@ -456,32 +430,31 @@
 /* 浅色主题：中性灰白工作区，黑色承担主要操作与选中态 */
 :root {
   color-scheme: light;
-  --background: #fafafa;
-  --foreground: #18181b;
+  --background: #f4f5f7;
+  --foreground: #111214;
   --card: #ffffff;
-  --card-foreground: #18181b;
+  --card-foreground: #111214;
   --popover: #ffffff;
-  --popover-foreground: #18181b;
-  --primary: #18181b;
+  --popover-foreground: #111214;
+  --primary: #111214;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
-  --secondary-foreground: #18181b;
-  --muted: #f4f4f5;
-  /* 次要文字需在**所有**浅色表面上达到 WCAG AA 4.5:1：
-     #67676f 在白底 5.61、#f4f4f5 上 5.10、#e9e9ed 上 4.63（原 #71717a 仅 3.99–4.83，不达标）。 */
-  --muted-foreground: #67676f;
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
+  --secondary: #eceef1;
+  --secondary-foreground: #111214;
+  --muted: #eceef1;
+  /* 次要文字需在所有浅色表面上达到 WCAG AA 4.5:1：#5b5f69 在白底、雾白底与灰色面板上均不低于 5.4:1。 */
+  --muted-foreground: #5b5f69;
+  --accent: #eceef1;
+  --accent-foreground: #111214;
   --destructive: #b42318;
   --destructive-foreground: #ffffff;
   --success: #15803d;
-  --border: #e4e4e7;
-  --input: #d4d4d8;
-  --ring: #18181b;
+  --border: #dfe2e7;
+  --input: #d0d4da;
+  --ring: #0f766e;
   --radius: 0.5rem;
-  --studio-accent: #18181b;
+  --studio-accent: #0f766e;
   --studio-accent-foreground: #ffffff;
-  --studio-warn: #a16207;
+  --studio-warn: #92400e;
   /* 媒体预览 / 画布保留独立深色场景，不把深色扩散到浅色工作区 */
   --studio-ink: #0c0d0f;
   --studio-ink-foreground: #f4f4f5;
@@ -495,40 +468,40 @@
   --studio-grid: #2a2b30;
   --studio-map-mask: rgba(12, 13, 15, 0.76);
   --sidebar: #ffffff;
-  --sidebar-foreground: #18181b;
-  --sidebar-primary: #18181b;
+  --sidebar-foreground: #111214;
+  --sidebar-primary: #111214;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f4f4f5;
-  --sidebar-accent-foreground: #18181b;
-  --sidebar-border: #e4e4e7;
+  --sidebar-accent: #eceef1;
+  --sidebar-accent-foreground: #111214;
+  --sidebar-border: #dfe2e7;
   --sidebar-ring: #18181b;
 }
 
 /* 深色主题：中性炭黑工作区，主按钮反转为白底黑字 */
 .dark {
   color-scheme: dark;
-  --background: #111113;
+  --background: #0f1012;
   --foreground: #f4f4f5;
-  --card: #1a1a1d;
+  --card: #17181b;
   --card-foreground: #f4f4f5;
-  --popover: #202023;
+  --popover: #1c1d21;
   --popover-foreground: #f4f4f5;
   --primary: #f4f4f5;
   --primary-foreground: #111113;
-  --secondary: #27272a;
+  --secondary: #23252a;
   --secondary-foreground: #f4f4f5;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
+  --muted: #23252a;
+  --muted-foreground: #a7acb6;
+  --accent: #23252a;
   --accent-foreground: #f4f4f5;
   --destructive: #f87171;
   --destructive-foreground: #240a0a;
   --success: #4ade80;
-  --border: #303035;
-  --input: #3f3f46;
-  --ring: #f4f4f5;
-  --studio-accent: #f4f4f5;
-  --studio-accent-foreground: #111113;
+  --border: #2b2e34;
+  --input: #3a3e46;
+  --ring: #5eead4;
+  --studio-accent: #5eead4;
+  --studio-accent-foreground: #0f1012;
   --studio-warn: #fbbf24;
   --studio-ink: #0b0c0e;
   --studio-ink-foreground: #f4f4f5;
@@ -538,56 +511,22 @@
   --studio-workspace: #0b0c0e;
   --studio-grid: #2a2b30;
   --studio-map-mask: rgba(11, 12, 14, 0.76);
-  --sidebar: #161619;
+  --sidebar: #131416;
   --sidebar-foreground: #f4f4f5;
   --sidebar-primary: #f4f4f5;
   --sidebar-primary-foreground: #111113;
-  --sidebar-accent: #27272a;
+  --sidebar-accent: #23252a;
   --sidebar-accent-foreground: #f4f4f5;
-  --sidebar-border: #303035;
+  --sidebar-border: #26282d;
   --sidebar-ring: #f4f4f5;
 }
 
 .studio-home {
-  --background: #f5f5f7;
-  --foreground: #1d1d1f;
-  --card: #ffffff;
-  --card-foreground: #1d1d1f;
-  --popover: #ffffff;
-  --popover-foreground: #1d1d1f;
-  --primary: #1d1d1f;
-  --primary-foreground: #ffffff;
-  --secondary: #e9e9ed;
-  --secondary-foreground: #1d1d1f;
-  --muted: #e9e9ed;
-  --muted-foreground: #67676f;
-  --accent: #e9e9ed;
-  --accent-foreground: #1d1d1f;
-  --border: rgba(29, 29, 31, 0.1);
-  --input: rgba(29, 29, 31, 0.14);
-  --ring: #1d1d1f;
-  --studio-home-shadow: 0 10px 28px rgba(29, 29, 31, 0.045), 0 2px 7px rgba(29, 29, 31, 0.025);
+  --studio-home-shadow: 0 1px 2px rgba(17, 18, 20, 0.04);
 }
 
 .dark .studio-home {
-  --background: #111113;
-  --foreground: #f4f4f5;
-  --card: #1a1a1d;
-  --card-foreground: #f4f4f5;
-  --popover: #202023;
-  --popover-foreground: #f4f4f5;
-  --primary: #f4f4f5;
-  --primary-foreground: #111113;
-  --secondary: #27272a;
-  --secondary-foreground: #f4f4f5;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
-  --accent-foreground: #f4f4f5;
-  --border: #303035;
-  --input: #3f3f46;
-  --ring: #f4f4f5;
-  --studio-home-shadow: 0 10px 28px rgba(0, 0, 0, 0.16), 0 2px 7px rgba(0, 0, 0, 0.1);
+  --studio-home-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .studio-home-prompt {
@@ -743,7 +682,7 @@
 /* 工作台外壳。
    这里**不**设置 filter / backdrop-filter / transform / contain：
    那会给内部的 fixed 侧栏、sticky 顶栏与 portal 浮层创建新的包含块，
-   导致菜单、弹窗与工具提示错位。 */
+   导致菜单、弹窗与工具提示错��。 */
 .studio-app-shell {
   background: var(--background);
   color: var(--foreground);
@@ -753,22 +692,7 @@
   background: transparent;
 }
 
-/* 环境光：极轻、可关闭。单独一个 fixed 装饰层，
-   不参与内容布局，也不影响任何浮层定位。 */
-.studio-app-shell::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: var(--lg-ambient);
-  opacity: var(--lg-ambient-opacity);
-  transition: opacity var(--lg-dur-slow) var(--lg-ease-out);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .studio-app-shell::before { transition: none; }
-}
+/* 页面背景保持纯色，不叠加环境光渐变，避免与内容争夺注意力。 */
 
 /* --------------------------------------------------------------------------
    表面映射
@@ -951,24 +875,14 @@
    -------------------------------------------------------------------------- */
 
 .studio-topbar {
-  background: var(--lg-glass-strong);
-  border-bottom: 1px solid var(--lg-edge);
-  box-shadow: 0 1px 0 var(--lg-highlight-soft), 0 8px 24px rgba(24, 24, 27, 0.05);
-  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
-  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
-}
-
-.dark .studio-topbar {
-  box-shadow: 0 1px 0 var(--lg-highlight-soft), 0 8px 24px rgba(0, 0, 0, 0.36);
+  background: var(--card);
+  border-bottom-color: var(--border);
 }
 
 .studio-sidebar,
 .studio-mobile-nav aside {
-  background: color-mix(in srgb, var(--sidebar) 84%, transparent);
-  border-color: var(--lg-edge);
-  box-shadow: 1px 0 0 var(--lg-highlight-soft);
-  -webkit-backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
-  backdrop-filter: blur(var(--lg-blur-bar)) saturate(var(--lg-saturate));
+  background: var(--sidebar);
+  border-color: var(--sidebar-border);
 }
 
 .studio-nav-item {
@@ -984,13 +898,12 @@
 }
 
 .studio-nav-item[data-active='true'] {
-  background: color-mix(in srgb, var(--studio-accent) 14%, transparent);
+  background: color-mix(in srgb, var(--studio-accent) 10%, transparent);
   color: var(--studio-accent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--studio-accent) 22%, transparent);
 }
 
 .studio-nav-item[data-active='true']:hover {
-  background: color-mix(in srgb, var(--studio-accent) 18%, transparent);
+  background: color-mix(in srgb, var(--studio-accent) 14%, transparent);
 }
 
 /* 顶栏与侧栏内的小控件：中性叠加，避免彩色噪点。 */
@@ -1080,42 +993,6 @@
     var(--lg-shadow-3);
 }
 
-.studio-home-shortcut {
-  border: 1px solid var(--lg-edge);
-  border-radius: var(--radius-lg);
-  background: var(--lg-glass-soft);
-  box-shadow: var(--lg-shadow-1), var(--lg-shadow-inset-top);
-  -webkit-backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
-  backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-saturate));
-  transition:
-    transform var(--lg-dur-base) var(--lg-ease-out),
-    border-color var(--lg-dur-base) var(--lg-ease-out),
-    background-color var(--lg-dur-base) var(--lg-ease-out),
-    box-shadow var(--lg-dur-base) var(--lg-ease-out);
-}
-
-.studio-home-shortcut:hover {
-  border-color: color-mix(in srgb, var(--studio-accent) 34%, var(--lg-edge));
-  background: var(--lg-glass-base);
-  box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
-  transform: translateY(-2px);
-}
-
-.studio-home [role='tab'][aria-selected='true'] {
-  background: color-mix(in srgb, var(--foreground) 9%, transparent);
-  box-shadow: inset 0 1px 0 var(--lg-highlight-soft);
-}
-
-.studio-home form button[type='submit'] {
-  background: var(--studio-accent);
-  color: var(--studio-accent-foreground);
-  box-shadow: var(--lg-shadow-2), var(--lg-shadow-inset-top);
-}
-
-.studio-home form button[type='submit']:hover {
-  opacity: 1;
-  filter: brightness(1.08);
-}
 
 @media (prefers-reduced-motion: reduce) {
   .studio-home-prompt { transition: none; }
@@ -1708,7 +1585,7 @@
 /* ==========================================================================\n+   OAOOAO 液态创作空间：明确可见的环境层\n+   --------------------------------------------------------------------------\n+   DeepSeek Harness 参考主题的关键不是单独给卡片加透明度，而是让整个创作\n+   空间先拥有一层持续存在的环境壁纸，再让侧栏、输入台和浮层在它上面形成\n+   不同厚度的玻璃。这里限定在工作台 / 后台作用域，不影响首页与套餐页。\n+   ========================================================================== */
 
 .studio-app-shell[data-studio-skin='gradient'] {
-  /* 保留一个可用于 `text-background` 的深色值；画布本身通过外壳规则保持透明。 */
+  /* 保留一个可用于 `text-background` 的深色值；��布本身通过外壳规则保持透明。 */
   --background: #10252c;
   --foreground: #f4fbfb;
   --card: rgba(11, 30, 37, 0.34);

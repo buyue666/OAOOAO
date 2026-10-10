@@ -1,0 +1,120 @@
+import Link from 'next/link'
+import {
+  Clapperboard,
+  FolderOpen,
+  Image as ImageIcon,
+  LayoutGrid,
+  Library,
+  ListChecks,
+  PanelsTopLeft,
+  Puzzle,
+  Settings,
+  ShieldCheck,
+  Video,
+  type LucideIcon,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Tooltip } from './ui'
+
+export interface StudioNavItem {
+  label: string
+  href: string
+  icon: LucideIcon
+  /** 命中这些路径前缀时高亮，让子页面归入同一个一级入口。 */
+  matches: readonly string[]
+}
+
+export const studioPrimaryNav: readonly StudioNavItem[] = [
+  { label: '工作台', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent'] },
+  { label: '图片生成', href: '/image', icon: ImageIcon, matches: ['/image'] },
+  { label: '视频生成', href: '/video', icon: Video, matches: ['/video'] },
+  { label: '短剧制作', href: '/drama', icon: Clapperboard, matches: ['/drama'] },
+  { label: '自由画布', href: '/canvas', icon: PanelsTopLeft, matches: ['/canvas'] },
+  { label: '任务', href: '/tasks', icon: ListChecks, matches: ['/tasks'] },
+  { label: '作品', href: '/works', icon: FolderOpen, matches: ['/works', '/gallery', '/projects'] },
+  { label: '资产', href: '/assets', icon: Library, matches: ['/assets'] },
+  { label: '技能市场', href: '/skills', icon: Puzzle, matches: ['/skills'] },
+]
+
+export const studioAdminNav: StudioNavItem = { label: '管理员后台', href: '/admin', icon: ShieldCheck, matches: ['/admin'] }
+export const studioSettingsNav: StudioNavItem = { label: '设置', href: '/settings', icon: Settings, matches: ['/settings'] }
+
+export function isNavItemActive(pathname: string, item: StudioNavItem) {
+  return item.matches.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+const rootTitles: Record<string, string> = {
+  studio: '工作台',
+  agent: '导演 Agent',
+  image: '图片生成',
+  video: '视频生成',
+  drama: '短剧制作',
+  canvas: '自由画布',
+  tasks: '任务',
+  works: '作品',
+  gallery: '广场',
+  projects: '项目',
+  assets: '资产',
+  skills: '技能市场',
+  account: '账户',
+  settings: '设置',
+  plans: '套餐',
+}
+
+const sectionTitles: Record<string, string> = {
+  script: '剧本',
+  storyboard: '分镜',
+  shots: '镜头',
+  characters: '角色与场景',
+  cut: '成片',
+  overview: '概览',
+  assets: '素材',
+  canvas: '画布',
+  settings: '设置',
+}
+
+/** 顶栏只显示当前页面名称；项目内页面附带项目名，避免只剩一个泛化的分区名。 */
+export function studioPageTitle(pathname: string, projectTitle?: string) {
+  const [root, id, section] = pathname.split('/').filter(Boolean)
+  if (!root) return '工作台'
+  if (id && (root === 'projects' || root === 'drama')) {
+    const name = projectTitle ?? (root === 'drama' ? '短剧项目' : '项目')
+    if (!section) return name
+    return `${name} · ${sectionTitles[section] ?? section}`
+  }
+  return rootTitles[root] ?? 'OAO'
+}
+
+export function StudioNavLink({
+  item,
+  pathname,
+  collapsed = false,
+  onNavigate,
+}: {
+  item: StudioNavItem
+  pathname: string
+  collapsed?: boolean
+  onNavigate?: () => void
+}) {
+  const Icon = item.icon
+  const active = isNavItemActive(pathname, item)
+  const link = (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={active ? 'page' : undefined}
+      aria-label={collapsed ? item.label : undefined}
+      data-active={active ? 'true' : 'false'}
+      className={cn(
+        'studio-nav-item flex h-10 items-center rounded-lg text-sm font-medium',
+        collapsed ? 'mx-auto w-10 justify-center' : 'gap-3 px-3',
+        active ? 'text-studio-accent' : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      <Icon className="size-[18px] shrink-0" aria-hidden="true" />
+      {!collapsed && <span className="truncate">{item.label}</span>}
+    </Link>
+  )
+
+  return collapsed ? <Tooltip label={item.label} side="right" className="flex w-full justify-center">{link}</Tooltip> : link
+}
