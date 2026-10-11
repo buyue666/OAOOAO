@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { ControlButton, EmptyState, Modal, type Tone } from './ui'
@@ -214,6 +214,14 @@ export function AdminDrawer({ open, title, description, onClose, children, foote
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose, open])
 
+  const isDockedPanel = dock && docked && slot !== null
+
+  /* 停靠面板较高，首次打开时底部操作栏可能在首屏之外；仅在底部越界时滚动到可见。 */
+  useEffect(() => {
+    if (!open || !isDockedPanel) return
+    slot?.firstElementChild?.scrollIntoView({ block: 'nearest' })
+  }, [isDockedPanel, open, slot])
+
   if (!open) return null
 
   const panel = (
@@ -301,6 +309,87 @@ export function AdminFilterBar({ children, actions }: { children: ReactNode; act
       <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
+  )
+}
+
+/* -------------------------------- 标签页与操作栏 -------------------------------- */
+
+type AdminTabItem<T extends string> = readonly [value: T, label: string]
+
+/**
+ * 后台分区标签：横向用于同一模块内的分区切换，纵向用于设置类的主从导航。
+ * 方向键在标签之间移动并同时切换，符合 WAI-ARIA Tabs 的键盘模型。
+ */
+export function AdminTabs<T extends string>({ label, items, value, onChange, orientation = 'horizontal' }: { label: string; items: ReadonlyArray<AdminTabItem<T>>; value: T; onChange: (value: T) => void; orientation?: 'horizontal' | 'vertical' }) {
+  const vertical = orientation === 'vertical'
+  const previousKey = vertical ? 'ArrowUp' : 'ArrowLeft'
+  const nextKey = vertical ? 'ArrowDown' : 'ArrowRight'
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== previousKey && event.key !== nextKey) return
+    event.preventDefault()
+    const current = items.findIndex(([itemValue]) => itemValue === value)
+    const target = (current + (event.key === nextKey ? 1 : -1) + items.length) % items.length
+    onChange(items[target][0])
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[target]?.focus()
+  }
+
+  return (
+    <div role="tablist" aria-label={label} aria-orientation={orientation} onKeyDown={handleKeyDown} className={cn(vertical ? 'flex flex-col gap-1' : 'flex flex-wrap gap-1 border-b border-border')}>
+      {items.map(([itemValue, itemLabel]) => {
+        const selected = itemValue === value
+        return (
+          <button
+            key={itemValue}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(itemValue)}
+            className={cn(
+              'text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-studio-accent/60',
+              vertical
+                ? cn('flex h-9 w-full items-center rounded-md px-3 text-left', selected ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground')
+                : cn('-mb-px h-10 border-b-2 px-3 font-medium', selected ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'),
+            )}
+          >
+            {itemLabel}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** 表单底部的固定操作栏：长表单滚动时，保存按钮始终停留在视口底部。 */
+export function AdminSaveBar({ hint, children }: { hint?: string; children: ReactNode }) {
+  return (
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-[var(--lg-shadow-2)]">
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      <div className="ml-auto flex flex-wrap items-center gap-2">{children}</div>
+    </div>
+  )
+}
+
+/**
+ * 数据列表面板：标题与主操作 → 筛选栏 → 数据表格 → 分页。
+ * 运营列表统一采用这一结构，保证「先筛选、再比较、后操作」的阅读顺序。
+ */
+export function AdminDataPanel({ title, description, actions, filters, filterActions, footer, children }: { title: string; description?: string; actions?: ReactNode; filters?: ReactNode; filterActions?: ReactNode; footer?: ReactNode; children: ReactNode }) {
+  const titleId = useId()
+  return (
+    <section aria-labelledby={titleId} className="studio-surface min-w-0 overflow-hidden">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0">
+          <h2 id={titleId} className="text-sm font-semibold">{title}</h2>
+          {description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      </header>
+      {(filters || filterActions) && <AdminFilterBar actions={filterActions}>{filters}</AdminFilterBar>}
+      <div className="min-w-0 p-4">{children}</div>
+      {footer && <div className="border-t border-border px-4 py-3">{footer}</div>}
+    </section>
   )
 }
 

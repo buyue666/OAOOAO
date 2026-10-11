@@ -167,7 +167,7 @@ export function DramaPage() {
             <div className="space-y-3">
               <label className="block"><span className="mb-1.5 block text-xs font-medium text-foreground">一句话故事</span><textarea value={idea} onChange={(event) => setIdea(event.target.value)} placeholder="例如：雨夜里的修表匠，发现每一块表都停在同一个时间。" className="studio-field min-h-24 w-full resize-y border border-border bg-card px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" /></label>
               <div className="flex flex-wrap items-center gap-2">
-                <ControlButton variant="glass" size="sm" disabled={!idea.trim() || drafting} onClick={() => void generateOutline()}>{drafting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} {drafting ? '正在生成大纲' : '生成大纲'}</ControlButton>
+                <ControlButton variant="primary" size="sm" disabled={!idea.trim() || drafting} onClick={() => void generateOutline()}>{drafting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} {drafting ? '正在生成大纲' : '生成大纲'}</ControlButton>
                 {draftEpisodes.length > 0 && <span className="text-xs text-success"><Check className="mr-1 inline size-3.5" />已暂存 {draftEpisodes.length} 集</span>}
               </div>
             </div>

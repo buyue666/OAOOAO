@@ -1,25 +1,28 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { RefreshCw, ShieldCheck } from 'lucide-react'
 import { listAuditLogs } from '@/lib/studio/admin-api'
 import type { AuditFilters, AuditLog } from '@/lib/studio/admin-types'
+import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import {
   AdminCell,
+  AdminDataPanel,
   AdminDefinition,
   AdminDrawer,
   AdminError,
-  AdminField,
   AdminInput,
   AdminLoading,
   AdminNotice,
   AdminPagination,
   AdminRow,
+  AdminSearch,
   AdminSectionCard,
   AdminSelect,
   AdminStat,
   AdminTable,
+  AdminWorkbench,
   TableMessageRow,
   formatAdminDate,
   formatAdminNumber,
@@ -92,6 +95,15 @@ export function AdminAuditPanel() {
   const failures = data.items.filter((log) => log.status === 'failure').length
   const logins = data.items.filter((log) => log.action === 'auth.login').length
 
+  function applyKeyword() {
+    setPage(1)
+    setQuery(keyword)
+  }
+
+  function resetFilters() {
+    setKeyword(''); setQuery(''); setAction(''); setStatus(''); setTargetType(''); setStart(''); setEnd(''); setPage(1)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-3">
@@ -100,87 +112,89 @@ export function AdminAuditPanel() {
         <AdminStat label="本页登录记录" value={formatAdminNumber(logins)} detail="管理员登录事件" />
       </div>
 
-      <AdminSectionCard title="查询条件" description="支持关键词、操作类型、结果与时间范围筛选。密钥类字段在展示前会自动脱敏。">
-        <div className="flex flex-wrap items-end gap-2">
-          <AdminField label="关键词" className="w-full sm:w-60">
-            <AdminInput value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="操作者、目标或操作标识" onKeyDown={(event) => { if (event.key === 'Enter') { setPage(1); setQuery(keyword) } }} />
-          </AdminField>
-          <AdminField label="操作类型" className="w-52">
-            <AdminSelect value={action} onChange={(event) => { setPage(1); setAction(event.target.value) }}>
-              {presetActions.map((value) => <option key={value || 'all'} value={value}>{value ? (actionLabels[value] || value) : '全部操作'}</option>)}
-            </AdminSelect>
-          </AdminField>
-          <AdminField label="结果" className="w-32">
-            <AdminSelect value={status} onChange={(event) => { setPage(1); setStatus(event.target.value) }}><option value="">全部结果</option><option value="success">成功</option><option value="failure">失败</option></AdminSelect>
-          </AdminField>
-          <AdminField label="目标类型" className="w-36">
-            <AdminSelect value={targetType} onChange={(event) => { setPage(1); setTargetType(event.target.value) }}>
-              <option value="">全部目标</option>
-              {Object.entries(targetTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </AdminSelect>
-          </AdminField>
-          <AdminField label="开始日期" className="w-40"><AdminInput type="date" value={start} onChange={(event) => { setPage(1); setStart(event.target.value) }} /></AdminField>
-          <AdminField label="结束日期" className="w-40"><AdminInput type="date" value={end} onChange={(event) => { setPage(1); setEnd(event.target.value) }} /></AdminField>
-          <ControlButton variant="primary" onClick={() => { setPage(1); setQuery(keyword) }}><Search className="size-3.5" />查询</ControlButton>
-          <ControlButton variant="secondary" onClick={() => { setAction(''); setStatus(''); setTargetType(''); setStart(''); setEnd(''); setKeyword(''); setQuery(''); setPage(1) }}>重置</ControlButton>
-          <ControlButton variant="secondary" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
-        </div>
-      </AdminSectionCard>
-
       {error && <AdminError message={error} retry={load} />}
-      {loading && !data.items.length ? <AdminLoading label="正在加载审计日志" /> : (
-        <>
-          <AdminTable columns={['时间', '操作', '操作者', 'IP', '目标', '结果', '详情']} minWidth={1100} caption="审计日志列表">
-            {data.items.map((log) => (
-              <AdminRow key={log.id}>
-                <AdminCell className="whitespace-nowrap text-xs text-muted-foreground">{formatAdminDate(log.createdAt)}</AdminCell>
-                <AdminCell>
-                  <p className="text-xs font-medium">{actionLabels[log.action] || log.action}</p>
-                  <p className="mt-1 font-mono text-[11px] text-muted-foreground">{log.action}</p>
-                </AdminCell>
-                <AdminCell className="text-xs">
-                  {log.actor?.username || '-'}
-                  {log.actor?.role && <span className="mt-1 block text-[11px] text-muted-foreground">{log.actor.role === 'admin' ? '管理员' : log.actor.role}</span>}
-                </AdminCell>
-                <AdminCell className="font-mono text-[11px]">{log.actor?.ip || '-'}</AdminCell>
-                <AdminCell className="max-w-[220px]">
-                  <p className="truncate text-xs">{log.target?.label || log.target?.id || '-'}</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{log.target?.type ? (targetTypeLabels[log.target.type] || log.target.type) : '-'}</p>
-                </AdminCell>
-                <AdminCell><StatusBadge tone={statusTone(log.status || 'success')}>{log.status === 'failure' ? '失败' : '成功'}</StatusBadge></AdminCell>
-                <AdminCell>
-                  <ControlButton variant="secondary" size="sm" onClick={() => setDetail(log)}>查看</ControlButton>
-                </AdminCell>
-              </AdminRow>
-            ))}
-            {!data.items.length && <TableMessageRow colSpan={7} loading={loading} error={error} empty="没有匹配的审计日志" />}
-          </AdminTable>
-          <AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} />
-        </>
-      )}
 
-      {detail && (
-        <AdminDrawer open onClose={() => setDetail(null)} width="sm:max-w-xl" title="审计详情" description={actionLabels[detail.action] || detail.action}>
-          <div className="flex flex-col gap-4">
-            <AdminSectionCard title="操作信息" className="p-4">
-              <AdminDefinition label="时间" value={formatAdminDate(detail.createdAt)} />
-              <AdminDefinition label="操作标识" value={detail.action} mono />
-              <AdminDefinition label="结果" value={<StatusBadge tone={statusTone(detail.status || 'success')}>{detail.status === 'failure' ? '失败' : '成功'}</StatusBadge>} />
-              <AdminDefinition label="操作者" value={detail.actor?.username} />
-              <AdminDefinition label="操作者角色" value={detail.actor?.role} />
-              <AdminDefinition label="来源 IP" value={detail.actor?.ip} mono />
-              <AdminDefinition label="客户端" value={detail.actor?.userAgent} />
-              <AdminDefinition label="目标类型" value={detail.target?.type ? (targetTypeLabels[detail.target.type] || detail.target.type) : undefined} />
-              <AdminDefinition label="目标名称" value={detail.target?.label} />
-              <AdminDefinition label="目标 ID" value={detail.target?.id} mono />
-            </AdminSectionCard>
-            <AdminSectionCard title="附加数据" description="密钥、密码与令牌类字段已在展示前脱敏。" className="p-4">
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted/30 p-3 text-[11px] leading-5">{JSON.stringify(maskSensitive(detail.metadata), null, 2) || '无附加数据'}</pre>
-            </AdminSectionCard>
-            <AdminNotice tone="neutral"><span className="flex items-center gap-1.5"><ShieldCheck className="size-3.5" />审计日志只读，不提供修改或删除入口。</span></AdminNotice>
-          </div>
-        </AdminDrawer>
-      )}
+      <AdminWorkbench>
+        <AdminDataPanel
+          title="审计日志"
+          description="按关键词、操作类型、结果、目标与日期筛选；点击「查看」在右侧打开详情。密钥类字段展示前自动脱敏。"
+          filters={
+            <>
+              <AdminSearch value={keyword} onChange={setKeyword} placeholder="操作者、目标或操作标识" onSubmit={applyKeyword} />
+              <AdminSelect aria-label="操作类型" value={action} onChange={(event) => { setPage(1); setAction(event.target.value) }} className="w-48">
+                {presetActions.map((value) => <option key={value || 'all'} value={value}>{value ? (actionLabels[value] || value) : '全部操作'}</option>)}
+              </AdminSelect>
+              <AdminSelect aria-label="结果" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value) }} className="w-28">
+                <option value="">全部结果</option><option value="success">成功</option><option value="failure">失败</option>
+              </AdminSelect>
+              <AdminSelect aria-label="目标类型" value={targetType} onChange={(event) => { setPage(1); setTargetType(event.target.value) }} className="w-32">
+                <option value="">全部目标</option>
+                {Object.entries(targetTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </AdminSelect>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">开始<AdminInput aria-label="开始日期" type="date" value={start} onChange={(event) => { setPage(1); setStart(event.target.value) }} className="w-36" /></label>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">结束<AdminInput aria-label="结束日期" type="date" value={end} onChange={(event) => { setPage(1); setEnd(event.target.value) }} className="w-36" /></label>
+            </>
+          }
+          filterActions={
+            <>
+              <ControlButton variant="secondary" size="sm" onClick={resetFilters}>重置</ControlButton>
+              <ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
+            </>
+          }
+          footer={<AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} />}
+        >
+          {loading && !data.items.length ? <AdminLoading label="正在加载审计日志" /> : (
+            <AdminTable columns={['时间', '操作', '操作者', 'IP', '目标', '结果', '详情']} minWidth={1100} caption="审计日志列表">
+              {data.items.map((log) => (
+                <AdminRow key={log.id} className={cn(detail?.id === log.id && 'bg-muted/60')}>
+                  <AdminCell className="whitespace-nowrap text-xs text-muted-foreground">{formatAdminDate(log.createdAt)}</AdminCell>
+                  <AdminCell>
+                    <p className="text-xs font-medium">{actionLabels[log.action] || log.action}</p>
+                    <p className="mt-1 font-mono text-[11px] text-muted-foreground">{log.action}</p>
+                  </AdminCell>
+                  <AdminCell className="text-xs">
+                    {log.actor?.username || '-'}
+                    {log.actor?.role && <span className="mt-1 block text-[11px] text-muted-foreground">{log.actor.role === 'admin' ? '管理员' : log.actor.role}</span>}
+                  </AdminCell>
+                  <AdminCell className="font-mono text-[11px]">{log.actor?.ip || '-'}</AdminCell>
+                  <AdminCell className="max-w-[220px]">
+                    <p className="truncate text-xs">{log.target?.label || log.target?.id || '-'}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{log.target?.type ? (targetTypeLabels[log.target.type] || log.target.type) : '-'}</p>
+                  </AdminCell>
+                  <AdminCell><StatusBadge tone={statusTone(log.status || 'success')}>{log.status === 'failure' ? '失败' : '成功'}</StatusBadge></AdminCell>
+                  <AdminCell>
+                    <ControlButton variant="secondary" size="sm" onClick={() => setDetail(log)} aria-label={`查看 ${actionLabels[log.action] || log.action} 的审计详情`}>查看</ControlButton>
+                  </AdminCell>
+                </AdminRow>
+              ))}
+              {!data.items.length && <TableMessageRow colSpan={7} loading={loading} error={error} empty="没有匹配的审计日志" />}
+            </AdminTable>
+          )}
+        </AdminDataPanel>
+
+        {detail && (
+          <AdminDrawer dock open onClose={() => setDetail(null)} width="sm:max-w-xl" title="审计详情" description={actionLabels[detail.action] || detail.action}>
+            <div className="flex flex-col gap-4">
+              <AdminSectionCard title="操作信息" className="p-4">
+                <AdminDefinition label="时间" value={formatAdminDate(detail.createdAt)} />
+                <AdminDefinition label="操作标识" value={detail.action} mono />
+                <AdminDefinition label="结果" value={<StatusBadge tone={statusTone(detail.status || 'success')}>{detail.status === 'failure' ? '失败' : '成功'}</StatusBadge>} />
+                <AdminDefinition label="操作者" value={detail.actor?.username} />
+                <AdminDefinition label="操作者角色" value={detail.actor?.role} />
+                <AdminDefinition label="来源 IP" value={detail.actor?.ip} mono />
+                <AdminDefinition label="客户端" value={detail.actor?.userAgent} />
+                <AdminDefinition label="目标类型" value={detail.target?.type ? (targetTypeLabels[detail.target.type] || detail.target.type) : undefined} />
+                <AdminDefinition label="目标名称" value={detail.target?.label} />
+                <AdminDefinition label="目标 ID" value={detail.target?.id} mono />
+              </AdminSectionCard>
+              <AdminSectionCard title="附加数据" description="密钥、密码与令牌类字段已在展示前脱敏。" className="p-4">
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-muted/30 p-3 text-[11px] leading-5">{JSON.stringify(maskSensitive(detail.metadata), null, 2) || '无附加数据'}</pre>
+              </AdminSectionCard>
+              <AdminNotice tone="neutral"><span className="flex items-center gap-1.5"><ShieldCheck className="size-3.5" />审计日志只读，不提供修改或删除入口。</span></AdminNotice>
+            </div>
+          </AdminDrawer>
+        )}
+      </AdminWorkbench>
     </div>
   )
 }

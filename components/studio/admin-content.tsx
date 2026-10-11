@@ -17,9 +17,11 @@ import {
   type Paged,
 } from '@/lib/studio/admin-api'
 import type { Announcement, AnnouncementInput, PublishedWork, WorkGovernanceCase } from '@/lib/studio/admin-types'
+import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import {
   AdminCell,
+  AdminDataPanel,
   AdminDefinition,
   AdminDrawer,
   AdminError,
@@ -28,11 +30,13 @@ import {
   AdminNotice,
   AdminPagination,
   AdminRow,
-  AdminSectionCard,
+  AdminSearch,
   AdminSelect,
   AdminStat,
   AdminTable,
+  AdminTabs,
   AdminTextarea,
+  AdminWorkbench,
   TableMessageRow,
   formatAdminDate,
   formatAdminNumber,
@@ -52,11 +56,12 @@ export function AdminContentPanel() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap gap-1.5">
-        {([['announcements', '公告管理'], ['works', '作品审核'], ['cases', '举报与治理']] as const).map(([value, label]) => (
-          <button key={value} type="button" onClick={() => setTab(value)} aria-pressed={tab === value} className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tab === value ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:bg-muted'}`}>{label}</button>
-        ))}
-      </div>
+      <AdminTabs
+        label="内容治理分区"
+        items={[['announcements', '公告管理'], ['works', '作品审核'], ['cases', '举报与治理']] as const}
+        value={tab}
+        onChange={setTab}
+      />
       {tab === 'announcements' && <AnnouncementsPanel canManage={canManage} reloadKey={reloadKey} />}
       {tab === 'works' && <WorksPanel canManage={canManage} reloadKey={reloadKey} />}
       {tab === 'cases' && <CasesPanel canManage={canManage} reloadKey={reloadKey} />}
@@ -140,41 +145,48 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
 
-      <AdminSectionCard
-        title="站点公告"
-        description="公告支持发布、下线、首页弹窗与登录后弹窗；生效区间由开始和结束时间控制。所有操作都会写入审计日志。"
-        action={canManage ? <div className="flex gap-2"><ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton><ControlButton variant="primary" size="sm" onClick={() => setEditor('new')}><Plus className="size-3.5" />新增公告</ControlButton></div> : undefined}
-      >
-        <AdminTable columns={['标题', '状态', '弹窗位置', '生效区间', '更新时间', '操作']} minWidth={1000} caption="公告列表">
-          {data.items.map((item) => (
-            <AdminRow key={item.id}>
-              <AdminCell className="max-w-[360px]"><p className="truncate font-medium">{item.title}</p><p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.content?.slice(0, 120) || '无内容'}</p></AdminCell>
-              <AdminCell><StatusBadge tone={item.enabled ? 'success' : 'muted'}>{item.enabled ? '已发布' : '未发布'}</StatusBadge></AdminCell>
-              <AdminCell>
-                <div className="flex flex-wrap gap-1.5">
-                  {canManage ? <>
-                    <button type="button" disabled={busy === item.id} onClick={() => void togglePopup(item, 'popupHome')} aria-pressed={item.popupHome} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupHome ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>首页弹窗</button>
-                    <button type="button" disabled={busy === item.id} onClick={() => void togglePopup(item, 'popupAfterLogin')} aria-pressed={item.popupAfterLogin} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupAfterLogin ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>登录后弹窗</button>
-                  </> : (item.popupHome || item.popupAfterLogin) ? <span className="text-[11px] text-muted-foreground">{[item.popupHome && '首页', item.popupAfterLogin && '登录后'].filter(Boolean).join(' · ')}</span> : <span className="text-[11px] text-muted-foreground">仅公告列表</span>}
-                </div>
-              </AdminCell>
-              <AdminCell className="text-xs text-muted-foreground">{item.startsAt || item.endsAt ? `${formatAdminDate(item.startsAt)} → ${formatAdminDate(item.endsAt)}` : '长期有效'}</AdminCell>
-              <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(item.updatedAt)}</AdminCell>
-              <AdminCell>
-                <div className="flex flex-wrap gap-1.5">
-                  {canManage && <ControlButton variant="secondary" size="sm" onClick={() => setEditor(item)}><Pencil className="size-3.5" />编辑</ControlButton>}
-                  {canManage && <ControlButton variant={item.enabled ? 'danger' : 'primary'} size="sm" disabled={busy === item.id} onClick={() => togglePublish(item)}>{item.enabled ? <><EyeOff className="size-3.5" />下线</> : <><Eye className="size-3.5" />发布</>}</ControlButton>}
-                  {canManage && <ControlButton variant="danger" size="sm" disabled={busy === item.id} onClick={() => remove(item)} aria-label={`删除 ${item.title}`}><Trash2 className="size-3.5" /></ControlButton>}
-                </div>
-              </AdminCell>
-            </AdminRow>
-          ))}
-          {!data.items.length && <TableMessageRow colSpan={6} loading={loading} error={error} empty="暂无公告" />}
-        </AdminTable>
-        <div className="mt-4"><AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} /></div>
-      </AdminSectionCard>
+      <AdminWorkbench>
+        <AdminDataPanel
+          title="站点公告"
+          description="公告支持发布、下线、首页弹窗与登录后弹窗；生效区间由开始和结束时间控制。所有操作都会写入审计日志。"
+          actions={canManage ? (
+            <>
+              <ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
+              <ControlButton variant="primary" size="sm" onClick={() => setEditor('new')}><Plus className="size-3.5" />新增公告</ControlButton>
+            </>
+          ) : undefined}
+          footer={<AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} />}
+        >
+          <AdminTable columns={['标题', '状态', '弹窗位置', '生效区间', '更新时间', '操作']} minWidth={1000} caption="公告列表">
+            {data.items.map((item) => (
+              <AdminRow key={item.id} className={cn(editor !== null && editor !== 'new' && editor.id === item.id && 'bg-muted/60')}>
+                <AdminCell className="max-w-[360px]"><p className="truncate font-medium">{item.title}</p><p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.content?.slice(0, 120) || '无内容'}</p></AdminCell>
+                <AdminCell><StatusBadge tone={item.enabled ? 'success' : 'muted'}>{item.enabled ? '已发布' : '未发布'}</StatusBadge></AdminCell>
+                <AdminCell>
+                  <div className="flex flex-wrap gap-1.5">
+                    {canManage ? <>
+                      <button type="button" disabled={busy === item.id} onClick={() => void togglePopup(item, 'popupHome')} aria-pressed={item.popupHome} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupHome ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>首页弹窗</button>
+                      <button type="button" disabled={busy === item.id} onClick={() => void togglePopup(item, 'popupAfterLogin')} aria-pressed={item.popupAfterLogin} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupAfterLogin ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>登录后弹窗</button>
+                    </> : (item.popupHome || item.popupAfterLogin) ? <span className="text-[11px] text-muted-foreground">{[item.popupHome && '首页', item.popupAfterLogin && '登录后'].filter(Boolean).join(' · ')}</span> : <span className="text-[11px] text-muted-foreground">仅公告列表</span>}
+                  </div>
+                </AdminCell>
+                <AdminCell className="text-xs text-muted-foreground">{item.startsAt || item.endsAt ? `${formatAdminDate(item.startsAt)} → ${formatAdminDate(item.endsAt)}` : '长期有效'}</AdminCell>
+                <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(item.updatedAt)}</AdminCell>
+                <AdminCell>
+                  <div className="flex flex-wrap gap-1.5">
+                    {canManage && <ControlButton variant="secondary" size="sm" onClick={() => setEditor(item)}><Pencil className="size-3.5" />编辑</ControlButton>}
+                    {canManage && <ControlButton variant={item.enabled ? 'danger' : 'primary'} size="sm" disabled={busy === item.id} onClick={() => togglePublish(item)}>{item.enabled ? <><EyeOff className="size-3.5" />下线</> : <><Eye className="size-3.5" />发布</>}</ControlButton>}
+                    {canManage && <ControlButton variant="danger" size="sm" disabled={busy === item.id} onClick={() => remove(item)} aria-label={`删除 ${item.title}`}><Trash2 className="size-3.5" /></ControlButton>}
+                  </div>
+                </AdminCell>
+              </AdminRow>
+            ))}
+            {!data.items.length && <TableMessageRow colSpan={6} loading={loading} error={error} empty="暂无公告" />}
+          </AdminTable>
+        </AdminDataPanel>
 
-      {editor && <AnnouncementEditor item={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} onSaved={(text) => { setMessage(text); setEditor(null); load() }} />}
+        {editor && <AnnouncementEditor item={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} onSaved={(text) => { setMessage(text); setEditor(null); load() }} />}
+      </AdminWorkbench>
     </div>
   )
 }
@@ -211,22 +223,33 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
   }
 
   return (
-    <AdminDrawer open onClose={onClose} title={item ? `编辑公告 ${item.title}` : '新增公告'} description="未发布的公告不会对用户展示；发布后立即在生效区间内生效。">
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
-          <AdminField label="公告标题" className="sm:col-span-2"><AdminInput name="title" required maxLength={120} defaultValue={item?.title} /></AdminField>
-          <AdminField label="公告内容" className="sm:col-span-2"><AdminTextarea name="content" rows={8} required defaultValue={item?.content} /></AdminField>
+    <AdminDrawer
+      open
+      dock
+      onClose={onClose}
+      width="sm:max-w-xl"
+      title={item ? '编辑公告' : '新增公告'}
+      description={item ? item.title : '未发布的公告不会对用户展示；发布后立即在生效区间内生效。'}
+      footer={
+        <>
+          <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
+          <ControlButton type="submit" form="announcement-editor-form" variant="primary" disabled={busy}><Megaphone className="size-3.5" />{busy ? '保存中' : '保存公告'}</ControlButton>
+        </>
+      }
+    >
+      <form id="announcement-editor-form" onSubmit={submit} className="flex flex-col gap-4">
+        <fieldset disabled={busy} className="flex flex-col gap-4">
+          <AdminField label="公告标题"><AdminInput name="title" required maxLength={120} defaultValue={item?.title} /></AdminField>
+          <AdminField label="公告内容"><AdminTextarea name="content" rows={8} required defaultValue={item?.content} /></AdminField>
           <AdminField label="开始时间" hint="留空表示立即生效。"><AdminInput name="startsAt" type="datetime-local" defaultValue={toLocalInput(item?.startsAt)} /></AdminField>
           <AdminField label="结束时间" hint="留空表示长期有效。"><AdminInput name="endsAt" type="datetime-local" defaultValue={toLocalInput(item?.endsAt)} /></AdminField>
-          <label className="flex items-center gap-2 text-sm"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />发布公告</label>
-          <label className="flex items-center gap-2 text-sm"><input name="popupHome" type="checkbox" defaultChecked={item?.popupHome ?? false} />首页弹窗展示</label>
-          <label className="flex items-center gap-2 text-sm"><input name="popupAfterLogin" type="checkbox" defaultChecked={item?.popupAfterLogin ?? false} />登录后弹窗展示</label>
+          <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+            <label className="flex items-center gap-2 text-sm"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />发布公告</label>
+            <label className="flex items-center gap-2 text-sm"><input name="popupHome" type="checkbox" defaultChecked={item?.popupHome ?? false} />首页弹窗展示</label>
+            <label className="flex items-center gap-2 text-sm"><input name="popupAfterLogin" type="checkbox" defaultChecked={item?.popupAfterLogin ?? false} />登录后弹窗展示</label>
+          </div>
         </fieldset>
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}
-        <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
-          <ControlButton type="submit" variant="primary" disabled={busy}><Megaphone className="size-3.5" />{busy ? '保存中' : '保存公告'}</ControlButton>
-        </div>
       </form>
     </AdminDrawer>
   )
@@ -334,50 +357,51 @@ function WorksPanel({ canManage, reloadKey }: { canManage: boolean; reloadKey: n
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
 
-      <AdminSectionCard title="作品审核" description="审核、下架与删除公开作品。内容操作全部写入审计日志。">
-        <div className="flex flex-wrap items-center gap-2">
-          <AdminInput aria-label="搜索作品" className="w-full sm:w-64" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="作品标题或作者" onKeyDown={(event) => { if (event.key === 'Enter') { setPage(1); setQuery(keyword) } }} />
-          <AdminSelect aria-label="审核状态" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value) }} className="w-36">
-            <option value="">全部状态</option><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已驳回</option><option value="taken_down">已下架</option>
-          </AdminSelect>
-          <ControlButton variant="primary" size="sm" onClick={() => { setPage(1); setQuery(keyword) }}>查询</ControlButton>
-          <ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
-        </div>
-
-        <div className="mt-4">
-          <AdminTable columns={['作品', '作者', '审核状态', '生命周期', '推荐', '时间', '操作']} minWidth={1040} caption="公开作品列表">
-            {data.items.map((work) => (
-              <AdminRow key={work.id}>
-                <AdminCell className="max-w-[280px]">
-                  <p className="truncate font-medium">{work.currentVersion?.title || '未命名作品'}</p>
-                  <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{work.currentVersion?.summary || work.id}</p>
-                </AdminCell>
-                <AdminCell className="text-xs">{work.authorUsername || work.authorUserId || '-'}</AdminCell>
-                <AdminCell><StatusBadge tone={statusTone(work.moderationStatus)}>{moderationLabels[String(work.moderationStatus)] || work.moderationStatus || '-'}</StatusBadge></AdminCell>
-                <AdminCell className="text-xs">{lifecycleLabels[String(work.lifecycleStatus)] || work.lifecycleStatus || '-'}</AdminCell>
-                <AdminCell>{work.featured ? <StatusBadge tone="accent">已推荐</StatusBadge> : <span className="text-xs text-muted-foreground">-</span>}</AdminCell>
-                <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(work.createdAt)}</AdminCell>
-                <AdminCell>
-                  <div className="flex flex-wrap gap-1.5">
-                    {canManage && work.moderationStatus === 'pending' && <>
-                      <ControlButton variant="primary" size="sm" disabled={busy === work.id} onClick={() => void approve(work)}>通过</ControlButton>
-                      <ControlButton variant="danger" size="sm" disabled={busy === work.id} onClick={() => reject(work)}>驳回</ControlButton>
-                    </>}
-                    {canManage && work.moderationStatus !== 'taken_down' && <ControlButton variant="danger" size="sm" disabled={busy === work.id} onClick={() => moderate(work)}>下架</ControlButton>}
-                    {canManage && <ControlButton
-                      variant="secondary" size="sm" disabled={busy === work.id}
-                      onClick={async () => { setBusy(work.id); try { await featureWork(work.id, !work.featured); setMessage(work.featured ? '已取消推荐' : '已设为推荐'); load() } catch (reason) { setError(reason instanceof Error ? reason.message : '推荐状态修改失败') } finally { setBusy(null) } }}
-                    ><Star className="size-3.5" />{work.featured ? '取消推荐' : '推荐'}</ControlButton>}
-                    {canManage && <ControlButton variant="danger" size="sm" disabled={busy === work.id} onClick={() => remove(work)} aria-label="删除作品"><Trash2 className="size-3.5" /></ControlButton>}
-                  </div>
-                </AdminCell>
-              </AdminRow>
-            ))}
-            {!data.items.length && <TableMessageRow colSpan={7} loading={loading} error={error} empty="暂无待处理作品" />}
-          </AdminTable>
-        </div>
-        <div className="mt-4"><AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} /></div>
-      </AdminSectionCard>
+      <AdminDataPanel
+        title="作品审核"
+        description="审核、下架与删除公开作品。内容操作全部写入审计日志。"
+        filters={
+          <>
+            <AdminSearch value={keyword} onChange={setKeyword} placeholder="作品标题或作者" onSubmit={() => { setPage(1); setQuery(keyword) }} />
+            <AdminSelect aria-label="审核状态" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value) }} className="w-36">
+              <option value="">全部状态</option><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已驳回</option><option value="taken_down">已下架</option>
+            </AdminSelect>
+          </>
+        }
+        filterActions={<ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>}
+        footer={<AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} />}
+      >
+        <AdminTable columns={['作品', '作者', '审核状态', '生命周期', '推荐', '时间', '操作']} minWidth={1040} caption="公开作品列表">
+          {data.items.map((work) => (
+            <AdminRow key={work.id}>
+              <AdminCell className="max-w-[280px]">
+                <p className="truncate font-medium">{work.currentVersion?.title || '未命名作品'}</p>
+                <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{work.currentVersion?.summary || work.id}</p>
+              </AdminCell>
+              <AdminCell className="text-xs">{work.authorUsername || work.authorUserId || '-'}</AdminCell>
+              <AdminCell><StatusBadge tone={statusTone(work.moderationStatus)}>{moderationLabels[String(work.moderationStatus)] || work.moderationStatus || '-'}</StatusBadge></AdminCell>
+              <AdminCell className="text-xs">{lifecycleLabels[String(work.lifecycleStatus)] || work.lifecycleStatus || '-'}</AdminCell>
+              <AdminCell>{work.featured ? <StatusBadge tone="accent">已推荐</StatusBadge> : <span className="text-xs text-muted-foreground">-</span>}</AdminCell>
+              <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(work.createdAt)}</AdminCell>
+              <AdminCell>
+                <div className="flex flex-wrap gap-1.5">
+                  {canManage && work.moderationStatus === 'pending' && <>
+                    <ControlButton variant="primary" size="sm" disabled={busy === work.id} onClick={() => void approve(work)}>通过</ControlButton>
+                    <ControlButton variant="danger" size="sm" disabled={busy === work.id} onClick={() => reject(work)}>驳回</ControlButton>
+                  </>}
+                  {canManage && work.moderationStatus !== 'taken_down' && <ControlButton variant="danger" size="sm" disabled={busy === work.id} onClick={() => moderate(work)}>下架</ControlButton>}
+                  {canManage && <ControlButton
+                    variant="secondary" size="sm" disabled={busy === work.id}
+                    onClick={async () => { setBusy(work.id); try { await featureWork(work.id, !work.featured); setMessage(work.featured ? '已取消推荐' : '已设为推荐'); load() } catch (reason) { setError(reason instanceof Error ? reason.message : '推荐状态修改失败') } finally { setBusy(null) } }}
+                  ><Star className="size-3.5" />{work.featured ? '取消推荐' : '推荐'}</ControlButton>}
+                  {canManage && <ControlButton variant="danger" size="sm" disabled={busy === work.id} onClick={() => remove(work)} aria-label="删除作品"><Trash2 className="size-3.5" /></ControlButton>}
+                </div>
+              </AdminCell>
+            </AdminRow>
+          ))}
+          {!data.items.length && <TableMessageRow colSpan={7} loading={loading} error={error} empty="暂无待处理作品" />}
+        </AdminTable>
+      </AdminDataPanel>
     </div>
   )
 }
@@ -420,22 +444,6 @@ function CasesPanel({ canManage, reloadKey }: { canManage: boolean; reloadKey: n
   return (
     <div className="flex flex-col gap-4">
       {confirm.dialog}
-      {target && (
-        <AdminDrawer open onClose={() => setTarget(null)} width="sm:max-w-lg" title="案件详情">
-          <div className="flex flex-col gap-3">
-            <AdminDefinition label="案件 ID" value={target.id} mono />
-            <AdminDefinition label="作品 ID" value={target.workId} mono />
-            <AdminDefinition label="版本 ID" value={target.versionId} mono />
-            <AdminDefinition label="类型" value={target.kind} />
-            <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(target.status)}>{target.status || '-'}</StatusBadge>} />
-            <AdminDefinition label="举报原因" value={target.reason} />
-            <AdminDefinition label="处理结果" value={target.resolution} />
-            <AdminDefinition label="创建时间" value={formatAdminDate(target.createdAt)} />
-            <AdminDefinition label="处理时间" value={formatAdminDate(target.resolvedAt)} />
-          </div>
-        </AdminDrawer>
-      )}
-
       <div className="grid gap-3 sm:grid-cols-3">
         <AdminStat label="案件总数" value={formatAdminNumber(data.total)} />
         <AdminStat label="本页未处理" value={formatAdminNumber(open)} tone={open ? 'warning' : 'neutral'} />
@@ -445,31 +453,53 @@ function CasesPanel({ canManage, reloadKey }: { canManage: boolean; reloadKey: n
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
 
-      <AdminSectionCard title="举报与异常内容" description="处理用户举报、申诉和异常内容治理案件。" action={<ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>}>
-        <AdminTable columns={['案件', '作品', '类型', '状态', '原因', '时间', '操作']} minWidth={1040} caption="治理案件列表">
-          {data.items.map((item) => (
-            <AdminRow key={item.id}>
-              <AdminCell className="font-mono text-[11px]">{item.id.slice(0, 12)}</AdminCell>
-              <AdminCell className="font-mono text-[11px]">{item.workId?.slice(0, 12) || '-'}</AdminCell>
-              <AdminCell className="text-xs">{item.kind || '-'}</AdminCell>
-              <AdminCell><StatusBadge tone={statusTone(item.status)}>{item.status || '-'}</StatusBadge></AdminCell>
-              <AdminCell className="max-w-[240px] truncate text-xs" >{item.reason || '-'}</AdminCell>
-              <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(item.createdAt)}</AdminCell>
-              <AdminCell>
-                <div className="flex flex-wrap gap-1.5">
-                  <ControlButton variant="secondary" size="sm" onClick={() => setTarget(item)}>详情</ControlButton>
-                  {canManage && item.status !== 'resolved' && <>
-                    <ControlButton variant="danger" size="sm" disabled={busy === item.id} onClick={() => resolve(item, 'uphold')}><ShieldAlert className="size-3.5" />维持</ControlButton>
-                    <ControlButton variant="secondary" size="sm" disabled={busy === item.id} onClick={() => resolve(item, 'dismiss')}>驳回</ControlButton>
-                  </>}
-                </div>
-              </AdminCell>
-            </AdminRow>
-          ))}
-          {!data.items.length && <TableMessageRow colSpan={7} loading={loading} error={error} empty="暂无治理案件" />}
-        </AdminTable>
-        <div className="mt-4"><AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} /></div>
-      </AdminSectionCard>
+      <AdminWorkbench>
+        <AdminDataPanel
+          title="举报与异常内容"
+          description="处理用户举报、申诉和异常内容治理案件。点击「详情」在右侧核对案件信息后再处理。"
+          actions={<ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>}
+          footer={<AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} />}
+        >
+          <AdminTable columns={['案件', '作品', '类型', '状态', '原因', '时间', '操作']} minWidth={1040} caption="治理案件列表">
+            {data.items.map((item) => (
+              <AdminRow key={item.id} className={cn(target?.id === item.id && 'bg-muted/60')}>
+                <AdminCell className="font-mono text-[11px]">{item.id.slice(0, 12)}</AdminCell>
+                <AdminCell className="font-mono text-[11px]">{item.workId?.slice(0, 12) || '-'}</AdminCell>
+                <AdminCell className="text-xs">{item.kind || '-'}</AdminCell>
+                <AdminCell><StatusBadge tone={statusTone(item.status)}>{item.status || '-'}</StatusBadge></AdminCell>
+                <AdminCell className="max-w-[240px] truncate text-xs">{item.reason || '-'}</AdminCell>
+                <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(item.createdAt)}</AdminCell>
+                <AdminCell>
+                  <div className="flex flex-wrap gap-1.5">
+                    <ControlButton variant="secondary" size="sm" onClick={() => setTarget(item)}>详情</ControlButton>
+                    {canManage && item.status !== 'resolved' && <>
+                      <ControlButton variant="danger" size="sm" disabled={busy === item.id} onClick={() => resolve(item, 'uphold')}><ShieldAlert className="size-3.5" />维持</ControlButton>
+                      <ControlButton variant="secondary" size="sm" disabled={busy === item.id} onClick={() => resolve(item, 'dismiss')}>驳回</ControlButton>
+                    </>}
+                  </div>
+                </AdminCell>
+              </AdminRow>
+            ))}
+            {!data.items.length && <TableMessageRow colSpan={7} loading={loading} error={error} empty="暂无治理案件" />}
+          </AdminTable>
+        </AdminDataPanel>
+
+        {target && (
+          <AdminDrawer dock open onClose={() => setTarget(null)} width="sm:max-w-lg" title="案件详情" description="核对作品、举报原因与处理结果">
+            <div className="flex flex-col gap-3">
+              <AdminDefinition label="案件 ID" value={target.id} mono />
+              <AdminDefinition label="作品 ID" value={target.workId} mono />
+              <AdminDefinition label="版本 ID" value={target.versionId} mono />
+              <AdminDefinition label="类型" value={target.kind} />
+              <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(target.status)}>{target.status || '-'}</StatusBadge>} />
+              <AdminDefinition label="举报原因" value={target.reason} />
+              <AdminDefinition label="处理结果" value={target.resolution} />
+              <AdminDefinition label="创建时间" value={formatAdminDate(target.createdAt)} />
+              <AdminDefinition label="处理时间" value={formatAdminDate(target.resolvedAt)} />
+            </div>
+          </AdminDrawer>
+        )}
+      </AdminWorkbench>
     </div>
   )
 }

@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import { ModelIcon } from './model-icon'
 import {
+  AdminCell,
+  AdminDataPanel,
   AdminDefinition,
   AdminDrawer,
   AdminEmpty,
@@ -17,9 +19,14 @@ import {
   AdminInput,
   AdminLoading,
   AdminNotice,
+  AdminRow,
+  AdminSearch,
   AdminSectionCard,
   AdminSelect,
   AdminStat,
+  AdminTable,
+  AdminTabs,
+  TableMessageRow,
   formatAdminNumber,
   useConfirm,
 } from './admin-kit'
@@ -27,6 +34,7 @@ import { useAdminReload, useAdminSession } from './admin-shell'
 
 const capabilities = [['text', '文本'], ['image', '图片'], ['video', '视频'], ['audio', '音频']] as const
 type Capability = typeof capabilities[number][0]
+type ChannelTab = 'channels' | 'models' | 'defaults'
 
 const protocols = [
   ['auto', '自动识别'], ['openai', 'OpenAI 兼容'], ['anthropic', 'Anthropic'], ['gemini', 'Gemini'],
@@ -45,6 +53,11 @@ export function AdminChannelsPanel() {
   const [message, setMessage] = useState('')
   const [editing, setEditing] = useState<SystemChannel | 'new' | null>(null)
   const [routing, setRouting] = useState(false)
+  const [tab, setTab] = useState<ChannelTab>('channels')
+  const [channelQuery, setChannelQuery] = useState('')
+  const [channelStatus, setChannelStatus] = useState<'all' | 'enabled' | 'disabled'>('all')
+  const [modelQuery, setModelQuery] = useState('')
+  const [modelCapability, setModelCapability] = useState<'all' | Capability>('all')
   const confirm = useConfirm()
 
   const load = useCallback(() => {
@@ -104,6 +117,18 @@ export function AdminChannelsPanel() {
     }
   }, [channels, load])
 
+  const channelNeedle = channelQuery.trim().toLowerCase()
+  const visibleChannels = channels.filter((channel) => {
+    if (channelStatus === 'enabled' && !channel.enabled) return false
+    if (channelStatus === 'disabled' && channel.enabled) return false
+    return !channelNeedle || [channel.id, channel.name, channel.baseUrl].some((field) => field?.toLowerCase().includes(channelNeedle))
+  })
+  const modelNeedle = modelQuery.trim().toLowerCase()
+  const visibleModels = models.filter((model) => {
+    if (modelCapability !== 'all' && model.capability !== modelCapability) return false
+    return !modelNeedle || [model.id, model.name].some((field) => field?.toLowerCase().includes(modelNeedle))
+  })
+
   if (loading && !settings) return <AdminLoading label="正在读取模型与渠道" />
   if (!settings) return <AdminError message={error || '渠道配置加载失败'} retry={load} />
 
@@ -121,94 +146,120 @@ export function AdminChannelsPanel() {
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
 
-      <AdminSectionCard
-        title="上游渠道"
-        description="Base URL、密钥、模型目录与高级协议配置。API Key 始终脱敏显示，编辑时留空表示沿用已保存的密钥。"
-        action={canManage ? <div className="flex gap-2"><ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton><ControlButton variant="primary" size="sm" onClick={() => setEditing('new')}><Plus className="size-3.5" />新增渠道</ControlButton></div> : undefined}
-      >
-        {channels.length ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {channels.map((channel) => {
-              const runtime = healthByChannel.get(channel.id)
-              const bindingCount = models.reduce((total, model) => total + model.bindings.filter((binding) => binding.channelId === channel.id).length, 0)
-              return (
-              <div key={channel.id} className="rounded-md border border-border p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{channel.name || channel.id}</p>
-                    <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{channel.baseUrl || '未配置地址'}</p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <StatusBadge tone={channel.enabled ? 'success' : 'muted'}>{channel.enabled ? '已启用' : '已停用'}</StatusBadge>
-                    {runtime?.cooling && <StatusBadge tone="danger">冷却中</StatusBadge>}
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
-                  <div><span className="text-muted-foreground">协议</span><p className="mt-0.5">{channel.advancedConfig?.protocol || channel.apiFormat || 'auto'}</p></div>
-                  <div><span className="text-muted-foreground">模型数</span><p className="mt-0.5">{channel.models.length}</p></div>
-                  <div><span className="text-muted-foreground">绑定数</span><p className="mt-0.5">{bindingCount}</p></div>
-                  <div><span className="text-muted-foreground">连续失败</span><p className={`mt-0.5 ${runtime?.consecutiveFailures ? 'text-destructive' : ''}`}>{runtime?.consecutiveFailures ?? 0}</p></div>
-                  <div><span className="text-muted-foreground">API Key</span><p className="mt-0.5">{channel.hasApiKey ? '已配置（已脱敏）' : '未配置'}</p></div>
-                  <div><span className="text-muted-foreground">Webhook</span><p className="mt-0.5">{channel.hasWebhookSecret ? '已配置（已脱敏）' : '未配置'}</p></div>
-                </div>
-                {(runtime?.cooldownUntil || runtime?.lastError) && (
-                  <div className="mt-3 border-t border-border pt-3 text-[11px]">
-                    {runtime?.cooldownUntil && <p className="text-studio-warn">冷却至 {new Date(runtime.cooldownUntil).toLocaleString('zh-CN', { hour12: false })}</p>}
-                    {runtime?.lastError && <p className="mt-1 line-clamp-2 text-destructive" title={runtime.lastError}>最后错误：{runtime.lastError}</p>}
-                  </div>
-                )}
-                {canManage && (
-                  <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
-                    <ControlButton variant="secondary" size="sm" onClick={() => setEditing(channel)}><Pencil className="size-3.5" />编辑</ControlButton>
-                    <ControlButton variant="secondary" size="sm" onClick={() => void toggleChannel(channel)}>{channel.enabled ? '停用' : '启用'}</ControlButton>
-                    <ControlButton variant="danger" size="sm" onClick={() => removeChannel(channel)}><Trash2 className="size-3.5" />删除</ControlButton>
-                  </div>
-                )}
-              </div>
-              )
-            })}
-          </div>
-        ) : <AdminEmpty title="暂无渠道配置" description="新增至少一个上游渠道后，才能为逻辑模型建立绑定并开始生成。" />}
-      </AdminSectionCard>
+      <AdminTabs
+        label="模型与渠道分区"
+        items={[['channels', '上游渠道'], ['models', '逻辑模型'], ['defaults', '默认模型与价格']] as const}
+        value={tab}
+        onChange={setTab}
+      />
 
-      <AdminSectionCard
-        title="逻辑模型"
-        description="对用户展示的模型名称、能力类型与渠道绑定优先级。修改后立即影响路由。"
-        action={canManage ? <ControlButton variant="primary" size="sm" onClick={() => setRouting(true)}><Layers3 className="size-3.5" />管理路由</ControlButton> : undefined}
-      >
-        {models.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
-              <thead className="text-muted-foreground"><tr>{['显示名称', '标识', '能力', '状态', '渠道绑定'].map((h) => <th key={h} className="py-2 pr-3 font-medium">{h}</th>)}</tr></thead>
-              <tbody>
-                {models.map((model) => (
-                  <tr key={model.id} className="border-t border-border">
-                    <td className="py-2.5 pr-3 font-medium">{model.name || model.id}</td>
-                    <td className="py-2.5 pr-3 font-mono text-[11px]">{model.id}</td>
-                    <td className="py-2.5 pr-3"><StatusBadge tone="muted">{capabilityLabel(model.capability)}</StatusBadge></td>
-                    <td className="py-2.5 pr-3"><StatusBadge tone={model.enabled ? 'success' : 'muted'}>{model.enabled ? '已启用' : '已停用'}</StatusBadge></td>
-                    <td className="py-2.5 pr-3">
+      {tab === 'channels' && (
+        <AdminDataPanel
+          title="上游渠道"
+          description="Base URL、密钥与协议配置。API Key 始终脱敏显示，编辑时留空表示沿用已保存的密钥。"
+          actions={canManage ? <ControlButton variant="primary" size="sm" onClick={() => setEditing('new')}><Plus className="size-3.5" />新增渠道</ControlButton> : undefined}
+          filters={
+            <>
+              <AdminSearch value={channelQuery} onChange={setChannelQuery} placeholder="搜索渠道名称、标识或地址" />
+              <AdminSelect aria-label="按启用状态筛选渠道" value={channelStatus} onChange={(event) => setChannelStatus(event.target.value as typeof channelStatus)} className="w-36">
+                <option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>
+              </AdminSelect>
+            </>
+          }
+          filterActions={<ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>}
+        >
+          {channels.length ? (
+            <AdminTable columns={['渠道', '协议', '状态', '模型', '绑定', '连续失败', '密钥与回调', '操作']} minWidth={1120} caption="上游渠道列表">
+              {visibleChannels.map((channel) => {
+                const runtime = healthByChannel.get(channel.id)
+                const bindingCount = models.reduce((total, model) => total + model.bindings.filter((binding) => binding.channelId === channel.id).length, 0)
+                return (
+                  <AdminRow key={channel.id}>
+                    <AdminCell className="max-w-[280px]">
+                      <p className="truncate font-medium">{channel.name || channel.id}</p>
+                      <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{channel.baseUrl || '未配置地址'}</p>
+                    </AdminCell>
+                    <AdminCell className="text-xs">{channel.advancedConfig?.protocol || channel.apiFormat || 'auto'}</AdminCell>
+                    <AdminCell className="max-w-[240px]">
                       <div className="flex flex-wrap gap-1.5">
-                        {model.bindings.map((binding) => (
-                          <span key={binding.id} className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 font-mono text-[11px]">
-                            {binding.channelId}:{binding.upstreamModel} · P{binding.priority}
-                            {!binding.enabled && <span className="text-destructive">停用</span>}
-                          </span>
-                        ))}
-                        {!model.bindings.length && <span className="text-muted-foreground">未绑定渠道</span>}
+                        <StatusBadge tone={channel.enabled ? 'success' : 'muted'}>{channel.enabled ? '已启用' : '已停用'}</StatusBadge>
+                        {runtime?.cooling && <StatusBadge tone="danger">冷却中</StatusBadge>}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : <AdminEmpty title="暂无逻辑模型" description="逻辑模型决定用户在生成页看到的模型列表。" />}
-      </AdminSectionCard>
+                      {runtime?.cooldownUntil && <p className="mt-1.5 text-[11px] text-studio-warn">冷却至 {new Date(runtime.cooldownUntil).toLocaleString('zh-CN', { hour12: false })}</p>}
+                      {runtime?.lastError && <p className="mt-1 line-clamp-2 text-[11px] text-destructive" title={runtime.lastError}>最后错误：{runtime.lastError}</p>}
+                    </AdminCell>
+                    <AdminCell className="text-xs">{channel.models.length}</AdminCell>
+                    <AdminCell className="text-xs">{bindingCount}</AdminCell>
+                    <AdminCell className={cn('text-xs', runtime?.consecutiveFailures ? 'text-destructive' : '')}>{runtime?.consecutiveFailures ?? 0}</AdminCell>
+                    <AdminCell className="text-xs">
+                      <p>API Key：{channel.hasApiKey ? '已配置（已脱敏）' : '未配置'}</p>
+                      <p className="mt-1 text-muted-foreground">Webhook：{channel.hasWebhookSecret ? '已配置（已脱敏）' : '未配置'}</p>
+                    </AdminCell>
+                    <AdminCell>
+                      {canManage && (
+                        <div className="flex flex-wrap gap-1.5">
+                          <ControlButton variant="secondary" size="sm" onClick={() => setEditing(channel)}><Pencil className="size-3.5" />编辑</ControlButton>
+                          <ControlButton variant="secondary" size="sm" onClick={() => void toggleChannel(channel)}>{channel.enabled ? '停用' : '启用'}</ControlButton>
+                          <ControlButton variant="danger" size="sm" onClick={() => removeChannel(channel)} aria-label={`删除渠道 ${channel.name || channel.id}`}><Trash2 className="size-3.5" /></ControlButton>
+                        </div>
+                      )}
+                    </AdminCell>
+                  </AdminRow>
+                )
+              })}
+              {!visibleChannels.length && <TableMessageRow colSpan={8} loading={false} empty="没有匹配的渠道" />}
+            </AdminTable>
+          ) : <AdminEmpty title="暂无渠道配置" description="新增至少一个上游渠道后，才能为逻辑模型建立绑定并开始生成。" />}
+        </AdminDataPanel>
+      )}
 
-      <AdminSectionCard title="默认模型与价格" description="生成页在用户未显式选择模型时使用的默认模型，以及每个模型的计费倍率。">
-        <SettingsSummary settings={settings} onEdit={canManage ? () => setRouting(true) : undefined} />
-      </AdminSectionCard>
+      {tab === 'models' && (
+        <AdminDataPanel
+          title="逻辑模型"
+          description="对用户展示的模型名称、能力类型与渠道绑定优先级。修改后立即影响路由。"
+          actions={canManage ? <ControlButton variant="primary" size="sm" onClick={() => setRouting(true)}><Layers3 className="size-3.5" />管理路由</ControlButton> : undefined}
+          filters={
+            <>
+              <AdminSearch value={modelQuery} onChange={setModelQuery} placeholder="搜索显示名称或标识" />
+              <AdminSelect aria-label="按能力筛选模型" value={modelCapability} onChange={(event) => setModelCapability(event.target.value as 'all' | Capability)} className="w-36">
+                <option value="all">全部能力</option>
+                {capabilities.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </AdminSelect>
+            </>
+          }
+        >
+          {models.length ? (
+            <AdminTable columns={['显示名称', '标识', '能力', '状态', '渠道绑定']} minWidth={900} caption="逻辑模型列表">
+              {visibleModels.map((model) => (
+                <AdminRow key={model.id}>
+                  <AdminCell className="font-medium">{model.name || model.id}</AdminCell>
+                  <AdminCell className="font-mono text-[11px]">{model.id}</AdminCell>
+                  <AdminCell><StatusBadge tone="muted">{capabilityLabel(model.capability)}</StatusBadge></AdminCell>
+                  <AdminCell><StatusBadge tone={model.enabled ? 'success' : 'muted'}>{model.enabled ? '已启用' : '已停用'}</StatusBadge></AdminCell>
+                  <AdminCell>
+                    <div className="flex flex-wrap gap-1.5">
+                      {model.bindings.map((binding) => (
+                        <span key={binding.id} className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 font-mono text-[11px]">
+                          {binding.channelId}:{binding.upstreamModel} · P{binding.priority}
+                          {!binding.enabled && <span className="text-destructive">停用</span>}
+                        </span>
+                      ))}
+                      {!model.bindings.length && <span className="text-xs text-muted-foreground">未绑定渠道</span>}
+                    </div>
+                  </AdminCell>
+                </AdminRow>
+              ))}
+              {!visibleModels.length && <TableMessageRow colSpan={5} loading={false} empty="没有匹配的模型" />}
+            </AdminTable>
+          ) : <AdminEmpty title="暂无逻辑模型" description="逻辑模型决定用户在生成页看到的模型列表。" />}
+        </AdminDataPanel>
+      )}
+
+      {tab === 'defaults' && (
+        <AdminSectionCard title="默认模型与价格" description="生成页在用户未显式选择模型时使用的默认模型，以及每个模型的计费倍率。">
+          <SettingsSummary settings={settings} onEdit={canManage ? () => setRouting(true) : undefined} />
+        </AdminSectionCard>
+      )}
 
       {editing && (
         <ChannelEditor
@@ -355,8 +406,15 @@ function ChannelEditor({ channel, existingChannels, onClose, onSaved }: { channe
       onClose={onClose}
       title={isNew ? '新增渠道' : `编辑渠道 ${channel?.name || channel?.id}`}
       description="API Key 不会回显；留空表示沿用已保存的密钥。所有密钥只提交新值。"
+      footer={
+        <>
+          <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
+          <ControlButton type="submit" form="channel-editor-form" variant="primary" disabled={busy}>{busy ? '保存中' : '保存渠道'}</ControlButton>
+        </>
+      }
     >
       <form
+        id="channel-editor-form"
         onSubmit={async (event) => {
           event.preventDefault()
           setBusy(true); setError(''); setMessage('')
@@ -418,11 +476,6 @@ function ChannelEditor({ channel, existingChannels, onClose, onSaved }: { channe
 
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}
         {message && <AdminNotice tone="success">{message}</AdminNotice>}
-
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
-          <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
-          <ControlButton type="submit" variant="primary" disabled={busy}>{busy ? '保存中' : '保存渠道'}</ControlButton>
-        </div>
       </form>
     </AdminDrawer>
   )
@@ -539,7 +592,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           const key = normalizeModelKey(alias)
           const owner = routeAliasOwners.get(key)
           const currentOwner = `${model.id}:${binding.channelId}`
-          if (owner && owner !== currentOwner) throw new Error(`请求别名 ${alias} 被多个渠道入口使用，请为每个售卖入口设置唯一别名`)
+          if (owner && owner !== currentOwner) throw new Error(`请求别名 ${alias} 被多个渠道入��使用，请为每个售卖入口设置唯一别名`)
           routeAliasOwners.set(key, currentOwner)
         }
       }

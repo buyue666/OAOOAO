@@ -35,6 +35,7 @@ import { ProductPreviewPanel } from './product-preview'
 import { ControlButton, Modal, StatusBadge } from './ui'
 import {
   AdminCell,
+  AdminDataPanel,
   AdminDefinition,
   AdminDrawer,
   AdminEmpty,
@@ -50,7 +51,9 @@ import {
   AdminSelect,
   AdminStat,
   AdminTable,
+  AdminTabs,
   AdminTextarea,
+  AdminWorkbench,
   TableMessageRow,
   formatAdminDate,
   formatAdminMoney,
@@ -172,7 +175,7 @@ export function AdminProductsPanel() {
     return `${product.name} ${formatAdminMoney(entry.promotionalAmountCents, product.currency)}${label ? ` / ${label}` : ' / 无折扣'}`
   }), [products])
 
-  /** 删除活动：后端在有订单引用时会拒绝（409），错误原样显示在确认框内。 */
+  /** 删除活动：后端在有订单引用时会拒绝（409），错误原样显示在确认��内。 */
   /**
    * 复制商品。
    *
@@ -487,7 +490,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
   /**
    * 折扣与权益行数的可推导结果（供编辑区显示）。
    *
-   * 折扣按后端 `formatDiscount` 的算法从「日常价 / 活动价」推导，
+   * 折扣按后端 `formatDiscount` 的算法从「日常�� / 活动价」推导，
    * 活动价按后端 `selectCurrentPromotion` 规则判断当前是否生效。
    */
   const activePromotion = useMemo(() => resolvePromotionForAmount(
@@ -751,7 +754,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
             <fieldset disabled={busy} className="grid min-w-0 gap-4 border-t border-border pt-4 sm:grid-cols-2">
               <legend className="text-sm font-semibold">订阅页展示</legend>
               <Field label="套餐显示名称" fieldId="displayName"><AdminInput aria-label="套餐显示名称" value={draft.display.name} onChange={(event) => patchDisplay({ name: event.target.value })} /></Field>
-              <Field label="会员类型" fieldId="audience"><AdminSelect aria-label="会员类型" value={draft.display.audience} onChange={(event) => patchDisplay({ audience: event.target.value === 'team' ? 'team' : 'creator' })}><option value="creator">创作会员</option><option value="team">团队版会员</option></AdminSelect></Field>
+              <Field label="会员类型" fieldId="audience"><AdminSelect aria-label="���员类型" value={draft.display.audience} onChange={(event) => patchDisplay({ audience: event.target.value === 'team' ? 'team' : 'creator' })}><option value="creator">创作会员</option><option value="team">团队版会员</option></AdminSelect></Field>
               <Field label="套餐分组标识" fieldId="groupId" hint="同套餐的月付、季付、年付使用相同标识。"><AdminInput aria-label="套餐分组标识" value={draft.display.groupId} onChange={(event) => patchDisplay({ groupId: event.target.value })} /></Field>
               <Field label="配色" fieldId="tone" hint="留空＝自动（按分组顺序分配，与用户页一致）">
                 <AdminSelect aria-label="配色" value={draft.display.tone} onChange={(event) => patchDisplay({ tone: event.target.value })}>
@@ -926,7 +929,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
         *
         * 字段多且含价格、上下架、权益这类敏感项，直接保存容易误改。
         * 这里逐条列出「真正变化」的字段，并把敏感变更单独标出，
-        * 让运营在写入前有机会核对；确认后才真正提交。
+        * 让运营在写入前有机会核对；���认后才真正提交。
         */}
       <Modal
         open={pendingDiff !== null}
@@ -1209,30 +1212,39 @@ export function AdminOrdersPanel() {
         <AdminStat label="对账异常" value={formatAdminNumber((finance?.reconciliation.paidOrdersWithoutSucceededPayment || 0) + (finance?.reconciliation.succeededPaymentsWithoutPaidOrder || 0) + (finance?.reconciliation.amountMismatchPayments || 0))} detail="订单与支付流水不一致数量" tone="danger" />
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {([['orders', '订单与支付'], ['coupons', '优惠券'], ['referrals', '邀请返利']] as const).map(([value, label]) => (
-          <button key={value} type="button" onClick={() => setTab(value)} aria-pressed={tab === value} className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${tab === value ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:bg-muted'}`}>{label}</button>
-        ))}
-      </div>
+      <AdminTabs
+        label="财务分区"
+        items={[['orders', '订单与支付'], ['coupons', '优惠券'], ['referrals', '邀请返利']] as const}
+        value={tab}
+        onChange={setTab}
+      />
 
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
 
-      {tab === 'orders' && (
-        <>
-          <AdminSectionCard title="订单查询" description="支持订单号、商品名和用户关键字搜索，并可按支付状态筛选。">
-            <div className="flex flex-wrap items-center gap-2">
-              <AdminInput aria-label="搜索订单" className="w-full sm:w-64" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="订单号、商品或用户" onKeyDown={(event) => { if (event.key === 'Enter') { setPage(1); setQuery(keyword) } }} />
-              <AdminSelect aria-label="订单状态" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value) }} className="w-36">
-                <option value="">全部状态</option>
-                {orderStatuses.map((value) => <option key={value} value={value}>{labelOf(orderStatusLabels, value)}</option>)}
-              </AdminSelect>
-              <ControlButton variant="primary" size="sm" onClick={() => { setPage(1); setQuery(keyword) }}>查询</ControlButton>
-              <ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
-            </div>
-          </AdminSectionCard>
-
-          <AdminTable columns={['订单号', '用户', '商品', '金额', '状态', '支付渠道', '时间', '操作']} minWidth={1180} caption="订单列表">
+      <AdminWorkbench>
+        {tab === 'orders' && (
+          <AdminDataPanel
+            title="订单查询"
+            description="支持订单号、商品名和用户关键字搜索，并可按支付状态筛选。点击「详情」在右侧核对支付快照。"
+            filters={
+              <>
+                <AdminInput aria-label="搜索订单" className="w-full sm:w-64" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="订单号、商品或用户" onKeyDown={(event) => { if (event.key === 'Enter') { setPage(1); setQuery(keyword) } }} />
+                <AdminSelect aria-label="订单状态" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value) }} className="w-36">
+                  <option value="">全部状态</option>
+                  {orderStatuses.map((value) => <option key={value} value={value}>{labelOf(orderStatusLabels, value)}</option>)}
+                </AdminSelect>
+              </>
+            }
+            filterActions={
+              <>
+                <ControlButton variant="primary" size="sm" onClick={() => { setPage(1); setQuery(keyword) }}>查询</ControlButton>
+                <ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
+              </>
+            }
+            footer={<AdminPagination page={page} pageSize={20} total={orders.total} loading={loading} onChange={setPage} />}
+          >
+            <AdminTable columns={['订单号', '用户', '商品', '金额', '状态', '支付渠道', '时间', '操作']} minWidth={1180} caption="订单列表">
             {orders.items.map((order) => (
               <AdminRow key={order.id}>
                 <AdminCell className="font-mono text-xs">{order.orderNo}</AdminCell>
@@ -1256,13 +1268,12 @@ export function AdminOrdersPanel() {
               </AdminRow>
             ))}
             {!orders.items.length && <TableMessageRow colSpan={8} loading={loading} error={error} empty="没有匹配的订单" />}
-          </AdminTable>
-          <AdminPagination page={page} pageSize={20} total={orders.total} loading={loading} onChange={setPage} />
-        </>
-      )}
+            </AdminTable>
+          </AdminDataPanel>
+        )}
 
-      {tab === 'coupons' && <CouponsPanel />}
-      {tab === 'referrals' && <ReferralsPanel />}
+        {tab === 'coupons' && <CouponsPanel />}
+        {tab === 'referrals' && <ReferralsPanel />}
 
       {detail && (
         <AdminDrawer open dock onClose={() => setDetail(null)} title={`订单 ${detail.orderNo}`} description={detail.subject}>
@@ -1296,6 +1307,7 @@ export function AdminOrdersPanel() {
           </div>
         </AdminDrawer>
       )}
+      </AdminWorkbench>
     </div>
   )
 }
@@ -1325,10 +1337,10 @@ function CouponsPanel() {
     <div className="flex flex-col gap-4">
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
-      <AdminSectionCard
+      <AdminDataPanel
         title="优惠券模板"
         description="优惠券由模板定义面额、门槛与有效期，可向指定用户发放。"
-        action={canManage ? <div className="flex gap-2"><ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton><ControlButton variant="primary" size="sm" onClick={() => setEditor('new')}><Plus className="size-3.5" />新增模板</ControlButton></div> : undefined}
+        actions={canManage ? <><ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton><ControlButton variant="primary" size="sm" onClick={() => setEditor('new')}><Plus className="size-3.5" />新增模板</ControlButton></> : undefined}
       >
         <AdminTable columns={['名称', '类型', '面额 / 折扣', '使用门槛', '已领取 / 总量', '有效期', '状态', '操作']} minWidth={1000} caption="优惠券模板">
           {templates.map((template) => (
@@ -1350,7 +1362,7 @@ function CouponsPanel() {
           ))}
           {!templates.length && <TableMessageRow colSpan={8} loading={loading} error={error} empty="暂无优惠券模板" />}
         </AdminTable>
-      </AdminSectionCard>
+      </AdminDataPanel>
 
       {editor && <CouponEditor template={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} onSaved={(text) => { setMessage(text); setEditor(null); load() }} />}
       {granting && <CouponGrant template={granting} onClose={() => setGranting(null)} onSaved={(text) => { setMessage(text); setGranting(null) }} />}

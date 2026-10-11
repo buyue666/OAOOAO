@@ -23,8 +23,10 @@ import {
   AdminInput,
   AdminLoading,
   AdminNotice,
+  AdminSaveBar,
   AdminSectionCard,
   AdminSelect,
+  AdminTabs,
   AdminTextarea,
   formatAdminNumber,
   useConfirm,
@@ -100,20 +102,24 @@ export function AdminSettingsPanel() {
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
 
-      <div className="flex flex-wrap gap-1.5">
-        {visibleSections.map((item) => (
-          <button key={item.id} type="button" onClick={() => setSection(item.id)} aria-pressed={active === item.id} className={`h-8 rounded-md px-3 text-xs font-medium transition-colors ${active === item.id ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:bg-muted'}`}>{item.label}</button>
-        ))}
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[212px_minmax(0,1fr)] lg:items-start">
+        {active && (
+          <nav aria-label="系统设置分组" className="lg:sticky lg:top-[88px]">
+            <AdminTabs label="系统设置分组" orientation="vertical" items={visibleSections.map((item) => [item.id, item.label] as const)} value={active} onChange={setSection} />
+          </nav>
+        )}
 
-      {active === 'site' && <SiteSection settings={settings} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} />}
-      {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canBilling={canBilling} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
-      {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} onModeSave={(patch, summary) => save('运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
-      {active === 'points' && <PointsSection settings={settings} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
-      {active === 'generation' && <GenerationSection settings={settings} onSave={(patch, summary) => save('生成设置', patch, summary)} saving={saving} />}
-      {active === 'mail' && <MailSection settings={settings} onSave={(patch, summary) => save('邮件设置', patch, summary)} saving={saving} />}
-      {active === 'storage' && <StorageSection storage={storage} onReload={load} onMessage={setMessage} onError={setError} />}
-      {active === 'lifecycle' && <LifecycleSection settings={settings} onSave={(patch, summary) => save('数据保留设置', patch, summary)} saving={saving} />}
+        <div role="tabpanel" aria-label={visibleSections.find((item) => item.id === active)?.label} className="flex min-w-0 flex-col gap-5">
+          {active === 'site' && <SiteSection settings={settings} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} />}
+          {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canBilling={canBilling} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
+          {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} onModeSave={(patch, summary) => save('运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
+          {active === 'points' && <PointsSection settings={settings} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
+          {active === 'generation' && <GenerationSection settings={settings} onSave={(patch, summary) => save('生成设置', patch, summary)} saving={saving} />}
+          {active === 'mail' && <MailSection settings={settings} onSave={(patch, summary) => save('邮件设置', patch, summary)} saving={saving} />}
+          {active === 'storage' && <StorageSection storage={storage} onReload={load} onMessage={setMessage} onError={setError} />}
+          {active === 'lifecycle' && <LifecycleSection settings={settings} onSave={(patch, summary) => save('数据保留设置', patch, summary)} saving={saving} />}
+        </div>
+      </div>
     </div>
   )
 }
@@ -180,13 +186,13 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
             <input name="announcementEnabled" type="checkbox" defaultChecked={site.announcementBar?.enabled === true} className="mt-0.5" />
             <span><span className="font-medium text-foreground">显示顶部通知横幅</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">适合展示模型上线、价格活动、维护提醒等短消息。</span></span>
           </label>
-          <AdminField label="横幅文案" hint="建议控制在一行内，支持 emoji。" className="sm:col-span-2"><AdminInput name="announcementText" maxLength={180} defaultValue={site.announcementBar?.text} placeholder="例如：🎉 MiniMax H3 已上线，首周限时优惠" /></AdminField>
+          <AdminField label="横幅文案" hint="建议控制在一行内，支持 emoji。" className="sm:col-span-2"><AdminInput name="announcementText" maxLength={180} defaultValue={site.announcementBar?.text} placeholder="例如：🎉 MiniMax H3 已上线，���周限时优惠" /></AdminField>
           <AdminField label="点击跳转地址" hint="留空时只展示文案。"><AdminInput name="announcementHref" maxLength={500} defaultValue={site.announcementBar?.href} placeholder="/plans 或 https://…" /></AdminField>
           <AdminField label="强调色"><AdminSelect name="announcementTone" defaultValue={site.announcementBar?.tone || 'promo'}><option value="promo">品牌紫蓝</option><option value="info">冷静蓝</option><option value="warning">提醒橙</option></AdminSelect></AdminField>
           <label className="flex items-center gap-2 text-sm sm:col-span-2"><input name="announcementDismissible" type="checkbox" defaultChecked={site.announcementBar?.dismissible !== false} />允许用户关闭（只对当前浏览器生效）</label>
         </fieldset>
       </AdminSectionCard>
-      <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存站点设置'}</ControlButton></div>
+      <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存站点设置'}</ControlButton></AdminSaveBar>
     </form>
   )
 }
@@ -233,7 +239,7 @@ function BillingSection({
               ? <AdminNotice tone="warning">当前用户只能使用已有积分，前台不会显示充值入口；管理员仍可手动调整积分。</AdminNotice>
               : <AdminNotice tone="neutral">商用模式已允许公开套餐与支付入口，但正式开放前仍需完成支付回调、退款和对账验证。</AdminNotice>}
           </div>
-          <div className="mt-4 flex justify-end"><ControlButton type="submit" variant="primary"><Save className="size-3.5" />保存运营模式</ControlButton></div>
+          <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary"><Save className="size-3.5" />保存运营模式</ControlButton></AdminSaveBar>
         </AdminSectionCard>
       </form>
 
@@ -307,7 +313,7 @@ function PaymentProviderEditor({
           ))}
           {provider.webhookUrl && <AdminField label="异步回调地址" hint="将此地址复制到易支付商户后台，不要把商户密钥写进 URL。" className="sm:col-span-2"><AdminInput readOnly value={provider.webhookUrl} /></AdminField>}
         </fieldset>
-        <div className="mt-4 flex items-center justify-between gap-3"><p className="text-[11px] text-muted-foreground">配置来源：{provider.sourceLabel || '未配置'}</p><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存易支付'}</ControlButton></div>
+        <AdminSaveBar hint={`配置来源：${provider.sourceLabel || '未配置'}`}><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存易支付'}</ControlButton></AdminSaveBar>
       </AdminSectionCard>
     </form>
   )
@@ -352,7 +358,7 @@ function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { s
           {!canBilling && <AdminNotice tone="warning">当前管理员没有计费职责，每日免费积分不可编辑。</AdminNotice>}
         </fieldset>
       </AdminSectionCard>
-      <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存注册与积分'}</ControlButton></div>
+      <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存注册与积分'}</ControlButton></AdminSaveBar>
     </form>
   )
 }
@@ -432,7 +438,7 @@ function PointsSection({ settings, onSave, saving }: { settings: AdminSettings; 
         <div><AdminDefinition label="视频时长倍率" value={Object.entries(settings.generationPointMultipliers.videoSeconds || {}).map(([key, value]) => `${key}×${value}`).join(' · ') || '-'} /></div>
       </AdminSectionCard>
 
-      <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存计费与权益'}</ControlButton></div>
+      <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存计费与权益'}</ControlButton></AdminSaveBar>
     </form>
   )
 }
@@ -487,7 +493,7 @@ function GenerationSection({ settings, onSave, saving }: { settings: AdminSettin
         <p className="mt-3 text-xs text-muted-foreground">如需修改，请前往 <a href="/admin/channels" className="underline">模型与渠道</a>。</p>
       </AdminSectionCard>
 
-      <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Server className="size-3.5" />{saving ? '保存中' : '保存生成设置'}</ControlButton></div>
+      <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Server className="size-3.5" />{saving ? '保存中' : '保存生成设置'}</ControlButton></AdminSaveBar>
     </form>
   )
 }
@@ -539,7 +545,7 @@ function MailSection({ settings, onSave, saving }: { settings: AdminSettings; on
             <AdminField label="发件邮箱"><AdminInput value={draft.fromEmail || ''} onChange={(event) => setDraft({ ...draft, fromEmail: event.target.value })} /></AdminField>
             <AdminField label="发件人名称"><AdminInput value={draft.fromName || ''} onChange={(event) => setDraft({ ...draft, fromName: event.target.value })} /></AdminField>
           </fieldset>
-          <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存邮件设置'}</ControlButton></div>
+          <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存邮件设置'}</ControlButton></AdminSaveBar>
         </form>
       </AdminSectionCard>
 
@@ -648,7 +654,7 @@ function LifecycleSection({ settings, onSave, saving }: { settings: AdminSetting
       <AdminSectionCard title="备份与恢复" description="网页端备份下载与恢复入口暂未开放，避免误覆盖线上数据。">
         <div className="flex items-start gap-2 text-xs text-muted-foreground"><Database className="mt-0.5 size-3.5 shrink-0" /><span>数据备份由部署层负责。如需导出或恢复数据，请使用服务器上的受控备份流程。</span></div>
       </AdminSectionCard>
-      <div className="flex justify-end"><ControlButton type="submit" variant="primary" disabled={saving}><Settings2 className="size-3.5" />{saving ? '保存中' : '保存数据保留设置'}</ControlButton></div>
+      <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Settings2 className="size-3.5" />{saving ? '保存中' : '保存数据保留设置'}</ControlButton></AdminSaveBar>
     </form>
   )
 }
