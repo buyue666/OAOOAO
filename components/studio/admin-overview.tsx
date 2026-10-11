@@ -10,10 +10,10 @@ import {
   AdminCell,
   AdminEmpty,
   AdminError,
+  AdminKpiStrip,
   AdminLoading,
   AdminRow,
   AdminSectionCard,
-  AdminStat,
   AdminTable,
   TableMessageRow,
   capabilityLabels,
@@ -152,16 +152,19 @@ function OverviewMetrics() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStat label="今日调用数" value={formatAdminNumber(todayValue)} detail={`窗口内累计 ${formatAdminNumber(total)} 次`} />
-        <AdminStat label={`近 ${overview?.windowDays ?? days} 日调用`} value={formatAdminNumber(total)} detail={`成功 ${formatAdminNumber(success)} · 失败 ${formatAdminNumber(failed)}`} />
-        <AdminStat label="成功率" value={`${successRate.toFixed(1)}%`} detail="按生成记录统计" tone="success" />
-        <AdminStat label="失败率" value={`${failureRate.toFixed(1)}%`} detail={`失败 ${formatAdminNumber(failed)} 次`} tone={failureRate > 10 ? 'danger' : 'neutral'} />
-        <AdminStat label="活跃用户" value={formatAdminNumber(overview?.activeUsers)} detail="窗口内有调用的用户" />
-        <AdminStat label="排队与执行中" value={formatAdminNumber(queueCount)} detail={`待处理 ${formatAdminNumber(summary.byStatus.pending)} · 执行 ${formatAdminNumber(summary.byStatus.running)}`} tone={queueCount ? 'warning' : 'neutral'} />
-        <AdminStat label="今日收入" value={formatAdminMoney(paidCents)} detail={`已支付订单 ${formatAdminNumber(finance?.orders.paid)} 笔`} tone="success" />
-        <AdminStat label="退款金额" value={formatAdminMoney(refundCents)} detail={`退款订单 ${formatAdminNumber(finance?.orders.refunded)} 笔`} tone={refundCents ? 'warning' : 'neutral'} />
-      </div>
+      <AdminKpiStrip
+        label="核心指标"
+        items={[
+          { label: '今日调用数', value: formatAdminNumber(todayValue), detail: `窗口内累计 ${formatAdminNumber(total)} 次` },
+          { label: `近 ${overview?.windowDays ?? days} 日调用`, value: formatAdminNumber(total), detail: `成功 ${formatAdminNumber(success)} · 失败 ${formatAdminNumber(failed)}` },
+          { label: '成功率', value: `${successRate.toFixed(1)}%`, detail: '按生成记录统计', tone: 'success' },
+          { label: '失败率', value: `${failureRate.toFixed(1)}%`, detail: `失败 ${formatAdminNumber(failed)} 次`, tone: failureRate > 10 ? 'danger' : 'neutral' },
+          { label: '活跃用户', value: formatAdminNumber(overview?.activeUsers), detail: '窗口内有调用的用户' },
+          { label: '排队与执行中', value: formatAdminNumber(queueCount), detail: `待处理 ${formatAdminNumber(summary.byStatus.pending)} · 执行 ${formatAdminNumber(summary.byStatus.running)}`, tone: queueCount ? 'warning' : 'neutral' },
+          { label: '今日收入', value: formatAdminMoney(paidCents), detail: `已支付订单 ${formatAdminNumber(finance?.orders.paid)} 笔`, tone: 'success' },
+          { label: '退款金额', value: formatAdminMoney(refundCents), detail: `退款订单 ${formatAdminNumber(finance?.orders.refunded)} 笔`, tone: refundCents ? 'warning' : 'neutral' },
+        ]}
+      />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,1fr)]">
         <AdminSectionCard title="调用趋势" description={`近 ${overview?.windowDays ?? days} 天的生成请求数量`} action={<StatusBadge tone="success">实时数据</StatusBadge>}>

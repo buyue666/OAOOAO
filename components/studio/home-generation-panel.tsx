@@ -36,50 +36,54 @@ export type GenerationPanelProps = {
 }
 
 /**
- * 右侧生成控制栏：模型 → 参数 → 积分估算 → 开始创作，自上而下形成一次提交的完整决策。
- * 桌面端吸附在视口顶部，输入描述时始终能看到它的结果。
+ * 右侧生成设置栏：上半部分是模型与参数，底部是积分估算与开始创作。
+ * 估算结果和提交按钮处于同一区域，用户确认消耗后可直接提交；桌面端吸附在视口内。
  */
 export function GenerationPanel(props: GenerationPanelProps) {
   const { mode, modeLabel, estimatedCredits, starting } = props
   const hasModelControls = mode !== 'text' && mode !== 'agent'
 
   return (
-    <aside aria-label="生成设置" className="studio-surface flex flex-col gap-5 p-5 lg:sticky lg:top-20">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-semibold text-foreground">生成设置</h2>
-        <p className="text-xs text-muted-foreground">{hasModelControls ? `${modeLabel}模式 · 模型决定可选参数` : '导演 Agent 会按描述自动编排步骤'}</p>
+    <aside aria-labelledby="generation-settings-title" className="studio-surface flex flex-col overflow-hidden lg:sticky lg:top-20">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <h2 id="generation-settings-title" className="text-sm font-semibold text-foreground">生成设置</h2>
+        <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{modeLabel}</span>
+      </header>
+
+      <div className="flex flex-col gap-5 p-5">
+        {hasModelControls ? (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">模型</span>
+              <ModelPicker {...props} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {props.ratioOptions.length > 0 && (
+                <ParamSelect label="比例" value={props.ratio} options={props.ratioOptions} onChange={props.onRatioChange} />
+              )}
+              {props.qualityOptions.length > 0 && (
+                <ParamSelect label="清晰度" value={props.quality} options={props.qualityOptions} onChange={props.onQualityChange} />
+              )}
+              {mode === 'video' && (
+                <DurationControl
+                  className="col-span-2"
+                  durationOptions={props.durationOptions}
+                  durationRange={props.durationRange}
+                  fixedDuration={props.fixedDuration}
+                  seconds={props.seconds}
+                  onSecondsChange={props.onSecondsChange}
+                />
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm leading-6 text-muted-foreground">导演 Agent 会根据描述拆解步骤、选择模型，并在开始前估算积分。</p>
+        )}
       </div>
 
-      {hasModelControls && (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">模型</span>
-            <ModelPicker {...props} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {props.ratioOptions.length > 0 && (
-              <ParamSelect label="比例" value={props.ratio} options={props.ratioOptions} onChange={props.onRatioChange} />
-            )}
-            {props.qualityOptions.length > 0 && (
-              <ParamSelect label="清晰度" value={props.quality} options={props.qualityOptions} onChange={props.onQualityChange} />
-            )}
-            {mode === 'video' && (
-              <DurationControl
-                className="col-span-2"
-                durationOptions={props.durationOptions}
-                durationRange={props.durationRange}
-                fixedDuration={props.fixedDuration}
-                seconds={props.seconds}
-                onSecondsChange={props.onSecondsChange}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-4 border-t border-border pt-5">
+      <footer className="flex flex-col gap-4 border-t border-border bg-muted/40 p-5">
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">积分估算</span>
+          <span className="text-xs font-medium text-muted-foreground">预计消耗</span>
           {estimatedCredits !== null ? (
             <p className="flex items-baseline gap-1.5">
               <span className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">{estimatedCredits.toLocaleString()}</span>
@@ -93,13 +97,13 @@ export function GenerationPanel(props: GenerationPanelProps) {
         <button
           type="submit"
           disabled={starting}
-          aria-label="开始创作"
           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-foreground px-5 text-sm font-semibold text-background transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-60"
         >
           <span>开始创作</span>
           <ArrowRight className="size-4" aria-hidden="true" />
         </button>
-      </div>
+        <p className="text-xs leading-5 text-muted-foreground">提交后进入对应创作工作台，描述与参考素材会一并带入。</p>
+      </footer>
     </aside>
   )
 }

@@ -7,7 +7,7 @@ import { Bot, Image as ImageIcon, MessageSquareText, Puzzle, Sparkles, Video } f
 import { useStudio } from '@/lib/studio/store'
 import { readIntentFiles, saveCreateIntent } from '@/lib/studio/create-intent'
 import { cn } from '@/lib/utils'
-import { InspirationShortcuts, PromptComposer, ReferenceMaterials } from './home-composer'
+import { InspirationShortcuts, PromptComposer } from './home-composer'
 import { GenerationPanel } from './home-generation-panel'
 import { RecentWorks } from './home-recent-works'
 
@@ -168,12 +168,12 @@ export function HomePage() {
   }
 
   return (
-    <div className="studio-home mx-auto flex w-full max-w-[1120px] flex-col gap-8 px-4 pb-12 pt-8 sm:px-6 lg:px-8">
+    <div className="studio-home mx-auto flex w-full max-w-[1280px] flex-col gap-6 px-4 pb-16 pt-6 sm:px-6 lg:px-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">创作工作台</p>
-          <h1 id="home-title" className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground sm:text-3xl">从一个想法开始</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">选择创作类型，描述画面与镜头，确认模型与参数后开始生成。</p>
+          <h1 id="home-title" className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-foreground">开始一次创作</h1>
+          <p className="mt-1.5 text-sm leading-6 text-muted-foreground">选择创作类型，描述画面与镜头，确认模型与参数后开始生成。</p>
         </div>
         <Link
           href="/skills"
@@ -212,11 +212,16 @@ export function HomePage() {
           event.preventDefault()
           void startCreation()
         }}
-        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start"
+        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start"
       >
         <div className="flex min-w-0 flex-col gap-6">
-          <PromptComposer value={prompt} onChange={setPrompt} onSubmitShortcut={() => void startCreation()} />
-          <ReferenceMaterials files={files} onFilesChange={setFiles} />
+          <PromptComposer
+            value={prompt}
+            onChange={setPrompt}
+            onSubmitShortcut={() => void startCreation()}
+            files={files}
+            onFilesChange={setFiles}
+          />
           <InspirationShortcuts scenes={sceneShortcuts} onSelect={selectScene} />
         </div>
 
@@ -249,7 +254,9 @@ export function HomePage() {
         />
       </form>
 
-      <RecentWorks projects={recentProjects} runningTask={runningTask} />
+      <div className="border-t border-border pt-8">
+        <RecentWorks projects={recentProjects} runningTask={runningTask} />
+      </div>
     </div>
   )
 }

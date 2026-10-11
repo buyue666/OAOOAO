@@ -38,6 +38,7 @@ import {
   AdminDefinition,
   AdminDrawer,
   AdminEmpty,
+  AdminKpiStrip,
   AdminError,
   AdminField,
   AdminInput,
@@ -220,18 +221,25 @@ export function AdminProductsPanel() {
   return (
     <div className="flex flex-col gap-5">
       {confirm.dialog}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStat label="商品总数" value={formatAdminNumber(products.length)} detail={`上架 ${formatAdminNumber(products.filter((p) => p.enabled).length)}`} />
-        <AdminStat label="订阅套餐" value={formatAdminNumber(planCount)} detail="按周期计费的会员方案" />
-        <AdminStat label="积分包" value={formatAdminNumber(pointsCount)} detail="一次性到账的积分商品" />
-        <AdminStat label="促销活动" value={formatAdminNumber(promotions.length)} detail={`进行中 ${formatAdminNumber(promotions.filter((c) => c.enabled).length)}`} tone="warning" />
-      </div>
+      <AdminKpiStrip
+        label="商品概览"
+        items={[
+          { label: '商品总数', value: formatAdminNumber(products.length), detail: `上架 ${formatAdminNumber(products.filter((p) => p.enabled).length)}` },
+          { label: '订阅套餐', value: formatAdminNumber(planCount), detail: '按周期计费的会员方案' },
+          { label: '积分包', value: formatAdminNumber(pointsCount), detail: '一次性到账的积分商品' },
+          { label: '促销活动', value: formatAdminNumber(promotions.length), detail: `进行中 ${formatAdminNumber(promotions.filter((c) => c.enabled).length)}`, tone: 'warning' },
+        ]}
+      />
 
-      <AdminSectionCard
-        title="商品与套餐"
-        description="订阅套餐与积分包共用同一套商品模型。周期、价格、积分与订阅页展示权益都保存在这里。"
-        action={canManage ? <ControlButton variant="primary" size="sm" onClick={() => setEditor('new')}><Plus className="size-3.5" />新增商品</ControlButton> : undefined}
-      >
+      <section aria-labelledby="products-list-title" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="products-list-title" className="text-sm font-semibold">商品与套餐</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">订阅套餐与积分包共用同一套商品模型。周期、价格、积分与订阅页展示权益都保存在这里。</p>
+          </div>
+          {canManage && <ControlButton variant="primary" size="sm" onClick={() => setEditor('new')}><Plus className="size-3.5" />新增商品</ControlButton>}
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <AdminInput aria-label="搜索商品" className="w-full sm:w-64" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索商品名称、说明或方案标识" />
           <AdminSelect aria-label="筛选商品类型" value={kind} onChange={(event) => setKind(event.target.value)} className="w-36"><option value="">全部类型</option><option value="plan">订阅套餐</option><option value="points">积分包</option></AdminSelect>
@@ -287,7 +295,7 @@ export function AdminProductsPanel() {
             {!visible.length && <TableMessageRow colSpan={8} loading={loading} error={error} empty="没有匹配的商品" />}
           </AdminTable>
         </div>
-      </AdminSectionCard>
+      </section>
 
       <AdminSectionCard
         title="促销活动"
@@ -839,7 +847,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
                     {promoNotice && <p className="text-[11px] text-studio-accent" role="status" data-testid="product-promo-notice">{promoNotice}</p>}
                     {promoError && <p className="text-[11px] text-destructive" role="alert" data-testid="product-promo-error">{promoError}</p>}
                     <p className="text-[11px] leading-5 text-muted-foreground">
-                      活动价必须大于 0 且低于日常价。保存后由后端计算折扣，此处的价格与折扣、右侧预览和用户套餐页会同时生效；
+                      活动价必须大于 0 且低于日常价。保存后由后端计算折扣，此处的价格与折扣、右侧预览��用户套餐页会同时生效；
                       活动名称、标签与时间范围可在下方「促销活动」区块统一管理。
                     </p>
                   </div>
@@ -1257,7 +1265,7 @@ export function AdminOrdersPanel() {
       {tab === 'referrals' && <ReferralsPanel />}
 
       {detail && (
-        <AdminDrawer open onClose={() => setDetail(null)} title={`订单 ${detail.orderNo}`} description={detail.subject}>
+        <AdminDrawer open dock onClose={() => setDetail(null)} title={`订单 ${detail.orderNo}`} description={detail.subject}>
           <div className="flex flex-col gap-4">
             <AdminSectionCard title="支付信息" className="p-4">
               <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(detail.status)}>{labelOf(orderStatusLabels, detail.status)}</StatusBadge>} />
@@ -1524,7 +1532,7 @@ function ReferralsPanel() {
         <AdminStat label="风控标记" value={formatAdminNumber(overview?.stats.risky)} tone={overview?.stats.risky ? 'danger' : 'neutral'} />
       </div>
 
-      <AdminSectionCard title="邀请奖励规则" description="设置邀请人积分、被邀请奖励类型、结算门槛与风控策略。">
+      <AdminSectionCard title="邀请奖励规则" description="设置邀请人积分、被邀请奖励类型、��算门槛与风控策略。">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <fieldset disabled={busy || !canManage} className="grid gap-4 sm:grid-cols-3">
             <Field label="邀请人积分"><AdminInput name="inviterPoints" type="number" min="0" defaultValue={program?.inviterPoints ?? 0} /></Field>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { ControlButton, EmptyState, Modal, type Tone } from './ui'
 import { cn } from '@/lib/utils'
@@ -57,9 +58,9 @@ export function AdminTable({ columns, children, minWidth = 760, caption }: { col
     <AdminTableShell>
       <table className="w-full text-left text-sm" style={{ minWidth }}>
         {caption && <caption className="sr-only">{caption}</caption>}
-        {/* 表头吸顶便于长表格对照，但**不做玻璃化**，避免密集数据失去对比度。 */}
-        <thead className="bg-muted/60 text-xs text-muted-foreground">
-          <tr>{columns.map((column) => <th key={column} scope="col" className="whitespace-nowrap px-4 py-3 font-medium">{column}</th>)}</tr>
+        {/* 表头吸顶便于长表格对照。吸顶必须落在 th 上，且 th 自带底色，否则滚动时内容会穿透表头。 */}
+        <thead className="text-xs text-muted-foreground">
+          <tr>{columns.map((column) => <th key={column} scope="col" className="sticky top-0 z-10 whitespace-nowrap bg-muted px-4 py-3 font-medium">{column}</th>)}</tr>
         </thead>
         <tbody>{children}</tbody>
       </table>
@@ -142,26 +143,103 @@ export function useConfirm() {
   return { confirm, dialog, busy }
 }
 
-/* -------------------------------- 抽屉 -------------------------------- */
+/* ------------------------- 主从布局：详情停靠与抽屉 ------------------------- */
 
-export function AdminDrawer({ open, title, description, onClose, children, footer, width = 'sm:max-w-3xl' }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; width?: string }) {
-  const containerRef = useRef<HTMLDivElement>(null)
+/**
+ * 桌面端（≥1280px）详情面板停靠在主从布局右侧，列表与详情同时可见；
+ * 更窄的视口下退回全屏抽屉，避免列表被挤到不可用的宽度。
+ */
+const DOCKED_QUERY = '(min-width: 1280px)'
+
+function subscribeToDockedQuery(onChange: () => void) {
+  const media = window.matchMedia(DOCKED_QUERY)
+  media.addEventListener('change', onChange)
+  return () => media.removeEventListener('change', onChange)
+}
+
+function readDockedQuery() {
+  return window.matchMedia(DOCKED_QUERY).matches
+}
+
+function useIsDockedViewport() {
+  return useSyncExternalStore(subscribeToDockedQuery, readDockedQuery, () => false)
+}
+
+type AdminDetailSlotValue = { slot: HTMLElement | null }
+const AdminDetailSlotContext = createContext<AdminDetailSlotValue>({ slot: null })
+
+/**
+ * 后台主从布局：主列承载列表与筛选，右侧是详情槽。
+ * 槽位没有内容时以 `empty:hidden` 隐藏，只有打开详情才会压缩主列宽度。
+ */
+export function AdminWorkbench({ children }: { children: ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const value = useMemo(() => ({ slot }), [slot])
+  return (
+    <AdminDetailSlotContext.Provider value={value}>
+      <div className="flex items-start gap-6">
+        <div className="min-w-0 flex-1">{children}</div>
+        <div ref={setSlot} className="admin-detail-slot sticky top-[88px] flex max-h-[calc(100dvh-112px)] w-[420px] shrink-0 flex-col empty:hidden" />
+      </div>
+    </AdminDetailSlotContext.Provider>
+  )
+}
+
+type AdminDrawerProps = {
+  open: boolean
+  title: string
+  description?: string
+  onClose: () => void
+  children: ReactNode
+  footer?: ReactNode
+  width?: string
+  /** 允许桌面端停靠到主从布局右侧。仅用于详情类面板；需要宽度的编辑器保持全屏抽屉。 */
+  dock?: boolean
+}
+
+/**
+ * 详情与编辑面板。
+ *
+ * - `dock` 且桌面端处于主从布局中：停靠在右侧，列表保持可见；底部操作栏固定在面板底部，内容区独立滚动。
+ * - 其他情况：全屏遮罩抽屉。编辑器需要完整宽度，因此默认不停靠。
+ */
+export function AdminDrawer({ open, title, description, onClose, children, footer, width = 'sm:max-w-3xl', dock = false }: AdminDrawerProps) {
+  const { slot } = useContext(AdminDetailSlotContext)
+  const docked = useIsDockedViewport()
+
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose, open])
+
   if (!open) return null
+
+  const panel = (
+    <>
+      <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+        <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{title}</h2>{description && <p className="mt-1 truncate text-xs text-muted-foreground">{description}</p>}</div>
+        <ControlButton variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><X className="size-4" /></ControlButton>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+      {footer && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/40 px-5 py-3">{footer}</footer>}
+    </>
+  )
+
+  if (dock && docked && slot) {
+    return createPortal(
+      <aside aria-label={title} className="motion-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        {panel}
+      </aside>,
+      slot,
+    )
+  }
+
   return (
     <div className="studio-sidepanel-backdrop motion-fade fixed inset-0 z-50 flex justify-end bg-studio-ink/50" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={containerRef} role="dialog" aria-modal="true" aria-label={title} className={cn('admin-drawer-surface motion-panel flex h-full w-full flex-col overflow-hidden border-l border-border shadow-2xl', width)}>
-        <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
-          <div className="min-w-0"><h2 className="truncate text-sm font-semibold">{title}</h2>{description && <p className="mt-1 truncate text-xs text-muted-foreground">{description}</p>}</div>
-          <ControlButton variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><X className="size-4" /></ControlButton>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/40 px-5 py-3">{footer}</footer>}
+      <section role="dialog" aria-modal="true" aria-label={title} className={cn('admin-drawer-surface motion-panel flex h-full w-full flex-col overflow-hidden border-l border-border shadow-2xl', width)}>
+        {panel}
       </section>
     </div>
   )
@@ -213,6 +291,19 @@ export function AdminToolbar({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-2">{children}</div>
 }
 
+/**
+ * 列表上方的筛选栏：左侧放筛选条件，右侧放批量或刷新类操作。
+ * 与表格共享同一个表面，形成「筛选 → 列表」的固定阅读顺序。
+ */
+export function AdminFilterBar({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">{children}</div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  )
+}
+
 export function AdminSectionCard({ title, description, action, children, className }: { title: string; description?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn('studio-surface p-5', className)}>
@@ -231,6 +322,23 @@ export function AdminDefinition({ label, value, mono }: { label: string; value: 
       <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
       <span className={cn('min-w-0 break-all text-right text-sm', mono && 'font-mono text-xs')}>{value === undefined || value === null || value === '' ? '-' : value}</span>
     </div>
+  )
+}
+
+export type AdminKpi = { label: string; value: string; detail?: string; tone?: Tone }
+
+/** 指标条：多个指标共用一条边框，以 1px 间隔线分隔，读数集中在同一块面板里。 */
+export function AdminKpiStrip({ label, items }: { label: string; items: AdminKpi[] }) {
+  return (
+    <dl aria-label={label} className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item) => (
+        <div key={item.label} className="flex min-w-0 flex-col gap-2 bg-card p-4">
+          <dt className="text-xs text-muted-foreground">{item.label}</dt>
+          <dd className={cn('text-xl font-semibold tabular-nums tracking-tight', item.tone === 'success' && 'text-success', item.tone === 'danger' && 'text-destructive', item.tone === 'warning' && 'text-studio-warn')}>{item.value}</dd>
+          {item.detail && <dd className="truncate text-xs text-muted-foreground" title={item.detail}>{item.detail}</dd>}
+        </div>
+      ))}
+    </dl>
   )
 }
 

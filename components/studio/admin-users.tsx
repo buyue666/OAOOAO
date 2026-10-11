@@ -21,13 +21,13 @@ import {
   AdminError,
   AdminField,
   AdminInput,
+  AdminKpiStrip,
   AdminNotice,
   AdminPagination,
   AdminRow,
   AdminSearch,
   AdminSectionCard,
   AdminSelect,
-  AdminStat,
   AdminTable,
   TableMessageRow,
   formatAdminDate,
@@ -94,18 +94,25 @@ export function AdminUsersPanel() {
   return (
     <div className="flex flex-col gap-5">
       {confirm.dialog}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStat label="账户总数" value={formatAdminNumber(summary.total)} detail={`正常 ${formatAdminNumber(summary.active)} · 禁用 ${formatAdminNumber(summary.disabled)}`} />
-        <AdminStat label="管理员" value={formatAdminNumber(summary.admins)} detail={`其中启用 ${formatAdminNumber(summary.activeAdmins)}`} tone="warning" />
-        <AdminStat label="持有套餐" value={formatAdminNumber(summary.usersWithPlan)} detail="已激活订阅套餐的用户" tone="success" />
-        <AdminStat label="积分总量" value={formatAdminNumber(summary.totalPointsBalance)} detail="所有账户积分余额合计" />
-      </div>
+      <AdminKpiStrip
+        label="账户概览"
+        items={[
+          { label: '账户总数', value: formatAdminNumber(summary.total), detail: `正常 ${formatAdminNumber(summary.active)} · 禁用 ${formatAdminNumber(summary.disabled)}` },
+          { label: '管理员', value: formatAdminNumber(summary.admins), detail: `其中启用 ${formatAdminNumber(summary.activeAdmins)}`, tone: 'warning' },
+          { label: '持有套餐', value: formatAdminNumber(summary.usersWithPlan), detail: '已激活订阅套餐的用户', tone: 'success' },
+          { label: '积分总量', value: formatAdminNumber(summary.totalPointsBalance), detail: '所有账户积分余额合计' },
+        ]}
+      />
 
-      <AdminSectionCard
-        title="用户账户"
-        description="支持用户名、昵称、邮箱关键字搜索，并按角色和状态筛选。"
-        action={canManage ? <ControlButton variant="primary" size="sm" onClick={() => setEditing('new')}><UserPlus className="size-3.5" />新增用户</ControlButton> : undefined}
-      >
+      <section aria-labelledby="users-list-title" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="users-list-title" className="text-sm font-semibold">用户账户</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">支持用户名、昵称、邮箱关键字搜索，并按角色和状态筛选。点击「详情」在右侧查看调用与订单。</p>
+          </div>
+          {canManage && <ControlButton variant="primary" size="sm" onClick={() => setEditing('new')}><UserPlus className="size-3.5" />新增用户</ControlButton>}
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <AdminSearch value={keyword} onChange={setKeyword} placeholder="搜索用户名、昵称或邮箱" onSubmit={() => { setPage(1); setQuery(keyword) }} />
           <AdminSelect aria-label="筛选角色" value={role} onChange={(event) => { setPage(1); setRole(event.target.value) }} className="w-32">
@@ -159,7 +166,7 @@ export function AdminUsersPanel() {
         </div>
 
         <div className="mt-4"><AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} /></div>
-      </AdminSectionCard>
+      </section>
 
       {detail && <UserDetailDrawer user={detail} canManage={canManage} onClose={() => setDetail(null)} onEdit={() => { setEditing(detail); setDetail(null) }} />}
       {editing && <UserEditor user={editing === 'new' ? undefined : editing} canGrant={canGrant} onClose={() => setEditing(null)} onSaved={(text) => { setMessage(text); setEditing(null); load() }} />}
@@ -203,6 +210,7 @@ function UserDetailDrawer({ user, canManage, onClose, onEdit }: { user: AdminUse
   return (
     <AdminDrawer
       open
+      dock
       onClose={onClose}
       title={user.displayName || user.username}
       description={`账户 #${user.accountId || user.id} · ${user.email || '未填写邮箱'}`}

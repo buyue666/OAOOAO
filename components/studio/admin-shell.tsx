@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { ControlButton, PageHeader } from './ui'
+import { AdminWorkbench } from './admin-kit'
 import { cn } from '@/lib/utils'
 import { getSession, type BackendUser } from '@/lib/studio/api'
 import type { AdminPermission, AdminSection } from '@/lib/studio/admin-types'
@@ -273,9 +274,11 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-[1540px] px-4 py-5 md:px-7 md:py-7">
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-5 md:px-7 md:py-7">
           <PageHeader eyebrow="控制中心" title={meta.title} description={meta.description} />
-          <div key={section} className="motion-page mt-5">{children}</div>
+          <AdminWorkbench>
+            <div key={section} className="motion-page mt-5">{children}</div>
+          </AdminWorkbench>
         </main>
       </div>
     </div>

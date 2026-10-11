@@ -9,6 +9,7 @@ import { consumeWechatLoginSession, createWechatLoginSession, getWechatLoginStat
 import { registerAccount, requestEmailCode, resetPasswordByEmail } from '@/lib/studio/account-api'
 import { useStudio } from '@/lib/studio/store'
 import { useLocale } from '@/lib/studio/i18n'
+import { cn } from '@/lib/utils'
 import { AuthBrandPanel } from './auth-brand-panel'
 import { AuthField, AuthInput, AuthPasswordInput } from './auth-fields'
 import { ControlButton, Notice } from './ui'
@@ -279,7 +280,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
     }
   }
 
-  const title = mode === 'login' ? '登录' : mode === 'register' ? '创建账户' : '重置密码'
+  const title = mode === 'login' ? '欢迎回来' : mode === 'register' ? '创建账户' : '重置密码'
   const description = mode === 'login' ? t('authLoginDescription') : mode === 'register' ? t('authRegisterDescription') : t('authResetDescription')
   const submitLabel = mode === 'login' ? '登录' : mode === 'register' ? '注册并登录' : '重置密码'
   const codePurpose = mode === 'register' ? 'register' : 'password-reset'
@@ -287,171 +288,199 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
   const codeDisabled = busy || sendingCode || cooldown > 0 || !email.trim()
 
   return (
-    <main className="grid min-h-dvh bg-background text-foreground lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+    <main className="grid min-h-dvh bg-background text-foreground lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
       <AuthBrandPanel />
 
-      <section className="flex min-h-dvh flex-col px-5 pb-8 pt-5 sm:px-10 lg:px-16 lg:pb-12 lg:pt-8">
-        <header className="flex items-center justify-between gap-4">
+      <section className="flex min-h-dvh flex-col">
+        <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-10 lg:px-14">
           <Image src="/media/brand/oao-mark.png" alt="" width={512} height={512} className="size-8 dark:invert lg:hidden" />
           <Link href="/" className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
             <ArrowLeft className="size-4" aria-hidden="true" />返回首页
           </Link>
         </header>
 
-        <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col pt-10 sm:pt-16 lg:pt-[12vh]">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">{title}</h1>
-            <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-          </div>
+        <div className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-10 lg:px-14">
+          <div className="mx-auto flex w-full max-w-[420px] flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">{title}</h1>
+              <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+            </div>
 
-          <div className="mt-6 flex flex-col gap-4">
-            {formError && <div role="alert"><Notice tone="danger"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />{formError}</Notice></div>}
-            {notice && <div role="status"><Notice tone="success"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />{notice}</Notice></div>}
-          </div>
-
-          <form onSubmit={submit} noValidate className="mt-5 flex flex-col gap-4">
             {mode !== 'reset' && (
-              <AuthField id={fieldIds.username} label={mode === 'register' ? '用户名（登录名，注册后不可修改）' : '用户名或邮箱'} error={fieldErrors.username}>
-                <span className="relative block">
-                  <UserRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <AuthInput id={fieldIds.username} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} error={fieldErrors.username} className="pl-10" />
-                </span>
-              </AuthField>
-            )}
-
-            {mode === 'login' && (
-              <>
-                <AuthField id={fieldIds.password} label="密码" error={fieldErrors.password}>
-                  <AuthPasswordInput id={fieldIds.password} autoComplete="current-password" value={password} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} onChange={(event) => setPassword(event.target.value)} error={fieldErrors.password} />
-                </AuthField>
-                {mfaRequired && (
-                  <AuthField id={fieldIds.totp} label="管理员动态验证码" error={fieldErrors.totp} hint={t('authMfaHelp')}>
-                    <AuthInput id={fieldIds.totp} inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} placeholder="请输入 6 位验证码" error={fieldErrors.totp} />
-                  </AuthField>
-                )}
-              </>
-            )}
-
-            {mode === 'register' && (
-              <>
-                <AuthField id={fieldIds.email} label="邮箱（用于验证账号）" error={fieldErrors.email}>
-                  <span className="relative block">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <AuthInput id={fieldIds.email} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} error={fieldErrors.email} className="pl-10" />
-                  </span>
-                </AuthField>
-                <AuthField id={fieldIds.emailCode} label="邮箱验证码" error={fieldErrors.emailCode}>
-                  <span className="flex gap-2">
-                    <AuthInput id={fieldIds.emailCode} inputMode="numeric" autoComplete="one-time-code" value={emailCode} onChange={(event) => setEmailCode(event.target.value)} error={fieldErrors.emailCode} className="min-w-0 flex-1" />
-                    <ControlButton type="button" variant="secondary" className="h-11 shrink-0 px-3.5 disabled:opacity-60" onClick={() => void sendCode(codePurpose)} disabled={codeDisabled}>
-                      <Send className="size-4" aria-hidden="true" />{codeButtonLabel}
-                    </ControlButton>
-                  </span>
-                </AuthField>
-                <AuthField id={fieldIds.password} label="密码（至少 8 位）" error={fieldErrors.password}>
-                  <AuthPasswordInput id={fieldIds.password} autoComplete="new-password" value={password} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} onChange={(event) => setPassword(event.target.value)} error={fieldErrors.password} />
-                </AuthField>
-                <AuthField id="auth-referral" label="邀请码（可选）">
-                  <AuthInput id="auth-referral" value={referralCode} onChange={(event) => setReferralCode(event.target.value)} placeholder={t('authReferralPlaceholder')} />
-                </AuthField>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor={fieldIds.policy} className="flex items-start gap-2.5 text-xs leading-5 text-muted-foreground">
-                    <input id={fieldIds.policy} type="checkbox" checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} aria-invalid={fieldErrors.policy ? true : undefined} className="mt-0.5 size-4 shrink-0 accent-studio-accent" />
-                    <span>我已阅读并同意服务条款与隐私政策。</span>
-                  </label>
-                  {fieldErrors.policy && <p role="alert" className="text-xs leading-5 text-destructive">{fieldErrors.policy}</p>}
-                </div>
-              </>
-            )}
-
-            {mode === 'reset' && (
-              <>
-                <AuthField id={fieldIds.email} label="注册邮箱" error={fieldErrors.email}>
-                  <span className="relative block">
-                    <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                    <AuthInput id={fieldIds.email} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} error={fieldErrors.email} className="pl-10" />
-                  </span>
-                </AuthField>
-                <AuthField id={fieldIds.emailCode} label="邮箱验证码" error={fieldErrors.emailCode}>
-                  <span className="flex gap-2">
-                    <AuthInput id={fieldIds.emailCode} inputMode="numeric" autoComplete="one-time-code" value={emailCode} onChange={(event) => setEmailCode(event.target.value)} error={fieldErrors.emailCode} className="min-w-0 flex-1" />
-                    <ControlButton type="button" variant="secondary" className="h-11 shrink-0 px-3.5 disabled:opacity-60" onClick={() => void sendCode(codePurpose)} disabled={codeDisabled}>
-                      <Send className="size-4" aria-hidden="true" />{codeButtonLabel}
-                    </ControlButton>
-                  </span>
-                </AuthField>
-                <AuthField id={fieldIds.newPassword} label="新密码（至少 8 位）" error={fieldErrors.newPassword}>
-                  <AuthPasswordInput id={fieldIds.newPassword} autoComplete="new-password" value={newPassword} visible={showNewPassword} onToggle={() => setShowNewPassword((value) => !value)} onChange={(event) => setNewPassword(event.target.value)} error={fieldErrors.newPassword} />
-                </AuthField>
-                <AuthField id={fieldIds.confirmPassword} label="确认新密码" error={fieldErrors.confirmPassword}>
-                  <AuthPasswordInput id={fieldIds.confirmPassword} autoComplete="new-password" value={confirmPassword} visible={showConfirmPassword} onToggle={() => setShowConfirmPassword((value) => !value)} onChange={(event) => setConfirmPassword(event.target.value)} error={fieldErrors.confirmPassword} />
-                </AuthField>
-              </>
-            )}
-
-            <ControlButton type="submit" variant="primary" className="mt-2 h-11 w-full text-sm" disabled={busy} aria-busy={busy || undefined}>
-              {status === 'success' ? (
-                <><CheckCircle2 className="size-4" aria-hidden="true" />登录成功，正在进入</>
-              ) : status === 'submitting' ? (
-                <><LoaderCircle className="size-4 animate-spin" aria-hidden="true" />正在处理…</>
-              ) : (
-                <>{submitLabel}<ArrowRight className="size-4" aria-hidden="true" /></>
-              )}
-            </ControlButton>
-          </form>
-
-          {mode === 'login' && wechatLoginEnabled && (
-            <section aria-label="微信扫码登录" className="mt-6 flex flex-col gap-4">
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span className="h-px flex-1 bg-border" aria-hidden="true" />
-                <span>或使用微信登录</span>
-                <span className="h-px flex-1 bg-border" aria-hidden="true" />
+              <div role="tablist" aria-label="账户入口" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                {(['login', 'register'] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === item}
+                    onClick={() => switchMode(item)}
+                    className={cn(
+                      'h-9 rounded-md text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
+                      mode === item ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {item === 'login' ? '登录' : '注册'}
+                  </button>
+                ))}
               </div>
-              {!wechatSession ? (
-                <ControlButton type="button" variant="secondary" className="h-11 w-full text-sm" onClick={() => void beginWechatLogin()} disabled={busy || wechatLoading}>
-                  <QrCode className="size-4" aria-hidden="true" />{wechatLoading ? '正在准备二维码…' : '微信扫码登录'}
-                </ControlButton>
-              ) : (
-                <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-card p-4">
-                  <div className="flex w-full items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-foreground">
-                      {wechatStatus === 'pending' ? '请使用微信扫描二维码' : wechatStatus === 'authorized' || wechatStatus === 'consumed' ? '授权成功，正在登录…' : wechatStatus === 'unlinked' ? '该微信尚未关联账号' : '二维码已过期，请重新获取'}
-                    </p>
-                    <button type="button" onClick={closeWechatLogin} disabled={wechatLoading} className="shrink-0 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">关闭</button>
-                  </div>
-                  <div className="flex size-44 items-center justify-center overflow-hidden rounded-md border border-border bg-white p-2">
-                    {wechatSession.qrCodeUrl && <img src={wechatSession.qrCodeUrl} alt="微信登录二维码" className="size-full object-contain" referrerPolicy="no-referrer" />}
-                  </div>
-                  {wechatStatus === 'unlinked' && <p className="text-center text-xs leading-5 text-muted-foreground">{t('authWechatUnlinked')}</p>}
-                  {wechatStatus === 'expired' && (
-                    <ControlButton type="button" variant="secondary" className="h-9 w-full text-sm" onClick={() => { closeWechatLogin(); void beginWechatLogin() }}>重新获取二维码</ControlButton>
-                  )}
-                </div>
-              )}
-              {wechatError && <p role="alert" className="text-xs leading-5 text-destructive">{wechatError}</p>}
-            </section>
-          )}
-
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-2 text-sm">
-            {mode === 'login' ? (
-              <>
-                <button type="button" onClick={() => switchMode('register')} className="font-medium text-studio-accent transition-colors hover:underline">注册新账户</button>
-                <button type="button" onClick={() => switchMode('reset')} className="text-muted-foreground transition-colors hover:text-foreground hover:underline">忘记密码</button>
-              </>
-            ) : (
-              <button type="button" onClick={() => switchMode('login')} className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground hover:underline">
-                <ArrowLeft className="size-3.5" aria-hidden="true" />返回登录
-              </button>
             )}
+
+            <div className="flex flex-col gap-4 empty:hidden">
+              {formError && <div role="alert"><Notice tone="danger"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />{formError}</Notice></div>}
+              {notice && <div role="status"><Notice tone="success"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />{notice}</Notice></div>}
+            </div>
+
+            <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+              {mode !== 'reset' && (
+                <AuthField id={fieldIds.username} label={mode === 'register' ? '用户名（登录名，注册后不可修改）' : '用户名或邮箱'} error={fieldErrors.username}>
+                  <span className="relative block">
+                    <UserRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                    <AuthInput id={fieldIds.username} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} error={fieldErrors.username} className="pl-10" />
+                  </span>
+                </AuthField>
+              )}
+
+              {mode === 'login' && (
+                <>
+                  <AuthField id={fieldIds.password} label="密码" error={fieldErrors.password}>
+                    <AuthPasswordInput id={fieldIds.password} autoComplete="current-password" value={password} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} onChange={(event) => setPassword(event.target.value)} error={fieldErrors.password} />
+                  </AuthField>
+                  {mfaRequired && (
+                    <AuthField id={fieldIds.totp} label="管理员动态验证码" error={fieldErrors.totp} hint={t('authMfaHelp')}>
+                      <AuthInput id={fieldIds.totp} inputMode="numeric" autoComplete="one-time-code" value={totpCode} onChange={(event) => setTotpCode(event.target.value)} placeholder="请输入 6 位验证码" error={fieldErrors.totp} />
+                    </AuthField>
+                  )}
+                </>
+              )}
+
+              {mode === 'register' && (
+                <>
+                  <AuthField id={fieldIds.email} label="邮箱（用于验证账号）" error={fieldErrors.email}>
+                    <span className="relative block">
+                      <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                      <AuthInput id={fieldIds.email} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} error={fieldErrors.email} className="pl-10" />
+                    </span>
+                  </AuthField>
+                  <AuthField id={fieldIds.emailCode} label="邮箱验证码" error={fieldErrors.emailCode}>
+                    <span className="flex gap-2">
+                      <AuthInput id={fieldIds.emailCode} inputMode="numeric" autoComplete="one-time-code" value={emailCode} onChange={(event) => setEmailCode(event.target.value)} error={fieldErrors.emailCode} className="min-w-0 flex-1" />
+                      <ControlButton type="button" variant="secondary" className="h-11 shrink-0 px-3.5 disabled:opacity-60" onClick={() => void sendCode(codePurpose)} disabled={codeDisabled}>
+                        <Send className="size-4" aria-hidden="true" />{codeButtonLabel}
+                      </ControlButton>
+                    </span>
+                  </AuthField>
+                  <AuthField id={fieldIds.password} label="密码（至少 8 位）" error={fieldErrors.password}>
+                    <AuthPasswordInput id={fieldIds.password} autoComplete="new-password" value={password} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} onChange={(event) => setPassword(event.target.value)} error={fieldErrors.password} />
+                  </AuthField>
+                  <AuthField id="auth-referral" label="邀请码（可选）">
+                    <AuthInput id="auth-referral" value={referralCode} onChange={(event) => setReferralCode(event.target.value)} placeholder={t('authReferralPlaceholder')} />
+                  </AuthField>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor={fieldIds.policy} className="flex items-start gap-2.5 text-xs leading-5 text-muted-foreground">
+                      <input id={fieldIds.policy} type="checkbox" checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} aria-invalid={fieldErrors.policy ? true : undefined} className="mt-0.5 size-4 shrink-0 accent-studio-accent" />
+                      <span>我已阅读并同意服务条款与隐私政策。</span>
+                    </label>
+                    {fieldErrors.policy && <p role="alert" className="text-xs leading-5 text-destructive">{fieldErrors.policy}</p>}
+                  </div>
+                </>
+              )}
+
+              {mode === 'reset' && (
+                <>
+                  <AuthField id={fieldIds.email} label="注册邮箱" error={fieldErrors.email}>
+                    <span className="relative block">
+                      <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                      <AuthInput id={fieldIds.email} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} error={fieldErrors.email} className="pl-10" />
+                    </span>
+                  </AuthField>
+                  <AuthField id={fieldIds.emailCode} label="邮箱验证码" error={fieldErrors.emailCode}>
+                    <span className="flex gap-2">
+                      <AuthInput id={fieldIds.emailCode} inputMode="numeric" autoComplete="one-time-code" value={emailCode} onChange={(event) => setEmailCode(event.target.value)} error={fieldErrors.emailCode} className="min-w-0 flex-1" />
+                      <ControlButton type="button" variant="secondary" className="h-11 shrink-0 px-3.5 disabled:opacity-60" onClick={() => void sendCode(codePurpose)} disabled={codeDisabled}>
+                        <Send className="size-4" aria-hidden="true" />{codeButtonLabel}
+                      </ControlButton>
+                    </span>
+                  </AuthField>
+                  <AuthField id={fieldIds.newPassword} label="新密码（至少 8 位）" error={fieldErrors.newPassword}>
+                    <AuthPasswordInput id={fieldIds.newPassword} autoComplete="new-password" value={newPassword} visible={showNewPassword} onToggle={() => setShowNewPassword((value) => !value)} onChange={(event) => setNewPassword(event.target.value)} error={fieldErrors.newPassword} />
+                  </AuthField>
+                  <AuthField id={fieldIds.confirmPassword} label="确认新密码" error={fieldErrors.confirmPassword}>
+                    <AuthPasswordInput id={fieldIds.confirmPassword} autoComplete="new-password" value={confirmPassword} visible={showConfirmPassword} onToggle={() => setShowConfirmPassword((value) => !value)} onChange={(event) => setConfirmPassword(event.target.value)} error={fieldErrors.confirmPassword} />
+                  </AuthField>
+                </>
+              )}
+
+              <ControlButton type="submit" variant="primary" className="mt-2 h-11 w-full text-sm" disabled={busy} aria-busy={busy || undefined}>
+                {status === 'success' ? (
+                  <><CheckCircle2 className="size-4" aria-hidden="true" />登录成功，正在进入</>
+                ) : status === 'submitting' ? (
+                  <><LoaderCircle className="size-4 animate-spin" aria-hidden="true" />正在处理…</>
+                ) : (
+                  <>{submitLabel}<ArrowRight className="size-4" aria-hidden="true" /></>
+                )}
+              </ControlButton>
+            </form>
+
+            {mode === 'login' && wechatLoginEnabled && (
+              <section aria-label="微信扫码登录" className="flex flex-col gap-4">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                  <span>或使用微信登录</span>
+                  <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                </div>
+                {!wechatSession ? (
+                  <ControlButton type="button" variant="secondary" className="h-11 w-full text-sm" onClick={() => void beginWechatLogin()} disabled={busy || wechatLoading}>
+                    <QrCode className="size-4" aria-hidden="true" />{wechatLoading ? '正在准备二维码…' : '微信扫码登录'}
+                  </ControlButton>
+                ) : (
+                  <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-card p-4">
+                    <div className="flex w-full items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-foreground">
+                        {wechatStatus === 'pending' ? '请使用微信扫描二维码' : wechatStatus === 'authorized' || wechatStatus === 'consumed' ? '授权成功，正在登录…' : wechatStatus === 'unlinked' ? '该微信尚未关联账号' : '二维码已过期，请重新获取'}
+                      </p>
+                      <button type="button" onClick={closeWechatLogin} disabled={wechatLoading} className="shrink-0 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">关闭</button>
+                    </div>
+                    <div className="flex size-44 items-center justify-center overflow-hidden rounded-md border border-border bg-white p-2">
+                      {wechatSession.qrCodeUrl && <img src={wechatSession.qrCodeUrl} alt="微信登录二维码" className="size-full object-contain" referrerPolicy="no-referrer" />}
+                    </div>
+                    {wechatStatus === 'unlinked' && <p className="text-center text-xs leading-5 text-muted-foreground">{t('authWechatUnlinked')}</p>}
+                    {wechatStatus === 'expired' && (
+                      <ControlButton type="button" variant="secondary" className="h-9 w-full text-sm" onClick={() => { closeWechatLogin(); void beginWechatLogin() }}>重新获取二维码</ControlButton>
+                    )}
+                  </div>
+                )}
+                {wechatError && <p role="alert" className="text-xs leading-5 text-destructive">{wechatError}</p>}
+              </section>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              {mode === 'login' && (
+                <button type="button" onClick={() => switchMode('reset')} className="text-muted-foreground transition-colors hover:text-foreground hover:underline">忘记密码</button>
+              )}
+              {mode === 'register' && (
+                <p className="text-muted-foreground">
+                  已有账户？
+                  <button type="button" onClick={() => switchMode('login')} className="ml-1 font-medium text-studio-accent transition-colors hover:underline">去登录</button>
+                </p>
+              )}
+              {mode === 'reset' && (
+                <button type="button" onClick={() => switchMode('login')} className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground hover:underline">
+                  <ArrowLeft className="size-3.5" aria-hidden="true" />返回登录
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        <footer className="mx-auto mt-10 w-full max-w-[400px] text-xs leading-5 text-muted-foreground">
-          继续即表示你同意
-          {termsHref ? <> <a href={termsHref} className="underline underline-offset-2 hover:text-foreground">服务条款</a></> : ' 服务条款'}
-          与
-          {privacyHref ? <> <a href={privacyHref} className="underline underline-offset-2 hover:text-foreground">隐私政策</a></> : ' 隐私政策'}
-          。
+        <footer className="px-5 pb-8 text-xs leading-5 text-muted-foreground sm:px-10 lg:px-14">
+          <p className="mx-auto max-w-[420px]">
+            继续即表示你同意
+            {termsHref ? <> <a href={termsHref} className="underline underline-offset-2 hover:text-foreground">服务条款</a></> : ' 服务条款'}
+            与
+            {privacyHref ? <> <a href={privacyHref} className="underline underline-offset-2 hover:text-foreground">隐私政策</a></> : ' 隐私政策'}
+            。
+          </p>
         </footer>
       </section>
     </main>
