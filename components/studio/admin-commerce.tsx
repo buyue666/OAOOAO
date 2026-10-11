@@ -175,7 +175,7 @@ export function AdminProductsPanel() {
     return `${product.name} ${formatAdminMoney(entry.promotionalAmountCents, product.currency)}${label ? ` / ${label}` : ' / 无折扣'}`
   }), [products])
 
-  /** 删除活动：后端在有订单引用时会拒绝（409），错误原样显示在确认��内。 */
+  /** 删除活动：后端在有订单引用时会拒绝（409），错误原样显示在确认框内。 */
   /**
    * 复制商品。
    *
@@ -490,7 +490,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
   /**
    * 折扣与权益行数的可推导结果（供编辑区显示）。
    *
-   * 折扣按后端 `formatDiscount` 的算法从「日常�� / 活动价」推导，
+   * 折扣按后端 `formatDiscount` 的算法从「日常价 / 活动价」推导，
    * 活动价按后端 `selectCurrentPromotion` 规则判断当前是否生效。
    */
   const activePromotion = useMemo(() => resolvePromotionForAmount(
@@ -754,7 +754,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
             <fieldset disabled={busy} className="grid min-w-0 gap-4 border-t border-border pt-4 sm:grid-cols-2">
               <legend className="text-sm font-semibold">订阅页展示</legend>
               <Field label="套餐显示名称" fieldId="displayName"><AdminInput aria-label="套餐显示名称" value={draft.display.name} onChange={(event) => patchDisplay({ name: event.target.value })} /></Field>
-              <Field label="会员类型" fieldId="audience"><AdminSelect aria-label="���员类型" value={draft.display.audience} onChange={(event) => patchDisplay({ audience: event.target.value === 'team' ? 'team' : 'creator' })}><option value="creator">创作会员</option><option value="team">团队版会员</option></AdminSelect></Field>
+              <Field label="会员类型" fieldId="audience"><AdminSelect aria-label="会员类型" value={draft.display.audience} onChange={(event) => patchDisplay({ audience: event.target.value === 'team' ? 'team' : 'creator' })}><option value="creator">创作会员</option><option value="team">团队版会员</option></AdminSelect></Field>
               <Field label="套餐分组标识" fieldId="groupId" hint="同套餐的月付、季付、年付使用相同标识。"><AdminInput aria-label="套餐分组标识" value={draft.display.groupId} onChange={(event) => patchDisplay({ groupId: event.target.value })} /></Field>
               <Field label="配色" fieldId="tone" hint="留空＝自动（按分组顺序分配，与用户页一致）">
                 <AdminSelect aria-label="配色" value={draft.display.tone} onChange={(event) => patchDisplay({ tone: event.target.value })}>
@@ -850,7 +850,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
                     {promoNotice && <p className="text-[11px] text-studio-accent" role="status" data-testid="product-promo-notice">{promoNotice}</p>}
                     {promoError && <p className="text-[11px] text-destructive" role="alert" data-testid="product-promo-error">{promoError}</p>}
                     <p className="text-[11px] leading-5 text-muted-foreground">
-                      活动价必须大于 0 且低于日常价。保存后由后端计算折扣，此处的价格与折扣、右侧预览��用户套餐页会同时生效；
+                      活动价必须大于 0 且低于日常价。保存后由后端计算折扣，此处的价格与折扣、右侧预览与用户套餐页会同时生效；
                       活动名称、标签与时间范围可在下方「促销活动」区块统一管理。
                     </p>
                   </div>
@@ -929,7 +929,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
         *
         * 字段多且含价格、上下架、权益这类敏感项，直接保存容易误改。
         * 这里逐条列出「真正变化」的字段，并把敏感变更单独标出，
-        * 让运营在写入前有机会核对；���认后才真正提交。
+        * 让运营在写入前有机会核对；确认后才真正提交。
         */}
       <Modal
         open={pendingDiff !== null}
@@ -1544,7 +1544,7 @@ function ReferralsPanel() {
         <AdminStat label="风控标记" value={formatAdminNumber(overview?.stats.risky)} tone={overview?.stats.risky ? 'danger' : 'neutral'} />
       </div>
 
-      <AdminSectionCard title="邀请奖励规则" description="设置邀请人积分、被邀请奖励类型、��算门槛与风控策略。">
+      <AdminSectionCard title="邀请奖励规则" description="设置邀请人积分、被邀请奖励类型、结算门槛与风控策略。">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <fieldset disabled={busy || !canManage} className="grid gap-4 sm:grid-cols-3">
             <Field label="邀请人积分"><AdminInput name="inviterPoints" type="number" min="0" defaultValue={program?.inviterPoints ?? 0} /></Field>

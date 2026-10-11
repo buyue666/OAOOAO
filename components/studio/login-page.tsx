@@ -280,6 +280,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
     }
   }
 
+  const eyebrow = mode === 'login' ? '账户登录' : mode === 'register' ? '新用户注册' : '找回密码'
   const title = mode === 'login' ? '欢迎回来' : mode === 'register' ? '创建账户' : '重置密码'
   const description = mode === 'login' ? t('authLoginDescription') : mode === 'register' ? t('authRegisterDescription') : t('authResetDescription')
   const submitLabel = mode === 'login' ? '登录' : mode === 'register' ? '注册并登录' : '重置密码'
@@ -300,8 +301,9 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
         </header>
 
         <div className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-10 lg:px-14">
-          <div className="mx-auto flex w-full max-w-[420px] flex-col gap-6">
+          <div className="mx-auto flex w-full max-w-[400px] flex-col gap-6">
             <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground">{eyebrow}</p>
               <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">{title}</h1>
               <p className="text-sm leading-6 text-muted-foreground">{description}</p>
             </div>

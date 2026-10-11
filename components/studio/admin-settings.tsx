@@ -186,7 +186,7 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
             <input name="announcementEnabled" type="checkbox" defaultChecked={site.announcementBar?.enabled === true} className="mt-0.5" />
             <span><span className="font-medium text-foreground">显示顶部通知横幅</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">适合展示模型上线、价格活动、维护提醒等短消息。</span></span>
           </label>
-          <AdminField label="横幅文案" hint="建议控制在一行内，支持 emoji。" className="sm:col-span-2"><AdminInput name="announcementText" maxLength={180} defaultValue={site.announcementBar?.text} placeholder="例如：🎉 MiniMax H3 已上线，���周限时优惠" /></AdminField>
+          <AdminField label="横幅文案" hint="建议控制在一行内，支持 emoji。" className="sm:col-span-2"><AdminInput name="announcementText" maxLength={180} defaultValue={site.announcementBar?.text} placeholder="例如：🎉 MiniMax H3 已上线，本周限时优惠" /></AdminField>
           <AdminField label="点击跳转地址" hint="留空时只展示文案。"><AdminInput name="announcementHref" maxLength={500} defaultValue={site.announcementBar?.href} placeholder="/plans 或 https://…" /></AdminField>
           <AdminField label="强调色"><AdminSelect name="announcementTone" defaultValue={site.announcementBar?.tone || 'promo'}><option value="promo">品牌紫蓝</option><option value="info">冷静蓝</option><option value="warning">提醒橙</option></AdminSelect></AdminField>
           <label className="flex items-center gap-2 text-sm sm:col-span-2"><input name="announcementDismissible" type="checkbox" defaultChecked={site.announcementBar?.dismissible !== false} />允许用户关闭（只对当前浏览器生效）</label>

@@ -181,7 +181,7 @@
 }
 
 /* 玻璃模糊本身。
-   这里**���意不套 `@supports`**，且把无前缀属性写在**最后**：
+   这里**刻意不套 `@supports`**，且把无前缀属性写在**最后**：
    Lightning CSS（Tailwind 4 / Next 16 的 CSS 管线）会把
    `-webkit-backdrop-filter` 与 `backdrop-filter` 视为同一逻辑属性并只保留最后一条，
    若把无前缀写在前面就会被删掉，Chrome 下玻璃完全失效（实测 computed = none）。
@@ -682,7 +682,7 @@
 /* 工作台外壳。
    这里**不**设置 filter / backdrop-filter / transform / contain：
    那会给内部的 fixed 侧栏、sticky 顶栏与 portal 浮层创建新的包含块，
-   导致菜单、弹窗与工具提示错��。 */
+   导致菜单、弹窗与工具提示错位。 */
 .studio-app-shell {
   background: var(--background);
   color: var(--foreground);
@@ -1573,7 +1573,7 @@
 /* ==========================================================================\n+   OAOOAO 液态创作空间：明确可见的环境层\n+   --------------------------------------------------------------------------\n+   DeepSeek Harness 参考主题的关键不是单独给卡片加透明度，而是让整个创作\n+   空间先拥有一层持续存在的环境壁纸，再让侧栏、输入台和浮层在它上面形成\n+   不同厚度的玻璃。这里限定在工作台 / 后台作用域，不影响首页与套餐页。\n+   ========================================================================== */
 
 .studio-app-shell[data-studio-skin='gradient'] {
-  /* 保留一个可用于 `text-background` 的深色值；��布本身通过外壳规则保持透明。 */
+  /* 保留一个可用于 `text-background` 的深色值；画布本身通过外壳规则保持透明。 */
   --background: #10252c;
   --foreground: #f4fbfb;
   --card: rgba(11, 30, 37, 0.34);

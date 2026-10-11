@@ -23,7 +23,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { ControlButton, PageHeader } from './ui'
+import { ControlButton } from './ui'
 import { AdminWorkbench } from './admin-kit'
 import { cn } from '@/lib/utils'
 import { getSession, type BackendUser } from '@/lib/studio/api'
@@ -210,11 +210,11 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
 
   return (
     <div className="admin-console flex min-h-dvh bg-background text-foreground" data-admin-section={section}>
-      {/* 侧栏为实色表面；不要给它加 transform，否则其内部 fixed 抽屉会错位。 */}
+      {/* 实色侧栏：不要加 transform，否则其内部 fixed 定位的抽屉会错位。 */}
       <aside className="admin-sidebar sticky top-0 hidden h-dvh w-[232px] shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b border-border px-5">
           <Link href="/studio" className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
-            <Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6" />
+            <Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6 dark:invert" />
             <span>控制中心</span>
           </Link>
         </div>
@@ -229,21 +229,21 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
           <div className="flex min-w-0 items-center gap-3">
             <ControlButton variant="ghost" size="sm" className="lg:hidden" aria-label="打开后台导航" onClick={() => setMobileOpen(true)}><Menu className="size-4" /></ControlButton>
             <Link href="/studio" className="flex items-center lg:hidden" aria-label="OAO 控制中心">
-              <Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6" />
+              <Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6 dark:invert" />
             </Link>
             <div className="hidden min-w-0 items-center gap-2 lg:flex">
               <span className="text-xs text-muted-foreground">控制中心</span>
               <span className="text-border" aria-hidden="true">/</span>
-              <span className="truncate text-sm font-semibold text-foreground">{meta.title}</span>
+              <h1 className="truncate text-sm font-semibold text-foreground">{meta.title}</h1>
             </div>
             <div className="min-w-0 lg:hidden">
-              <p className="truncate text-sm font-semibold text-foreground">{meta.title}</p>
-              <p className="truncate text-[11px] text-muted-foreground">控制中心</p>
+              <h1 className="truncate text-sm font-semibold text-foreground">{meta.title}</h1>
+              <p className="truncate text-xs text-muted-foreground">控制中心</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <AdminModuleSearch items={items} onNavigate={navigate} />
-            <ControlButton variant="ghost" size="sm" onClick={refresh} title="刷新当前页面"><RefreshCw className="size-4" /></ControlButton>
+            <ControlButton variant="ghost" size="sm" onClick={refresh} title="刷新当前页面" aria-label="刷新当前页面"><RefreshCw className="size-4" /></ControlButton>
             <Link href="/studio" className="hidden items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:inline-flex"><ExternalLink className="size-3.5" />工作台</Link>
             <span className="hidden items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground xl:inline-flex"><span className="size-1.5 rounded-full bg-success" aria-hidden="true" />服务已连接</span>
             <div className="flex items-center gap-2 border-l border-border pl-3">
@@ -266,7 +266,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
             <div className="absolute inset-0 bg-studio-ink/50" onClick={() => setMobileOpen(false)} />
             <nav className="relative flex w-[248px] max-w-[80vw] flex-col overflow-y-auto border-r border-border bg-card" aria-label="后台导航">
               <div className="flex h-16 items-center justify-between border-b border-border px-4">
-                <span className="flex items-center gap-2.5 text-sm font-semibold"><Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6" />控制中心</span>
+                <span className="flex items-center gap-2.5 text-sm font-semibold"><Image src="/media/brand/oao-mark.png" alt="" width={24} height={24} className="size-6 dark:invert" />控制中心</span>
                 <ControlButton variant="ghost" size="sm" aria-label="关闭导航" onClick={() => setMobileOpen(false)}><X className="size-4" /></ControlButton>
               </div>
               <AdminNavList section={section} items={items} onNavigate={navigate} />
@@ -275,7 +275,7 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
         )}
 
         <main className="mx-auto w-full max-w-[1600px] px-4 py-5 md:px-7 md:py-7">
-          <PageHeader eyebrow="控制中心" title={meta.title} description={meta.description} />
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{meta.description}</p>
           <AdminWorkbench>
             <div key={section} className="motion-page mt-5">{children}</div>
           </AdminWorkbench>
@@ -328,24 +328,25 @@ function AdminNavList({ section, items, onNavigate }: { section: AdminSection; i
     <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-5" aria-label="后台导航">
       {groups.map((group) => (
         <section key={group.label} className="mb-6">
-          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">{group.label}</p>
+          <p className="mb-2 px-2 text-xs font-semibold text-muted-foreground">{group.label}</p>
           <div className="flex flex-col gap-0.5">
-            {group.items.map(([value, label, Icon]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => onNavigate(value)}
-                aria-current={section === value ? 'page' : undefined}
-                className={cn(
-                  'flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors duration-150',
-                  section === value
-                    ? 'bg-studio-accent/14 font-medium text-studio-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--studio-accent)_22%,transparent)]'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                <Icon className="size-4 shrink-0" />{label}
-              </button>
-            ))}
+            {group.items.map(([value, label, Icon]) => {
+              const active = section === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onNavigate(value)}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors duration-150',
+                    active ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <Icon className={cn('size-4 shrink-0', active && 'text-studio-accent')} />{label}
+                </button>
+              )
+            })}
           </div>
         </section>
       ))}

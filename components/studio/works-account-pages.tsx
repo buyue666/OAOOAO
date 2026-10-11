@@ -745,7 +745,7 @@ function InvitePanel({ onNotice }: { onNotice: (value: string) => void }) {
             <div className="border-t border-border pt-2">
               <KeyValue label="邀请人奖励" value={center.program.enabled ? `${center.program.inviterPoints} 积分` : '邀请计划未启用'} />
               <KeyValue label="被邀请人奖励" value={center.program.enabled ? `${center.program.inviteePoints} 积分（${center.program.inviteeRewardType === 'daily' ? '每日' : '永久'}）` : '—'} />
-              <KeyValue label="最���有效支付" value={`${moneyLabel(center.program.minimumPaidCents, 'CNY')}`} />
+              <KeyValue label="最低有效支付" value={`${moneyLabel(center.program.minimumPaidCents, 'CNY')}`} />
               <KeyValue label="冷却期" value={`${center.program.coolingOffDays} 天`} />
             </div>
           </div>

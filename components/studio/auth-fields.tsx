@@ -41,7 +41,7 @@ export function AuthPasswordInput({ visible, onToggle, className, ...props }: Au
       <button
         type="button"
         onClick={onToggle}
-        aria-label="显示密码"
+        aria-label={visible ? '隐藏密码' : '显示密码'}
         aria-pressed={visible}
         className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/50"
       >

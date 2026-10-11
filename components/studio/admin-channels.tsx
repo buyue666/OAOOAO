@@ -592,7 +592,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           const key = normalizeModelKey(alias)
           const owner = routeAliasOwners.get(key)
           const currentOwner = `${model.id}:${binding.channelId}`
-          if (owner && owner !== currentOwner) throw new Error(`请求别名 ${alias} 被多个渠道入��使用，请为每个售卖入口设置唯一别名`)
+          if (owner && owner !== currentOwner) throw new Error(`请求别名 ${alias} 被多个渠道入口使用，请为每个售卖入口设置唯一别名`)
           routeAliasOwners.set(key, currentOwner)
         }
       }

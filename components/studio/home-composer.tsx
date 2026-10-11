@@ -22,9 +22,9 @@ type PromptComposerProps = {
  */
 export function PromptComposer({ value, onChange, onSubmitShortcut, files, onFilesChange, placeholder, className }: PromptComposerProps) {
   return (
-    <section aria-labelledby="home-prompt-title" className={cn('studio-surface flex min-w-0 flex-col', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
-        <h2 id="home-prompt-title" className="text-base font-semibold text-foreground">创作描述</h2>
+    <div className={cn('flex min-w-0 flex-col', className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5">
+        <label htmlFor="home-prompt" className="text-sm font-semibold text-foreground">创作描述</label>
         <p className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="hidden sm:inline">Ctrl/⌘ + Enter 开始创作</span>
           <span className="tabular-nums">{value.length} 字</span>
@@ -32,7 +32,6 @@ export function PromptComposer({ value, onChange, onSubmitShortcut, files, onFil
       </div>
       <textarea
         id="home-prompt"
-        aria-labelledby="home-prompt-title"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -42,15 +41,15 @@ export function PromptComposer({ value, onChange, onSubmitShortcut, files, onFil
           }
         }}
         placeholder={placeholder}
-        className="mt-3 block min-h-[220px] w-full flex-1 resize-y bg-transparent px-5 pb-4 text-[15px] leading-7 text-foreground outline-none placeholder:text-muted-foreground lg:min-h-[300px]"
+        rows={5}
+        className="mt-3 block min-h-[160px] w-full resize-y bg-transparent px-5 text-base leading-7 text-foreground outline-none placeholder:text-muted-foreground lg:min-h-[220px]"
       />
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-muted/40 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border px-4 py-3">
         <ReferenceMaterials files={files} onFilesChange={onFilesChange} />
         <Link
           href="/skills"
           target="_blank"
           rel="noopener noreferrer"
-          title="在新标签页打开技能库"
           className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         >
           <Puzzle className="size-3.5" aria-hidden="true" />
@@ -58,7 +57,7 @@ export function PromptComposer({ value, onChange, onSubmitShortcut, files, onFil
           <span className="sr-only">（在新标签页打开）</span>
         </Link>
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -108,26 +107,26 @@ type InspirationShortcutsProps<T extends InspirationScene> = {
   className?: string
 }
 
-/** 灵感模板：缩略图、类型标签与明确的「继续创作」入口。选择后把描述填入输入区并切换模式。 */
+/** 灵感模板：16:9 缩略图、类型标签与「继续创作」入口。选择后把描述填入输入区并切换模式。 */
 export function InspirationShortcuts<T extends InspirationScene>({ scenes, onSelect, className }: InspirationShortcutsProps<T>) {
   return (
     <section aria-labelledby="inspiration-title" className={cn('flex min-w-0 flex-col gap-3', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="inspiration-title" className="text-base font-semibold text-foreground">灵感模板</h2>
-        <p className="text-xs text-muted-foreground">继续创作会把模板描述填入输入区</p>
+      <div className="min-w-0">
+        <h2 id="inspiration-title" className="text-sm font-semibold text-foreground">灵感模板</h2>
+        <p className="mt-1 text-xs text-muted-foreground">选择模板后，描述会填入上方输入区，并切换到对应的创作模式。</p>
       </div>
-      <ul className="grid gap-3 sm:grid-cols-3">
+      <ul className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 md:grid md:snap-none md:grid-cols-3 md:overflow-visible">
         {scenes.map((scene) => (
-          <li key={scene.title} className="min-w-0">
+          <li key={scene.title} className="w-[78%] shrink-0 snap-start sm:w-[46%] md:w-auto md:min-w-0">
             <article className="studio-surface flex h-full flex-col overflow-hidden">
-              <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-                <Image src={scene.src} alt="" fill sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 100vw" className="object-cover" />
-                <span className="absolute left-2.5 top-2.5 rounded-md bg-card px-2 py-0.5 text-[11px] font-medium text-foreground">{scene.tag}</span>
+              <div className="relative aspect-[16/9] overflow-hidden bg-muted">
+                <Image src={scene.src} alt="" fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover" />
+                <span className="absolute left-3 top-3 rounded-md bg-background px-2 py-0.5 text-xs font-medium text-foreground">{scene.tag}</span>
               </div>
-              <div className="flex flex-1 flex-col gap-3 p-3.5">
+              <div className="flex flex-1 flex-col gap-3 p-4">
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-semibold text-foreground">{scene.title}</h3>
-                  <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">{scene.description}</p>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{scene.description}</p>
                 </div>
                 <button
                   type="button"
