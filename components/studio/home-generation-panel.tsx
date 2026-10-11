@@ -1,7 +1,7 @@
 'use client'
 
 import type { RefObject } from 'react'
-import { ArrowRight, Check, ChevronDown } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, LoaderCircle } from 'lucide-react'
 import type { ModelConfig } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
 import { ModelIcon } from './model-icon'
@@ -9,6 +9,18 @@ import { ModelIcon } from './model-icon'
 type CreateMode = 'agent' | 'image' | 'video' | 'text' | 'drama'
 
 const controlClass = 'h-9 w-full min-w-0 rounded-md border border-border bg-background px-2.5 text-sm tabular-nums text-foreground outline-none transition-colors duration-150 focus-visible:border-studio-accent focus-visible:ring-2 focus-visible:ring-studio-accent/25'
+
+/** 导演 Agent 与文本模式没有可预估的固定积分，因此用文字说明任务与计费方式。 */
+const directorNotes: Partial<Record<CreateMode, { task: string; cost: string }>> = {
+  agent: {
+    task: '描述目标与约束，导演 Agent 会拆解为文案、分镜与素材步骤，并按顺序执行。',
+    cost: '只有实际执行的生成步骤会扣减积分，积分随所用模型与参数变化。',
+  },
+  text: {
+    task: '输入要撰写、改写或总结的内容，结果会在导演 Agent 对话中返回。',
+    cost: '按实际生成的文本步骤计费，开始前不显示固定积分。',
+  },
+}
 
 export type GenerationPanelProps = {
   mode: CreateMode
@@ -33,20 +45,24 @@ export type GenerationPanelProps = {
   onSecondsChange: (value: number) => void
   estimatedCredits: number | null
   starting: boolean
+  canStart: boolean
+  startError: string
+  className?: string
 }
 
 /**
- * 右侧生成设置栏：上半部分是模型与参数，底部是积分估算与开始创作。
- * 估算结果和提交按钮处于同一区域，用户确认消耗后可直接提交；桌面端吸附在视口内。
+ * 生成设置：模型与参数在上，「预计消耗」与「开始创作」在下相邻排列。
+ * 面板不裁切内容，模型下拉以浮层展开，可以越过面板边界。
  */
 export function GenerationPanel(props: GenerationPanelProps) {
-  const { mode, modeLabel, estimatedCredits, starting } = props
+  const { mode, modeLabel, estimatedCredits, starting, canStart, startError, className } = props
   const hasModelControls = mode !== 'text' && mode !== 'agent'
+  const note = directorNotes[mode]
 
   return (
-    <aside aria-labelledby="generation-settings-title" className="studio-surface flex flex-col overflow-hidden lg:sticky lg:top-20">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
-        <h2 id="generation-settings-title" className="text-sm font-semibold text-foreground">生成设置</h2>
+    <aside aria-labelledby="generation-settings-title" className={cn('studio-surface flex flex-col lg:sticky lg:top-20', className)}>
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <h2 id="generation-settings-title" className="text-base font-semibold text-foreground">生成设置</h2>
         <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{modeLabel}</span>
       </header>
 
@@ -77,32 +93,53 @@ export function GenerationPanel(props: GenerationPanelProps) {
             </div>
           </>
         ) : (
-          <p className="text-sm leading-6 text-muted-foreground">导演 Agent 会根据描述拆解步骤、选择模型，并在开始前估算积分。</p>
+          <dl className="flex flex-col gap-4 text-sm">
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground">任务说明</dt>
+              <dd className="leading-6 text-foreground">{note?.task}</dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs font-medium text-muted-foreground">消耗逻辑</dt>
+              <dd className="leading-6 text-foreground">{note?.cost}</dd>
+            </div>
+          </dl>
         )}
       </div>
 
-      <footer className="flex flex-col gap-4 border-t border-border bg-muted/40 p-5">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">预计消耗</span>
-          {estimatedCredits !== null ? (
-            <p className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">{estimatedCredits.toLocaleString()}</span>
-              <span className="text-sm text-muted-foreground">积分</span>
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">{mode === 'drama' ? '分镜与成片按实际生成计费' : '按实际运行计费'}</p>
-          )}
+      <footer className="flex flex-col gap-3 border-t border-border p-5">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <span className="text-xs font-medium text-muted-foreground">预计消耗</span>
+            {estimatedCredits !== null ? (
+              <p className="mt-0.5 flex items-baseline gap-1.5">
+                <span className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">{estimatedCredits.toLocaleString()}</span>
+                <span className="text-sm text-muted-foreground">积分</span>
+              </p>
+            ) : (
+              <p className="mt-0.5 text-sm font-medium text-foreground">按实际执行计费</p>
+            )}
+          </div>
+          {estimatedCredits !== null && <p className="max-w-[8.5rem] text-right text-[11px] leading-4 text-muted-foreground">按当前模型与参数估算</p>}
         </div>
+
+        {!canStart && <p className="text-xs leading-5 text-muted-foreground">先输入创作描述或添加参考素材，即可开始。</p>}
+        {startError && (
+          <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">{startError}</p>
+        )}
 
         <button
           type="submit"
-          disabled={starting}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-foreground px-5 text-sm font-semibold text-background transition-opacity duration-150 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:opacity-60"
+          disabled={starting || !canStart}
+          aria-busy={starting || undefined}
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-foreground px-5 text-sm font-semibold text-background transition-colors duration-150 hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
-          <span>开始创作</span>
-          <ArrowRight className="size-4" aria-hidden="true" />
+          {starting ? (
+            <><LoaderCircle className="size-4 animate-spin" aria-hidden="true" />正在进入工作台…</>
+          ) : (
+            <>开始创作<ArrowRight className="size-4" aria-hidden="true" /></>
+          )}
         </button>
-        <p className="text-xs leading-5 text-muted-foreground">提交后进入对应创作工作台，描述与参考素材会一并带入。</p>
+        <p className="text-[11px] leading-5 text-muted-foreground">提交后进入对应创作工作台，描述与参考素材会一并带入。</p>
       </footer>
     </aside>
   )
