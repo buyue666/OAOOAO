@@ -7,7 +7,7 @@ import { useCanvasActions } from './canvas-context'
 import { useCanvasStore } from './canvas-store'
 import { CREATABLE_KINDS, NODE_META } from './node-factory'
 import type { FreeCanvasNode } from './types'
-import { settingsSideFor } from './nodes/node-kit'
+import { settingsPlacementFor } from './nodes/node-kit'
 
 type MenuEntry =
   | { type: 'item'; key: string; label: string; onSelect: () => void; disabled?: boolean }
@@ -104,7 +104,7 @@ function nodeEntries(
       label: '节点配置',
       onSelect: () => {
         const element = document.querySelector(`.react-flow__node[data-id="${CSS.escape(node.id)}"]`)
-        store().openSettings(node.id, settingsSideFor(element))
+        store().openSettings(node.id, settingsPlacementFor(element))
       },
     })
     entries.push({ type: 'item', key: 'favorite', label: '收藏第一个结果', disabled: !node.data.results.length, onSelect: () => void actions.saveResultToLibrary(node.id, 0) })

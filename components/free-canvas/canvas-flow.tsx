@@ -9,7 +9,7 @@ import { AgentNode } from './nodes/agent-node'
 import { GenerationNode } from './nodes/generation-node'
 import { GroupNode } from './nodes/group-node'
 import { MediaNode } from './nodes/media-node'
-import { settingsSideFor } from './nodes/node-kit'
+import { settingsPlacementFor } from './nodes/node-kit'
 import type { FreeCanvasNode } from './types'
 
 const nodeTypes = {
@@ -92,7 +92,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
       return
     }
     const current = useCanvasStore.getState().settingsNodeId
-    openSettings(current === node.id ? null : node.id, settingsSideFor(event.currentTarget))
+    openSettings(current === node.id ? null : node.id, settingsPlacementFor(event.currentTarget))
   }
 
   const handleNodeContextMenu = (event: ReactMouseEvent, node: FreeCanvasNode) => {

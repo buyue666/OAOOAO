@@ -10,7 +10,7 @@ import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
 import { NODE_SIZE } from '../node-factory'
 import type { GenerationFlowNode, GenerationKind, GenerationNodeData, NodeResult, TaskPhase } from '../types'
-import { NodeAnchors, NodeHandles, settingsSideFor, TitleEditor } from './node-kit'
+import { NodeAnchors, NodeHandles, settingsPlacementFor, TitleEditor } from './node-kit'
 import { GenerationSettings } from './generation-settings'
 
 const KIND_ICON = { image: ImageIcon, video: Clapperboard, text: FileText, audio: AudioLines } satisfies Record<GenerationKind, typeof ImageIcon>
@@ -34,7 +34,7 @@ const PHASE_LABEL: Record<TaskPhase | 'idle', string> = {
 export const GenerationNode = memo(function GenerationNode({ id, data, selected }: NodeProps<GenerationFlowNode>) {
   const { state } = useStudio()
   const actions = useCanvasActions()
-  const settingsSide = useCanvasStore((store) => (store.settingsNodeId === id ? store.settingsSide : null))
+  const settingsPlacement = useCanvasStore((store) => (store.settingsNodeId === id ? store.settingsPlacement : null))
   const focusRequested = useCanvasStore((store) => store.focusNodeId === id)
   const clearFocus = useCanvasStore((store) => store.clearFocus)
   const openSettings = useCanvasStore((store) => store.openSettings)
@@ -59,7 +59,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
 
   const handleSettingsClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
-    openSettings(settingsSide ? null : id, settingsSideFor(event.currentTarget))
+    openSettings(settingsPlacement ? null : id, settingsPlacementFor(event.currentTarget))
   }
 
   const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -77,7 +77,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
       <article
         className={cn(
           'flex flex-col gap-3 rounded-2xl border bg-neutral-950 p-3 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] transition-colors',
-          selected || settingsSide ? 'border-white' : 'border-white/15 hover:border-white/35',
+          selected || settingsPlacement ? 'border-white' : 'border-white/15 hover:border-white/35',
         )}
       >
         <header className="flex items-center gap-2">
@@ -89,7 +89,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
           <button
             type="button"
             aria-label="节点配置"
-            aria-expanded={Boolean(settingsSide)}
+            aria-expanded={Boolean(settingsPlacement)}
             onClick={handleSettingsClick}
             onPointerDown={(event) => event.stopPropagation()}
             className="nodrag flex size-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white"
@@ -148,7 +148,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
           </div>
         </div>
       </article>
-      {settingsSide ? <GenerationSettings nodeId={id} side={settingsSide} /> : null}
+      {settingsPlacement ? <GenerationSettings nodeId={id} placement={settingsPlacement} /> : null}
     </div>
   )
 })

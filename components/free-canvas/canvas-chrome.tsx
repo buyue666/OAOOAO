@@ -178,7 +178,7 @@ export function CanvasSelectionBar() {
   const topLevelCount = selected.filter((node) => !node.parentId).length
 
   return (
-    <div role="toolbar" aria-label="批量操作" className="pointer-events-auto absolute bottom-4 left-1/2 z-40 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-2xl border border-white/15 bg-black/90 p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.7)] backdrop-blur-md">
+    <div role="toolbar" aria-label="批量操作" className="pointer-events-auto absolute bottom-[76px] left-1/2 z-40 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-2xl border border-white/15 bg-black/90 p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.7)] backdrop-blur-md">
       <span className="px-2 text-xs text-neutral-400">已选 {selected.length}</span>
       <BarButton onClick={() => groupSelection()}>分组</BarButton>
       {hasGroup ? <BarButton onClick={() => ungroupSelection()}>解组</BarButton> : null}

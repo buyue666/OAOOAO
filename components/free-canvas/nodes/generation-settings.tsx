@@ -7,7 +7,7 @@ import { defaultFormats, defaultVoices, filterModelsByCapability } from '@/lib/s
 import { useStudio } from '@/lib/studio/store'
 import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
-import type { GenerationKind, NodeReference, NodeSkill } from '../types'
+import type { GenerationKind, NodeReference, NodeSkill, SettingsPlacement } from '../types'
 import { COUNTER_SCALE, SETTINGS_POPOVER_WIDTH } from './node-kit'
 
 const RATIO_FALLBACK = ['1:1', '4:5', '16:9', '9:16']
@@ -25,12 +25,13 @@ const VIDEO_QUALITY_FALLBACK = [
 ]
 const VIDEO_SECONDS_FALLBACK = ['4', '5', '8', '10']
 const IMAGE_COUNTS = ['1', '2', '3', '4']
+const SETTINGS_SIDE_GAP = 16
 
 const CAPABILITY: Record<GenerationKind, 'image' | 'video' | 'text' | 'audio'> = { image: 'image', video: 'video', text: 'text', audio: 'audio' }
 
 const SECTION_TITLE = 'text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500'
 
-export function GenerationSettings({ nodeId, side }: { nodeId: string; side: 'left' | 'right' }) {
+export function GenerationSettings({ nodeId, placement }: { nodeId: string; placement: SettingsPlacement }) {
   const node = useCanvasStore((store) => store.nodes.find((item) => item.id === nodeId))
   const incomingCount = useCanvasStore((store) => store.edges.filter((edge) => edge.target === nodeId).length)
   const updateNodeData = useCanvasStore((store) => store.updateNodeData)
@@ -54,13 +55,16 @@ export function GenerationSettings({ nodeId, side }: { nodeId: string; side: 'le
   const estimate = actions.estimateNode(data)
   const stop = (event: PointerEvent) => event.stopPropagation()
 
+  const { side, offset } = placement
   const style: CSSProperties = {
     position: 'absolute',
-    top: 0,
+    top: offset.y,
     width: SETTINGS_POPOVER_WIDTH,
     transform: COUNTER_SCALE,
     transformOrigin: side === 'right' ? 'top left' : 'top right',
-    ...(side === 'right' ? { left: 'calc(100% + 16px)' } : { right: 'calc(100% + 16px)' }),
+    ...(side === 'right'
+      ? { left: '100%', marginLeft: SETTINGS_SIDE_GAP + offset.x }
+      : { right: '100%', marginRight: SETTINGS_SIDE_GAP - offset.x }),
   }
 
   return (

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
 import { CREATABLE_KINDS, NODE_META, type CreatableKind } from '../node-factory'
-import { HANDLE_IDS, type NodeSide } from '../types'
+import { DEFAULT_SETTINGS_PLACEMENT, HANDLE_IDS, type NodeSide, type SettingsPlacement } from '../types'
 
 /** 节点在 React Flow 中会随画布缩放；浮层用反向缩放保持可读尺寸，并继续锚定在节点上。 */
 export const COUNTER_SCALE = 'scale(calc(1 / var(--canvas-zoom, 1)))'
@@ -174,15 +174,18 @@ export function TitleEditor({ nodeId, title, className }: { nodeId: string; titl
 /** 节点靠近视口右侧时，配置浮层改为向左展开，避免被裁切。 */
 const SETTINGS_OVERLAY_GAP = 16
 const SETTINGS_OVERLAY_MAX_HEIGHT = 460
+const SETTINGS_VIEWPORT_MARGIN = 16
+/** 画布顶部与底部的工具条占用的高度，浮层不能压住它们。 */
+const SETTINGS_VIEWPORT_CHROME = 72
 
 /**
- * 配置浮层默认贴在节点右侧。两侧都按真实矩形计算与其他节点的重叠面积（超出视口的部分同样计入），
- * 选择遮挡更少的一侧，避免浮层盖住相邻节点。
+ * 配置浮层默认与节点顶部对齐。两侧都按真实矩形计算与其他节点的重叠面积（超出视口的部分同样计入），
+ * 选择遮挡更少的一侧，并把浮层平移回 React Flow 视口内，偏移量换算为节点本地坐标。
  */
-export function settingsSideFor(element: Element | null): 'left' | 'right' {
+export function settingsPlacementFor(element: Element | null): SettingsPlacement {
   const node = element?.closest('.react-flow__node')
   const flow = element?.closest('.react-flow')
-  if (!node || !flow) return 'right'
+  if (!node || !flow) return DEFAULT_SETTINGS_PLACEMENT
   const anchor = node.getBoundingClientRect()
   const viewport = flow.getBoundingClientRect()
   const others = [...flow.querySelectorAll('.react-flow__node')]
@@ -202,9 +205,19 @@ export function settingsSideFor(element: Element | null): 'left' | 'right' {
     return overlapArea + outsideWidth * height
   }
 
-  const rightCost = costOf(anchor.right + SETTINGS_OVERLAY_GAP)
-  const leftCost = costOf(anchor.left - SETTINGS_OVERLAY_GAP - SETTINGS_WIDTH)
-  return leftCost < rightCost ? 'left' : 'right'
+  const rightLeft = anchor.right + SETTINGS_OVERLAY_GAP
+  const leftLeft = anchor.left - SETTINGS_OVERLAY_GAP - SETTINGS_WIDTH
+  const side = costOf(leftLeft) < costOf(rightLeft) ? 'left' : 'right'
+  const anchoredLeft = side === 'left' ? leftLeft : rightLeft
+  const clampedLeft = keepWithin(anchoredLeft, viewport.left + SETTINGS_VIEWPORT_MARGIN, viewport.right - SETTINGS_VIEWPORT_MARGIN - SETTINGS_WIDTH)
+  const clampedTop = keepWithin(anchor.top, viewport.top + SETTINGS_VIEWPORT_CHROME, viewport.bottom - SETTINGS_VIEWPORT_CHROME - height)
+  const zoom = node instanceof HTMLElement && node.offsetWidth ? anchor.width / node.offsetWidth : 1
+  return { side, offset: { x: (clampedLeft - anchoredLeft) / zoom, y: (clampedTop - anchor.top) / zoom } }
+}
+
+/** 数值限制在 [min, max] 内；区间反向（视口比浮层还小）时优先保证起始边可见。 */
+function keepWithin(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, max))
 }
 
 export const SETTINGS_POPOVER_WIDTH = SETTINGS_WIDTH

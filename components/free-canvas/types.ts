@@ -5,6 +5,10 @@ export type MediaKind = 'image' | 'video' | 'audio'
 export type MediaNodeKind = 'reference' | 'asset'
 export type CanvasNodeKind = GenerationKind | MediaNodeKind | 'agent' | 'group'
 export type NodeSide = 'top' | 'right' | 'bottom' | 'left'
+
+/** 节点配置浮层的锚定侧，以及相对默认位置的平移量（已换算为节点本地坐标）。 */
+export type SettingsPlacement = { side: 'left' | 'right'; offset: { x: number; y: number } }
+export const DEFAULT_SETTINGS_PLACEMENT: SettingsPlacement = { side: 'right', offset: { x: 0, y: 0 } }
 export type TaskPhase = 'queued' | 'running' | 'success' | 'error' | 'cancelled'
 
 export type NodeReference = {

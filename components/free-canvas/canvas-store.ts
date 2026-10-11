@@ -10,7 +10,7 @@ import {
   type XYPosition,
 } from '@xyflow/react'
 import { createGroupNode, NODE_GAP, newNodeId, sizeOf } from './node-factory'
-import { HANDLE_IDS, type AgentNodeData, type FreeCanvasEdge, type FreeCanvasNode, type GenerationNodeData, type MediaNodeData, type NodeSide } from './types'
+import { DEFAULT_SETTINGS_PLACEMENT, HANDLE_IDS, type AgentNodeData, type FreeCanvasEdge, type FreeCanvasNode, type GenerationNodeData, type MediaNodeData, type NodeSide, type SettingsPlacement } from './types'
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
 
@@ -60,7 +60,7 @@ export type CanvasState = {
   clipboard: Snapshot | null
   notice: string | null
   settingsNodeId: string | null
-  settingsSide: 'left' | 'right'
+  settingsPlacement: SettingsPlacement
   typeMenu: TypeMenuState
   contextMenu: ContextMenuState
   assetPanelOpen: boolean
@@ -94,7 +94,7 @@ export type CanvasState = {
   ungroupSelection: () => void
   alignSelection: (axis: 'x' | 'y') => void
   adoptRemoteBoard: (nodes: FreeCanvasNode[], edges: FreeCanvasEdge[], updatedAt: string) => void
-  openSettings: (nodeId: string | null, side?: 'left' | 'right') => void
+  openSettings: (nodeId: string | null, placement?: SettingsPlacement) => void
   openTypeMenu: (menu: TypeMenuState) => void
   openContextMenu: (menu: ContextMenuState) => void
   closeOverlays: () => void
@@ -233,7 +233,7 @@ const initialState = {
   clipboard: null as Snapshot | null,
   notice: null,
   settingsNodeId: null,
-  settingsSide: 'right' as const,
+  settingsPlacement: DEFAULT_SETTINGS_PLACEMENT,
   typeMenu: null as TypeMenuState,
   contextMenu: null as ContextMenuState,
   assetPanelOpen: false,
@@ -557,7 +557,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       }
     }),
 
-  openSettings: (nodeId, side = 'right') => set({ settingsNodeId: nodeId, settingsSide: side, typeMenu: null, contextMenu: null }),
+  openSettings: (nodeId, placement = DEFAULT_SETTINGS_PLACEMENT) => set({ settingsNodeId: nodeId, settingsPlacement: placement, typeMenu: null, contextMenu: null }),
 
   openTypeMenu: (menu) => set({ typeMenu: menu, contextMenu: null }),
 
