@@ -1,7 +1,6 @@
-import { Suspense } from 'react'
-import { OaoCanvas } from '@/components/oao-canvas/oao-canvas'
+import { CanvasEditor } from '@/components/free-canvas/canvas-editor'
 
 export default async function Page({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
-  return <Suspense fallback={<main className="h-full min-h-dvh bg-black" />}><OaoCanvas projectId={projectId} /></Suspense>
+  return <CanvasEditor key={projectId} projectId={projectId} />
 }
