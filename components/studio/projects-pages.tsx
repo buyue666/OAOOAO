@@ -36,7 +36,6 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { CanvasWorkspace } from "./canvas-workspace";
 import { DirectorAgent } from "./director-agent";
 import {
   ControlButton,
@@ -634,7 +633,21 @@ export function ProjectWorkspacePage({
       </nav>
 
       {activeTab === "canvas" ? (
-        <CanvasWorkspace projectId={project.id} />
+        <section
+          aria-labelledby="project-canvas-heading"
+          className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border px-6 py-10 text-center"
+        >
+          <WandSparkles className="size-5 text-muted-foreground" aria-hidden="true" />
+          <h2 id="project-canvas-heading" className="text-sm font-medium text-foreground">自由画布</h2>
+          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">节点、资产和 OAO Agent 都在全屏画布中编辑。</p>
+          <Link
+            href={`/canvas/${project.id}`}
+            className="inline-flex h-9 items-center gap-2 rounded-xl bg-foreground px-4 text-sm font-medium text-background hover:opacity-90"
+          >
+            打开全屏画布
+            <ArrowUpRight className="size-4" aria-hidden="true" />
+          </Link>
+        </section>
       ) : (
         <>
           {activeTab === "overview" && (
@@ -1153,7 +1166,7 @@ function ScriptWorkspace({
     const nextScene = scenes.find((shot) => shot.id === sceneId);
     if (!nextScene) return;
     /**
-     * 切场景 = 进入另一个编辑目标。
+     * 切场景 = ��入另一个编辑目标。
      * 让在途保存的响应失效（`stillSameTarget()` 会返回 false），
      * 否则上一个场景的保存结果会写到新场景的编辑区里。
      * 同时把编辑版本推进一格，避免把"上一个场景的提交版本"误判成当前草稿。
@@ -1261,7 +1274,7 @@ function ScriptWorkspace({
       const verified = verifyScriptSaved(saved, episode?.id ?? "", targetId ?? "", body, dialogue);
       if (!verified) {
         setDirty(true);
-        setSaveError("服务端返回的内容与提交的草稿不一致，已保留草稿。请重试或刷新页面确认。");
+        setSaveError("服务端返回的内容与提交的草稿不一致，已保留草稿。请重试或刷新��面确认。");
         return false;
       }
       /**
@@ -2645,7 +2658,7 @@ function StoryboardPanel({
       await navigator.clipboard.writeText(draft);
       setNotice({ tone: "accent", text: "当前镜头内容已复制到剪贴板。" });
     } catch {
-      setNotice({ tone: "warning", text: "复制失败：浏览器拒绝了剪贴板访问，请手动选中内容复制。" });
+      setNotice({ tone: "warning", text: "复制失败：浏览器拒绝了剪贴板访问，请手动选中内容复���。" });
     }
   }
 
@@ -2939,7 +2952,7 @@ function StoryboardPanel({
                 </div>
                 <p className="text-[10px] leading-5 text-muted-foreground">
                   实际扣费以任务返回为准；估算为 0 表示后台未对该模型单独定价。
-                  {!liveReady && " 当前暂时无法提交任务，请稍后重试。"}
+                  {!liveReady && " 当前暂时无法提交任务，请稍后���试。"}
                 </p>
               </div>
             </div>

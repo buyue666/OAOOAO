@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { controlAgentRun } from '@/lib/studio/generation-api'
 import { useGeneration } from '@/lib/studio/generation-store'
 import type { AgentRun } from '@/lib/studio/generation-types'
-import { flushCanvasSave, mergeRemoteAdditions } from './canvas-persistence'
+import { flushCanvasSave, syncRemoteBoard } from './canvas-persistence'
 import { useCanvasStore } from './canvas-store'
 import { errorMessageOf } from './use-generation-actions'
 import type { AgentNodeData, AgentStep } from './types'
@@ -27,8 +27,8 @@ export function agentPatchFromRun(run: AgentRun): Partial<AgentNodeData> {
   }
 }
 
-function patchAgentNode(nodeId: string, data: Partial<AgentNodeData>) {
-  useCanvasStore.getState().patchNodes([{ id: nodeId, data }])
+function patchAgentNode(nodeId: string, data: Partial<AgentNodeData>, persist = true) {
+  useCanvasStore.getState().patchNodes([{ id: nodeId, data }], { persist })
 }
 
 const AGENT_POLL_INTERVAL_MS = 2500
@@ -52,12 +52,16 @@ function observeAgentRun(nodeId: string, runId: string, getAgent: (id: string) =
       while (hasAgentNode(nodeId)) {
         const run = await getAgent(runId)
         if (!hasAgentNode(nodeId)) return
-        patchAgentNode(nodeId, agentPatchFromRun(run))
         if (isAgentRunTerminal(run.status)) {
-          await mergeRemoteAdditions().catch(() => undefined)
+          // 服务端在运行结束时写入结果节点并推进版本号，必须先同步版本，终态保存才不会冲突。
+          await syncRemoteBoard().catch(() => undefined)
+          if (hasAgentNode(nodeId)) patchAgentNode(nodeId, agentPatchFromRun(run))
           return
         }
-        if (USER_ACTION_RUN_STATUSES.includes(run.status)) return
+        const waitingForUser = USER_ACTION_RUN_STATUSES.includes(run.status)
+        // 运行中的进度只留在内存里，避免每次轮询都让画布变脏；等待用户时才需要持久化。
+        patchAgentNode(nodeId, agentPatchFromRun(run), waitingForUser)
+        if (waitingForUser) return
         await new Promise((resolve) => setTimeout(resolve, AGENT_POLL_INTERVAL_MS))
       }
     } catch (error) {

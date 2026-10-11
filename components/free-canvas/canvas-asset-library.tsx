@@ -19,8 +19,8 @@ const TABS: { id: TabId; label: string; match: (asset: LibraryAssetView) => bool
   { id: 'style', label: '风格', match: (asset) => categoryOf(asset) === 'style' },
   { id: 'image', label: '参考图片', match: (asset) => asset.kind === 'image' },
   { id: 'video', label: '参考视频', match: (asset) => asset.kind === 'video' },
-  { id: 'upload', label: '上传文件', match: (asset) => asset.source === 'user-upload' },
-  { id: 'favorite', label: '生成收藏', match: (asset) => asset.tags.includes('收藏') },
+  { id: 'upload', label: '用户上传文件', match: (asset) => asset.source === 'user-upload' },
+  { id: 'favorite', label: '生成结果收藏', match: (asset) => asset.tags.includes('收藏') },
   { id: 'skill', label: '技能', match: (asset) => asset.kind === 'text' },
 ]
 

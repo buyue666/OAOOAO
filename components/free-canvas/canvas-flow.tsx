@@ -183,7 +183,6 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
         panOnScroll={false}
         zoomOnDoubleClick={false}
         connectionRadius={28}
-        proOptions={{ hideAttribution: true }}
         isValidConnection={(connection) => connection.source !== connection.target}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

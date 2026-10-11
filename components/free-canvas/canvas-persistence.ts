@@ -108,12 +108,20 @@ export function flushCanvasSaveOnHide() {
   })
 }
 
-/** Agent 在服务端写入的新节点合并回编辑器；本地已有的节点与连线保持不变。 */
-export async function mergeRemoteAdditions() {
+async function settleInFlightSave() {
+  while (inFlight) await inFlight
+}
+
+/**
+ * Agent 在服务端写入结果后，把服务端画布与新版本号同步回编辑器。
+ * 这里不能先保存本地状态：本地版本号已过期，保存必然 409。没有未保存修改时整体采用服务端画布；
+ * 有未保存修改时只追加服务端新增的节点与连线，本地修改优先，之后的保存会使用新的版本号。
+ */
+export async function syncRemoteBoard() {
   const projectId = useCanvasStore.getState().projectId
   if (!projectId) return
-  await flushCanvasSave()
+  await settleInFlightSave()
   const project = await getCanvasProject(projectId)
   const board = readBoard(project)
-  useCanvasStore.getState().mergeRemote(board.nodes, board.edges, project.updatedAt)
+  useCanvasStore.getState().adoptRemoteBoard(board.nodes, board.edges, project.updatedAt)
 }

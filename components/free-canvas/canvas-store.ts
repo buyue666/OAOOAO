@@ -83,7 +83,7 @@ export type CanvasState = {
   insertNodes: (nodes: FreeCanvasNode[], edges?: FreeCanvasEdge[], options?: { select?: boolean; focus?: boolean }) => void
   insertNodeNear: (sourceId: string, side: NodeSide, node: FreeCanvasNode) => string | null
   updateNodeData: (nodeId: string, patch: Record<string, unknown>, options?: { history?: boolean }) => void
-  patchNodes: (patches: RemoteNodePatch[]) => void
+  patchNodes: (patches: RemoteNodePatch[], options?: { persist?: boolean }) => void
   removeNodes: (ids: string[], label?: string) => void
   deleteSelection: () => void
   restoreTrash: (entryId: string) => void
@@ -93,7 +93,7 @@ export type CanvasState = {
   groupSelection: () => void
   ungroupSelection: () => void
   alignSelection: (axis: 'x' | 'y') => void
-  mergeRemote: (nodes: FreeCanvasNode[], edges: FreeCanvasEdge[], updatedAt: string) => void
+  adoptRemoteBoard: (nodes: FreeCanvasNode[], edges: FreeCanvasEdge[], updatedAt: string) => void
   openSettings: (nodeId: string | null, side?: 'left' | 'right') => void
   openTypeMenu: (menu: TypeMenuState) => void
   openContextMenu: (menu: ContextMenuState) => void
@@ -402,7 +402,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       ...dirtyPatch(state),
     })),
 
-  patchNodes: (patches) =>
+  patchNodes: (patches, options) =>
     set((state) => {
       const byId = new Map(patches.map((patch) => [patch.id, patch.data]))
       let changed = false
@@ -412,7 +412,8 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         changed = true
         return { ...node, data: { ...node.data, ...patch } } as FreeCanvasNode
       })
-      return changed ? { nodes, ...dirtyPatch(state) } : {}
+      if (!changed) return {}
+      return { nodes, ...(options?.persist === false ? {} : dirtyPatch(state)) }
     }),
 
   removeNodes: (ids, label = '删除节点') => set((state) => removalPatch(state, ids, label)),
@@ -534,16 +535,24 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       return { nodes, ...historyPatch(state), ...dirtyPatch(state) }
     }),
 
-  mergeRemote: (nodes, edges, updatedAt) =>
+  adoptRemoteBoard: (nodes, edges, updatedAt) =>
     set((state) => {
+      if (state.saveStatus === 'conflict') return {}
+      if (state.revision === state.savedRevision) {
+        const selectedIds = new Set(state.nodes.filter((node) => node.selected).map((node) => node.id))
+        return {
+          nodes: sortGroupsFirst(nodes.map((node) => ({ ...node, selected: selectedIds.has(node.id) }) as FreeCanvasNode)),
+          edges,
+          updatedAt,
+        }
+      }
       const knownNodes = new Set(state.nodes.map((node) => node.id))
       const knownEdges = new Set(state.edges.map((edge) => edge.id))
       const addedNodes = nodes.filter((node) => !knownNodes.has(node.id))
       const addedEdges = edges.filter((edge) => !knownEdges.has(edge.id))
-      const hasAdditions = addedNodes.length > 0 || addedEdges.length > 0
       return {
-        nodes: hasAdditions ? sortGroupsFirst([...state.nodes, ...addedNodes]) : state.nodes,
-        edges: hasAdditions ? [...state.edges, ...addedEdges] : state.edges,
+        nodes: addedNodes.length ? sortGroupsFirst([...state.nodes, ...addedNodes]) : state.nodes,
+        edges: addedEdges.length ? [...state.edges, ...addedEdges] : state.edges,
         updatedAt,
       }
     }),

@@ -20,6 +20,7 @@ import { createMediaNode, createNodeOfKind, type CreatableKind } from './node-fa
 import type { NodeSide } from './types'
 import { useAgentActions } from './use-agent-actions'
 import { useGenerationActions } from './use-generation-actions'
+import { useWorkHandoff } from './use-work-handoff'
 
 const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
 const MAX_REFERENCES = 4
@@ -91,6 +92,7 @@ function CanvasWorkspace() {
     (): XYPosition => screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }),
     [screenToFlowPosition],
   )
+  useWorkHandoff(viewportCenter)
 
   const createNodeAt = useCallback((kind: CreatableKind, position: XYPosition) => {
     const store = useCanvasStore.getState()
