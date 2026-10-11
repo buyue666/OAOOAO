@@ -14,7 +14,7 @@ import { CanvasAssetLibrary } from './canvas-asset-library'
 import { CanvasNoticeToast, CanvasSelectionBar, CanvasTopBar, CanvasZoomDock, EmptyCanvasGuide } from './canvas-chrome'
 import { CanvasFlow } from './canvas-flow'
 import { CanvasContextMenu } from './canvas-menu'
-import { flushCanvasSave, flushCanvasSaveOnHide, startCanvasAutosave, stopCanvasSaveTimer, useFreeCanvasProject } from './canvas-persistence'
+import { flushCanvasSave, flushCanvasSaveOnHide, startCanvasAutosave, stopCanvasSaveTimer } from './canvas-persistence'
 import { useCanvasStore } from './canvas-store'
 import { createMediaNode, createNodeOfKind, type CreatableKind } from './node-factory'
 import type { NodeSide } from './types'
@@ -25,8 +25,7 @@ const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
 const MAX_REFERENCES = 4
 const PROJECT_FIELDS_OWNED_BY_BOARD = ['nodes', 'connections', 'viewport', 'title', 'updatedAt']
 
-export function CanvasEditor({ projectId }: { projectId: string }) {
-  const { data: project, error } = useFreeCanvasProject(projectId)
+export function CanvasEditor({ projectId, project, loadError }: { projectId: string; project: CanvasBackendProject | null; loadError: string | null }) {
   const hydrated = useCanvasStore((state) => state.hydrated && state.projectId === projectId)
   const hydrate = useCanvasStore((state) => state.hydrate)
   const reset = useCanvasStore((state) => state.reset)
@@ -63,8 +62,8 @@ export function CanvasEditor({ projectId }: { projectId: string }) {
     }
   }, [reset])
 
-  if (error) {
-    return <CanvasStatusScreen title="无法打开这个画布" description="画布可能已被删除，或当前账号没有访问权限。" />
+  if (!project) {
+    return <CanvasStatusScreen title="无法打开这个画布" description={loadError ?? '画布可能已被删除，或当前账号没有访问权限。'} />
   }
   if (!hydrated) {
     return <CanvasStatusScreen title="正在打开画布" description="正在读取节点、连线与视口。" />

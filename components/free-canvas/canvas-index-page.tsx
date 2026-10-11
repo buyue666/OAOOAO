@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { deleteCanvasProjects, type CanvasSummary } from '@/lib/studio/api'
-import { createFreeCanvas, renameFreeCanvas, useFreeCanvasProjects } from './canvas-persistence'
+import { createFreeCanvas, renameFreeCanvas } from './canvas-persistence'
 import { errorMessageOf } from './use-generation-actions'
 
 const DOT_GRID = {
@@ -13,9 +13,8 @@ const DOT_GRID = {
   backgroundSize: '16px 16px',
 }
 
-export function CanvasIndexPage() {
+export function CanvasIndexPage({ projects, loadError }: { projects: CanvasSummary[]; loadError: string | null }) {
   const router = useRouter()
-  const { data: projects, error, isLoading, mutate } = useFreeCanvasProjects()
   const [creating, setCreating] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -23,7 +22,7 @@ export function CanvasIndexPage() {
     setCreating(true)
     setNotice(null)
     try {
-      const project = await createFreeCanvas(`未命名画布 ${(projects?.length ?? 0) + 1}`)
+      const project = await createFreeCanvas(`未命名画布 ${projects.length + 1}`)
       router.push(`/canvas/${project.id}`)
     } catch (reason) {
       setNotice(errorMessageOf(reason))
@@ -52,15 +51,13 @@ export function CanvasIndexPage() {
 
         {notice ? <p role="alert" className="text-sm text-neutral-300">{notice}</p> : null}
 
-        {error ? (
-          <p role="alert" className="text-sm text-neutral-400">画布列表读取失败，请确认已登录后刷新页面。</p>
-        ) : isLoading ? (
-          <p role="status" className="text-sm text-neutral-500">正在读取画布…</p>
-        ) : projects?.length ? (
+        {loadError ? (
+          <p role="alert" className="text-sm text-neutral-400">画布列表读取失败：{loadError}</p>
+        ) : projects.length ? (
           <ul aria-label="画布列表" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {projects.map((project) => (
               <li key={project.id}>
-                <CanvasCard project={project} onChanged={() => void mutate()} />
+                <CanvasCard project={project} onChanged={() => router.refresh()} />
               </li>
             ))}
           </ul>

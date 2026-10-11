@@ -172,11 +172,39 @@ export function TitleEditor({ nodeId, title, className }: { nodeId: string; titl
 }
 
 /** 节点靠近视口右侧时，配置浮层改为向左展开，避免被裁切。 */
+const SETTINGS_OVERLAY_GAP = 16
+const SETTINGS_OVERLAY_MAX_HEIGHT = 460
+
+/**
+ * 配置浮层默认贴在节点右侧。两侧都按真实矩形计算与其他节点的重叠面积（超出视口的部分同样计入），
+ * 选择遮挡更少的一侧，避免浮层盖住相邻节点。
+ */
 export function settingsSideFor(element: Element | null): 'left' | 'right' {
   const node = element?.closest('.react-flow__node')
   const flow = element?.closest('.react-flow')
   if (!node || !flow) return 'right'
-  return node.getBoundingClientRect().right + SETTINGS_WIDTH + 16 > flow.getBoundingClientRect().right ? 'left' : 'right'
+  const anchor = node.getBoundingClientRect()
+  const viewport = flow.getBoundingClientRect()
+  const others = [...flow.querySelectorAll('.react-flow__node')]
+    .filter((item) => item !== node)
+    .map((item) => item.getBoundingClientRect())
+  const height = Math.min(SETTINGS_OVERLAY_MAX_HEIGHT, window.innerHeight * 0.7)
+
+  const costOf = (left: number) => {
+    const right = left + SETTINGS_WIDTH
+    const bottom = anchor.top + height
+    const overlapArea = others.reduce((total, other) => {
+      const width = Math.min(right, other.right) - Math.max(left, other.left)
+      const areaHeight = Math.min(bottom, other.bottom) - Math.max(anchor.top, other.top)
+      return width > 0 && areaHeight > 0 ? total + width * areaHeight : total
+    }, 0)
+    const outsideWidth = Math.max(0, right - viewport.right) + Math.max(0, viewport.left - left)
+    return overlapArea + outsideWidth * height
+  }
+
+  const rightCost = costOf(anchor.right + SETTINGS_OVERLAY_GAP)
+  const leftCost = costOf(anchor.left - SETTINGS_OVERLAY_GAP - SETTINGS_WIDTH)
+  return leftCost < rightCost ? 'left' : 'right'
 }
 
 export const SETTINGS_POPOVER_WIDTH = SETTINGS_WIDTH

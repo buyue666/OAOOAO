@@ -104,9 +104,6 @@ importers:
       streamdown:
         specifier: 2.5.0
         version: 2.5.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      swr:
-        specifier: ^2.5.1
-        version: 2.5.1
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.4.0

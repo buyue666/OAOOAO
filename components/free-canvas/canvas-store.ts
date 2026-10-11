@@ -93,7 +93,7 @@ export type CanvasState = {
   groupSelection: () => void
   ungroupSelection: () => void
   alignSelection: (axis: 'x' | 'y') => void
-  mergeRemote: (nodes: FreeCanvasNode[], edges: FreeCanvasEdge[]) => void
+  mergeRemote: (nodes: FreeCanvasNode[], edges: FreeCanvasEdge[], updatedAt: string) => void
   openSettings: (nodeId: string | null, side?: 'left' | 'right') => void
   openTypeMenu: (menu: TypeMenuState) => void
   openContextMenu: (menu: ContextMenuState) => void
@@ -534,17 +534,17 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       return { nodes, ...historyPatch(state), ...dirtyPatch(state) }
     }),
 
-  mergeRemote: (nodes, edges) =>
+  mergeRemote: (nodes, edges, updatedAt) =>
     set((state) => {
       const knownNodes = new Set(state.nodes.map((node) => node.id))
       const knownEdges = new Set(state.edges.map((edge) => edge.id))
       const addedNodes = nodes.filter((node) => !knownNodes.has(node.id))
       const addedEdges = edges.filter((edge) => !knownEdges.has(edge.id))
-      if (!addedNodes.length && !addedEdges.length) return {}
+      const hasAdditions = addedNodes.length > 0 || addedEdges.length > 0
       return {
-        nodes: sortGroupsFirst([...state.nodes, ...addedNodes]),
-        edges: [...state.edges, ...addedEdges],
-        ...dirtyPatch(state),
+        nodes: hasAdditions ? sortGroupsFirst([...state.nodes, ...addedNodes]) : state.nodes,
+        edges: hasAdditions ? [...state.edges, ...addedEdges] : state.edges,
+        updatedAt,
       }
     }),
 

@@ -1,33 +1,11 @@
-import useSWR from 'swr'
-import {
-  createCanvasProject,
-  getCanvasProject,
-  listCanvasProjects,
-  request,
-  StudioApiError,
-  type CanvasBackendProject,
-  type CanvasSummary,
-} from '@/lib/studio/api'
+import { createCanvasProject, getCanvasProject, request, StudioApiError } from '@/lib/studio/api'
 import { readBoard, writeBoard, writeViewport } from './board-codec'
 import { useCanvasStore, type CanvasState } from './canvas-store'
 
-const PROJECTS_KEY = 'free-canvas/projects'
 const AUTOSAVE_DELAY_MS = 700
 
 type SaveResponse = {
   data?: { project?: { updatedAt?: string }; ack?: { updatedAt?: string } }
-}
-
-export function useFreeCanvasProjects() {
-  return useSWR<CanvasSummary[]>(PROJECTS_KEY, async () => (await listCanvasProjects()).projects, { revalidateOnFocus: false })
-}
-
-export function useFreeCanvasProject(projectId: string) {
-  return useSWR<CanvasBackendProject>(['free-canvas/project', projectId], () => getCanvasProject(projectId), {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
-    shouldRetryOnError: false,
-  })
 }
 
 export async function createFreeCanvas(title: string) {
@@ -135,6 +113,7 @@ export async function mergeRemoteAdditions() {
   const projectId = useCanvasStore.getState().projectId
   if (!projectId) return
   await flushCanvasSave()
-  const board = readBoard(await getCanvasProject(projectId))
-  useCanvasStore.getState().mergeRemote(board.nodes, board.edges)
+  const project = await getCanvasProject(projectId)
+  const board = readBoard(project)
+  useCanvasStore.getState().mergeRemote(board.nodes, board.edges, project.updatedAt)
 }

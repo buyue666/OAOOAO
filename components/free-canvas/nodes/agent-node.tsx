@@ -1,16 +1,13 @@
 'use client'
 
-import { memo, useEffect, useRef } from 'react'
+import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Bot, CheckCircle2, CircleDashed, Loader2, Sparkles, Square, XCircle } from 'lucide-react'
-import useSWR from 'swr'
 import { cn } from '@/lib/utils'
-import { useGeneration } from '@/lib/studio/generation-store'
-import { mergeRemoteAdditions } from '../canvas-persistence'
 import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
 import { NODE_SIZE } from '../node-factory'
-import { isAgentRunTerminal, agentPatchFromRun } from '../use-agent-actions'
+import { isAgentRunTerminal } from '../use-agent-actions'
 import type { AgentFlowNode, AgentStep } from '../types'
 import { NodeAnchors, NodeHandles } from './node-kit'
 
@@ -47,7 +44,6 @@ export const AgentNode = memo(function AgentNode({ id, data, selected }: NodePro
     <div className="group relative" style={{ width: NODE_SIZE.agent.width }} data-selected={selected} data-node-kind="agent">
       <NodeHandles />
       <NodeAnchors nodeId={id} />
-      {data.runId ? <AgentRunWatcher nodeId={id} runId={data.runId} /> : null}
       <article
         className={cn(
           'flex flex-col gap-3 rounded-2xl border bg-neutral-950 p-3 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] transition-colors',
@@ -109,6 +105,11 @@ export const AgentNode = memo(function AgentNode({ id, data, selected }: NodePro
               <span className="flex h-8 items-center gap-1.5 text-xs text-neutral-400">
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                 运行中
+                {data.runId ? (
+                  <button type="button" onClick={() => actions.refreshAgent(id)} className="ml-1 h-7 rounded-md px-2 text-white hover:bg-white/10">
+                    刷新进度
+                  </button>
+                ) : null}
               </span>
             )}
           </div>
@@ -143,35 +144,4 @@ function StepRow({ step }: { step: AgentStep }) {
       <span className="shrink-0 text-[11px] text-neutral-500">{STEP_STATUS_LABEL[step.status] ?? step.status}</span>
     </li>
   )
-}
-
-/**
- * 轮询 Agent 运行状态并回写节点。运行结束后合并服务端新增的节点，
- * 本地已存在的节点与连线保持不变。
- */
-function AgentRunWatcher({ nodeId, runId }: { nodeId: string; runId: string }) {
-  const generation = useGeneration()
-  const lastSignature = useRef('')
-  const mergedRunId = useRef<string | null>(null)
-  const { data: run } = useSWR(['free-canvas/agent-run', runId], () => generation.getAgent(runId), {
-    refreshInterval: (latest) => (latest && isAgentRunTerminal(latest.status) ? 0 : 2500),
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-  })
-
-  useEffect(() => {
-    if (!run) return
-    const patch = agentPatchFromRun(run)
-    const signature = JSON.stringify(patch)
-    if (signature !== lastSignature.current) {
-      lastSignature.current = signature
-      useCanvasStore.getState().patchNodes([{ id: nodeId, data: patch }])
-    }
-    if (isAgentRunTerminal(run.status) && mergedRunId.current !== run.id) {
-      mergedRunId.current = run.id
-      void mergeRemoteAdditions().catch(() => undefined)
-    }
-  }, [run, nodeId])
-
-  return null
 }
