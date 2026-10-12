@@ -80,6 +80,9 @@ export type AgentNodeData = {
   failure: string | null
   pointsCost: number | null
   context: string[]
+  /** 请求已发出但响应未知时复用，避免重试重复创建运行。 */
+  clientRequestId?: string | null
+  planApproval?: { totalPoints: number; estimated: boolean; approvedAt?: number }
 }
 
 export type GroupNodeData = {

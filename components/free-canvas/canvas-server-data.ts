@@ -12,6 +12,7 @@ function backendUrlFor(pathWithQuery: string) {
   const configured = process.env.OAOAO_BACKEND_URL?.trim()
   if (!configured) return null
   const target = new URL(configured)
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') throw new Error('后端服务地址必须使用 HTTP 或 HTTPS')
   const requested = new URL(pathWithQuery, 'http://localhost')
   target.pathname = `${target.pathname.replace(/\/$/, '')}${requested.pathname}`
   target.search = requested.search
@@ -23,6 +24,9 @@ function backendUrlFor(pathWithQuery: string) {
  * 数据随页面一起渲染，客户端不需要在挂载后再发起请求。
  */
 async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>> {
+  // cookies() 必须在读取环境变量之前调用。这样即使构建时没有注入后端地址，
+  // 页面也会保持动态渲染，不会把“后端服务未配置”错误固化进静态 HTML。
+  const cookieHeader = (await cookies()).toString()
   let target: URL | null
   try {
     target = backendUrlFor(pathWithQuery)
@@ -34,7 +38,7 @@ async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>
   let response: Response
   try {
     response = await fetch(target, {
-      headers: { accept: 'application/json', cookie: (await cookies()).toString() },
+      headers: { accept: 'application/json', cookie: cookieHeader },
       cache: 'no-store',
     })
   } catch {
@@ -43,9 +47,9 @@ async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>
   if (response.status === 401) return { kind: 'unauthorized' }
   if (response.status === 404) return { kind: 'not-found' }
 
-  const payload = (await response.json().catch(() => null)) as { msg?: string; data?: T } | null
+  const payload = (await response.json().catch(() => null)) as { msg?: string; error?: string; data?: T } | null
   if (!response.ok || !payload?.data) {
-    return { kind: 'error', message: payload?.msg || `画布服务返回 ${response.status}` }
+    return { kind: 'error', message: payload?.msg || payload?.error || `画布服务返回 ${response.status}` }
   }
   return { kind: 'ok', data: payload.data }
 }

@@ -28,7 +28,7 @@ export function PlansPage() {
   // 默认按自用模式处理，避免计费接口异常时把充值入口误开放。
   const [billing, setBilling] = useState<BillingAccess>({ mode: 'self_use', rechargeEnabled: false })
   const load = useCallback(async () => {
-    setStatus('loading')
+    setStatus('loading'); setError('')
     try {
       const result = await listBillingProducts()
       setProducts(result.products)
@@ -107,13 +107,21 @@ export function PlansPage() {
         {state.backendStatus === 'connected' && state.user.role === 'admin' && <Link href="/admin/products">管理套餐</Link>}
       </div>
     </div>
-    {!billing.rechargeEnabled ? (
+    {status === 'loading' ? (
+      <div className="mx-auto flex min-h-[70dvh] w-full max-w-2xl items-center justify-center px-6 py-16"><p className="text-sm text-white/60">正在读取套餐与购买状态…</p></div>
+    ) : status === 'error' ? (
+      <div className="mx-auto flex min-h-[70dvh] w-full max-w-2xl items-center justify-center px-6 py-16"><section className="w-full rounded-3xl border border-red-300/20 bg-red-300/[0.06] p-8 text-center"><p className="text-sm text-red-100">{error || '套餐加载失败'}</p><Button className="mt-6" onClick={() => void load()}>重新加载</Button></section></div>
+    ) : !billing.rechargeEnabled ? (
       <div className="mx-auto flex min-h-[70dvh] w-full max-w-2xl items-center justify-center px-6 py-16">
         <section className="w-full rounded-3xl border border-white/15 bg-white/[0.06] p-8 text-center shadow-2xl shadow-black/20 backdrop-blur-xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">自用模式</p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight">充值与在线支付暂未开放</h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/60">当前站点用于内部创作与测试，用户充值、套餐购买和在线支付入口已关闭。已有积分仍可正常使用。</p>
-          <Link href="/studio" className="mt-7 inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-85">返回工作台</Link>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">{billing.mode === 'commercial' ? '商用模式配置中' : '自用模式'}</p>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight">{billing.mode === 'commercial' ? '套餐购买暂未开放' : '充值与在线支付暂未开放'}</h1>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/60">{billing.mode === 'commercial' ? '站点已经切换到商用模式，但购买政策和公开协议还没有完整发布。完成配置后，这里会自动开放套餐购买。' : '当前站点用于内部创作与测试，用户充值、套餐购买和在线支付入口已关闭。已有积分仍可正常使用。'}</p>
+          {billing.mode === 'commercial' && billing.purchaseReadiness?.missing?.length ? <ul className="mx-auto mt-5 max-w-md space-y-1 text-left text-xs leading-5 text-amber-100/80">{billing.purchaseReadiness.missing.map((item) => <li key={item}>• {item}</li>)}</ul> : null}
+          <div className="mt-7 flex flex-wrap justify-center gap-2">
+            <Link href="/studio" className="inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-85">返回工作台</Link>
+            {billing.mode === 'commercial' && state.backendStatus === 'connected' && state.user?.role === 'admin' ? <Link href="/admin/settings" className="inline-flex h-10 items-center rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">打开购买政策设置</Link> : null}
+          </div>
         </section>
       </div>
     ) : (

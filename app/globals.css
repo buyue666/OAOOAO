@@ -2536,6 +2536,14 @@
 .oao-canvas-editor .oao-canvas-inspector-field input:focus,
 .oao-canvas-editor .oao-canvas-inspector-field textarea:focus,
 .oao-canvas-editor .oao-canvas-generation-field textarea:focus { border-color: rgb(255 255 255 / 56%); box-shadow: 0 0 0 3px rgb(255 255 255 / 9%); }
+.oao-canvas-editor .oao-agent-composer { transition: border-color 140ms ease; }
+.oao-canvas-editor .oao-agent-composer:focus-within { border-color: rgb(255 255 255 / 42%); }
+.oao-canvas-editor .oao-agent-prompt,
+.oao-canvas-editor .oao-agent-prompt:focus,
+.oao-canvas-editor .oao-agent-prompt:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
 .oao-canvas-editor .oao-canvas-list-row:hover,
 .oao-canvas-editor .oao-canvas-list-row.is-active { border-color: rgb(255 255 255 / 19%); background: rgb(255 255 255 / 8%); }
 .oao-canvas-editor .oao-canvas-generation-locked {

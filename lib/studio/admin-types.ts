@@ -365,8 +365,10 @@ export type SiteSettings = {
   footerCopyright?: string
   termsUrl?: string
   termsVersion?: string
+  termsContent?: string
   privacyUrl?: string
   privacyVersion?: string
+  privacyContent?: string
   friendLinks?: SiteFriendLink[]
   socials?: Record<string, SiteSocial>
   heroVideoUrl?: string
@@ -416,6 +418,7 @@ export type GenerationPointMultipliers = { imageQuality?: Record<string, number>
 export type AdminSettings = {
   site: SiteSettings
   operationMode: 'self_use' | 'commercial'
+  commercePolicy?: import('./commerce-policy').CommercePolicy
   registrationEnabled: boolean
   emailRegistrationEnabled: boolean
   freeDailyPointsEnabled: boolean

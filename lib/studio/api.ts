@@ -2,6 +2,7 @@ import type { Edge, Node } from '@xyflow/react'
 import type { CanvasBoard, CanvasNodeData, Project } from './types'
 import type { DramaProject, DramaSourceAsset } from './drama-types'
 import type { SiteAnnouncementBar } from './admin-types'
+import type { CommercePolicy, PurchaseReadiness } from './commerce-policy'
 
 export type BackendUser = {
   id: string
@@ -41,7 +42,7 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionSettings = {
-  site?: { title?: string; logoUrl?: string; iconUrl?: string; announcementBar?: SiteAnnouncementBar; [key: string]: unknown }
+  site?: { title?: string; logoUrl?: string; iconUrl?: string; announcementBar?: SiteAnnouncementBar; termsContent?: string; privacyContent?: string; [key: string]: unknown }
   operationMode?: 'self_use' | 'commercial'
   modelPointCosts?: Record<string, number>
   wechatLoginEnabled?: boolean
@@ -92,7 +93,11 @@ export type BillingProduct = {
   pricing?: { listUnitAmountCents: number; saleUnitAmountCents: number; discountCents: number; promotion?: { label: string } }
 }
 
-export type BillingAccess = { mode: 'self_use' | 'commercial'; rechargeEnabled: boolean }
+export type BillingAccess = {
+  mode: 'self_use' | 'commercial'
+  rechargeEnabled: boolean
+  purchaseReadiness?: PurchaseReadiness
+}
 
 export type CanvasBackendNode = {
   id: string
@@ -243,7 +248,7 @@ export function consumeWechatLoginSession(sessionId: string) {
 }
 
 export function listBillingProducts() {
-  return request<{ products: BillingProduct[]; paymentProviders: string[]; billing?: BillingAccess }>('/api/billing/products')
+  return request<{ products: BillingProduct[]; paymentProviders: string[]; billing?: BillingAccess; commercePolicy?: CommercePolicy | null }>('/api/billing/products')
 }
 
 export function listBillingOrders() {

@@ -40,21 +40,26 @@ let inFlight: Promise<void> | null = null
 async function persistOnce() {
   const state = useCanvasStore.getState()
   if (!state.projectId || !state.hydrated || state.revision === state.savedRevision || state.saveStatus === 'conflict') return
+  const projectId = state.projectId
   const revision = state.revision
   state.setSaveStatus('saving')
   try {
-    const response = await request<SaveResponse>(`/api/canvas/projects/${encodeURIComponent(state.projectId)}`, {
+    const response = await request<SaveResponse>(`/api/canvas/projects/${encodeURIComponent(projectId)}`, {
       method: 'PATCH',
       body: JSON.stringify(buildSaveBody(state)),
     })
     const updatedAt = response.data?.project?.updatedAt ?? response.data?.ack?.updatedAt ?? null
-    useCanvasStore.getState().markSaved(updatedAt, revision)
+    const current = useCanvasStore.getState()
+    if (current.projectId === projectId && current.hydrated) current.markSaved(updatedAt, revision)
   } catch (error) {
+    const current = useCanvasStore.getState()
+    if (current.projectId !== projectId || !current.hydrated) return
     if (error instanceof StudioApiError && error.status === 409) {
-      useCanvasStore.getState().setSaveStatus('conflict', '画布已在别处更新，请刷新页面后继续编辑')
+      current.setSaveStatus('conflict', '画布已在别处更新，请刷新页面后继续编辑')
       return
     }
-    useCanvasStore.getState().setSaveStatus('error', error instanceof Error ? error.message : '保存失败')
+    current.setSaveStatus('error', error instanceof Error ? error.message : '保存失败')
+    throw error
   }
 }
 
@@ -62,7 +67,7 @@ function scheduleCanvasSave() {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     saveTimer = null
-    void flushCanvasSave()
+    void flushCanvasSave().catch(() => undefined)
   }, AUTOSAVE_DELAY_MS)
 }
 
@@ -105,7 +110,7 @@ export function flushCanvasSaveOnHide() {
     keepalive: true,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(buildSaveBody(state)),
-  })
+  }).catch(() => undefined)
 }
 
 async function settleInFlightSave() {
@@ -122,6 +127,7 @@ export async function syncRemoteBoard() {
   if (!projectId) return
   await settleInFlightSave()
   const project = await getCanvasProject(projectId)
+  if (useCanvasStore.getState().projectId !== projectId || !useCanvasStore.getState().hydrated) return
   const board = readBoard(project)
   useCanvasStore.getState().adoptRemoteBoard(board.nodes, board.edges, project.updatedAt)
 }

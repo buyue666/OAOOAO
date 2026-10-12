@@ -52,7 +52,7 @@ export function CanvasIndexPage({ projects, loadError }: { projects: CanvasSumma
         {notice ? <p role="alert" className="text-sm text-neutral-300">{notice}</p> : null}
 
         {loadError ? (
-          <p role="alert" className="text-sm text-neutral-400">画布列表读取失败：{loadError}</p>
+          <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-neutral-400"><span>画布列表读取失败：{loadError}</span><button type="button" onClick={() => router.refresh()} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">重新读取</button></div>
         ) : projects.length ? (
           <ul aria-label="画布列表" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {projects.map((project) => (

@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Bot, CheckCircle2, CircleDashed, Loader2, Sparkles, Square, XCircle } from 'lucide-react'
+import { Bot, CheckCircle2, CircleDashed, Loader2, Play, Sparkles, Square, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
@@ -16,6 +16,7 @@ const RUN_STATUS_LABEL: Record<string, string> = {
   awaiting_approval: '等待确认',
   running: '执行中',
   paused: '已暂停',
+  unconfirmed: '提交未确认',
   completed: '已完成',
   failed: '失败',
   cancelled: '已取消',
@@ -36,9 +37,10 @@ const STEP_STATUS_LABEL: Record<string, string> = {
 export const AgentNode = memo(function AgentNode({ id, data, selected }: NodeProps<AgentFlowNode>) {
   const actions = useCanvasActions()
   const updateNodeData = useCanvasStore((store) => store.updateNodeData)
-  const running = data.runStatus === 'planning' || data.runStatus === 'running' || data.runStatus === 'paused' || data.runStatus === 'awaiting_approval'
-    || (Boolean(data.runId) && !isAgentRunTerminal(data.runStatus))
-  const canRun = data.prompt.trim().length > 0 && !running
+  const running = data.runStatus === 'planning' || data.runStatus === 'running'
+    || (Boolean(data.runId) && !isAgentRunTerminal(data.runStatus) && data.runStatus !== 'paused' && data.runStatus !== 'awaiting_approval')
+  const waiting = data.runStatus === 'paused' || data.runStatus === 'awaiting_approval'
+  const canRun = data.prompt.trim().length > 0 && !running && !waiting
 
   return (
     <div className="group relative" style={{ width: NODE_SIZE.agent.width }} data-selected={selected} data-node-kind="agent">
@@ -74,7 +76,7 @@ export const AgentNode = memo(function AgentNode({ id, data, selected }: NodePro
           )}
         </div>
 
-        <div className="nodrag nowheel flex flex-col gap-2.5 rounded-xl border border-white/10 bg-black p-2.5 focus-within:border-white/50">
+        <div className="oao-agent-composer nodrag nowheel flex flex-col gap-2.5 rounded-xl border border-white/10 bg-black p-2.5">
           <textarea
             value={data.prompt}
             rows={2}
@@ -82,10 +84,10 @@ export const AgentNode = memo(function AgentNode({ id, data, selected }: NodePro
             placeholder="告诉 Agent 要在这张画布上完成什么"
             disabled={running}
             onChange={(event) => updateNodeData(id, { prompt: event.target.value })}
-            className="nodrag nowheel min-h-11 w-full resize-none bg-transparent text-sm leading-relaxed text-white placeholder:text-neutral-600 focus:outline-none disabled:opacity-60"
+            className="oao-agent-prompt nodrag nowheel min-h-16 w-full resize-y bg-transparent text-sm leading-relaxed text-white placeholder:text-neutral-600 focus:outline-none disabled:opacity-60"
           />
           <div className="flex items-center justify-end gap-1.5">
-            {running && data.runId ? (
+            {(running || waiting) && data.runId ? (
               <button type="button" onClick={() => void actions.cancelAgent(id)} className="flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs text-white hover:bg-white/10">
                 <Square className="size-3 fill-current" aria-hidden="true" />
                 取消运行
@@ -96,22 +98,34 @@ export const AgentNode = memo(function AgentNode({ id, data, selected }: NodePro
                 确认执行
               </button>
             ) : null}
-            {!running ? (
+            {data.runStatus === 'paused' && data.runId ? (
+              <button type="button" onClick={() => void actions.resumeAgent(id)} className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-black hover:bg-neutral-200">
+                <Play className="size-3.5" aria-hidden="true" />
+                继续执行
+              </button>
+            ) : null}
+            {data.runStatus === 'unconfirmed' ? (
+              <button type="button" onClick={() => void actions.startAgent(id)} disabled={!canRun} className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-black hover:bg-neutral-200 disabled:opacity-40">
+                <Play className="size-3.5" aria-hidden="true" />
+                重新提交
+              </button>
+            ) : null}
+            {!running && !waiting && data.runStatus !== 'unconfirmed' ? (
               <button type="button" onClick={() => void actions.startAgent(id)} disabled={!canRun} className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-black hover:bg-neutral-200 disabled:opacity-40">
                 <Sparkles className="size-3.5" aria-hidden="true" />
                 运行
               </button>
-            ) : (
+            ) : running ? (
               <span className="flex h-8 items-center gap-1.5 text-xs text-neutral-400">
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                运行中
+                {data.runStatus === 'planning' ? '规划中' : '运行中'}
                 {data.runId ? (
                   <button type="button" onClick={() => actions.refreshAgent(id)} className="ml-1 h-7 rounded-md px-2 text-white hover:bg-white/10">
                     刷新进度
                   </button>
                 ) : null}
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -123,6 +137,10 @@ export const AgentNode = memo(function AgentNode({ id, data, selected }: NodePro
 
         {data.failure ? (
           <p role="alert" className="rounded-lg border border-white/20 px-2.5 py-2 text-xs leading-relaxed text-neutral-200">{data.failure}</p>
+        ) : null}
+
+        {data.runStatus === 'awaiting_approval' && data.planApproval ? (
+          <p className="rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-2 text-xs leading-relaxed text-neutral-300">预计消耗 {data.planApproval.totalPoints} 积分{data.planApproval.estimated ? '（预估）' : ''}，确认后开始执行。</p>
         ) : null}
 
         {data.pointsCost !== null && data.runStatus ? (

@@ -175,6 +175,10 @@ function readAgent(raw: Raw): AgentNodeData {
     failure: textOf(raw.failure) || null,
     pointsCost,
     context: Array.isArray(raw.context) ? raw.context.filter((item): item is string => typeof item === 'string') : [],
+    clientRequestId: textOf(raw.clientRequestId) || null,
+    planApproval: raw.planApproval && typeof raw.planApproval === 'object'
+      ? { totalPoints: numberOf(asRecord(raw.planApproval).totalPoints), estimated: Boolean(asRecord(raw.planApproval).estimated), ...(numberOf(asRecord(raw.planApproval).approvedAt) ? { approvedAt: numberOf(asRecord(raw.planApproval).approvedAt) } : {}) }
+      : undefined,
   }
 }
 

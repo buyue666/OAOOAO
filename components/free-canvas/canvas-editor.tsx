@@ -57,7 +57,7 @@ export function CanvasEditor({ projectId, project, loadError }: { projectId: str
       stopAutosave()
       window.removeEventListener('pagehide', saveOnHide)
       document.removeEventListener('visibilitychange', handleVisibility)
-      void flushCanvasSave()
+      void flushCanvasSave().catch(() => undefined)
       stopCanvasSaveTimer()
       reset()
     }

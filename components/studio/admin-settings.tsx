@@ -32,6 +32,7 @@ import {
   useConfirm,
 } from './admin-kit'
 import { useAdminReload, useAdminSession } from './admin-shell'
+import { CommercePolicyEditor } from './commerce-policy-editor'
 
 type SectionId = 'site' | 'account' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
 
@@ -112,7 +113,7 @@ export function AdminSettingsPanel() {
         <div role="tabpanel" aria-label={visibleSections.find((item) => item.id === active)?.label} className="flex min-w-0 flex-col gap-5">
           {active === 'site' && <SiteSection settings={settings} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} />}
           {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canBilling={canBilling} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
-          {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} onModeSave={(patch, summary) => save('运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
+          {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} saving={saving} onModeSave={(patch, summary) => save('运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
           {active === 'points' && <PointsSection settings={settings} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
           {active === 'generation' && <GenerationSection settings={settings} onSave={(patch, summary) => save('生成设置', patch, summary)} saving={saving} />}
           {active === 'mail' && <MailSection settings={settings} onSave={(patch, summary) => save('邮件设置', patch, summary)} saving={saving} />}
@@ -144,8 +145,10 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
       footerCopyright: value('footerCopyright'),
       termsUrl: value('termsUrl'),
       termsVersion: value('termsVersion'),
+      termsContent: value('termsContent'),
       privacyUrl: value('privacyUrl'),
       privacyVersion: value('privacyVersion'),
+      privacyContent: value('privacyContent'),
       announcementBar: {
         ...(site.announcementBar ?? {}),
         enabled: data.has('announcementEnabled'),
@@ -156,7 +159,7 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
       },
     }
     const summary: string[] = []
-    for (const [key, label] of [['title', '站点名称'], ['logoUrl', 'Logo'], ['iconUrl', '站点图标'], ['seoTitle', '搜索标题'], ['seoDescription', '搜索描述'], ['footerCopyright', '页脚版权'], ['termsUrl', '服务条款地址'], ['privacyUrl', '隐私政策地址']] as const) {
+    for (const [key, label] of [['title', '站点名称'], ['logoUrl', 'Logo'], ['iconUrl', '站点图标'], ['seoTitle', '搜索标题'], ['seoDescription', '搜索描述'], ['footerCopyright', '页脚版权'], ['termsUrl', '服务条款地址'], ['termsVersion', '服务条款版本'], ['termsContent', '服务条款正文'], ['privacyUrl', '隐私政策地址'], ['privacyVersion', '隐私政策版本'], ['privacyContent', '隐私政策正文']] as const) {
       if (String((site as Record<string, unknown>)[key] ?? '') !== String((next as Record<string, unknown>)[key] ?? '')) summary.push(label)
     }
     if (JSON.stringify(site.announcementBar ?? {}) !== JSON.stringify(next.announcementBar ?? {})) summary.push('顶部通知横幅')
@@ -176,8 +179,10 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
           <AdminField label="首页视频地址"><AdminInput name="heroVideoUrl" defaultValue={site.heroVideoUrl} readOnly /></AdminField>
           <AdminField label="服务条款地址"><AdminInput name="termsUrl" defaultValue={site.termsUrl} /></AdminField>
           <AdminField label="服务条款版本"><AdminInput name="termsVersion" defaultValue={site.termsVersion} /></AdminField>
+          <AdminField label="服务条款正文" hint="使用 /terms 时必须填写正式正文。" className="sm:col-span-2"><AdminTextarea name="termsContent" rows={8} defaultValue={site.termsContent} placeholder="请填写用户购买前可以阅读的服务条款。" /></AdminField>
           <AdminField label="隐私政策地址"><AdminInput name="privacyUrl" defaultValue={site.privacyUrl} /></AdminField>
           <AdminField label="隐私政策版本"><AdminInput name="privacyVersion" defaultValue={site.privacyVersion} /></AdminField>
+          <AdminField label="隐私政策正文" hint="使用 /privacy 时必须填写正式正文。" className="sm:col-span-2"><AdminTextarea name="privacyContent" rows={8} defaultValue={site.privacyContent} placeholder="请填写隐私政策正式正文。" /></AdminField>
         </fieldset>
       </AdminSectionCard>
       <AdminSectionCard title="顶部通知横幅" description="在页面最上方展示一条轻量通知。启用后会同步出现在着陆页与工作台，关闭或过期内容不会占位。">
@@ -202,6 +207,7 @@ function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; on
 function BillingSection({
   settings,
   paymentConfig,
+  saving,
   onModeSave,
   onPaymentConfigChange,
   onMessage,
@@ -209,6 +215,7 @@ function BillingSection({
 }: {
   settings: AdminSettings
   paymentConfig: AdminPaymentConfigSummary | null
+  saving: boolean
   onModeSave: (patch: AdminSettingsPatch, summary: string[]) => void
   onPaymentConfigChange: (value: AdminPaymentConfigSummary) => void
   onMessage: (value: string) => void
@@ -242,6 +249,8 @@ function BillingSection({
           <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary"><Save className="size-3.5" />保存运营模式</ControlButton></AdminSaveBar>
         </AdminSectionCard>
       </form>
+
+      <CommercePolicyEditor settings={settings} onSave={onModeSave} saving={saving} />
 
       <PaymentProviderEditor provider={epay} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />
 

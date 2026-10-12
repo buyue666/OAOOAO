@@ -93,7 +93,7 @@ export function createAgentNode(position: XYPosition, id = newNodeId('agent')): 
     id,
     type: 'agent',
     position,
-    data: { kind: 'agent', title: 'OAO Agent', prompt: '', runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [] },
+    data: { kind: 'agent', title: 'OAO Agent', prompt: '', runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [], clientRequestId: null },
   }
 }
 
