@@ -11,10 +11,6 @@ export const metadata: Metadata = {
   title: 'OAO · AI 创作工作台',
   description: '在一个工作台中完成 AI 图片、视频、短剧与导演 Agent 创作。',
   generator: 'v0.app',
-  icons: {
-    icon: '/icon.png',
-    apple: '/icon.png',
-  },
 }
 
 export const viewport: Viewport = {
