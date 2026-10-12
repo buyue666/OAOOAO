@@ -24,8 +24,8 @@
 .header:is([data-ready='true'], [data-scrolled='true'], [data-open='true'], :focus-within) { opacity: 1; transform: translate(-50%, 0); border: 1px solid rgb(255 255 255 / 74%); background: rgb(255 255 255 / 92%); box-shadow: 0 14px 36px rgb(20 25 30 / 13%); backdrop-filter: blur(18px); }
 .headerRow { min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; gap: 24px; }
 .logo { display: inline-flex; flex-shrink: 0; align-items: center; }
-.brandLogo { display: block; width: 28px; height: 28px; object-fit: contain; }
-.footerLogo { display: block; width: 32px; height: 32px; object-fit: contain; }
+.brandLogo { display: block; width: 88px; height: auto; object-fit: contain; }
+.footerLogo { display: block; width: 104px; height: auto; object-fit: contain; }
 .desktopNav { display: flex; align-items: center; gap: clamp(20px, 3vw, 42px); }
 .desktopNav a { color: #5f6468; font-size: 14px; transition: color 180ms ease; }
 .desktopNav a:hover { color: var(--ink); }
