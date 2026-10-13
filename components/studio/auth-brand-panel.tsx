@@ -26,8 +26,8 @@ export function AuthBrandPanel() {
       <div aria-hidden="true" className="absolute inset-0 bg-[#0b0c0e]/55" />
 
       <div className="relative flex h-16 shrink-0 items-center gap-3 px-12">
-        <Image src="/media/brand/oao-mark.png" alt="" width={512} height={512} className="size-7 invert" />
-        <span className="text-sm font-medium text-white/90">OAO 创作平台</span>
+        <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} className="h-7 w-auto shrink-0 object-contain invert" />
+        <span className="text-sm font-medium text-white/90">创作平台</span>
       </div>
 
       <div className="relative mt-auto flex flex-col gap-10 px-12 pb-12">

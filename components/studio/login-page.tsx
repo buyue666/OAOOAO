@@ -294,7 +294,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
 
       <section className="flex min-h-dvh flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-10 lg:px-14">
-          <Image src="/media/brand/oao-mark.png" alt="" width={512} height={512} className="size-8 dark:invert lg:hidden" />
+          <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} className="h-7 w-auto shrink-0 object-contain dark:invert lg:hidden" />
           <Link href="/" className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
             <ArrowLeft className="size-4" aria-hidden="true" />返回首页
           </Link>

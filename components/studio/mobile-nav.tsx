@@ -31,8 +31,8 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
     >
       <aside role="dialog" aria-modal="true" aria-label="工作台导航" className="motion-drawer-left flex h-full w-64 max-w-[85vw] flex-col border-r border-sidebar-border">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-3">
-          <Link href="/studio" onClick={onClose} aria-label="返回工作台" className="flex size-9 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-            <Image src="/media/brand/oao-mark.png" alt="" width={512} height={512} className="size-7 dark:invert" />
+          <Link href="/studio" onClick={onClose} aria-label="返回工作台" className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+            <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} className="h-6 w-auto object-contain dark:invert" />
           </Link>
           <button type="button" onClick={onClose} aria-label="关闭导航" className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
             <X className="size-4" aria-hidden="true" />
