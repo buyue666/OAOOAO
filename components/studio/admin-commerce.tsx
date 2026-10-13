@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { BadgePercent, CircleDollarSign, Copy, Gift, Hourglass, Pencil, Plus, RefreshCw, RotateCcw, Save, Ticket, Users } from 'lucide-react'
 import {
   closeBillingOrder,
+  cancelBillingOrderRefund,
   completeBillingOrder,
   createBillingProduct,
   deletePromotion,
@@ -18,6 +19,7 @@ import {
   listReferralRelationships,
   listReferralRewards,
   refundBillingOrder,
+  prepareBillingOrderRefund,
   saveCouponTemplate,
   savePromotion,
   updateBillingProduct,
@@ -1124,6 +1126,11 @@ function toLocalInput(value?: string) {
 
 const orderStatuses = ['pending', 'paid', 'closed', 'canceled', 'refunding', 'refunded'] as const
 
+function refundReservationId(order: BillingOrder): string | null {
+  const reservation = objectValue(order.metadata?.refundReservation)
+  return reservation.status === 'prepared' && typeof reservation.id === 'string' ? reservation.id : null
+}
+
 export function AdminOrdersPanel() {
   const session = useAdminSession()
   const { reloadKey } = useAdminReload()
@@ -1155,19 +1162,66 @@ export function AdminOrdersPanel() {
 
   useEffect(() => { void load() }, [load])
 
-  const refund = useCallback((order: BillingOrder) => {
+  const applyRefundOrder = useCallback((updated: BillingOrder) => {
+    setOrders((current) => ({ ...current, items: current.items.map((item) => item.id === updated.id ? { ...item, ...updated } : item) }))
+    setDetail((current) => current?.id === updated.id ? { ...current, ...updated } : current)
+  }, [])
+
+  const prepareRefund = useCallback((order: BillingOrder) => {
+    if (order.provider !== 'manual') { setError('该支付渠道尚未接入退款协议，请先核对支付记录。'); return }
     confirm.confirm({
-      title: `为订单 ${order.orderNo} 退款？`,
-      description: '退款会按支付渠道执行，并撤回已发放的积分与套餐权益。该操作不可撤销。',
-      confirmLabel: '确认退款',
+      title: `先为订单 ${order.orderNo} 预留退款积分？`,
+      description: `本步骤先从可用余额中预留本单积分和已发放的邀请奖励，退款金额为 ${formatAdminMoney(order.amountCents, order.currency)}。预留失败时请勿线下汇款；预留成功后，再通过原收款方式退款并核实到账。本步骤不会转出现金，预留不会自动释放。`,
+      confirmLabel: '先预留积分，尚未汇款',
       tone: 'danger',
       onConfirm: async () => {
         setActing(order.id)
-        try { await refundBillingOrder(order.id, '管理员后台退款'); setMessage('退款已提交'); load() }
+        try {
+          const result = await prepareBillingOrderRefund(order.id, '管理员准备线下退款，尚未汇款')
+          applyRefundOrder(result.order)
+          setMessage(`订单 ${order.orderNo} 已预留积分，尚未退款。请线下退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账，再点击「确认已退款」。若未汇款，可取消预留。`)
+          load()
+        }
         finally { setActing(null) }
       },
     })
-  }, [confirm, load])
+  }, [confirm, load, applyRefundOrder])
+
+  const refund = useCallback((order: BillingOrder) => {
+    const reservationId = refundReservationId(order)
+    if (!reservationId) { setError('这笔订单缺少有效退款预留，请刷新并核对记录，暂勿汇款。'); return }
+    confirm.confirm({
+      title: `确认订单 ${order.orderNo} 的线下退款已到账？`,
+      description: `积分已预留。请仅在线下退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账后确认。本操作登记退款完成并撤销本单套餐权益，不会再次转出现金，也不会重复扣减预留积分。若汇款结果不确定，请保留当前状态并先查询原收款渠道。`,
+      confirmLabel: '已核实退款到账，完成登记',
+      tone: 'danger',
+      onConfirm: async () => {
+        setActing(order.id)
+        try {
+          const result = await refundBillingOrder(order.id, '管理员已核实线下退款到账', reservationId)
+          applyRefundOrder(result.order); setMessage(`订单 ${order.orderNo} 的线下退款已登记`); load()
+        } finally { setActing(null) }
+      },
+    })
+  }, [confirm, load, applyRefundOrder])
+
+  const cancelRefund = useCallback((order: BillingOrder) => {
+    const reservationId = refundReservationId(order)
+    if (!reservationId) { setError('退款预留记录缺失，请刷新并核对记录。'); return }
+    confirm.confirm({
+      title: `取消订单 ${order.orderNo} 的退款预留？`,
+      description: '请先核实没有发起或完成任何线下退款。取消后会归还全部预留积分，订单恢复已支付。此操作无法撤回已发出的现金；汇款处理中或结果不确定时，请勿取消。',
+      confirmLabel: '已核实未汇款，归还预留积分',
+      tone: 'danger',
+      onConfirm: async () => {
+        setActing(order.id)
+        try {
+          const result = await cancelBillingOrderRefund(order.id, '管理员核实未发起线下退款，取消预留', reservationId)
+          applyRefundOrder(result.order); setMessage(`订单 ${order.orderNo} 已取消退款预留，积分已归还`); load()
+        } finally { setActing(null) }
+      },
+    })
+  }, [confirm, load, applyRefundOrder])
 
   const close = useCallback((order: BillingOrder) => {
     confirm.confirm({
@@ -1262,7 +1316,9 @@ export function AdminOrdersPanel() {
                     <ControlButton variant="secondary" size="sm" onClick={() => setDetail(order)}>详情</ControlButton>
                     {canManage && order.status === 'pending' && <ControlButton variant="secondary" size="sm" disabled={acting === order.id} onClick={() => complete(order)}>标记已支付</ControlButton>}
                     {canManage && order.status === 'pending' && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => close(order)}>关闭</ControlButton>}
-                    {canManage && order.status === 'paid' && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => refund(order)}><CircleDollarSign className="size-3.5" />退款</ControlButton>}
+                    {canManage && order.status === 'paid' && order.provider === 'manual' && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => prepareRefund(order)}><CircleDollarSign className="size-3.5" />预留退款积分</ControlButton>}
+                    {canManage && order.status === 'refunding' && order.provider === 'manual' && <><ControlButton variant="danger" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => refund(order)}>确认已退款</ControlButton><ControlButton variant="secondary" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => cancelRefund(order)}>未汇款，取消预留</ControlButton></>}
+                    {canManage && order.status === 'paid' && order.provider !== 'manual' && <span className="text-[11px] text-muted-foreground">该渠道退款暂不可用</span>}
                   </div>
                 </AdminCell>
               </AdminRow>
@@ -1278,6 +1334,7 @@ export function AdminOrdersPanel() {
       {detail && (
         <AdminDrawer open dock onClose={() => setDetail(null)} title={`订单 ${detail.orderNo}`} description={detail.subject}>
           <div className="flex flex-col gap-4">
+            {detail.status === 'refunding' && <AdminNotice tone="warning">{refundReservationId(detail) ? '退款积分已预留，尚未登记退款完成。请先线下退款并核实到账，再点击「确认已退款」。未汇款可取消预留；汇款结果不确定时请保留预留并核对。' : '退款预留记录缺失，需要核对记录；请勿继续汇款。'}</AdminNotice>}
             <AdminSectionCard title="支付信息" className="p-4">
               <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(detail.status)}>{labelOf(orderStatusLabels, detail.status)}</StatusBadge>} />
               <AdminDefinition label="支付渠道" value={detail.provider} />

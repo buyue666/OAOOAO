@@ -26,7 +26,7 @@ import {
   listDramaProjects,
   saveDramaProject,
 } from './api'
-import { resolveLinkedDramaProjectId } from './drama-link'
+import { canvasHandoffFromProjectId, resolveLinkedDramaProjectId } from './drama-link'
 import type { DramaProject } from './drama-types'
 import { useStudio } from './store'
 
@@ -56,6 +56,7 @@ export function useLinkedDramaProject(canvasProjectId: string, options: { enable
   const [revision, setRevision] = useState(0)
   const [project, setProject] = useState<DramaProject | null>(null)
   const [dramaProjectId, setDramaProjectId] = useState<string | null>(null)
+  const [canvasHandoffId, setCanvasHandoffId] = useState('')
   const [state_, setState] = useState<DramaLinkState>('idle')
   const [message, setMessage] = useState('')
   const guardRef = useRef(createWriteGuard())
@@ -69,6 +70,7 @@ export function useLinkedDramaProject(canvasProjectId: string, options: { enable
       setState('idle')
       setProject(null)
       setDramaProjectId(null)
+      setCanvasHandoffId('')
       setMessage('')
       return
     }
@@ -76,11 +78,13 @@ export function useLinkedDramaProject(canvasProjectId: string, options: { enable
       setState('unauthenticated')
       setProject(null)
       setDramaProjectId(null)
+      setCanvasHandoffId('')
       return
     }
     const token = guardRef.current.begin()
     setState('loading')
     setMessage('')
+    setCanvasHandoffId('')
     try {
       /**
        * 画布项目里的 `sourceHandoffId` 是最准确的关联凭据（后端自己写入的），
@@ -88,11 +92,12 @@ export function useLinkedDramaProject(canvasProjectId: string, options: { enable
        */
       const canvasProject = await getCanvasProject(canvasProjectId).catch(() => null)
       if (!guardRef.current.isCurrent(token)) return
+      setCanvasHandoffId(canvasHandoffFromProjectId(canvasProjectId, canvasProject?.sourceHandoffId))
       const listed = await listDramaProjects()
       if (!guardRef.current.isCurrent(token)) return
       const linkedId = resolveLinkedDramaProjectId(
         canvasProjectId,
-        listed.projects.map((item) => item.id),
+        listed.projects,
         canvasProject?.sourceHandoffId,
       )
       if (!linkedId) {
@@ -149,7 +154,7 @@ export function useLinkedDramaProject(canvasProjectId: string, options: { enable
   /** 本地替换（分镜任务写回后立刻更新视图，不必再打一次读接口）。 */
   const replace = useCallback((next: DramaProject) => setProject(next), [])
 
-  return { project, dramaProjectId, state: state_, message, reload: load, save, replace }
+  return { project, dramaProjectId, canvasHandoffId, state: state_, message, reload: load, save, replace }
 }
 
 /**

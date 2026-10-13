@@ -11,6 +11,8 @@ pnpm dev
 
 默认读取 `.env.local` 中的 `OAOAO_BACKEND_URL`，当前本地配置指向 `http://127.0.0.1:3200`。`app/api/[...path]/route.ts` 校验浏览器来源后转发 API，保留会话 Cookie 和流式响应。反向代理部署可设置 `OAOAO_PUBLIC_URL`。
 
+真实客户端 IP 转发默认关闭。仅在入口代理覆盖 `X-Real-IP`、且 Next 服务不能被外部直接访问时，设置 `OAOAO_TRUST_REVERSE_PROXY=true`。代理只转发验证通过的单一 IP，清除客户端自带的转发链；独立后端还需将该前端的内部地址加入 `TRUSTED_PROXY_CIDRS`。Caddy 入口可使用 `header_up X-Real-IP {remote_host}`，不要直接信任浏览器提交的该头。
+
 本仓库包含完整前端与 API 转发层，不包含独立业务后端、数据库、实际密钥或用户数据。首页 `/` 可独立预览，创作工作台为 `/studio`；登录、生成、支付和管理功能需要兼容后端。首页素材与验收说明见 `LANDING_PAGE_NOTES.md`。
 
 登录入口：`/login`
@@ -100,9 +102,8 @@ pnpm dev --port 3460 --hostname 127.0.0.1
 - **手动支付**：`/api/billing/orders` 创建订单 → `/api/billing/orders/{id}/checkout` 返回人工支付信息 → 用户付款后由管理员在 `/admin/orders` 标记已支付或关闭。
 - **订单查询**：`GET /api/billing/orders/{id}` 读取当前支付状态与快照。
 - **关闭**：`POST /api/billing/orders/{id}/cancel` 关闭未支付订单。
-- **退款**：`POST /api/admin/billing/orders/{id}/refund` 只对已支付订单生效，未支付订单后端返回 409「只有已支付订单可以退款」。
-- **支付回调**：后端确实存在 `/api/billing/webhooks/{provider}`（POST/GET），会校验签名密钥并驱动订单与积分结算。本地未配置支付密钥时该接口返回「支付回调密钥未配置」，这是预期行为，不是实现缺失。
-- 本地可用的支付渠道只有 `manual`（见 `/api/billing/products` 的 `paymentProviders`）。真实在线支付需要在后端配置对应渠道密钥后才能验证，本仓库不伪造支付成功。
+- **退款**：独立后端的人工退款先预留可回收积分，再由管理员在线下完成实际款项退款，最后记录退款完成；未汇款时可取消预留。后台操作不会自动转移现金。
+- **支付渠道**：独立后端当前只实现人工收款渠道，需在后台明确启用。在线支付协议与回调尚未接入，配置密钥不会使其自动可用；页面读取后端的实际可用渠道，不伪造支付成功。
 
 ## 检查
 

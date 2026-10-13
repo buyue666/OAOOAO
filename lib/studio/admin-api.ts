@@ -368,8 +368,27 @@ export function completeBillingOrder(id: string, reason?: string) {
   return request<unknown>(`/api/admin/billing/orders/${encodeURIComponent(id)}/complete`, { method: 'POST', body: JSON.stringify({ reason }) })
 }
 
-export function refundBillingOrder(id: string, reason: string) {
-  return request<unknown>(`/api/admin/billing/orders/${encodeURIComponent(id)}/refund`, { method: 'POST', body: JSON.stringify({ reason }) })
+export function prepareBillingOrderRefund(id: string, reason: string) {
+  return request<{ order: BillingOrder; reservation: { id: string; status: string; amountCents: number; currency: string } }>(`/api/admin/billing/orders/${encodeURIComponent(id)}/refund/prepare`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+}
+
+/** The administrator has verified the external transfer after preparation. No cash is sent here. */
+export function refundBillingOrder(id: string, reason: string, reservationId: string) {
+  return request<{ order: BillingOrder }>(`/api/admin/billing/orders/${encodeURIComponent(id)}/refund`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, reservationId, confirmExternalRefund: true }),
+  })
+}
+
+/** Release credits only after verifying that no external transfer has been made. */
+export function cancelBillingOrderRefund(id: string, reason: string, reservationId: string) {
+  return request<{ order: BillingOrder }>(`/api/admin/billing/orders/${encodeURIComponent(id)}/refund/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, reservationId, confirmExternalRefundNotSent: true }),
+  })
 }
 
 export async function listPromotions(): Promise<PromotionCampaign[]> {

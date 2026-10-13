@@ -1,8 +1,8 @@
 # Third-Party Notices
 
-## Canvas Foundation (MIT)
+## Infinite Canvas (MIT)
 
-OAO 自由画布包含一部分采用 MIT 许可的底层画布交互实现。OAO 在此基础上重新组织了画布节点、资产管理、模型调用、Agent 操作、项目存储和用户界面；本文件仅保留原始版权与许可证要求，不提供外部项目入口。
+来源：[basketikun/infinite-canvas](https://github.com/basketikun/infinite-canvas)。本仓库提交 `23cd1a066f7538c760a0f7476d98298f655676df` 曾在 `components/oao-canvas/reference-src/` 导入采用 MIT 许可的画布实现。该目录现已移除；对于历史分发以及可能保留的改编部分，继续保留原始版权与许可。OAOOAO 的品牌、界面调整或文件搬移不会转移第三方代码的版权。
 
 Copyright (c) 2026 basketikun
 
@@ -11,3 +11,19 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## TapCanvas (MIT portions only)
+
+来源：[anymouschina/TapCanvas](https://github.com/anymouschina/TapCanvas)，核对版本 `92b5a58dbb6db0a9c9b50bf7701e9638a7fa4627`。本前端的套餐折扣展示曾对齐旧业务后端的展示契约，该后端记录了 TapCanvas 套餐展示部分的移植来源。为保留该间接来源链，在此保守保留其 MIT 通知；这不表示整个 OAOOAO 来自 TapCanvas，也不表示整个 TapCanvas 适用 MIT。其 `apps/new-api` 另有 AGPL-3.0 许可，本声明不为该目录授予 MIT 权利。
+
+Copyright (c) 2025 Beq
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Scope
+
+上述许可仅覆盖对应第三方材料，不自动许可 OAOOAO 的其他代码或任何外部业务后端。通过 npm 引入的依赖仍适用各自许可证。商标、图片、视频、模板等资源的使用权也应分别核实。本文件不是对全部代码或资产“无侵权”的保证。

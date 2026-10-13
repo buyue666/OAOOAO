@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { isIP } from 'node:net'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -44,7 +45,12 @@ async function proxy(request: NextRequest) {
   target.pathname = `${target.pathname.replace(/\/$/, '')}${request.nextUrl.pathname}`
   target.search = request.nextUrl.search
   const headers = new Headers(request.headers)
-  for (const name of ['host', 'connection', 'content-length', 'transfer-encoding', 'forwarded', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'upgrade']) headers.delete(name)
+  // Enable only when the trusted ingress overwrites X-Real-IP and direct access
+  // to this Next server is restricted. Never forward a browser-supplied chain.
+  const clientIp = process.env.OAOAO_TRUST_REVERSE_PROXY === 'true'
+    ? request.headers.get('x-real-ip')?.trim() : undefined
+  for (const name of ['host', 'connection', 'content-length', 'transfer-encoding', 'forwarded', 'x-real-ip', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-for', 'upgrade']) headers.delete(name)
+  if (clientIp && isIP(clientIp)) headers.set('x-forwarded-for', clientIp)
   headers.set('origin', target.origin)
   headers.set('referer', `${target.origin}/`)
   headers.set('accept-encoding', 'identity')

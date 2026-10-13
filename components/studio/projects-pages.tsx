@@ -1410,7 +1410,7 @@ function ScriptWorkspace({
       />
       <div className="min-w-0">
         {drama.state === "unlinked" && (
-          <ScriptUnlinkedNotice canvasProjectId={canvasProjectId} title={currentProject.title} onLinked={() => void drama.reload()} />
+          <ScriptUnlinkedNotice canvasProjectId={canvasProjectId} sourceHandoffId={drama.canvasHandoffId} title={currentProject.title} onLinked={() => void drama.reload()} />
         )}
         {drama.state === "error" && (
           <div className="mb-4">
@@ -1665,17 +1665,16 @@ async function buildSourceAssets(files: IntentFile[]): Promise<{ assets: DramaSo
 /**
  * 「没有关联短剧项目」的诚实提示 + 真实创建入口。
  *
- * 创建时必须带上 `sourceHandoffId`（= 画布 id 去掉 `canvas-`），
- * 后端据此把短剧 id 生成为 `drama-${sourceHandoffId}`，关联由后端自己的规则建立；
- * 绝不把画布 id 直接当短剧 id 用。
+ * 创建时沿用画布已保存的 `sourceHandoffId`；旧记录才由画布 ID 推导。
+ * 项目 ID 以服务端返回值为准，不把画布 ID 当成短剧 ID。
  *
  * 创建成功后由调用方 `onLinked()` 重新解析关联：`bumpAccountData()` 会通知
  * 所有账户数据 hooks 重读，因此不需要整页刷新。
  */
-function ScriptUnlinkedNotice({ canvasProjectId, title, onLinked }: { canvasProjectId: string; title: string; onLinked: () => void }) {
+function ScriptUnlinkedNotice({ canvasProjectId, sourceHandoffId, title, onLinked }: { canvasProjectId: string; sourceHandoffId?: string; title: string; onLinked: () => void }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const handoff = canvasHandoffFromProjectId(canvasProjectId);
+  const handoff = canvasHandoffFromProjectId(canvasProjectId, sourceHandoffId);
 
   async function createLinkedDrama() {
     if (creating || !handoff) return;
@@ -2350,7 +2349,7 @@ function StoryboardWorkspace({ project }: { project: Project | undefined }) {
       />
       <div className="min-w-0">
         {drama.state === "unlinked" && (
-          <ScriptUnlinkedNotice canvasProjectId={canvasProjectId} title={project?.title ?? ""} onLinked={() => void drama.reload()} />
+          <ScriptUnlinkedNotice canvasProjectId={canvasProjectId} sourceHandoffId={drama.canvasHandoffId} title={project?.title ?? ""} onLinked={() => void drama.reload()} />
         )}
         {drama.state === "error" && (
           <div className="mb-4">

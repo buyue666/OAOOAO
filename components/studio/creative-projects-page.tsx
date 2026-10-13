@@ -48,11 +48,11 @@ function updatedLabel(value: string) {
 function projectRows(dramas: DramaProjectSummary[], canvases: CanvasSummary[], filter: ProjectFilter): ProjectRow[] {
   const dramaById = new Map(dramas.map((project) => [project.id, project]))
   const canvasById = new Map(canvases.map((project) => [project.id, project]))
-  const dramaIds = [...dramaById.keys()]
+  const dramaCandidates = [...dramaById.values()]
   const linked = new Map<string, CanvasSummary[]>()
   const independent: CanvasSummary[] = []
   for (const canvas of canvasById.values()) {
-    const dramaId = resolveLinkedDramaProjectId(canvas.id, dramaIds)
+    const dramaId = resolveLinkedDramaProjectId(canvas.id, dramaCandidates, canvas.sourceHandoffId)
     if (dramaId) linked.set(dramaId, [...(linked.get(dramaId) ?? []), canvas])
     else independent.push(canvas)
   }

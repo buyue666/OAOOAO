@@ -136,6 +136,7 @@ export type CanvasBackendProject = {
 
 export type CanvasSummary = {
   id: string
+  sourceHandoffId?: string
   title: string
   nodeCount: number
   connectionCount: number
@@ -308,6 +309,7 @@ export async function deleteCanvasProjects(ids: string[]) {
 
 export type DramaProjectSummary = {
   id: string
+  sourceHandoffId?: string
   title: string
   status: string
   createdAt: string
@@ -329,9 +331,8 @@ export async function listDramaProjects(params: { page?: number; pageSize?: numb
  * 短剧项目与画布项目是不同的业务对象，因此必须走各自的接口，
  * 不能把短剧状态写进画布记录，否则刷新后会被服务端列表覆盖。
  *
- * `sourceHandoffId` 是**画布→短剧的唯一关联凭据**：后端用它把短剧 id 生成为
- * `drama-${sourceHandoffId}`，画布侧又是 `canvas-${sourceHandoffId}`，
- * 两个项目因此天然一一对应（后台自己的 `drama-canvas-link.ts` 就是这条规则）。
+ * `sourceHandoffId` 是稳定的关联与创建重试凭据。项目 ID 以接口返回值为准，
+ * 不要求由这个凭据拼接出来；刷新时通过双方保存的关联字段找回项目。
  */
 export async function createDramaProject(input: {
   title: string
