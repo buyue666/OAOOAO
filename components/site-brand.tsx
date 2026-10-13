@@ -27,8 +27,9 @@ export function SiteBrandMetadata() {
   const { title, iconUrl, customIcon } = useSiteBrand()
   const pathname = usePathname()
   useEffect(() => {
-    document.title = `${title} · ${pathname.startsWith('/admin') ? '管理后台' : pathname === '/' ? '图片、视频与故事创作' : 'AI 创作工作台'}`
+    const pageTitle = `${title} · ${pathname.startsWith('/admin') ? '管理后台' : pathname === '/' ? '图片、视频与故事创作' : 'AI 创作工作台'}`
     let active = true
+    let currentIcon = iconUrl
     function setIcon(url: string) {
       const links = Array.from(document.head.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]'))
       if (!links.length) {
@@ -37,10 +38,20 @@ export function SiteBrandMetadata() {
       }
       for (const link of links) { link.href = url; link.removeAttribute('type'); link.removeAttribute('sizes') }
     }
-    setIcon(iconUrl)
+    function syncMetadata() {
+      const titles = Array.from(document.head.querySelectorAll('title'))
+      if (!titles.length) document.title = pageTitle
+      for (const element of titles) { if (element.textContent !== pageTitle) element.textContent = pageTitle }
+      setIcon(currentIcon)
+    }
+    syncMetadata()
+    // App Router can insert its static metadata after this effect during navigation.
+    // Keep all title/icon nodes consistent with the confirmed public brand.
+    const observer = new MutationObserver(syncMetadata)
+    observer.observe(document.head, { childList: true, subtree: true, characterData: true })
     const probe = customIcon ? new window.Image() : null
-    if (probe) { probe.onerror = () => { if (active) setIcon(DEFAULT_SITE_ICON) }; probe.src = iconUrl }
-    return () => { active = false; if (probe) probe.onerror = null }
+    if (probe) { probe.onerror = () => { if (active) { currentIcon = DEFAULT_SITE_ICON; syncMetadata() } }; probe.src = iconUrl }
+    return () => { active = false; observer.disconnect(); if (probe) probe.onerror = null }
   }, [title, iconUrl, customIcon, pathname])
   return null
 }
