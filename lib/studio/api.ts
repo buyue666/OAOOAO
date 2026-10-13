@@ -272,8 +272,9 @@ export async function createCheckout(orderId: string, provider: string) {
   return { checkout }
 }
 
-export async function listCanvasProjects() {
-  const result = await request<{ code: number; data: { projects: CanvasSummary[]; total: number }; msg?: string }>('/api/canvas/projects?page=1&pageSize=100')
+export async function listCanvasProjects(params: { page?: number; pageSize?: number } = {}) {
+  const search = new URLSearchParams({ page: String(params.page ?? 1), pageSize: String(params.pageSize ?? 100) })
+  const result = await request<{ code: number; data: { projects: CanvasSummary[]; total: number }; msg?: string }>(`/api/canvas/projects?${search.toString()}`)
   return result.data
 }
 
@@ -313,10 +314,12 @@ export type DramaProjectSummary = {
   updatedAt: string
   shotCount?: number
   coverUrl?: string
+  cover?: { kind: 'image' | 'video'; url: string }
 }
 
-export async function listDramaProjects() {
-  const result = await request<{ code: number; data: { projects: DramaProjectSummary[]; total: number } }>('/api/drama/projects?page=1&pageSize=100')
+export async function listDramaProjects(params: { page?: number; pageSize?: number } = {}) {
+  const search = new URLSearchParams({ page: String(params.page ?? 1), pageSize: String(params.pageSize ?? 100) })
+  const result = await request<{ code: number; data: { projects: DramaProjectSummary[]; total: number } }>(`/api/drama/projects?${search.toString()}`)
   return result.data
 }
 

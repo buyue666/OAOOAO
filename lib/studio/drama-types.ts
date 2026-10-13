@@ -12,6 +12,38 @@ export type DramaReviewStatus = 'draft' | 'content_review' | 'approved' | 'visua
 
 export type DramaVideoMode = 'storyboard' | 'direct' | 'reference'
 
+export type DramaAssetReference = {
+  id: string
+  url: string
+  storageKey?: string
+  source: 'upload' | 'generated' | 'library'
+  label: string
+  width?: number
+  height?: number
+  createdAt: string
+}
+
+export type DramaNamedAsset = {
+  id: string
+  name: string
+  description: string
+  profile?: { visualIdentity: string; styling: string; colorPalette: string; consistencyRules: string }
+  references?: DramaAssetReference[]
+  primaryReferenceId?: string
+  referenceImageUrl?: string
+  referenceStorageKey?: string
+  voiceProfile?: { voice: string; speed: number; instructions: string }
+  payoff?: string
+  [key: string]: unknown
+}
+
+export type DramaRenderTask = {
+  id: string
+  status: 'pending' | 'running' | 'success' | 'error' | 'cancelled'
+  result?: { url?: string }
+  error?: string
+}
+
 export type DramaSourceAsset = {
   id: string
   type: 'text' | 'image' | 'video' | 'audio'
@@ -66,6 +98,13 @@ export type DramaShot = {
   generationAttempt?: number
   generationTaskId?: string
   generationError?: string
+  videoUrl?: string
+  subtitle?: string
+  audioMode?: 'source' | 'voiceover' | 'mute'
+  audioStatus?: DramaTaskStatus
+  audioTaskId?: string
+  audioError?: string
+  audioUrl?: string
   [key: string]: unknown
 }
 
@@ -82,6 +121,7 @@ export type DramaEpisode = {
   reviewStatus: DramaReviewStatus
   shots: DramaShot[]
   productionPaused?: boolean
+  renderTask?: DramaRenderTask
   [key: string]: unknown
 }
 
@@ -95,10 +135,10 @@ export type DramaProject = {
   status: 'active' | 'archived'
   creativeConversationId?: string
   activeEpisodeId?: string
-  characters: Array<Record<string, unknown>>
-  scenes: Array<Record<string, unknown>>
-  props: Array<Record<string, unknown>>
-  clues: Array<Record<string, unknown>>
+  characters: DramaNamedAsset[]
+  scenes: DramaNamedAsset[]
+  props: DramaNamedAsset[]
+  clues: DramaNamedAsset[]
   defaultVideoMode: DramaVideoMode
   episodes: DramaEpisode[]
   sourceAssets?: DramaSourceAsset[]

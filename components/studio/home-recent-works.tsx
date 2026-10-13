@@ -1,78 +1,76 @@
+'use client'
+
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
-import type { Project, Task } from '@/lib/studio/types'
-import { MediaThumb, StatusBadge, type Tone } from './ui'
+import { useEffect, useState } from 'react'
+import { ArrowRight, Clapperboard, PanelsTopLeft, RefreshCw } from 'lucide-react'
+import { listDramaProjects, type DramaProjectSummary } from '@/lib/studio/api'
+import { subscribeAccountData } from '@/lib/studio/account-data-sync'
+import { useStudio } from '@/lib/studio/store'
+import { MediaThumb } from './ui'
 
-/**
- * 演示项目的封面映射。
- *
- * **只对演示项目 ID 生效**：真实项目（后端返回的 UUID）没有本地封面，
- * 直接用项目自带的 `cover`，不会因为「名字碰巧相同」而套上别人的图片。
- */
-const demoProjectCovers: Record<string, string> = {
-  aurora: '/media/project-aurora.png',
-  northline: '/media/project-northline.png',
-  'quiet-room': '/media/project-quiet-room.png',
-  'red-shift': '/media/project-red-shift.png',
+type RecentProject = { id: string; title: string; cover: string; updatedAt: string; kind: 'creative' | 'canvas'; href: string }
+
+function dateLabel(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '继续编辑' : `${new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(date)} 更新`
 }
 
-const projectTones: Record<string, Tone> = {
-  进行中: 'accent',
-  已完成: 'success',
-  已归档: 'muted',
+function projectCover(project: DramaProjectSummary) {
+  return project.cover?.kind === 'video' ? '' : project.cover?.url || project.coverUrl || ''
 }
 
-/** 最近作品以封面网格呈现：内容优先，每个项目一张可点击的卡片。 */
-export function RecentWorks({ projects, runningTask }: { projects: Project[]; runningTask?: Task }) {
+/** 展示服务端创作项目和已有画布，不把节点数量伪装成镜头数或生成进度。 */
+export function RecentWorks() {
+  const { state } = useStudio()
+  const [dramas, setDramas] = useState<DramaProjectSummary[]>([])
+  const [loadedFor, setLoadedFor] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(0)
+  const connected = state.backendStatus === 'connected'
+
+  useEffect(() => subscribeAccountData(() => setRevision((value) => value + 1)), [])
+  useEffect(() => {
+    let disposed = false
+    setDramas([])
+    setLoadedFor('')
+    setError('')
+    if (!connected) { setLoading(false); return }
+    setLoading(true)
+    void listDramaProjects().then((result) => {
+      if (!disposed) { setDramas(result.projects ?? []); setLoadedFor(state.user.id) }
+    }).catch((reason) => {
+      if (!disposed) setError(reason instanceof Error ? reason.message : '项目读取失败')
+    }).finally(() => { if (!disposed) setLoading(false) })
+    return () => { disposed = true }
+  }, [connected, state.user.id, revision])
+
+  const projects: RecentProject[] = connected ? [
+    ...(loadedFor === state.user.id ? dramas : []).map((project): RecentProject => ({ id: project.id, title: project.title, cover: projectCover(project), updatedAt: project.updatedAt, kind: 'creative', href: `/projects/${encodeURIComponent(project.id)}` })),
+    ...state.projects.map((project): RecentProject => ({ id: project.id, title: project.title, cover: project.cover, updatedAt: project.updatedAt, kind: 'canvas', href: `/canvas/${encodeURIComponent(project.id)}` })),
+  ].sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0)).slice(0, 4) : []
+
   return (
     <section aria-labelledby="recent-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h2 id="recent-title" className="text-sm font-semibold text-foreground">最近作品</h2>
-          <p className="mt-1 text-xs text-muted-foreground">最近更新的项目，点击即可继续编辑。</p>
+        <div>
+          <h2 id="recent-title" className="text-sm font-semibold text-foreground">接着上次的想法</h2>
+          <p className="mt-1 text-xs text-muted-foreground">最近编辑的项目与画布。</p>
         </div>
-        <Link href="/works" className="inline-flex shrink-0 items-center gap-1 rounded-md text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-          全部作品
-          <ArrowRight className="size-3.5" aria-hidden="true" />
-        </Link>
+        <Link href="/projects" className="inline-flex items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">全部项目<ArrowRight className="size-3.5" aria-hidden="true" /></Link>
       </div>
-
-      {runningTask && (
-        <Link href="/tasks" aria-live="polite" className="studio-surface flex min-w-0 items-center gap-2.5 px-4 py-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-          <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-studio-accent motion-reduce:animate-none" aria-hidden="true" />
-          <span className="truncate text-foreground">{runningTask.title}</span>
-          <span className="hidden shrink-0 sm:inline">· {runningTask.stage}</span>
-          <span className="ml-auto shrink-0">查看任务</span>
-        </Link>
-      )}
-
+      {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><p className="text-muted-foreground">部分项目暂时无法读取：{error}</p><button type="button" onClick={() => setRevision((value) => value + 1)} className="inline-flex items-center gap-1.5 rounded px-2 py-1 hover:bg-muted"><RefreshCw className="size-3.5" aria-hidden="true" />重新读取</button></div>}
       {projects.length ? (
-        <ul aria-label="最近作品列表" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          {projects.map((project) => (
-            <li key={project.id} className="min-w-0">
-              <Link href={`/projects/${project.id}`} className="studio-surface group flex h-full flex-col overflow-hidden transition-colors duration-150 hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-                <MediaThumb
-                  src={demoProjectCovers[project.id] ?? project.cover}
-                  alt=""
-                  fallback={project.title}
-                  className="aspect-[4/3] w-full shrink-0 [&_img]:transition-transform [&_img]:duration-300 [&_img]:ease-out group-hover:[&_img]:scale-[1.03] motion-reduce:[&_img]:transition-none"
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-1.5 p-3.5">
-                  <span className="flex items-center justify-between gap-2">
-                    <StatusBadge tone={projectTones[project.status] ?? 'neutral'}>{project.status}</StatusBadge>
-                    {project.status === '进行中' && <span className="text-xs font-medium tabular-nums text-foreground">{project.progress}%</span>}
-                  </span>
-                  <span className="truncate text-sm font-medium text-foreground">{project.title}</span>
-                  <span className="truncate text-xs text-muted-foreground">{project.type} · {project.updatedAt} 更新</span>
-                </span>
-              </Link>
-            </li>
-          ))}
+        <ul aria-label="最近项目列表" className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
+          {projects.map((project) => {
+            const Icon = project.kind === 'creative' ? Clapperboard : PanelsTopLeft
+            return <li key={`${project.kind}-${project.id}`} className="min-w-0"><Link href={project.href} className="studio-surface group flex h-full flex-col overflow-hidden transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"><MediaThumb src={project.cover} alt="" fallback={project.title} className="aspect-[16/10] w-full shrink-0" /><span className="flex min-w-0 flex-1 flex-col gap-2 p-3.5"><span className="truncate text-sm font-medium">{project.title}</span><span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Icon className="size-3" aria-hidden="true" />{project.kind === 'creative' ? '创作项目' : '自由画布'}<span className="ml-auto">{dateLabel(project.updatedAt)}</span></span></span></Link></li>
+          })}
         </ul>
-      ) : (
-        <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border px-5 py-8 text-center">
-          <p className="text-sm font-medium text-foreground">还没有作品</p>
-          <p className="text-xs text-muted-foreground">在上方输入创作描述并开始，生成的作品会出现在这里。</p>
+      ) : loading || state.backendStatus === 'checking' ? <p role="status" className="rounded-lg border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">正在读取最近项目…</p> : !error && (
+        <div className="rounded-lg border border-dashed border-border px-5 py-8 text-center">
+          <p className="text-sm font-medium">{connected ? '第一件作品，从这里开始' : state.backendStatus === 'offline' ? '暂时无法读取最近项目' : '登录后继续你的项目'}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{connected ? '选择「做一件完整作品」，保存提纲和参考，开始整理镜头。' : state.backendStatus === 'offline' ? '服务暂时不可用，恢复连接后即可继续。' : '项目、参考素材和创作记录会跟随你的账户保存。'}</p>
         </div>
       )}
     </section>

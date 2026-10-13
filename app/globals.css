@@ -582,7 +582,7 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; }
-  html { min-width: 320px; }
+  html { min-width: min(320px, 100%); }
   body { @apply bg-background text-foreground; min-height: 100dvh; overflow-x: clip; }
   button, input, textarea, select { font: inherit; }
   img, video { max-width: 100%; }

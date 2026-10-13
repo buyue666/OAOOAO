@@ -104,6 +104,16 @@ export type SubmissionIdentity = {
   attemptNo?: number
 }
 
+/** Stable destination for a generation task; persisted by the backend task store. */
+export type GenerationProjectContext = {
+  projectId?: string
+  episodeId?: string
+  shotId?: string
+  conversationId?: string
+  parentTaskId?: string
+  surface?: 'chat' | 'canvas' | 'drama'
+}
+
 export type ImageGenerationInput = {
   prompt: string
   model?: string
@@ -118,7 +128,7 @@ export type ImageGenerationInput = {
   title?: string
   projectId?: string
   surface?: 'chat' | 'canvas' | 'drama'
-} & SubmissionIdentity
+} & SubmissionIdentity & GenerationProjectContext
 
 export type VideoGenerationInput = {
   prompt: string
@@ -129,7 +139,7 @@ export type VideoGenerationInput = {
   references?: GenerationReference[]
   projectId?: string
   surface?: 'chat' | 'canvas' | 'drama'
-} & SubmissionIdentity
+} & SubmissionIdentity & GenerationProjectContext
 
 export type AudioGenerationInput = {
   prompt: string
@@ -138,7 +148,7 @@ export type AudioGenerationInput = {
   format?: string
   projectId?: string
   surface?: 'chat' | 'canvas' | 'drama'
-} & SubmissionIdentity
+} & SubmissionIdentity & GenerationProjectContext
 
 export type TextGenerationInput = {
   prompt: string

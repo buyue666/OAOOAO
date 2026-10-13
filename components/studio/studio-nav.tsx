@@ -1,16 +1,13 @@
 import Link from 'next/link'
 import {
-  Clapperboard,
   FolderOpen,
-  Image as ImageIcon,
+  History,
   LayoutGrid,
   Library,
   ListChecks,
-  PanelsTopLeft,
   Puzzle,
   Settings,
   ShieldCheck,
-  Video,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -25,15 +22,15 @@ export interface StudioNavItem {
 }
 
 export const studioPrimaryNav: readonly StudioNavItem[] = [
-  { label: '工作台', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent'] },
-  { label: '图片生成', href: '/image', icon: ImageIcon, matches: ['/image'] },
-  { label: '视频生成', href: '/video', icon: Video, matches: ['/video'] },
-  { label: '短剧制作', href: '/drama', icon: Clapperboard, matches: ['/drama'] },
-  { label: '自由画布', href: '/canvas', icon: PanelsTopLeft, matches: ['/canvas'] },
+  { label: '开始创作', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent', '/image', '/video'] },
+  { label: '我的项目', href: '/projects', icon: FolderOpen, matches: ['/projects', '/drama', '/canvas'] },
+  { label: '创作资产', href: '/assets', icon: Library, matches: ['/assets'] },
+]
+
+export const studioSecondaryNav: readonly StudioNavItem[] = [
+  { label: '生成记录', href: '/works', icon: History, matches: ['/works', '/gallery'] },
   { label: '任务', href: '/tasks', icon: ListChecks, matches: ['/tasks'] },
-  { label: '作品', href: '/works', icon: FolderOpen, matches: ['/works', '/gallery', '/projects'] },
-  { label: '资产', href: '/assets', icon: Library, matches: ['/assets'] },
-  { label: '技能市场', href: '/skills', icon: Puzzle, matches: ['/skills'] },
+  { label: '技能库', href: '/skills', icon: Puzzle, matches: ['/skills'] },
 ]
 
 export const studioAdminNav: StudioNavItem = { label: '管理员后台', href: '/admin', icon: ShieldCheck, matches: ['/admin'] }
@@ -44,18 +41,18 @@ export function isNavItemActive(pathname: string, item: StudioNavItem) {
 }
 
 const rootTitles: Record<string, string> = {
-  studio: '工作台',
+  studio: '开始创作',
   agent: '导演 Agent',
   image: '图片生成',
   video: '视频生成',
   drama: '短剧制作',
   canvas: '自由画布',
   tasks: '任务',
-  works: '作品',
+  works: '生成记录',
   gallery: '广场',
-  projects: '项目',
-  assets: '资产',
-  skills: '技能市场',
+  projects: '我的项目',
+  assets: '创作资产',
+  skills: '技能库',
   account: '账户',
   settings: '设置',
   plans: '套餐',
@@ -76,7 +73,7 @@ const sectionTitles: Record<string, string> = {
 /** 顶栏只显示当前页面名称；项目内页面附带项目名，避免只剩一个泛化的分区名。 */
 export function studioPageTitle(pathname: string, projectTitle?: string) {
   const [root, id, section] = pathname.split('/').filter(Boolean)
-  if (!root) return '工作台'
+  if (!root) return '开始创作'
   if (id && (root === 'projects' || root === 'drama')) {
     const name = projectTitle ?? (root === 'drama' ? '短剧项目' : '项目')
     if (!section) return name

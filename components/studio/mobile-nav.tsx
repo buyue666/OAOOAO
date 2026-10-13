@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Suspense, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
-import { StudioNavLink, studioAdminNav, studioPrimaryNav, studioSettingsNav } from './studio-nav'
+import { StudioNavLink, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 
 function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
@@ -46,6 +46,11 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
         </nav>
 
         <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2">
+          <nav aria-label="创作记录与工具" className="mb-1 flex flex-col gap-1 border-b border-sidebar-border pb-2">
+            {studioSecondaryNav.map((item) => (
+              <StudioNavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
+            ))}
+          </nav>
           {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} onNavigate={onClose} />}
           <StudioNavLink item={studioSettingsNav} pathname={pathname} onNavigate={onClose} />
         </div>

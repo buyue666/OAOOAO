@@ -7,7 +7,7 @@ import { Suspense } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { cn } from '@/lib/utils'
-import { StudioNavLink, studioAdminNav, studioPrimaryNav, studioSettingsNav } from './studio-nav'
+import { StudioNavLink, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 
 function SidebarContent() {
   const pathname = usePathname()
@@ -53,6 +53,11 @@ function SidebarContent() {
       </nav>
 
       <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2">
+        <nav aria-label="创作记录与工具" className="mb-1 flex flex-col gap-1 border-b border-sidebar-border pb-2">
+          {studioSecondaryNav.map((item) => (
+            <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
+          ))}
+        </nav>
         {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} collapsed={collapsed} />}
         <StudioNavLink item={studioSettingsNav} pathname={pathname} collapsed={collapsed} />
       </div>

@@ -166,9 +166,9 @@ export function createImageTask(input: ImageGenerationInput) {
       kind: input.kind ?? (references.length ? 'edit' : 'generation'),
       ...(references.length ? { references } : {}),
       source: input.surface ?? 'image-workbench',
-      context: { ...(input.projectId ? { projectId: input.projectId } : {}), ...(input.surface ? { surface: input.surface } : {}) },
+      context: projectTaskContext(input),
     }),
-    headers: requestIdHeaders(input.clientRequestId),
+    headers: requestIdHeaders(input.clientRequestId, input.attemptNo),
   })
 }
 
@@ -181,6 +181,19 @@ function requestIdHeaders(clientRequestId?: string, attemptNo?: number) {
   if (clientRequestId) headers['x-vozeb-pro-client-request-id'] = clientRequestId
   if (attemptNo && attemptNo > 0) headers['x-vozeb-pro-attempt-no'] = String(attemptNo)
   return headers
+}
+
+function projectTaskContext(input: { projectId?: string; episodeId?: string; shotId?: string; conversationId?: string; parentTaskId?: string; surface?: string; clientRequestId?: string; attemptNo?: number }) {
+  return Object.fromEntries(Object.entries({
+    projectId: input.projectId,
+    episodeId: input.episodeId,
+    shotId: input.shotId,
+    conversationId: input.conversationId,
+    parentTaskId: input.parentTaskId,
+    surface: input.surface,
+    clientRequestId: input.clientRequestId,
+    attemptNo: input.attemptNo,
+  }).filter(([, value]) => value !== undefined && value !== ''))
 }
 
 export function createVideoTask(input: VideoGenerationInput) {
@@ -197,9 +210,9 @@ export function createVideoTask(input: VideoGenerationInput) {
       },
       ...(references.length ? { references } : {}),
       source: input.surface ?? 'video-workbench',
-      context: { ...(input.projectId ? { projectId: input.projectId } : {}), ...(input.surface ? { surface: input.surface } : {}) },
+      context: projectTaskContext(input),
     }),
-    headers: requestIdHeaders(input.clientRequestId),
+    headers: requestIdHeaders(input.clientRequestId, input.attemptNo),
   })
 }
 
@@ -227,9 +240,9 @@ export function createAudioTask(input: AudioGenerationInput) {
         ...(input.format ? { format: input.format } : {}),
       },
       source: input.surface ?? 'audio-workbench',
-      context: { ...(input.projectId ? { projectId: input.projectId } : {}) },
+      context: projectTaskContext(input),
     }),
-    headers: requestIdHeaders(input.clientRequestId),
+    headers: requestIdHeaders(input.clientRequestId, input.attemptNo),
   })
 }
 
