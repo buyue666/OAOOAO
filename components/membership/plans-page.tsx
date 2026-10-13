@@ -116,11 +116,11 @@ export function PlansPage() {
         <section className="w-full rounded-3xl border border-white/15 bg-white/[0.06] p-8 text-center shadow-2xl shadow-black/20 backdrop-blur-xl">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">{billing.mode === 'commercial' ? '商用模式配置中' : '自用模式'}</p>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight">{billing.mode === 'commercial' ? '套餐购买暂未开放' : '充值与在线支付暂未开放'}</h1>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/60">{billing.mode === 'commercial' ? '站点已经切换到商用模式，但购买政策和公开协议还没有完整发布。完成配置后，这里会自动开放套餐购买。' : '当前站点用于内部创作与测试，用户充值、套餐购买和在线支付入口已关闭。已有积分仍可正常使用。'}</p>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/60">{billing.mode === 'commercial' ? billing.purchaseReadiness?.ready ? '购买政策已发布，支付渠道尚未配置完成。支付服务准备就绪后将开放购买，已有积分仍可正常使用。' : '站点已经切换到商用模式，但购买政策和公开协议还没有完整发布。完成配置后，这里会自动开放套餐购买。' : '当前站点用于内部创作与测试，用户充值、套餐购买和在线支付入口已关闭。已有积分仍可正常使用。'}</p>
           {billing.mode === 'commercial' && billing.purchaseReadiness?.missing?.length ? <ul className="mx-auto mt-5 max-w-md space-y-1 text-left text-xs leading-5 text-amber-100/80">{billing.purchaseReadiness.missing.map((item) => <li key={item}>• {item}</li>)}</ul> : null}
           <div className="mt-7 flex flex-wrap justify-center gap-2">
             <Link href="/studio" className="inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-85">返回工作台</Link>
-            {billing.mode === 'commercial' && state.backendStatus === 'connected' && state.user?.role === 'admin' ? <Link href="/admin/settings" className="inline-flex h-10 items-center rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">打开购买政策设置</Link> : null}
+            {billing.mode === 'commercial' && state.backendStatus === 'connected' && state.user?.role === 'admin' ? <Link href="/admin/settings" className="inline-flex h-10 items-center rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">{billing.purchaseReadiness?.ready ? '打开支付设置' : '打开购买政策设置'}</Link> : null}
           </div>
         </section>
       </div>
@@ -129,7 +129,7 @@ export function PlansPage() {
     )}
     <Dialog open={!!checkout} onOpenChange={open => { if (!open) setCheckout(null) }}>
       <DialogContent><DialogHeader><DialogTitle>支付订单</DialogTitle><DialogDescription>{checkout?.orderNo} · {orderStatus}</DialogDescription></DialogHeader>
-        {checkout?.kind === 'manual' && <p>订单已创建，请联系管理员完成支付。</p>}
+        {checkout?.kind === 'manual' && <div className="space-y-3"><p className="whitespace-pre-wrap break-words">{checkout.instructions?.trim() || '订单已创建，请联系管理员获取付款说明。'}</p><p className="text-sm text-muted-foreground">管理员核实收款后，积分将计入账户。请保留订单号，避免重复付款。</p></div>}
         {checkout?.kind === 'qr' && (qrImage ? <img src={qrImage} alt="支付二维码" width={280} height={280} className="mx-auto max-w-full" /> : <p>正在生成支付二维码</p>)}
         {checkout?.url && <a href={checkout.url} rel="noreferrer" target="_blank">前往支付</a>}
         <Button onClick={refreshOrder}>查询支付结果</Button>

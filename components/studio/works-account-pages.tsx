@@ -578,7 +578,7 @@ function OrdersPanel() {
   const [busyId, setBusyId] = useState('')
   const [actionError, setActionError] = useState('')
   const [notice, setNotice] = useState('')
-  const [checkout, setCheckout] = useState<{ orderNo: string; kind: string; url?: string; qrContent?: string } | null>(null)
+  const [checkout, setCheckout] = useState<{ orderNo: string; kind: string; instructions?: string; url?: string; qrContent?: string } | null>(null)
 
   if (loadState === 'unauthenticated') {
     return <Notice tone="neutral"><span className="min-w-0 flex-1">登录后查看订单记录。</span><Link href="/login?next=/account" className="shrink-0 text-[11px] underline">前往登录</Link></Notice>
@@ -589,7 +589,7 @@ function OrdersPanel() {
     setBusyId(orderId); setActionError(''); setNotice('')
     try {
       const result = await resumeCheckout(orderId, provider || 'manual')
-      setCheckout({ orderNo, kind: result.kind, url: result.url, qrContent: result.qrContent })
+      setCheckout({ orderNo, kind: result.kind, instructions: result.instructions, url: result.url, qrContent: result.qrContent })
       setNotice('已重新获取支付参数。支付完成后请点击「刷新状态」。')
     } catch (reason) {
       setActionError(reason instanceof Error ? reason.message : '获取支付参数失败')
@@ -661,6 +661,7 @@ function OrdersPanel() {
         {checkout && (
           <div className="flex flex-col gap-3">
             <KeyValue label="支付方式" value={checkout.kind === 'manual' ? '人工确认' : checkout.kind} />
+            {checkout.kind === 'manual' && <p className="whitespace-pre-wrap break-words text-sm">{checkout.instructions?.trim() || '请联系管理员获取本订单的付款说明。'}</p>}
             {checkout.url && <a href={checkout.url} target="_blank" rel="noopener noreferrer" className="text-xs text-studio-accent underline">打开支付页面</a>}
             {checkout.qrContent && <p className="break-all rounded-md border border-border bg-muted/40 p-2 font-mono text-[11px]">{checkout.qrContent}</p>}
             <Notice tone="neutral">当前订单需要人工确认支付，请按页面提示完成后等待处理。</Notice>

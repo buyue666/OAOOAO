@@ -335,6 +335,7 @@ export type CheckoutView = {
   orderId: string
   orderNo: string
   kind: 'manual' | 'redirect' | 'form' | 'qr'
+  instructions?: string
   url?: string
   qrContent?: string
   form?: { action: string; method: string; fields: Array<{ name: string; value: string }> }
