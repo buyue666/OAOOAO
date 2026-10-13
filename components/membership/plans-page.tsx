@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
+import { SiteBrand } from '@/components/site-brand'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MembershipPurchaseView } from './membership-purchase-view'
@@ -100,7 +100,7 @@ export function PlansPage() {
   }
   return <div className="min-h-dvh bg-black text-zinc-100">
     <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 pr-16 text-sm">
-      <Link href="/" aria-label="OAO 首页" className="inline-flex items-center"><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={112} height={27} className="h-7 w-auto invert" /></Link>
+      <Link href="/" aria-label="返回首页" className="inline-flex items-center"><SiteBrand tone="dark" imageClassName="h-7" /></Link>
       <div className="flex flex-wrap items-center gap-4">
         {providers.length > 0 && <label>支付方式 <select aria-label="支付方式" value={provider} onChange={e => setProvider(e.target.value)} className="ml-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1">{providers.map(p => <option key={p} value={p}>{({manual:'人工支付', epay:'在线支付', stripe:'银行卡', ciyuan:'词元余额'} as Record<string,string>)[p] || p}</option>)}</select></label>}
         <Link href={state.backendStatus === 'connected' ? '/account' : '/login?next=/plans'}>{state.backendStatus === 'connected' ? '账户与订单' : '登录'}</Link>

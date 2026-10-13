@@ -6,6 +6,7 @@ import { ArrowDown, ArrowRight, Bot, Clapperboard, FileText, ImageIcon, Language
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import styles from './landing-page.module.css'
 import { SiteAnnouncementBar } from './site-announcement-bar'
+import { SiteBrand, useSiteBrand } from './site-brand'
 import { useStudio } from '@/lib/studio/store'
 import { useLocale } from '@/lib/studio/i18n'
 
@@ -98,7 +99,7 @@ function Header() {
   }, [open])
   return <header ref={ref} className={styles.header} data-ready={ready} data-scrolled={scrolled} data-open={open}>
     <div className={styles.headerRow}>
-      <a href="#hero" className={styles.logo} aria-label="OAO 首页" onClick={() => setOpen(false)}><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} className={styles.brandLogo} /></a>
+      <a href="#hero" className={styles.logo} aria-label="返回首页" onClick={() => setOpen(false)}><SiteBrand tone="light" imageClassName="h-6 max-w-[112px]" /></a>
       <nav className={styles.desktopNav} aria-label="首页导航">{navigation.map((item) => <a key={item.href} href={item.href}>{t(item.key)}</a>)}</nav>
       <div className={styles.headerActions}><button type="button" className={styles.localeToggle} onClick={toggleLocale} aria-label={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')} title={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')}><Languages size={15} /></button><Link href="/studio" className={styles.headerCta}>{t('enterCreation')}</Link></div>
       <button ref={toggle} type="button" className={styles.menuToggle} aria-label={open ? '关闭菜单' : '打开菜单'} aria-expanded={open} aria-controls="landing-mobile-menu" onClick={() => setOpen(!open)}>{open ? <X size={22} /> : <Menu size={22} />}</button>
@@ -184,14 +185,15 @@ function About() {
 function Footer() {
   const { locale, t } = useLocale()
   const { state } = useStudio()
+  const brand = useSiteBrand()
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   const accountItems = locale === 'zh-CN'
     ? [{ label: '工作台', href: '/studio' }, { label: '我的作品', href: '/works' }, ...(rechargeEnabled ? [{ label: '订阅套餐', href: '/plans' }] : []), { label: '登录账户', href: '/login' }]
     : [{ label: 'Workspace', href: '/studio' }, { label: 'My works', href: '/works' }, ...(rechargeEnabled ? [{ label: 'Plans', href: '/plans' }] : []), { label: 'Sign in', href: '/login' }]
   const columns = locale === 'zh-CN'
-    ? [{ title: '探索', items: [{ label: '创作能力', href: '#models' }, { label: '作品展示', href: '#gallery' }, { label: '关于 OAO', href: '#about' }] }, { title: '开始创作', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: '我的 OAO', items: accountItems }]
-    : [{ title: 'Explore', items: [{ label: 'Capabilities', href: '#models' }, { label: 'Works', href: '#gallery' }, { label: 'About OAO', href: '#about' }] }, { title: 'Create', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: 'My OAO', items: accountItems }]
-  return <footer className={styles.footer}><div className={styles.footerGrid}><div className={styles.footerBrand}><a href="#hero" aria-label="OAO 首页"><Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} className={styles.footerLogo} /></a><p>{t('footerDescription')}</p></div>{columns.map((column) => <div key={column.title}><h3>{column.title}</h3><ul>{column.items.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></div>)}</div><div className={styles.footerBottom}><p>{locale === 'zh-CN' ? '© 2026 OAO。保留所有权利。' : '© 2026 OAO. All rights reserved.'}</p><a href="#hero">{locale === 'zh-CN' ? '返回顶部' : 'Back to top'} <ArrowDown size={14} className={styles.up} /></a></div></footer>
+    ? [{ title: '探索', items: [{ label: '创作能力', href: '#models' }, { label: '作品展示', href: '#gallery' }, { label: `关于 ${brand.title}`, href: '#about' }] }, { title: '开始创作', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: `我的 ${brand.title}`, items: accountItems }]
+    : [{ title: 'Explore', items: [{ label: 'Capabilities', href: '#models' }, { label: 'Works', href: '#gallery' }, { label: `About ${brand.title}`, href: '#about' }] }, { title: 'Create', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: `My ${brand.title}`, items: accountItems }]
+  return <footer className={styles.footer}><div className={styles.footerGrid}><div className={styles.footerBrand}><a href="#hero" aria-label="返回首页"><SiteBrand tone="light" imageClassName="h-7 max-w-[160px]" /></a><p>{t('footerDescription')}</p></div>{columns.map((column) => <div key={column.title}><h3>{column.title}</h3><ul>{column.items.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></div>)}</div><div className={styles.footerBottom}><p>{locale === 'zh-CN' ? `© 2026 ${brand.title}。保留所有权利。` : `© 2026 ${brand.title}. All rights reserved.`}</p><a href="#hero">{locale === 'zh-CN' ? '返回顶部' : 'Back to top'} <ArrowDown size={14} className={styles.up} /></a></div></footer>
 }
 
 export function LandingPage() {

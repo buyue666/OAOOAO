@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { SiteBrand } from '@/components/site-brand'
 
 const steps = [
   { title: '描述想法', detail: '用一句话或一段脚本说明画面、镜头与故事。' },
@@ -14,7 +15,7 @@ const capabilities = ['图片生成', '视频生成', '短剧制作', '自由画
  */
 export function AuthBrandPanel() {
   return (
-    <aside aria-label="OAO 产品介绍" className="relative hidden min-h-dvh overflow-hidden bg-[#0b0c0e] text-white lg:flex lg:flex-col">
+    <aside aria-label="产品介绍" className="relative hidden min-h-dvh overflow-hidden bg-[#0b0c0e] text-white lg:flex lg:flex-col">
       <Image
         src="/media/generated/auth-ai-canvas-v1.png"
         alt=""
@@ -26,7 +27,7 @@ export function AuthBrandPanel() {
       <div aria-hidden="true" className="absolute inset-0 bg-[#0b0c0e]/55" />
 
       <div className="relative flex h-16 shrink-0 items-center gap-3 px-12">
-        <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} className="h-7 w-auto shrink-0 object-contain invert" />
+        <SiteBrand tone="dark" imageClassName="h-7" />
         <span className="text-sm font-medium text-white/90">创作平台</span>
       </div>
 

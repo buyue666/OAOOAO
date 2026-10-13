@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
+import { SiteBrand } from '@/components/site-brand'
 import { usePathname } from 'next/navigation'
 import { Suspense } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
@@ -32,7 +32,7 @@ function SidebarContent() {
             aria-label="返回工作台"
             className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           >
-            <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} preload className="h-6 w-auto object-contain dark:invert" />
+            <SiteBrand imageClassName="h-6 max-w-[152px]" />
           </Link>
         )}
         <button

@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useState } from 'react'
-import Image from 'next/image'
+import { SiteBrand, useSiteBrand } from '@/components/site-brand'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Mail, QrCode, Send, UserRound } from 'lucide-react'
@@ -67,6 +67,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
   const searchParams = useSearchParams()
   const { refreshSession, state } = useStudio()
   const { t } = useLocale()
+  const brand = useSiteBrand()
   const [mode, setMode] = useState<AuthMode>(routeMode ?? parseMode(searchParams.get('mode')))
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -282,7 +283,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
 
   const eyebrow = mode === 'login' ? '账户登录' : mode === 'register' ? '新用户注册' : '找回密码'
   const title = mode === 'login' ? '欢迎回来' : mode === 'register' ? '创建账户' : '重置密码'
-  const description = mode === 'login' ? t('authLoginDescription') : mode === 'register' ? t('authRegisterDescription') : t('authResetDescription')
+  const description = mode === 'login' ? t('authLoginDescription').replace(/\bOAO\b/g, () => brand.title) : mode === 'register' ? t('authRegisterDescription') : t('authResetDescription')
   const submitLabel = mode === 'login' ? '登录' : mode === 'register' ? '注册并登录' : '重置密码'
   const codePurpose = mode === 'register' ? 'register' : 'password-reset'
   const codeButtonLabel = sendingCode ? '发送中…' : cooldown > 0 ? `${cooldown} 秒后重发` : '获取验证码'
@@ -294,7 +295,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
 
       <section className="flex min-h-dvh flex-col">
         <header className="flex h-16 shrink-0 items-center justify-between gap-4 px-5 sm:px-10 lg:px-14">
-          <Image src="/media/brand/oao-logo-transparent.png" alt="OAO" width={1221} height={292} className="h-7 w-auto shrink-0 object-contain dark:invert lg:hidden" />
+          <SiteBrand className="shrink-0 lg:hidden" imageClassName="h-7" />
           <Link href="/" className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
             <ArrowLeft className="size-4" aria-hidden="true" />返回首页
           </Link>

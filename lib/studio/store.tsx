@@ -3,10 +3,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from 'react'
 import { assets, adminChannels, adminModels, adminUsers, models as demoModels, orders, projects, shots, tasks as demoTasks, works, demoUser, media } from './mock-data'
 import { createDemoTask, demoResultForTask, estimateCredits as estimateDemoCredits } from './mock-service'
-import { backendUserToStudioUser, deleteCanvasProjects, isUnauthorized, listCanvasProjects, createCanvasProject } from './api'
+import { backendUserToStudioUser, deleteCanvasProjects, isUnauthorized, listCanvasProjects, createCanvasProject, getSession } from './api'
 import { clearScopedTaskCache } from './task-cache'
 import { loadSessionSnapshot, sessionIdentity } from './session'
 import { defaultGenerationDefaults, estimatePoints, modelsFromSession } from './studio-models'
+import { createSiteBrandSync, subscribeSiteBrandRefresh, subscribeSiteBrandUpdates } from './site-brand-sync'
 import type { AgentPlan, GenerationSettings, ModelConfig, Project, StudioAction, StudioContextValue, StudioSkin, StudioState, Theme, User } from './types'
 
 const storageKey = 'oaooao-studio-demo'
@@ -98,6 +99,8 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
   switch (action.type) {
     case 'HYDRATE':
       return { ...state, ...action.payload, hydrated: true }
+    case 'SET_SITE_BRAND':
+      return { ...state, sessionSettings: { ...state.sessionSettings, site: { ...state.sessionSettings?.site, ...action.site } } }
     case 'SET_BACKEND_STATUS':
       return { ...state, backendStatus: action.status, ...(action.error ? { backendError: action.error } : { backendError: undefined }) }
     case 'SET_THEME':
@@ -219,8 +222,16 @@ const StudioContext = createContext<StudioContextValue | null>(null)
 
 export function StudioProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, getInitialState)
+  const [brandSync] = useState(createSiteBrandSync)
   /** 会话世代：登录、退出、切换账号时自增，用于强制重新读取会话与模型目录。 */
   const [sessionEpoch, setSessionEpoch] = useState(0)
+
+  useEffect(() => {
+    const unsubscribe = brandSync.subscribe((site) => dispatch({ type: 'SET_SITE_BRAND', site }))
+    const disconnect = subscribeSiteBrandUpdates((site) => brandSync.publish(site))
+    const stopRefreshing = subscribeSiteBrandRefresh(brandSync, async () => (await getSession()).settings?.site)
+    return () => { stopRefreshing(); disconnect(); unsubscribe() }
+  }, [brandSync])
 
   useEffect(() => {
     const raw = window.localStorage.getItem(storageKey)
@@ -243,11 +254,13 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     if (!state.hydrated) return
     let cancelled = false
     void (async () => {
+      const brandRevision = brandSync.getRevision()
       try {
         const snapshot = await loadSessionSnapshot()
         if (cancelled) return
+        const settings = brandSync.merge(snapshot.settings, brandRevision)
         if (!snapshot.user) {
-          dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), backendStatus: 'unauthenticated', liveModels: [], sessionSettings: snapshot.settings } })
+          dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), backendStatus: 'unauthenticated', liveModels: [], sessionSettings: settings } })
           return
         }
         const user = backendUserToStudioUser(snapshot.user, media.portrait)
@@ -256,7 +269,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           payload: {
             user,
             credits: user.credits,
-            sessionSettings: snapshot.settings,
+            sessionSettings: settings,
             liveModels: snapshot.models,
             ...(snapshot.models.length ? { models: snapshot.models } : {}),
           },
@@ -282,7 +295,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [state.hydrated, sessionEpoch])
+  }, [brandSync, state.hydrated, sessionEpoch])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', state.theme === 'dark')
@@ -372,13 +385,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
    */
   const refreshSession = useCallback(async () => {
     const previousIdentity = sessionIdentity(state.user)
+    const brandRevision = brandSync.getRevision()
     setSessionEpoch((value) => value + 1)
     try {
       const snapshot = await loadSessionSnapshot()
+      const settings = brandSync.merge(snapshot.settings, brandRevision)
       if (!snapshot.user) {
         // 退出登录：清掉上一个账号的任务缓存，避免下一个登录者看到其提示词与未确认提交。
         clearScopedTaskCache(previousIdentity || state.user.id)
-        dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), credits: 0, liveModels: [], sessionSettings: snapshot.settings, projects: [], assets: [], tasks: [], works: [], agentPlans: [] } })
+        dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), credits: 0, liveModels: [], sessionSettings: settings, projects: [], assets: [], tasks: [], works: [], agentPlans: [] } })
         dispatch({ type: 'SET_BACKEND_STATUS', status: 'unauthenticated' })
         return
       }
@@ -392,7 +407,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         payload: {
           user,
           credits: user.credits,
-          sessionSettings: snapshot.settings,
+          sessionSettings: settings,
           liveModels: snapshot.models,
           ...(snapshot.models.length ? { models: snapshot.models } : {}),
           ...(switched ? { projects: [], assets: [], tasks: [], works: [], agentPlans: [] } : {}),
@@ -406,7 +421,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         error: error instanceof Error ? error.message : '会话刷新失败',
       })
     }
-  }, [state.user])
+  }, [brandSync, state.user])
 
   /**
    * 新建项目。

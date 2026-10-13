@@ -3,6 +3,7 @@
  * 页面只调用这里的函数；后端字段差异在这一层收敛，页面不写兼容分支。
  */
 import { request, StudioApiError } from './api'
+import { publishSiteBrandSettings } from './site-brand-sync'
 import type {
   AdminGenerationOperations,
   AdminGenerationOverview,
@@ -191,8 +192,12 @@ export async function getAdminSettings(): Promise<AdminSettings> {
 /** 后端按字段合并补丁；这里允许提交部分设置。 */
 export type AdminSettingsPatch = Partial<Omit<AdminSettings, 'defaultModels'>> & { defaultModels?: Partial<SystemDefaultModels> }
 
-export function updateAdminSettings(patch: AdminSettingsPatch) {
-  return request<{ settings: AdminSettings }>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(patch) })
+export async function updateAdminSettings(patch: AdminSettingsPatch) {
+  const payload = await request<{ settings: AdminSettings }>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(patch) })
+  assertOk(payload)
+  if (!payload?.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) throw new StudioApiError('设置保存后未返回有效配置，请重新读取确认', 502)
+  if (patch.site && payload.settings.site) publishSiteBrandSettings(payload.settings.site)
+  return payload
 }
 
 /** 读取支付渠道状态；后端只返回非敏感字段，密钥字段只返回 configured 标记。 */
@@ -273,8 +278,8 @@ export type LaunchReadinessReport = {
  *
  * 只读接口：不会修改任何配置。区分 error（阻断收费上线）与 warning（需人工确认）。
  */
-export async function getLaunchReadiness(): Promise<LaunchReadinessReport> {
-  const payload = await request<{ code?: number; msg?: string; data?: LaunchReadinessReport }>('/api/admin/launch-readiness')
+export async function getLaunchReadiness(profile: 'self_use' | 'paid_beta' | 'production' = 'self_use'): Promise<LaunchReadinessReport> {
+  const payload = await request<{ code?: number; msg?: string; data?: LaunchReadinessReport }>(`/api/admin/launch-readiness${query({ profile })}`)
   if (typeof payload.code === 'number' && payload.code !== 0) throw new StudioApiError(payload.msg || '上线检查失败', payload.code)
   const report = payload.data
   if (!report) throw new StudioApiError('上线检查未返回结果', 502)

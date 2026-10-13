@@ -98,7 +98,7 @@ export function AdminPagination({ page, pageSize, total, loading, onChange }: { 
 
 /* -------------------------------- 确认操作 -------------------------------- */
 
-export type ConfirmRequest = { title: string; description?: string; confirmLabel?: string; tone?: 'danger' | 'default'; onConfirm: () => Promise<void> | void }
+export type ConfirmRequest = { title: string; description?: string; notice?: string; confirmLabel?: string; tone?: 'danger' | 'default'; onConfirm: () => Promise<void> | void }
 
 /**
  * 危险操作统一走这个 hook：先弹确认框，确认后才执行。
@@ -134,7 +134,7 @@ export function useConfirm() {
       </>}
     >
       <div className="flex flex-col gap-3">
-        <AdminNotice tone={request?.tone === 'default' ? 'neutral' : 'warning'}>该操作会立即写入后台并记录审计日志，请确认目标对象无误。</AdminNotice>
+        <AdminNotice tone={request?.tone === 'default' ? 'neutral' : 'warning'}>{request?.notice ?? '该操作会立即写入后台并记录审计日志，请确认目标对象无误。'}</AdminNotice>
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       </div>
     </Modal>

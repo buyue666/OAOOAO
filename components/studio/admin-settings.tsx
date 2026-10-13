@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Cloud, Database, Gem, Mail, RefreshCw, Save, Server, Settings2, ShieldCheck, Wallet } from 'lucide-react'
 import {
   getAdminSettings,
@@ -13,7 +13,7 @@ import {
   updatePaymentProviderConfig,
   type AdminSettingsPatch,
 } from '@/lib/studio/admin-api'
-import type { AdminPaymentConfigSummary, AdminPaymentProviderConfig, AdminSettings, GenerationConcurrencySettings, GenerationDefaultSettings, MailSettings, ObjectStorageSettings, SiteSettings } from '@/lib/studio/admin-types'
+import type { AdminPaymentConfigSummary, AdminPaymentProviderConfig, AdminSettings, GenerationConcurrencySettings, GenerationDefaultSettings, MailSettings, ObjectStorageSettings } from '@/lib/studio/admin-types'
 import { ControlButton, StatusBadge } from './ui'
 import {
   AdminDefinition,
@@ -31,8 +31,9 @@ import {
   formatAdminNumber,
   useConfirm,
 } from './admin-kit'
-import { useAdminReload, useAdminSession } from './admin-shell'
+import { useAdminNavigation, useAdminReload, useAdminSession } from './admin-shell'
 import { CommercePolicyEditor } from './commerce-policy-editor'
+import { AdminSiteSettings } from './admin-site-settings'
 
 type SectionId = 'site' | 'account' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
 
@@ -47,34 +48,79 @@ export function AdminSettingsPanel() {
   const [message, setMessage] = useState('')
   const [section, setSection] = useState<SectionId>('site')
   const [saving, setSaving] = useState(false)
+  const [siteDirty, setSiteDirty] = useState(false)
+  const siteDirtyRef = useRef(false)
+  siteDirtyRef.current = siteDirty
+  const [formRevision, setFormRevision] = useState(0)
+  const [loadWarnings, setLoadWarnings] = useState<string[]>([])
   const confirm = useConfirm()
+  const { registerGuard } = useAdminNavigation()
+  useEffect(() => {
+    registerGuard(siteDirty ? (proceed) => confirm.confirm({ title: '离开前放弃品牌更改？', description: '你还有未保存的站点配置。', notice: '此操作只放弃当前草稿，已保存的配置不会改变。', confirmLabel: '放弃并离开', tone: 'default', onConfirm: () => { setSiteDirty(false); proceed() } }) : null)
+    return () => registerGuard(null)
+  }, [siteDirty, registerGuard, confirm.confirm])
 
   const canSystem = session.can('system.manage')
   const canBilling = session.can('billing.manage')
   const canUpstream = session.can('upstream.manage')
+  const requestVersion = useRef(0)
 
   const load = useCallback(() => {
-    setLoading(true); setError('')
-    Promise.all([getAdminSettings(), canSystem ? getObjectStorage().catch(() => null) : Promise.resolve(null), canBilling ? getPaymentConfig().catch(() => null) : Promise.resolve(null)])
-      .then(([next, objectStorage, nextPaymentConfig]) => { setSettings(next); setStorage(objectStorage); setPaymentConfig(nextPaymentConfig) })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : '系统设置加载失败'))
-      .finally(() => setLoading(false))
-  }, [canSystem, reloadKey])
+    const version = ++requestVersion.current
+    setLoading(true); setError(''); setLoadWarnings([])
+    Promise.allSettled([getAdminSettings(), canSystem ? getObjectStorage() : Promise.resolve(null), canBilling ? getPaymentConfig() : Promise.resolve(null)])
+      .then(([next, objectStorage, nextPaymentConfig]) => {
+        if (version !== requestVersion.current) return
+        if (next.status === 'fulfilled') {
+          if (siteDirtyRef.current) setMessage('配置已读取，当前有未保存的品牌更改，已保留你的草稿。')
+          else { setSettings(next.value); setFormRevision((value) => value + 1) }
+        }
+        else setError(next.reason instanceof Error ? next.reason.message : '系统设置加载失败')
+        const warnings: string[] = []
+        if (objectStorage.status === 'fulfilled') setStorage(objectStorage.value)
+        else warnings.push('对象存储配置读取失败，请重试。当前不能据此判断存储是否已配置。')
+        if (nextPaymentConfig.status === 'fulfilled') setPaymentConfig(nextPaymentConfig.value)
+        else warnings.push('支付配置读取失败，请重试。当前不能据此判断支付是否可用。')
+        setLoadWarnings(warnings)
+        setLoading(false)
+      })
+  }, [canSystem, canBilling, reloadKey])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { void load(); return () => { requestVersion.current += 1 } }, [load])
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('section')
+    if (requested && ['site', 'account', 'billing', 'points', 'generation', 'mail', 'storage', 'lifecycle'].includes(requested)) setSection(requested as SectionId)
+  }, [])
+
+  function changeSection(next: SectionId) {
+    if (next === section) return
+    const select = () => {
+      setSection(next); setSiteDirty(false); setMessage('')
+      const url = new URL(window.location.href)
+      url.searchParams.set('section', next)
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+    }
+    if (siteDirty) confirm.confirm({ title: '离开前放弃品牌更改？', description: '当前站点配置尚未保存，切换分组后这次更改会丢失。', notice: '此操作只放弃当前草稿，已保存的配置不会改变。', confirmLabel: '放弃并切换', tone: 'default', onConfirm: select })
+    else select()
+  }
 
   /** 所有保存都先展示变更摘要，再由管理员确认。 */
   const save = useCallback((label: string, patch: AdminSettingsPatch, summary: string[]) => {
     confirm.confirm({
       title: `保存${label}？`,
-      description: summary.length ? `将提交 ${summary.length} 项变更。` : '将提交当前表单内容。',
+      description: summary.length ? `将更新：${summary.join('、')}。` : '将提交当前表单内容。',
       confirmLabel: '确认保存',
       tone: 'default',
       onConfirm: async () => {
         setSaving(true); setError(''); setMessage('')
         try {
           const result = await updateAdminSettings(patch)
+          requestVersion.current += 1
           setSettings(result.settings)
+          setSiteDirty(false)
+          setFormRevision((value) => value + 1)
+          setLoading(false)
           setMessage(`${label}已保存`)
         } finally { setSaving(false) }
       },
@@ -102,19 +148,26 @@ export function AdminSettingsPanel() {
       {confirm.dialog}
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
+      {loadWarnings.map((warning) => <AdminError key={warning} message={warning} retry={load} />)}
 
-      <div className="grid gap-6 lg:grid-cols-[212px_minmax(0,1fr)] lg:items-start">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <StatusBadge tone="neutral">{settings.operationMode === 'commercial' ? '商用模式' : '自用模式'}</StatusBadge>
+        <StatusBadge tone={settings.registrationEnabled ? 'success' : 'neutral'}>{settings.registrationEnabled ? '开放注册' : '注册已关闭'}</StatusBadge>
+        <span className="ml-auto text-muted-foreground">{loading ? '正在同步配置…' : `${visibleSections.length} 个设置分组`}</span>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[176px_minmax(0,1fr)] lg:items-start">
         {active && (
-          <nav aria-label="系统设置分组" className="lg:sticky lg:top-[88px]">
-            <AdminTabs label="系统设置分组" orientation="vertical" items={visibleSections.map((item) => [item.id, item.label] as const)} value={active} onChange={setSection} />
+          <nav aria-label="系统设置分组" className="rounded-xl border border-border bg-card p-2 lg:sticky lg:top-[88px]">
+            <div className="lg:hidden"><AdminSelect aria-label="选择设置分组" value={active} onChange={(event) => changeSection(event.target.value as SectionId)}>{visibleSections.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</AdminSelect></div>
+            <div className="hidden lg:block"><AdminTabs label="系统设置分组" orientation="vertical" items={visibleSections.map((item) => [item.id, item.label] as const)} value={active} onChange={changeSection} /></div>
           </nav>
         )}
 
-        <div role="tabpanel" aria-label={visibleSections.find((item) => item.id === active)?.label} className="flex min-w-0 flex-col gap-5">
-          {active === 'site' && <SiteSection settings={settings} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} />}
+        <div key={active === 'site' ? 'site' : `${active}:${formRevision}`} role="tabpanel" aria-label={visibleSections.find((item) => item.id === active)?.label} className="flex min-w-0 flex-col gap-5">
+          {active === 'site' && <AdminSiteSettings site={settings.site || {}} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} onDirtyChange={setSiteDirty} />}
           {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canBilling={canBilling} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
           {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} saving={saving} onModeSave={(patch, summary) => save('运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
-          {active === 'points' && <PointsSection settings={settings} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
+          {active === 'points' && <PointsSection settings={settings} canUpstream={canUpstream} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
           {active === 'generation' && <GenerationSection settings={settings} onSave={(patch, summary) => save('生成设置', patch, summary)} saving={saving} />}
           {active === 'mail' && <MailSection settings={settings} onSave={(patch, summary) => save('邮件设置', patch, summary)} saving={saving} />}
           {active === 'storage' && <StorageSection storage={storage} onReload={load} onMessage={setMessage} onError={setError} />}
@@ -122,83 +175,6 @@ export function AdminSettingsPanel() {
         </div>
       </div>
     </div>
-  )
-}
-
-/* ------------------------------- 站点设置 ------------------------------- */
-
-function SiteSection({ settings, onSave, saving }: { settings: AdminSettings; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
-  const site = settings.site || {}
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const data = new FormData(event.currentTarget)
-    const value = (key: string) => String(data.get(key) ?? '').trim()
-    const announcementTone = value('announcementTone') || 'promo'
-    const next: SiteSettings = {
-      ...site,
-      title: value('title'),
-      logoUrl: value('logoUrl'),
-      iconUrl: value('iconUrl'),
-      seoTitle: value('seoTitle'),
-      seoDescription: value('seoDescription'),
-      seoKeywords: value('seoKeywords'),
-      footerCopyright: value('footerCopyright'),
-      termsUrl: value('termsUrl'),
-      termsVersion: value('termsVersion'),
-      termsContent: value('termsContent'),
-      privacyUrl: value('privacyUrl'),
-      privacyVersion: value('privacyVersion'),
-      privacyContent: value('privacyContent'),
-      announcementBar: {
-        ...(site.announcementBar ?? {}),
-        enabled: data.has('announcementEnabled'),
-        text: value('announcementText'),
-        href: value('announcementHref'),
-        tone: announcementTone,
-        dismissible: data.has('announcementDismissible'),
-      },
-    }
-    const summary: string[] = []
-    for (const [key, label] of [['title', '站点名称'], ['logoUrl', 'Logo'], ['iconUrl', '站点图标'], ['seoTitle', '搜索标题'], ['seoDescription', '搜索描述'], ['footerCopyright', '页脚版权'], ['termsUrl', '服务条款地址'], ['termsVersion', '服务条款版本'], ['termsContent', '服务条款正文'], ['privacyUrl', '隐私政策地址'], ['privacyVersion', '隐私政策版本'], ['privacyContent', '隐私政策正文']] as const) {
-      if (String((site as Record<string, unknown>)[key] ?? '') !== String((next as Record<string, unknown>)[key] ?? '')) summary.push(label)
-    }
-    if (JSON.stringify(site.announcementBar ?? {}) !== JSON.stringify(next.announcementBar ?? {})) summary.push('顶部通知横幅')
-    onSave({ site: next }, summary)
-  }
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <AdminSectionCard title="站点与品牌" description="站点名称、Logo 与域名展示。所有字段保存后立即对前台生效。">
-        <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
-          <AdminField label="站点名称"><AdminInput name="title" defaultValue={site.title} maxLength={40} /></AdminField>
-          <AdminField label="站点图标 URL"><AdminInput name="iconUrl" defaultValue={site.iconUrl} /></AdminField>
-          <AdminField label="Logo URL" className="sm:col-span-2"><AdminInput name="logoUrl" defaultValue={site.logoUrl} /></AdminField>
-          <AdminField label="搜索标题"><AdminInput name="seoTitle" defaultValue={site.seoTitle} /></AdminField>
-          <AdminField label="搜索关键词"><AdminInput name="seoKeywords" defaultValue={site.seoKeywords} /></AdminField>
-          <AdminField label="搜索描述" className="sm:col-span-2"><AdminTextarea name="seoDescription" rows={2} defaultValue={site.seoDescription} /></AdminField>
-          <AdminField label="页脚版权"><AdminInput name="footerCopyright" defaultValue={site.footerCopyright} /></AdminField>
-          <AdminField label="首页视频地址"><AdminInput name="heroVideoUrl" defaultValue={site.heroVideoUrl} readOnly /></AdminField>
-          <AdminField label="服务条款地址"><AdminInput name="termsUrl" defaultValue={site.termsUrl} /></AdminField>
-          <AdminField label="服务条款版本"><AdminInput name="termsVersion" defaultValue={site.termsVersion} /></AdminField>
-          <AdminField label="服务条款正文" hint="使用 /terms 时必须填写正式正文。" className="sm:col-span-2"><AdminTextarea name="termsContent" rows={8} defaultValue={site.termsContent} placeholder="请填写用户购买前可以阅读的服务条款。" /></AdminField>
-          <AdminField label="隐私政策地址"><AdminInput name="privacyUrl" defaultValue={site.privacyUrl} /></AdminField>
-          <AdminField label="隐私政策版本"><AdminInput name="privacyVersion" defaultValue={site.privacyVersion} /></AdminField>
-          <AdminField label="隐私政策正文" hint="使用 /privacy 时必须填写正式正文。" className="sm:col-span-2"><AdminTextarea name="privacyContent" rows={8} defaultValue={site.privacyContent} placeholder="请填写隐私政策正式正文。" /></AdminField>
-        </fieldset>
-      </AdminSectionCard>
-      <AdminSectionCard title="顶部通知横幅" description="在页面最上方展示一条轻量通知。启用后会同步出现在着陆页与工作台，关闭或过期内容不会占位。">
-        <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm sm:col-span-2">
-            <input name="announcementEnabled" type="checkbox" defaultChecked={site.announcementBar?.enabled === true} className="mt-0.5" />
-            <span><span className="font-medium text-foreground">显示顶部通知横幅</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">适合展示模型上线、价格活动、维护提醒等短消息。</span></span>
-          </label>
-          <AdminField label="横幅文案" hint="建议控制在一行内，支持 emoji。" className="sm:col-span-2"><AdminInput name="announcementText" maxLength={180} defaultValue={site.announcementBar?.text} placeholder="例如：🎉 MiniMax H3 已上线，本周限时优惠" /></AdminField>
-          <AdminField label="点击跳转地址" hint="留空时只展示文案。"><AdminInput name="announcementHref" maxLength={500} defaultValue={site.announcementBar?.href} placeholder="/plans 或 https://…" /></AdminField>
-          <AdminField label="强调色"><AdminSelect name="announcementTone" defaultValue={site.announcementBar?.tone || 'promo'}><option value="promo">品牌紫蓝</option><option value="info">冷静蓝</option><option value="warning">提醒橙</option></AdminSelect></AdminField>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2"><input name="announcementDismissible" type="checkbox" defaultChecked={site.announcementBar?.dismissible !== false} />允许用户关闭（只对当前浏览器生效）</label>
-        </fieldset>
-      </AdminSectionCard>
-      <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存站点设置'}</ControlButton></AdminSaveBar>
-    </form>
   )
 }
 
@@ -374,7 +350,7 @@ function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { s
 
 /* ------------------------------ 计费与权益 ------------------------------ */
 
-function PointsSection({ settings, onSave, saving }: { settings: AdminSettings; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
+function PointsSection({ settings, onSave, saving, canUpstream }: { settings: AdminSettings; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean; canUpstream: boolean }) {
   const [plans, setPlans] = useState(settings.entitlements.plans.map((plan) => ({ ...plan, limits: { ...plan.limits }, features: [...plan.features] })))
   const [entitlementsEnabled, setEntitlementsEnabled] = useState(settings.entitlements.enabled)
   const [defaultPlanId, setDefaultPlanId] = useState(settings.entitlements.defaultPlanId)
@@ -382,21 +358,25 @@ function PointsSection({ settings, onSave, saving }: { settings: AdminSettings; 
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const entitlements = { enabled: entitlementsEnabled, defaultPlanId, plans }
+    const summary: string[] = []
+    if (JSON.stringify(entitlements) !== JSON.stringify(settings.entitlements)) summary.push('套餐权益')
+    if (canUpstream && JSON.stringify(limits) !== JSON.stringify(settings.generationCostControl)) summary.push('生成成本控制')
     onSave({
-      entitlements: { enabled: entitlementsEnabled, defaultPlanId, plans },
-      generationCostControl: limits,
-    }, ['套餐权益', '生成成本控制'])
+      entitlements,
+      ...(canUpstream ? { generationCostControl: limits } : {}),
+    }, summary)
   }
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
-      <AdminSectionCard title="成本控制上限" description="限制单次任务与每日积分消耗，0 表示不限制。">
+      {canUpstream && <AdminSectionCard title="成本控制上限" description="限制单次任务与每日积分消耗，0 表示不限制。">
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-3">
           <AdminField label="单任务积分上限"><AdminInput type="number" min="0" value={limits.maxPointsPerTask} onChange={(event) => setLimits({ ...limits, maxPointsPerTask: Number(event.target.value) || 0 })} /></AdminField>
           <AdminField label="单用户每日上限"><AdminInput type="number" min="0" value={limits.dailyUserPointSpend} onChange={(event) => setLimits({ ...limits, dailyUserPointSpend: Number(event.target.value) || 0 })} /></AdminField>
           <AdminField label="全站每日上限"><AdminInput type="number" min="0" value={limits.dailyTotalPointSpend} onChange={(event) => setLimits({ ...limits, dailyTotalPointSpend: Number(event.target.value) || 0 })} /></AdminField>
         </fieldset>
-      </AdminSectionCard>
+      </AdminSectionCard>}
 
       <AdminSectionCard title="权益方案" description="用户所属套餐决定每日积分与各类调用上限。">
         <fieldset disabled={saving} className="flex flex-col gap-4">

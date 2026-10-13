@@ -4,13 +4,14 @@ import { StudioApp } from '@/components/studio/studio-app'
 import { GenerationProvider } from '@/lib/studio/generation-store'
 import { StudioProvider } from '@/lib/studio/store'
 import { LocaleProvider } from '@/lib/studio/i18n'
+import { SiteBrandMetadata } from '@/components/site-brand'
 import '@xyflow/react/dist/style.css'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'OAO · AI 创作工作台',
   description: '在一个工作台中完成 AI 图片、视频、短剧与导演 Agent 创作。',
-  generator: 'v0.app',
+  icons: { icon: '/media/brand/oao-mark.png' },
 }
 
 export const viewport: Viewport = {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="font-sans antialiased">
         <LocaleProvider>
           <StudioProvider>
+            <SiteBrandMetadata />
             <GenerationProvider><StudioApp>{children}</StudioApp></GenerationProvider>
           </StudioProvider>
         </LocaleProvider>

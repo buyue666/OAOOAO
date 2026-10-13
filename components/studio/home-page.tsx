@@ -6,6 +6,7 @@ import { ArrowRight, Bot, Clapperboard, Image as ImageIcon, Layers3, Video, type
 import { cn } from '@/lib/utils'
 import { CreativeProjectStarter } from './creative-project-starter'
 import { RecentWorks } from './home-recent-works'
+import { useSiteBrand } from '@/components/site-brand'
 
 type EntryMode = 'quick' | 'project'
 
@@ -16,6 +17,7 @@ const directions = [
 ]
 
 export function HomePage() {
+  const brand = useSiteBrand()
   const [mode, setMode] = useState<EntryMode>('quick')
   const [brief, setBrief] = useState('')
 
@@ -23,7 +25,7 @@ export function HomePage() {
     <div className="studio-home mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-16 pt-7 sm:px-6 lg:px-8 lg:pt-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground">OAO · 创作空间</p>
+          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground">{brand.title} · 创作空间</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">今天，做点什么？</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">从一张图开始，或把一个想法发展成完整作品。</p>
         </div>
