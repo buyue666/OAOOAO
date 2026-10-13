@@ -42,6 +42,8 @@ export type GenerationTask = {
   upstreamId?: string
   durationSeconds?: number
   canRetry?: boolean
+  /** The provider may still be running after a cancellation request. */
+  cancelRequested?: boolean
   warning?: string
 }
 

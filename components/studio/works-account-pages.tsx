@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, Download, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
 import { ControlButton, KeyValue, MediaThumb, Modal, Notice, PageHeader, SectionHeading, SegmentedControl, StatusBadge } from './ui'
 import { useStudio } from '@/lib/studio/store'
@@ -23,6 +23,10 @@ import {
 import { useLedgerSummary, useReferralCenter, useServerOrders, useServerWorks } from '@/lib/studio/use-account-data'
 import type { StudioWork } from '@/lib/studio/account-api'
 import { cn } from '@/lib/utils'
+import { addMediaToProject } from '@/lib/studio/project-media'
+import { downloadMedia } from '@/lib/studio/result-delivery'
+import { writeReuseParams } from '@/lib/studio/reuse-params'
+import { writeWorkHandoff } from '@/lib/studio/work-handoff'
 
 /* ------------------------------- 我的作品 ------------------------------- */
 
@@ -99,83 +103,69 @@ export function WorksPage() {
 
 /** 作品卡片：支持预览、下载、复用参数、发送到画布、加入项目。 */
 function WorkCard({ work }: { work: StudioWork }) {
-  const { state, dispatch } = useStudio()
+  const { state } = useStudio()
   const [preview, setPreview] = useState(false)
   const [notice, setNotice] = useState('')
+  const [projectBusy, setProjectBusy] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const projectLock = useRef(false)
   const ratio = work.kind === 'video' ? '16:9' : '1:1'
 
-  function download() {
-    if (!work.src) return
-    const anchor = document.createElement('a')
-    anchor.href = work.src
-    anchor.download = `${work.title || 'oaooao-result'}.${work.kind === 'video' ? 'mp4' : 'png'}`
-    anchor.rel = 'noopener'
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
+  async function download() {
+    if (!work.src || downloading) return
+    setDownloading(true)
+    try {
+      const result = await downloadMedia({ url: work.src, kind: work.kind }, work.title)
+      if (!result.ok) setNotice(result.message)
+    } finally { setDownloading(false) }
   }
 
   /** 复用参数：把结果带回工作台，由工作台继续用同一组参数创作。 */
-  function reuseParams() {
+  function reuseParams(event: React.MouseEvent<HTMLAnchorElement>) {
     try {
-      window.localStorage.setItem('oaooao-reuse-params', JSON.stringify({
+      if (work.kind === 'audio') throw new Error('音频结果请发送到画布继续使用')
+      writeReuseParams(window.sessionStorage, state.user.id, {
         kind: work.kind,
         prompt: work.prompt,
         model: work.model,
         taskId: work.taskId ?? work.id,
-        createdAt: Date.now(),
-      }))
-    } catch {
-      // 存储不可用时仍可跳转工作台，只是不能预填参数。
+      })
+    } catch (error) {
+      event.preventDefault()
+      setNotice(error instanceof Error ? error.message : '无法复用参数，请重试')
     }
   }
 
   /** 发送到画布：写入待接收的结果，画布页读取后作为节点插入。 */
   function sendToCanvas() {
     try {
-      const key = 'oaooao-canvas-handoff'
-      const existing = JSON.parse(window.localStorage.getItem(key) || '[]')
-      const list = Array.isArray(existing) ? existing : []
-      const entry = { id: work.id, kind: work.kind, title: work.title, src: work.src, poster: work.poster, prompt: work.prompt, model: work.model }
-      window.localStorage.setItem(key, JSON.stringify([entry, ...list.filter((item: { id?: string }) => item?.id !== work.id)].slice(0, 40)))
-      setNotice('已发送到画布，打开画布即可插入该结果。')
+      writeWorkHandoff(window.sessionStorage, state.user.id, { id: work.id, kind: work.kind, title: work.title, src: work.src })
+      setNotice('已准备好，请在当前标签页 15 分钟内打开目标画布。')
     } catch {
       setNotice('浏览器存储不可用，无法发送到画布。')
     }
   }
 
   /** 加入项目：把结果登记为当前选中项目的素材。 */
-  function addToProject() {
+  async function addToProject() {
+    if (projectLock.current) return
     const projectId = state.selectedProjectId
     const project = state.projects.find((item) => item.id === projectId)
     if (!project) {
       setNotice('当前没有可用项目，请先在项目页创建或选择项目。')
       return
     }
-    dispatch({
-      type: 'ADD_WORK_TO_PROJECT',
-      projectId,
-      work: {
-        id: `work-${work.id}`,
-        kind: work.kind === 'video' ? 'video' : 'image',
-        title: work.title,
-        src: work.src,
-        poster: work.poster,
-        fallback: work.fallback,
-        tags: ['来自作品'],
-        size: '',
-        status: '可用',
-        projectIds: [projectId],
-        referencedBy: [],
-        createdAt: new Date().toISOString(),
-      },
-    })
-    setNotice(`已加入项目「${project.title}」。`)
+    projectLock.current = true; setProjectBusy(true); setNotice('')
+    try {
+      const result = await addMediaToProject(projectId, { sourceId: work.src, title: work.title, kind: work.kind, url: work.src, poster: work.poster, prompt: work.prompt, model: work.model })
+      setNotice(result.alreadyPresent ? `该作品已在项目「${project.title}」中。` : `已保存到项目「${project.title}」。`)
+    } catch (error) { setNotice(error instanceof Error ? `加入项目失败：${error.message}` : '加入项目失败，请重试') }
+    finally { projectLock.current = false; setProjectBusy(false) }
   }
 
   return (
     <article className="studio-surface studio-surface-interactive group overflow-hidden">
-      <MediaThumb
+      {work.kind === 'audio' ? <div className="flex aspect-[4/3] items-center justify-center bg-muted p-4"><audio src={work.src} controls preload="none" aria-label={work.title} className="w-full" /></div> : <MediaThumb
         src={work.src}
         poster={work.poster}
         kind={work.kind === 'video' ? 'video' : 'image'}
@@ -183,16 +173,16 @@ function WorkCard({ work }: { work: StudioWork }) {
         fallback={work.fallback}
         className="aspect-[4/3]"
         overlay={<div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-studio-ink/80 to-transparent px-3 pb-2.5 pt-8"><StatusBadge solid tone="success">已完成</StatusBadge><span className="text-[10px] text-studio-ink-muted">{ratio}</span></div>}
-      />
+      />}
       <div className="p-3">
         <p className="truncate text-sm font-semibold text-foreground" title={work.title}>{work.title}</p>
         <p className="mt-1 truncate text-xs text-muted-foreground">{work.model || '未记录模型'}{work.createdAt ? ` · ${new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <ControlButton variant="secondary" size="sm" onClick={() => setPreview(true)}><ExternalLink className="size-3.5" />预览</ControlButton>
-          <ControlButton variant="ghost" size="sm" onClick={download}><Download className="size-3.5" />下载</ControlButton>
-          <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link>
+          <ControlButton variant="ghost" size="sm" onClick={() => void download()} disabled={downloading}><Download className="size-3.5" />{downloading ? '下载中…' : '下载'}</ControlButton>
+          {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link> : null}
           <ControlButton variant="ghost" size="sm" onClick={sendToCanvas}><WandSparkles className="size-3.5" />发到画布</ControlButton>
-          <ControlButton variant="ghost" size="sm" onClick={addToProject}><FolderPlus className="size-3.5" />加入项目</ControlButton>
+          <ControlButton variant="ghost" size="sm" onClick={() => void addToProject()} disabled={projectBusy}><FolderPlus className="size-3.5" />{projectBusy ? '保存中…' : '加入项目'}</ControlButton>
         </div>
         {notice && <p className="mt-2 text-[11px] text-studio-accent" aria-live="polite">{notice}</p>}
       </div>
@@ -204,13 +194,13 @@ function WorkCard({ work }: { work: StudioWork }) {
         footer={(
           <>
             <ControlButton variant="ghost" onClick={() => setPreview(false)}>关闭</ControlButton>
-            <ControlButton variant="secondary" onClick={download}><Download className="size-3.5" />下载原文件</ControlButton>
-            <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Copy className="size-4" />复用这组参数</Link>
+            <ControlButton variant="secondary" onClick={() => void download()} disabled={downloading}><Download className="size-3.5" />{downloading ? '下载中…' : '下载原文件'}</ControlButton>
+            {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Copy className="size-4" />复用这组参数</Link> : null}
           </>
         )}
       >
         <div className="flex flex-col gap-3">
-          <MediaThumb src={work.src} poster={work.poster} kind={work.kind === 'video' ? 'video' : 'image'} alt={work.title} fallback={work.fallback} className="aspect-video" />
+          {work.kind === 'audio' ? <audio src={work.src} controls preload="none" aria-label={work.title} className="w-full" /> : <MediaThumb src={work.src} poster={work.poster} kind={work.kind === 'video' ? 'video' : 'image'} alt={work.title} fallback={work.fallback} className="aspect-video" />}
           {work.prompt && <div><p className="text-xs font-medium text-muted-foreground">创作提示词</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">{work.prompt}</p></div>}
           <div className="border-y border-border">
             <KeyValue label="模型" value={work.model || '未记录'} />
@@ -230,34 +220,50 @@ function WorkCard({ work }: { work: StudioWork }) {
 export function GalleryPage() {
   const { state } = useStudio()
   const [filter, setFilter] = useState('精选')
-  const [items, setItems] = useState<Array<{ id: string; title: string; src?: string; kind: string; author?: string }>>([])
+  type PublicWork = { id: string; title: string; summary: string; src?: string; cover?: string; kind: 'image' | 'video'; featured: boolean }
+  const [items, setItems] = useState<PublicWork[]>([])
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [message, setMessage] = useState('')
-  const [active, setActive] = useState<{ id: string; title: string; src?: string; kind: string } | null>(null)
+  const [active, setActive] = useState<PublicWork | null>(null)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [enabled, setEnabled] = useState(true)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
     let active_ = true
-    setLoadState('loading')
+    const controller = new AbortController()
+    setLoadState('loading'); setMessage(''); setItems([]); setActive(null)
     // 公开接口不需要登录；失败时明确说明，不用私有作品冒充公开内容。
-    // The public gallery backend exposes the paginated list at /api/public/gallery.
-    // /api/public/works is reserved for an individual published work and returns 404 here.
-    fetch('/api/public/gallery?limit=24&sort=featured', { credentials: 'include', cache: 'no-store' })
+    const query = new URLSearchParams({ page: String(page), limit: '24', sort: 'featured' })
+    if (filter === '精选') query.set('featured', 'true')
+    else if (filter === 'image' || filter === 'video') query.set('kind', filter)
+    fetch(`/api/public/gallery?${query}`, { credentials: 'omit', cache: 'no-store', signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json().catch(() => null)
         if (!response.ok) throw new Error(payload?.msg || payload?.error || `请求失败（${response.status}）`)
-        return payload
+        const result = payload?.data ?? payload
+        if (!result || typeof result !== 'object') throw new Error('公开作品响应无效，请重试。')
+        return result
       })
       .then((payload) => {
         if (!active_) return
-        const raw = payload?.data?.works ?? payload?.data?.items ?? payload?.works ?? payload?.items ?? []
+        setEnabled(payload.enabled !== false)
+        if (payload.enabled === false) { setItems([]); setTotal(0); setLoadState('ready'); return }
+        const raw = payload.items ?? payload.works
+        if (!Array.isArray(raw)) throw new Error('公开作品列表格式无效，请重试。')
         const list = Array.isArray(raw) ? raw : []
-        setItems(list.map((item: Record<string, unknown>) => ({
+        setItems(list.filter((item: Record<string, unknown>) => item && (item.kind === 'image' || item.kind === 'video')).map((item: Record<string, unknown>) => ({
           id: String(item.id ?? item.slug ?? ''),
           title: String(item.title ?? '未命名作品'),
-          src: typeof item.coverUrl === 'string' ? item.coverUrl : typeof item.mediaUrl === 'string' ? item.mediaUrl : undefined,
-          kind: String(item.kind ?? 'image'),
-          author: typeof item.authorName === 'string' ? item.authorName : undefined,
+          summary: typeof item.summary === 'string' ? item.summary : '',
+          src: typeof item.mediaUrl === 'string' ? item.mediaUrl : typeof item.coverUrl === 'string' ? item.coverUrl : undefined,
+          cover: typeof item.coverUrl === 'string' ? item.coverUrl : undefined,
+          kind: item.kind as 'image' | 'video',
+          featured: item.featured === true,
         })).filter((item: { id: string }) => item.id))
+        setTotal(Number.isFinite(payload.total) && payload.total >= 0 ? payload.total : list.length)
+        if (Number.isFinite(payload.total) && page > Math.max(1, Math.ceil(payload.total / 24))) setPage(Math.max(1, Math.ceil(payload.total / 24)))
         setLoadState('ready')
       })
       .catch((reason) => {
@@ -265,39 +271,39 @@ export function GalleryPage() {
         setMessage(reason instanceof Error ? reason.message : '公开作品加载失败')
         setLoadState('error')
       })
-    return () => { active_ = false }
-  }, [])
-
-  const gallery = filter === '全部' ? items : items.filter((item) => filter === '精选' ? true : item.kind === filter)
+    return () => { active_ = false; controller.abort() }
+  }, [filter, page, revision])
 
   return (
     <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader eyebrow="发现" title="广场" description="浏览 OAO 社区中的公开作品。" actions={<SegmentedControl value={filter} onChange={setFilter} options={[{ value: '精选', label: '精选' }, { value: '全部', label: '全部' }, { value: 'image', label: '图片' }, { value: 'video', label: '视频' }]} />} />
+      <PageHeader eyebrow="发现" title="广场" description="浏览已审核并发布的图片与视频作品。" actions={<SegmentedControl value={filter} onChange={(value) => { setFilter(value); setPage(1) }} options={[{ value: '精选', label: '精选' }, { value: '全部', label: '全部' }, { value: 'image', label: '图片' }, { value: 'video', label: '视频' }]} />} />
       {message && <Notice tone="warning">{message}</Notice>}
       {loadState === 'loading' ? (
-        <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取公开作品</div>
-      ) : gallery.length === 0 ? (
+        <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />正在读取公开作品</div>
+      ) : !enabled || items.length === 0 ? (
         <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center">
-          <p className="text-sm font-medium">{loadState === 'error' ? '公开作品暂时无法读取' : '还没有公开作品'}</p>
-          <p className="max-w-sm text-xs leading-5 text-muted-foreground">{loadState === 'error' ? '当前无法读取公开作品，请稍后重试。' : '作品被发布后才会出现在这里。'}</p>
+          <p className="text-sm font-medium">{loadState === 'error' ? '公开作品暂时无法读取' : !enabled ? '公开广场尚未开放' : filter === '精选' ? '暂时没有精选作品' : '还没有符合条件的公开作品'}</p>
+          <p className="max-w-sm text-xs leading-5 text-muted-foreground">{loadState === 'error' ? '当前无法读取公开作品，可重新尝试。' : !enabled ? '站点尚未启用安全的公开作品展示。' : '只有已审核、已发布且提供可公开媒体的作品会出现在这里。'}</p>
+          {loadState === 'error' ? <ControlButton onClick={() => setRevision((value) => value + 1)}>重新读取</ControlButton> : enabled && filter !== '全部' ? <ControlButton onClick={() => { setFilter('全部'); setPage(1) }}>浏览全部作品</ControlButton> : null}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {gallery.map((work, index) => (
+          {items.map((work, index) => (
             <button type="button" key={work.id} onClick={() => setActive(work)} className="group text-left">
-              <MediaThumb src={work.src} kind={work.kind === 'video' ? 'video' : 'image'} alt={work.title} fallback={work.title} className={index % 5 === 0 ? 'aspect-[4/5]' : 'aspect-[4/3]'} />
+              <MediaThumb src={work.src} poster={work.cover} kind={work.kind} alt={work.title} fallback={work.title} className={index % 5 === 0 ? 'aspect-[4/5]' : 'aspect-[4/3]'} />
               <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="truncate text-xs text-muted-foreground">{work.author || '匿名作者'}</span>
-                <span className="text-[10px] text-muted-foreground">{work.kind === 'video' ? '视频' : '图片'}</span>
+                <span className="truncate text-sm font-medium">{work.title}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">{work.featured ? '精选 · ' : ''}{work.kind === 'video' ? '视频' : '图片'}</span>
               </div>
             </button>
           ))}
         </div>
       )}
-      <Modal open={Boolean(active)} onClose={() => setActive(null)} title={active?.title ?? '作品详情'} description="公开作品预览" footer={<ControlButton variant="ghost" onClick={() => setActive(null)}>关闭</ControlButton>}>
-        <MediaThumb src={active?.src} kind={active?.kind === 'video' ? 'video' : 'image'} alt={active?.title ?? '作品'} fallback={active?.title ?? '作品'} className="aspect-video" />
+      {loadState === 'ready' && enabled && total > 24 && <nav aria-label="公开作品分页" className="flex items-center justify-center gap-3"><ControlButton disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</ControlButton><span className="text-xs text-muted-foreground">第 {page} / {Math.max(1, Math.ceil(total / 24))} 页 · {total} 件作品</span><ControlButton disabled={page * 24 >= total} onClick={() => setPage((value) => value + 1)}>下一页</ControlButton></nav>}
+      <Modal open={Boolean(active)} onClose={() => setActive(null)} title={active?.title ?? '作品详情'} description={active?.summary || '公开作品预览'} footer={<ControlButton variant="ghost" onClick={() => setActive(null)}>关闭</ControlButton>}>
+        <MediaThumb src={active?.src} poster={active?.cover} kind={active?.kind === 'video' ? 'video' : 'image'} alt={active?.title ?? '作品'} fallback={active?.title ?? '作品'} className="aspect-video" />
       </Modal>
-      {state.backendStatus !== 'connected' && <Notice tone="neutral">未登录也可以浏览公开作品；发布与互动需要登录。</Notice>}
+      {state.backendStatus !== 'connected' && <Notice tone="neutral">这里仅展示已审核发布的作品，无需登录即可浏览。</Notice>}
     </div>
   )
 }
@@ -764,17 +770,35 @@ export function SettingsPage() {
   const connected = state.backendStatus === 'connected'
   const [notice, setNotice] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [noticeTone, setNoticeTone] = useState<'success' | 'warning'>('success')
+  const syncLock = useRef(false)
+  const syncEpoch = useRef(0)
+  const accountRef = useRef(state.user.id)
+  accountRef.current = state.user.id
+  useEffect(() => {
+    syncEpoch.current += 1; syncLock.current = false; setRefreshing(false); setNotice('')
+    return () => { syncEpoch.current += 1 }
+  }, [state.user.id])
 
   /** 手动同步会话：接口失败时明确提示，不显示成「已同步」。 */
   async function sync() {
+    if (syncLock.current) return
+    syncLock.current = true
+    const token = syncEpoch.current
+    const accountId = state.user.id
+    const current = () => token === syncEpoch.current && accountRef.current === accountId
     setRefreshing(true); setNotice('')
     try {
-      await refreshSession()
-      setNotice('已重新同步账户、模型目录与积分。')
+      const result = await refreshSession()
+      if (!current()) return
+      setNoticeTone(result.status === 'connected' ? 'success' : 'warning')
+      setNotice(result.status === 'connected' ? '已重新同步账户、模型目录与积分。' : result.status === 'unauthenticated' ? '当前未登录，请登录后同步账户数据。' : result.status === 'superseded' ? '本次同步已被另一笔更新替代，请以当前账户状态为准。' : `同步失败：${result.error || '服务暂时不可用，请稍后重试。'}`)
     } catch (reason) {
+      if (!current()) return
+      setNoticeTone('warning')
       setNotice(reason instanceof Error ? `同步失败：${reason.message}` : '同步失败，请稍后重试。')
     } finally {
-      setRefreshing(false)
+      if (current()) { syncLock.current = false; setRefreshing(false) }
     }
   }
 
@@ -792,12 +816,12 @@ export function SettingsPage() {
         <div className="studio-surface p-5">
           <SectionHeading title="账户与数据" description={connected ? '账户数据与界面偏好。' : '登录后即可查看账户数据。'} />
           <div className="mt-4 border-t border-border pt-2">
-            <KeyValue label="账户状态" value={<StatusBadge tone={connected ? 'success' : 'neutral'}>{connected ? '已同步' : '未登录'}</StatusBadge>} />
+            <KeyValue label="账户状态" value={<StatusBadge tone={connected ? 'success' : 'neutral'}>{connected ? '已同步' : state.backendStatus === 'checking' ? '正在读取' : state.backendStatus === 'offline' ? '暂时无法连接' : '未登录'}</StatusBadge>} />
             <KeyValue label="模型目录" value={state.liveModels.length ? `${state.liveModels.length} 个可用模型` : '暂未获取模型'} />
             <KeyValue label="可用积分" value={connected ? state.credits.toLocaleString() : '—'} />
-            <KeyValue label="重新同步" value={<ControlButton variant="ghost" size="sm" onClick={sync} disabled={refreshing}><RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />{refreshing ? '同步中…' : '立即同步'}</ControlButton>} />
+            <KeyValue label="重新同步" value={<ControlButton variant="ghost" size="sm" onClick={sync} disabled={refreshing}><RefreshCw className={cn('size-3.5', refreshing && 'animate-spin motion-reduce:animate-none')} />{refreshing ? '同步中…' : '立即同步'}</ControlButton>} />
           </div>
-          {!connected && <Notice tone="neutral">登录后可查看完整账户数据。</Notice>}
+          {!connected && <Notice tone="neutral">{state.backendStatus === 'offline' ? '服务暂时无法连接，恢复连接后可重新同步。' : '登录后可查看完整账户数据。'}</Notice>}
         </div>
       </div>
       <div className="studio-surface p-5">
@@ -808,7 +832,7 @@ export function SettingsPage() {
           <span className="text-xs text-muted-foreground">已固定为当前界面风格</span>
         </div>
       </div>
-      {notice && <Notice tone="accent"><Check className="mt-0.5 size-3.5 shrink-0" />{notice}</Notice>}
+      {notice && <Notice tone={noticeTone === 'success' ? 'accent' : 'warning'}>{noticeTone === 'success' && <Check className="mt-0.5 size-3.5 shrink-0" />}{notice}</Notice>}
     </div>
   )
 }

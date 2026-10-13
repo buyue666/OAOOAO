@@ -34,6 +34,8 @@ import {
 import { useAdminNavigation, useAdminReload, useAdminSession } from './admin-shell'
 import { CommercePolicyEditor } from './commerce-policy-editor'
 import { AdminSiteSettings } from './admin-site-settings'
+import { assertStorageSaved, CREATIVE_STORAGE_NOTICE, storageTestMessage, storageUpdateInput } from '@/lib/studio/object-storage-status'
+import { assertManualPaymentSaved, canConfigureManualPayment, MANUAL_INSTRUCTIONS_LIMIT, manualPaymentInput, manualPaymentInstructions } from '@/lib/studio/manual-payment-config'
 
 type SectionId = 'site' | 'account' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
 
@@ -62,6 +64,7 @@ export function AdminSettingsPanel() {
 
   const canSystem = session.can('system.manage')
   const canBilling = session.can('billing.manage')
+  const canCommerce = session.can('commerce.manage')
   const canUpstream = session.can('upstream.manage')
   const requestVersion = useRef(0)
 
@@ -132,9 +135,9 @@ export function AdminSettingsPanel() {
 
   const sections: Array<{ id: SectionId; label: string; visible: boolean }> = [
     { id: 'site', label: '站点与品牌', visible: canSystem },
-    { id: 'account', label: '注册与积分', visible: canSystem || canBilling },
-    { id: 'billing', label: '运营与支付', visible: canBilling },
-    { id: 'points', label: '计费与权益', visible: canBilling },
+    { id: 'account', label: '注册与积分', visible: canSystem || canCommerce },
+    { id: 'billing', label: '运营与支付', visible: canSystem || canCommerce || canBilling },
+    { id: 'points', label: '计费与权益', visible: canCommerce },
     { id: 'generation', label: '生成限制与默认参数', visible: canUpstream },
     { id: 'mail', label: '邮件服务', visible: canSystem },
     { id: 'storage', label: '对象存储', visible: canSystem },
@@ -165,8 +168,8 @@ export function AdminSettingsPanel() {
 
         <div key={active === 'site' ? 'site' : `${active}:${formRevision}`} role="tabpanel" aria-label={visibleSections.find((item) => item.id === active)?.label} className="flex min-w-0 flex-col gap-5">
           {active === 'site' && <AdminSiteSettings site={settings.site || {}} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} onDirtyChange={setSiteDirty} />}
-          {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canBilling={canBilling} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
-          {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} saving={saving} onModeSave={(patch, summary) => save('运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
+          {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canCommerce={canCommerce} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
+          {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} canSystem={canSystem} canCommerce={canCommerce} canBilling={canBilling} saving={saving} onModeSave={(patch, summary) => save('commercePolicy' in patch ? '购买政策' : '运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
           {active === 'points' && <PointsSection settings={settings} canUpstream={canUpstream} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
           {active === 'generation' && <GenerationSection settings={settings} onSave={(patch, summary) => save('生成设置', patch, summary)} saving={saving} />}
           {active === 'mail' && <MailSection settings={settings} onSave={(patch, summary) => save('邮件设置', patch, summary)} saving={saving} />}
@@ -183,6 +186,9 @@ export function AdminSettingsPanel() {
 function BillingSection({
   settings,
   paymentConfig,
+  canSystem,
+  canCommerce,
+  canBilling,
   saving,
   onModeSave,
   onPaymentConfigChange,
@@ -191,6 +197,9 @@ function BillingSection({
 }: {
   settings: AdminSettings
   paymentConfig: AdminPaymentConfigSummary | null
+  canSystem: boolean
+  canCommerce: boolean
+  canBilling: boolean
   saving: boolean
   onModeSave: (patch: AdminSettingsPatch, summary: string[]) => void
   onPaymentConfigChange: (value: AdminPaymentConfigSummary) => void
@@ -198,10 +207,11 @@ function BillingSection({
   onError: (value: string) => void
 }) {
   const mode = settings.operationMode === 'commercial' ? 'commercial' : 'self_use'
-  const epay = paymentConfig?.providers.find((provider) => provider.id === 'epay')
+  const manual = paymentConfig?.providers.find((provider) => provider.id === 'manual')
 
   function submitMode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!canSystem || saving) return
     const data = new FormData(event.currentTarget)
     const nextMode = data.get('operationMode') === 'commercial' ? 'commercial' : 'self_use'
     onModeSave({ operationMode: nextMode }, nextMode === mode ? [] : ['站点运营模式'])
@@ -209,33 +219,33 @@ function BillingSection({
 
   return (
     <div className="flex flex-col gap-4">
-      <form onSubmit={submitMode}>
+      {canSystem && <form onSubmit={submitMode}>
         <AdminSectionCard title="站点运营模式" description="自用模式关闭用户充值、套餐购买和在线支付；商用模式才会开放公开计费入口。模式限制由系统同时执行。">
           <div className="grid gap-4 sm:grid-cols-[minmax(0,260px)_1fr] sm:items-end">
             <AdminField label="当前模式">
-              <AdminSelect name="operationMode" defaultValue={mode}>
+              <AdminSelect name="operationMode" defaultValue={mode} disabled={saving}>
                 <option value="self_use">自用模式</option>
                 <option value="commercial">商用模式</option>
               </AdminSelect>
             </AdminField>
             {mode === 'self_use'
               ? <AdminNotice tone="warning">当前用户只能使用已有积分，前台不会显示充值入口；管理员仍可手动调整积分。</AdminNotice>
-              : <AdminNotice tone="neutral">商用模式已允许公开套餐与支付入口，但正式开放前仍需完成支付回调、退款和对账验证。</AdminNotice>}
+              : <AdminNotice tone="neutral">商用模式下，购买入口还需要已发布的客户政策和可用收款配置。当前支持人工收款，到账需由管理员核实后确认。</AdminNotice>}
           </div>
-          <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary"><Save className="size-3.5" />保存运营模式</ControlButton></AdminSaveBar>
+          <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />保存运营模式</ControlButton></AdminSaveBar>
         </AdminSectionCard>
-      </form>
+      </form>}
 
-      <CommercePolicyEditor settings={settings} onSave={onModeSave} saving={saving} />
+      {canCommerce && <CommercePolicyEditor settings={settings} onSave={onModeSave} saving={saving} />}
 
-      <PaymentProviderEditor provider={epay} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />
+      {canBilling && <PaymentProviderEditor provider={manual} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />}
 
-      {paymentConfig && <AdminSectionCard title="支付渠道概览" description="状态只反映当前配置是否满足下单与回调要求，不会展示任何密钥内容。">
+      {canBilling && paymentConfig && <AdminSectionCard title="支付渠道概览" description="配置就绪只表示可提供人工收款说明，不代表已经收到款项。自动支付渠道尚未接入，已有配置保持不变。">
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {paymentConfig.providers.map((provider) => (
             <div key={provider.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs">
-              <div className="min-w-0"><p className="truncate font-medium text-foreground">{provider.name}</p><p className="mt-1 truncate text-[11px] text-muted-foreground">{provider.sourceLabel || '未配置'}</p></div>
-              <StatusBadge tone={provider.ready ? 'success' : provider.enabled ? 'warning' : 'neutral'}>{provider.ready ? '可用' : provider.enabled ? '待配置' : '已关闭'}</StatusBadge>
+              <div className="min-w-0"><p className="truncate font-medium text-foreground">{provider.id === 'manual' ? '人工收款' : provider.name}</p><p className="mt-1 text-[11px] text-muted-foreground">{canConfigureManualPayment(provider) ? '由管理员核实到账后确认订单' : '暂不支持在线收款或自动回调；已有配置保留'}</p></div>
+              <StatusBadge tone={canConfigureManualPayment(provider) ? provider.ready ? 'success' : provider.enabled ? 'warning' : 'neutral' : 'neutral'}>{!canConfigureManualPayment(provider) ? '未接入' : provider.ready ? '配置就绪' : provider.enabled ? '待配置' : '已关闭'}</StatusBadge>
             </div>
           ))}
         </div>
@@ -256,49 +266,47 @@ function PaymentProviderEditor({
   onError: (value: string) => void
 }) {
   const [enabled, setEnabled] = useState(provider?.enabled === true)
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [instructions, setInstructions] = useState(() => manualPaymentInstructions(provider))
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
 
   useEffect(() => {
     setEnabled(provider?.enabled === true)
-    setValues(Object.fromEntries((provider?.fields ?? []).map((field) => [field.key, field.secret ? '' : field.value ?? ''])))
+    setInstructions(manualPaymentInstructions(provider))
   }, [provider])
 
-  if (!provider) return <AdminSectionCard title="易支付" description="正在读取支付配置。"><AdminNotice tone="warning">当前管理员没有读取支付配置的权限，或系统暂未返回易支付定义。</AdminNotice></AdminSectionCard>
+  if (!canConfigureManualPayment(provider)) return <AdminSectionCard title="人工收款" description="当前无法编辑收款配置。"><AdminNotice tone="warning">系统未返回可用的人工收款配置。请检查读取权限并重新读取设置；现有配置不会改变。</AdminNotice></AdminSectionCard>
   const currentProvider = provider
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setSaving(true); onError('')
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true); onError(''); onMessage('')
     try {
-      const next = await updatePaymentProviderConfig(currentProvider.id, enabled, values)
+      const input = manualPaymentInput(currentProvider, enabled, instructions)
+      const next = await updatePaymentProviderConfig(input.providerId, input.enabled, input.values)
+      assertManualPaymentSaved(next, input)
       onSaved(next)
-      onMessage('易支付配置已保存')
+      onMessage(input.enabled ? '人工收款配置已保存。订单到账仍需管理员核实并确认。' : '人工收款配置已保存，收款入口已关闭。')
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : '易支付配置保存失败')
-    } finally { setSaving(false) }
+      onError(reason instanceof Error ? reason.message : '人工收款配置保存失败')
+    } finally { savingRef.current = false; setSaving(false) }
   }
 
   return (
-    <form onSubmit={submit}>
-      <AdminSectionCard title="易支付" description={`${provider.description} 回调地址由系统生成，保存后请把下面的地址填入易支付后台。`}>
+    <form onSubmit={submit} aria-busy={saving}>
+      <AdminSectionCard title="人工收款" description="购买者按说明在站外付款；管理员核实实际到账后，在订单管理中确认收款，系统才发放积分或套餐权益。系统不会自动转账。">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs"><StatusBadge tone={provider.checkoutReady ? 'success' : 'warning'}>{provider.checkoutReady ? '下单已就绪' : '缺少下单配置'}</StatusBadge><StatusBadge tone={provider.webhookReady ? 'success' : 'warning'}>{provider.webhookReady ? '回调已就绪' : '回调待配置'}</StatusBadge></div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={saving} />启用易支付</label>
+          <div className="flex flex-wrap items-center gap-2 text-xs"><StatusBadge tone={provider.ready ? 'success' : provider.enabled ? 'warning' : 'neutral'}>{provider.ready ? '已保存配置就绪' : provider.enabled ? '已保存配置待完善' : '当前已关闭'}</StatusBadge><StatusBadge tone="neutral">无需自动回调</StatusBadge></div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={saving} />启用人工收款</label>
         </div>
-        <fieldset disabled={saving} className="mt-4 grid gap-4 sm:grid-cols-2">
-          {provider.fields.map((field) => (
-            <AdminField key={field.key} label={field.label} hint={field.note || (field.secret && field.configured ? '已保存密钥，留空表示保持不变。' : undefined)} className={field.kind === 'textarea' ? 'sm:col-span-2' : undefined}>
-              {field.kind === 'select'
-                ? <AdminSelect value={values[field.key] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</AdminSelect>
-                : field.kind === 'textarea'
-                  ? <AdminTextarea value={values[field.key] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.secret && field.configured ? '已配置，留空保持不变' : field.placeholder} rows={3} />
-                  : <AdminInput type={field.kind === 'secret' ? 'password' : 'text'} value={values[field.key] ?? ''} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} placeholder={field.secret && field.configured ? '已配置，留空保持不变' : field.placeholder} />}
-            </AdminField>
-          ))}
-          {provider.webhookUrl && <AdminField label="异步回调地址" hint="将此地址复制到易支付商户后台，不要把商户密钥写进 URL。" className="sm:col-span-2"><AdminInput readOnly value={provider.webhookUrl} /></AdminField>}
+        <fieldset disabled={saving} className="mt-4">
+          <AdminField label="给购买者的收款说明" hint="说明会显示在结算页面，请填写付款方式、核实要求及联系方法，不要填写密钥或管理员凭据。">
+            <AdminTextarea name="instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)} required={enabled} maxLength={MANUAL_INSTRUCTIONS_LIMIT} placeholder="例如：付款前联系客服确认收款信息，付款时备注订单号。到账经管理员核实后开通权益。" rows={6} />
+          </AdminField>
         </fieldset>
-        <AdminSaveBar hint={`配置来源：${provider.sourceLabel || '未配置'}`}><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存易支付'}</ControlButton></AdminSaveBar>
+        <AdminSaveBar hint="保存仅更新人工收款配置，不会确认任何订单收款。"><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存人工收款配置'}</ControlButton></AdminSaveBar>
       </AdminSectionCard>
     </form>
   )
@@ -306,7 +314,7 @@ function PaymentProviderEditor({
 
 /* ------------------------------ 注册与积分 ------------------------------ */
 
-function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { settings: AdminSettings; canSystem: boolean; canBilling: boolean; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
+function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { settings: AdminSettings; canSystem: boolean; canCommerce: boolean; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
@@ -317,7 +325,7 @@ function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { s
       patch.registrationEnabled = registration
       if (registration !== settings.registrationEnabled) summary.push('开放注册')
     }
-    if (canBilling) {
+    if (canCommerce) {
       const enabled = data.has('freeDailyPointsEnabled')
       const amount = Number(data.get('freeDailyPoints')) || 0
       patch.freeDailyPointsEnabled = enabled
@@ -329,20 +337,18 @@ function AccountSection({ settings, canSystem, canBilling, onSave, saving }: { s
   }
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
-      <AdminSectionCard title="注册开关" description="控制新用户注册入口。关闭后仅管理员可以创建账号。">
-        <fieldset disabled={saving || !canSystem} className="flex flex-col gap-3">
+      {canSystem && <AdminSectionCard title="注册开关" description="控制新用户注册入口。关闭后仅管理员可以创建账号。">
+        <fieldset disabled={saving} className="flex flex-col gap-3">
           <label className="flex items-center justify-between gap-4 border-b border-border pb-3 text-sm"><span><span className="font-medium">开放注册</span><span className="mt-1 block text-xs text-muted-foreground">关闭后站点注册入口对所有访客隐藏。</span></span><input type="checkbox" name="registrationEnabled" defaultChecked={settings.registrationEnabled} /></label>
           <div className="flex items-center justify-between gap-4 text-sm"><span><span className="font-medium">邮箱验证（注册必需）</span><span className="mt-1 block text-xs text-muted-foreground">普通账号注册必须通过邮箱验证码；配置并启用微信扫码登录后，微信新用户可走独立的微信身份验证。</span></span><span className="shrink-0 rounded-full border border-studio-accent/30 bg-studio-accent/10 px-2.5 py-1 text-xs font-medium text-studio-accent">固定开启</span></div>
-          {!canSystem && <AdminNotice tone="warning">当前管理员没有系统设置职责，注册开关不可编辑。</AdminNotice>}
         </fieldset>
-      </AdminSectionCard>
-      <AdminSectionCard title="每日免费积分" description="新用户每天可自动领取的积分额度。">
-        <fieldset disabled={saving || !canBilling} className="grid gap-4 sm:grid-cols-2">
+      </AdminSectionCard>}
+      {canCommerce && <AdminSectionCard title="每日免费积分" description="新用户每天可自动领取的积分额度。">
+        <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="freeDailyPointsEnabled" defaultChecked={settings.freeDailyPointsEnabled} />启用每日免费积分</label>
           <AdminField label="每日积分额度"><AdminInput name="freeDailyPoints" type="number" min="0" step="1" defaultValue={settings.freeDailyPoints} /></AdminField>
-          {!canBilling && <AdminNotice tone="warning">当前管理员没有计费职责，每日免费积分不可编辑。</AdminNotice>}
         </fieldset>
-      </AdminSectionCard>
+      </AdminSectionCard>}
       <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存注册与积分'}</ControlButton></AdminSaveBar>
     </form>
   )
@@ -558,53 +564,51 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
   const [secretAccessKey, setSecretAccessKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [checking, setChecking] = useState(false)
+  const storageAction = useRef(false)
 
   useEffect(() => { if (storage) setDraft(storage) }, [storage])
 
   if (!storage) return <AdminEmpty title="存储配置不可用" description="当前管理员没有系统设置职责，无法读取或修改对象存储。" />
 
   async function save() {
-    setBusy(true); onError('')
+    if (storageAction.current) return
+    storageAction.current = true
+    setBusy(true); onError(''); onMessage('')
     try {
-      const result = await updateObjectStorage({
-        enabled: draft.enabled,
-        endpoint: draft.endpoint,
-        region: draft.region,
-        bucket: draft.bucket,
-        prefix: draft.prefix,
-        forcePathStyle: draft.forcePathStyle,
-        ...(accessKeyId ? { accessKeyId } : {}),
-        ...(secretAccessKey ? { secretAccessKey } : {}),
-      })
-      void result
+      const input = storageUpdateInput(draft, accessKeyId, secretAccessKey)
+      const result = await updateObjectStorage(input)
+      assertStorageSaved(result, input)
       setAccessKeyId(''); setSecretAccessKey('')
-      onMessage('对象存储配置已保存')
+      onMessage('对象存储配置已保存，保持未启用。' + CREATIVE_STORAGE_NOTICE)
       onReload()
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '对象存储配置保存失败')
-    } finally { setBusy(false) }
+    } finally { storageAction.current = false; setBusy(false) }
   }
 
   async function check() {
-    setChecking(true); onError('')
+    if (storageAction.current) return
+    storageAction.current = true
+    setChecking(true); onError(''); onMessage('')
     try {
-      await testObjectStorage()
-      onMessage('外部存储连接正常，读写权限可用。')
+      onMessage(storageTestMessage(await testObjectStorage()))
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '外部存储连接检测失败')
-    } finally { setChecking(false) }
+    } finally { storageAction.current = false; setChecking(false) }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <AdminSectionCard title="对象存储（OSS / S3）" description="生成素材会同步到外部存储。密钥字段不会回显，留空表示沿用已保存的值。" action={<div className="flex gap-2"><StatusBadge tone={storage.enabled ? 'success' : 'muted'}>{storage.enabled ? '已启用' : '未启用'}</StatusBadge></div>}>
+      <AdminNotice tone="warning">{CREATIVE_STORAGE_NOTICE} 可以保存连接参数供后续使用，当前不能启用对象存储写入。密钥留空表示保留已保存值。</AdminNotice>
+      {storage.enabled && <AdminNotice tone="danger">已保存的配置仍标记为启用，当前版本会因此拒绝上传与媒体生成。页面不会自动更改它；如需恢复服务器存储，请取消下方勾选并明确保存。</AdminNotice>}
+      <AdminSectionCard title="对象存储（OSS / S3）" description="连接检测使用已保存配置，只核对服务端返回的桶访问与写入验证状态，不会保存当前表单。" action={<div className="flex gap-2"><StatusBadge tone={storage.enabled ? 'warning' : 'muted'}>{storage.enabled ? '已配置启用 · 当前不支持' : '未启用'}</StatusBadge></div>}>
         <div className="mb-4 flex flex-wrap gap-2">
           <StatusBadge tone={storage.hasAccessKeyId ? 'success' : 'muted'}>Access Key {storage.hasAccessKeyId ? '已配置' : '未配置'}</StatusBadge>
           <StatusBadge tone={storage.hasSecretAccessKey ? 'success' : 'muted'}>Secret Key {storage.hasSecretAccessKey ? '已配置' : '未配置'}</StatusBadge>
           <span className="text-xs text-muted-foreground">最近更新：{storage.updatedAt ? new Date(storage.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '-'}</span>
         </div>
         <fieldset disabled={busy || checking} className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />启用外部存储</label>
+          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.enabled} disabled={!storage.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />启用外部存储（暂不支持，可取消已有启用状态）</label>
           <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.forcePathStyle} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} />使用 Path Style 访问</label>
           <AdminField label="Endpoint"><AdminInput value={draft.endpoint} onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} placeholder="https://s3.example.com" /></AdminField>
           <AdminField label="Region"><AdminInput value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></AdminField>
@@ -614,8 +618,9 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
           <AdminField label="Secret Access Key" hint={storage.hasSecretAccessKey ? '已保存，留空表示不修改。' : '尚未保存。'}><AdminInput type="password" value={secretAccessKey} onChange={(event) => setSecretAccessKey(event.target.value)} autoComplete="new-password" placeholder={storage.hasSecretAccessKey ? '留空表示不修改' : ''} /></AdminField>
         </fieldset>
       </AdminSectionCard>
+      {!storage.enabled && <p className="text-xs text-muted-foreground">当前仅能检测已保存且标记启用的既有配置。无需为了检测而启用存储；连接参数可先保存。</p>}
       <div className="flex flex-wrap justify-end gap-2">
-        <ControlButton variant="secondary" onClick={() => void check()} disabled={busy || checking}><Cloud className="size-3.5" />{checking ? '检测中' : '连接检测'}</ControlButton>
+        <ControlButton variant="secondary" onClick={() => void check()} disabled={busy || checking || !storage.enabled}><Cloud className="size-3.5" />{checking ? '检测中' : '检测已保存的桶'}</ControlButton>
         <ControlButton variant="primary" onClick={() => void save()} disabled={busy || checking}><Save className="size-3.5" />{busy ? '保存中' : '保存存储配置'}</ControlButton>
       </div>
     </div>

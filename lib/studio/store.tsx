@@ -1,16 +1,16 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from 'react'
-import { assets, adminChannels, adminModels, adminUsers, models as demoModels, orders, projects, shots, tasks as demoTasks, works, demoUser, media } from './mock-data'
-import { createDemoTask, demoResultForTask, estimateCredits as estimateDemoCredits } from './mock-service'
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { backendUserToStudioUser, deleteCanvasProjects, isUnauthorized, listCanvasProjects, createCanvasProject, getSession } from './api'
 import { clearScopedTaskCache } from './task-cache'
 import { loadSessionSnapshot, sessionIdentity } from './session'
-import { defaultGenerationDefaults, estimatePoints, modelsFromSession } from './studio-models'
+import { defaultGenerationDefaults, estimatePoints } from './studio-models'
 import { createSiteBrandSync, subscribeSiteBrandRefresh, subscribeSiteBrandUpdates } from './site-brand-sync'
-import type { AgentPlan, GenerationSettings, ModelConfig, Project, StudioAction, StudioContextValue, StudioSkin, StudioState, Theme, User } from './types'
+import type { GenerationSettings, Project, StudioAction, StudioContextValue, StudioSkin, StudioState, Theme, User } from './types'
 
-const storageKey = 'oaooao-studio-demo'
+const storageKey = 'oaooao-studio-preferences-v1'
+const legacyStorageKey = 'oaooao-studio-demo'
+const fallbackAvatar = '/icon.svg'
 
 /**
  * 退出登录后的占位用户。
@@ -20,25 +20,18 @@ const storageKey = 'oaooao-studio-demo'
  * 该占位不含任何上一个账号的信息。
  */
 function signedOutUser(): User {
-  return { id: '', name: '', email: '', role: 'member', avatar: media.portrait, plan: '', credits: 0 }
+  return { id: '', name: '', email: '', role: 'member', avatar: fallbackAvatar, plan: '', credits: 0 }
 }
 
-/**
- * 本地演示数据只在后端不可用或未登录时作为预览使用。
- * `state.liveModels` 非空表示模型目录来自后端，页面据此区分真实生成与本地预览。
- */
-function getLiveDemoTasks() {
-  const now = Date.now()
-  return demoTasks.map((task) => {
-    const elapsed = task.status === 'processing' ? 2800 : task.status === 'queued' ? 500 : 0
-    return {
-      ...task,
-      resultAssetIds: [...task.resultAssetIds],
-      settings: { ...task.settings },
-      createdAt: elapsed ? now - elapsed : task.createdAt,
-      updatedAt: elapsed ? now - elapsed : task.updatedAt,
-    }
-  })
+export function emptyAccountState(): Pick<StudioState, 'user' | 'credits' | 'projects' | 'assets' | 'models' | 'liveModels' | 'tasks' | 'works' | 'shots' | 'agentPlans' | 'orders' | 'adminUsers' | 'adminChannels' | 'adminModels' | 'canvasBoards' | 'selectedProjectId' | 'notifications'> {
+  return { user: signedOutUser(), credits: 0, projects: [], assets: [], models: [], liveModels: [], tasks: [], works: [], shots: [], agentPlans: [], orders: [], adminUsers: [], adminChannels: [], adminModels: [], canvasBoards: {}, selectedProjectId: '', notifications: 0 }
+}
+
+/** Only harmless UI preferences may cross sessions; historical caches are untrusted. */
+export function readStudioPreferences(raw: string | null): Pick<StudioState, 'theme' | 'skin' | 'sidebarCollapsed'> {
+  let value: Record<string, unknown> = {}
+  try { const parsed = raw ? JSON.parse(raw) : {}; if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) value = parsed } catch { /* Invalid storage must not prevent session loading. */ }
+  return { theme: value.theme === 'dark' ? 'dark' : 'light', skin: 'minimal', sidebarCollapsed: value.sidebarCollapsed === true }
 }
 
 function getInitialState(): StudioState {
@@ -48,22 +41,8 @@ function getInitialState(): StudioState {
     theme: 'light',
     skin: 'minimal',
     sidebarCollapsed: false,
-    user: demoUser,
-    credits: demoUser.credits,
-    projects: projects.map((item) => ({ ...item, tags: [...item.tags] })),
-    assets: assets.map((item) => ({ ...item, tags: [...item.tags], projectIds: [...item.projectIds], referencedBy: [...item.referencedBy] })),
-    models: demoModels.map((item) => ({ ...item, capabilities: { ...item.capabilities, durations: [...item.capabilities.durations], ratios: [...item.capabilities.ratios], qualities: [...item.capabilities.qualities] } })),
-    liveModels: [],
+    ...emptyAccountState(),
     sessionSettings: undefined,
-    tasks: demoTasks.map((item) => ({ ...item, resultAssetIds: [...item.resultAssetIds], settings: { ...item.settings } })),
-    works: works.map((item) => ({ ...item })),
-    shots: shots.map((item) => ({ ...item, referenceAssetIds: [...item.referenceAssetIds], candidates: item.candidates.map((candidate) => ({ ...candidate })) })),
-    agentPlans: [],
-    orders: orders.map((item) => ({ ...item })),
-    adminUsers: adminUsers.map((item) => ({ ...item })),
-    adminChannels: adminChannels.map((item) => ({ ...item })),
-    adminModels: adminModels.map((item) => ({ ...item })),
-    canvasBoards: {},
     /**
      * 默认不选中任何项目。
      *
@@ -73,7 +52,6 @@ function getInitialState(): StudioState {
      * `SET_SELECTED_PROJECT` 选中第一个属于当前用户的项目。
      */
     selectedProjectId: '',
-    notifications: 2,
   }
 }
 
@@ -97,8 +75,10 @@ function projectFromCanvasSummary(summary: { id: string; title: string; updatedA
 
 function reducer(state: StudioState, action: StudioAction): StudioState {
   switch (action.type) {
-    case 'HYDRATE':
-      return { ...state, ...action.payload, hydrated: true }
+    case 'HYDRATE': {
+      const changedAccount = action.payload.user !== undefined && state.user.id !== action.payload.user.id
+      return { ...state, ...(changedAccount ? emptyAccountState() : {}), ...action.payload, hydrated: true }
+    }
     case 'SET_SITE_BRAND':
       return { ...state, sessionSettings: { ...state.sessionSettings, site: { ...state.sessionSettings?.site, ...action.site } } }
     case 'SET_BACKEND_STATUS':
@@ -125,40 +105,13 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
         ...state,
         projects: state.projects.map((project) => project.id === action.projectId ? { ...project, status: '已归档' } : project),
       }
+    // Legacy dispatch names remain inert for compatibility. Only API responses
+    // may create tasks, settle results, or change an account balance.
     case 'ADD_TASK':
-      return { ...state, tasks: [action.task, ...state.tasks] }
     case 'RETRY_TASK':
-      return {
-        ...state,
-        tasks: state.tasks.map((task) => task.id === action.taskId ? {
-          ...task,
-          status: 'queued',
-          stage: '等待重试',
-          error: undefined,
-          retryCount: task.retryCount + 1,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        } : task),
-      }
-    case 'TICK_TASKS': {
-      const now = Date.now()
-      let nextWorks = state.works
-      const nextTasks = state.tasks.map((task) => {
-        const age = now - task.createdAt
-        if (task.status === 'queued' && age > 1800) {
-          return { ...task, status: 'processing' as const, stage: task.type === 'export' ? '整理片段' : '生成中', updatedAt: now }
-        }
-        if (task.status === 'processing' && age > 5200) {
-          const result = demoResultForTask(task)
-          if (!nextWorks.some((work) => work.id === result.id)) nextWorks = [result, ...nextWorks]
-          return { ...task, status: 'completed' as const, stage: '已完成', actualCredits: task.expectedCredits, resultAssetIds: [result.id], updatedAt: now }
-        }
-        return task
-      })
-      return { ...state, tasks: nextTasks, works: nextWorks }
-    }
+    case 'TICK_TASKS':
     case 'SPEND_CREDITS':
-      return { ...state, credits: Math.max(0, state.credits - action.amount), user: { ...state.user, credits: Math.max(0, state.credits - action.amount) } }
+      return state
     case 'ADD_ASSET_TO_PROJECT':
       return {
         ...state,
@@ -223,8 +176,51 @@ const StudioContext = createContext<StudioContextValue | null>(null)
 export function StudioProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, getInitialState)
   const [brandSync] = useState(createSiteBrandSync)
-  /** 会话世代：登录、退出、切换账号时自增，用于强制重新读取会话与模型目录。 */
-  const [sessionEpoch, setSessionEpoch] = useState(0)
+  const sessionTicket = useRef(0)
+  const sessionIdentityRef = useRef('')
+
+  const refreshSession = useCallback<StudioContextValue['refreshSession']>(async () => {
+    const ticket = ++sessionTicket.current
+    const brandRevision = brandSync.getRevision()
+    const current = () => ticket === sessionTicket.current
+    try {
+      const snapshot = await loadSessionSnapshot()
+      if (!current()) return { status: 'superseded' }
+      const settings = brandSync.merge(snapshot.settings, brandRevision)
+      const previousIdentity = sessionIdentityRef.current
+      const nextIdentity = sessionIdentity(snapshot.user)
+      if (previousIdentity && previousIdentity !== nextIdentity) clearScopedTaskCache(previousIdentity)
+      sessionIdentityRef.current = nextIdentity
+      if (!snapshot.user) {
+        dispatch({ type: 'HYDRATE', payload: { ...emptyAccountState(), sessionSettings: settings, backendStatus: 'unauthenticated', backendError: undefined } })
+        return { status: 'unauthenticated' }
+      }
+      const user = backendUserToStudioUser(snapshot.user, fallbackAvatar)
+      dispatch({ type: 'HYDRATE', payload: {
+        ...(previousIdentity !== nextIdentity ? emptyAccountState() : {}),
+        user, credits: user.credits, sessionSettings: settings,
+        models: snapshot.models, liveModels: snapshot.models,
+        backendStatus: 'connected', backendError: undefined,
+      } })
+      // The same request token guards the dependent project query as well.
+      // An old account's delayed list can never populate the next account.
+      void listCanvasProjects().then((result) => {
+        if (current()) dispatch({ type: 'HYDRATE', payload: { projects: result.projects.map(projectFromCanvasSummary) } })
+      }).catch(() => { /* Keep genuine cached rows for this account; never synthesize projects. */ })
+      return { status: 'connected' }
+    } catch (error) {
+      if (!current()) return { status: 'superseded' }
+      if (isUnauthorized(error)) {
+        if (sessionIdentityRef.current) clearScopedTaskCache(sessionIdentityRef.current)
+        sessionIdentityRef.current = ''
+        dispatch({ type: 'HYDRATE', payload: emptyAccountState() })
+      }
+      const status = isUnauthorized(error) ? 'unauthenticated' : 'offline'
+      const message = error instanceof Error ? error.message : '会话读取失败'
+      dispatch({ type: 'SET_BACKEND_STATUS', status, error: message })
+      return { status, error: message }
+    }
+  }, [brandSync])
 
   useEffect(() => {
     const unsubscribe = brandSync.subscribe((site) => dispatch({ type: 'SET_SITE_BRAND', site }))
@@ -234,68 +230,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, [brandSync])
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(storageKey)
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as Partial<StudioState>
-        const theme = parsed.theme === 'dark' ? 'dark' : 'light'
-        // 玻璃质感是当前唯一公开皮肤；保留旧字段只为兼容历史缓存，不再允许旧缓存把界面切回去。
-        const skin: StudioSkin = 'minimal'
-        dispatch({ type: 'HYDRATE', payload: { ...parsed, theme, skin } })
-      } catch {
-        dispatch({ type: 'HYDRATE', payload: { tasks: getLiveDemoTasks() } })
-      }
-    } else {
-      dispatch({ type: 'HYDRATE', payload: { tasks: getLiveDemoTasks() } })
-    }
+    let raw: string | null = null
+    try { raw = window.localStorage.getItem(storageKey) ?? window.localStorage.getItem(legacyStorageKey) } catch { /* Storage may be disabled. */ }
+    dispatch({ type: 'HYDRATE', payload: readStudioPreferences(raw) })
   }, [])
 
   useEffect(() => {
     if (!state.hydrated) return
-    let cancelled = false
-    void (async () => {
-      const brandRevision = brandSync.getRevision()
-      try {
-        const snapshot = await loadSessionSnapshot()
-        if (cancelled) return
-        const settings = brandSync.merge(snapshot.settings, brandRevision)
-        if (!snapshot.user) {
-          dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), backendStatus: 'unauthenticated', liveModels: [], sessionSettings: settings } })
-          return
-        }
-        const user = backendUserToStudioUser(snapshot.user, media.portrait)
-        dispatch({
-          type: 'HYDRATE',
-          payload: {
-            user,
-            credits: user.credits,
-            sessionSettings: settings,
-            liveModels: snapshot.models,
-            ...(snapshot.models.length ? { models: snapshot.models } : {}),
-          },
-        })
-        dispatch({ type: 'SET_BACKEND_STATUS', status: 'connected' })
-        void listCanvasProjects()
-          .then((result) => {
-            if (cancelled) return
-            dispatch({ type: 'HYDRATE', payload: { projects: result.projects.map(projectFromCanvasSummary) } })
-          })
-          .catch(() => {
-            // 画布列表不是登录成功的前置条件；接口不可用时保留空状态而不是回退到演示项目。
-          })
-      } catch (error) {
-        if (cancelled) return
-        dispatch({
-          type: 'SET_BACKEND_STATUS',
-          status: isUnauthorized(error) ? 'unauthenticated' : 'offline',
-          error: error instanceof Error ? error.message : '后端连接失败',
-        })
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [brandSync, state.hydrated, sessionEpoch])
+    void refreshSession()
+    return () => { sessionTicket.current += 1 }
+  }, [state.hydrated, refreshSession])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', state.theme === 'dark')
@@ -308,8 +252,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
    * 早先默认值是写死的演示项目 `'aurora'`，真实账号下它并不存在：
    * 画布请求 404、「加入项目」写到不存在的项目上。
    *
-   * 只在**已连接后端**时校准：未连接时 `state.projects` 是演示数据，
-   * 用它校准会把用户带到演示项目上。
+   * 只在已连接后端时校准，断线期间保留当前账户最近一次真实选择。
    */
   useEffect(() => {
     if (!state.hydrated) return
@@ -331,97 +274,25 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!state.hydrated) return
-    const payload = {
-      theme: state.theme,
-      skin: state.skin,
-      sidebarCollapsed: state.sidebarCollapsed,
-      credits: state.credits,
-      projects: state.projects,
-      assets: state.assets,
-      tasks: state.tasks,
-      works: state.works,
-      shots: state.shots,
-      agentPlans: state.agentPlans,
-      canvasBoards: state.canvasBoards,
-      selectedProjectId: state.selectedProjectId,
-    }
-    window.localStorage.setItem(storageKey, JSON.stringify(payload))
-  }, [state])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => dispatch({ type: 'TICK_TASKS' }), 1800)
-    return () => window.clearInterval(timer)
-  }, [])
+    const payload = { version: 1, theme: state.theme, skin: 'minimal', sidebarCollapsed: state.sidebarCollapsed }
+    try { window.localStorage.setItem(storageKey, JSON.stringify(payload)) } catch { /* Preferences are optional; API state is unaffected. */ }
+  }, [state.hydrated, state.theme, state.sidebarCollapsed])
 
   const setTheme = useCallback((theme: Theme) => dispatch({ type: 'SET_THEME', theme }), [])
   const setSkin = useCallback((_skin: StudioSkin) => dispatch({ type: 'SET_SKIN', skin: 'minimal' }), [])
   const toggleTheme = useCallback(() => dispatch({ type: 'SET_THEME', theme: state.theme === 'dark' ? 'light' : 'dark' }), [state.theme])
   const toggleSidebar = useCallback(() => dispatch({ type: 'TOGGLE_SIDEBAR' }), [])
-  /** 有真实模型目录时用后端定价估算，否则退回演示估算并明确标注为本地预览。 */
-  const liveModelList = state.liveModels.length ? state.liveModels : []
+  const liveModelList = state.liveModels
   const estimateCredits = useCallback((modelId: string, settings: Partial<GenerationSettings> = {}) => {
-    if (liveModelList.length) {
-      const seconds = settings.duration ? Number.parseInt(settings.duration, 10) : undefined
-      return estimatePoints(modelId, state.sessionSettings, liveModelList, {
-        count: settings.count,
-        quality: settings.quality,
-        seconds: Number.isFinite(seconds) ? seconds : undefined,
-      })
-    }
-    return estimateDemoCredits(modelId, settings, state.models)
-  }, [liveModelList, state.models, state.sessionSettings])
-  const addDemoTask = useCallback((input: Parameters<typeof createDemoTask>[0]) => {
-    if (state.credits < input.expectedCredits) return null
-    const task = createDemoTask(input)
-    dispatch({ type: 'SPEND_CREDITS', amount: input.expectedCredits })
-    dispatch({ type: 'ADD_TASK', task })
-    return task.id
-  }, [state.credits])
-
-  /**
-   * 立即重新读取会话并同步用户、模型目录、积分与项目。
-   * 登录成功、退出、切换账号后调用它，客户端导航不再需要整页刷新。
-   * 切换账号时清空上一个账号的业务数据，避免内容残留。
-   */
-  const refreshSession = useCallback(async () => {
-    const previousIdentity = sessionIdentity(state.user)
-    const brandRevision = brandSync.getRevision()
-    setSessionEpoch((value) => value + 1)
-    try {
-      const snapshot = await loadSessionSnapshot()
-      const settings = brandSync.merge(snapshot.settings, brandRevision)
-      if (!snapshot.user) {
-        // 退出登录：清掉上一个账号的任务缓存，避免下一个登录者看到其提示词与未确认提交。
-        clearScopedTaskCache(previousIdentity || state.user.id)
-        dispatch({ type: 'HYDRATE', payload: { user: signedOutUser(), credits: 0, liveModels: [], sessionSettings: settings, projects: [], assets: [], tasks: [], works: [], agentPlans: [] } })
-        dispatch({ type: 'SET_BACKEND_STATUS', status: 'unauthenticated' })
-        return
-      }
-      const user = backendUserToStudioUser(snapshot.user, media.portrait)
-      const nextIdentity = sessionIdentity(snapshot.user)
-      const switched = Boolean(previousIdentity) && previousIdentity !== nextIdentity
-      // 切换账号时先清空，防止上一个账号的项目、任务和作品短暂显示给新账号。
-      if (switched) clearScopedTaskCache(previousIdentity)
-      dispatch({
-        type: 'HYDRATE',
-        payload: {
-          user,
-          credits: user.credits,
-          sessionSettings: settings,
-          liveModels: snapshot.models,
-          ...(snapshot.models.length ? { models: snapshot.models } : {}),
-          ...(switched ? { projects: [], assets: [], tasks: [], works: [], agentPlans: [] } : {}),
-        },
-      })
-      dispatch({ type: 'SET_BACKEND_STATUS', status: 'connected' })
-    } catch (error) {
-      dispatch({
-        type: 'SET_BACKEND_STATUS',
-        status: isUnauthorized(error) ? 'unauthenticated' : 'offline',
-        error: error instanceof Error ? error.message : '会话刷新失败',
-      })
-    }
-  }, [brandSync, state.user])
+    if (!liveModelList.some((model) => model.id === modelId)) return 0
+    const seconds = settings.duration ? Number.parseInt(settings.duration, 10) : undefined
+    return estimatePoints(modelId, state.sessionSettings, liveModelList, {
+      count: settings.count, quality: settings.quality,
+      seconds: Number.isFinite(seconds) ? seconds : undefined,
+    })
+  }, [liveModelList, state.sessionSettings])
+  // Compatibility only: the production provider never starts simulated tasks.
+  const addDemoTask = useCallback<StudioContextValue['addDemoTask']>(() => null, [])
 
   /**
    * 新建项目。
@@ -434,12 +305,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     const trimmed = title.trim()
     if (!trimmed) throw new Error('项目名称不能为空')
     if (state.backendStatus !== 'connected') {
-      // 未登录时保留本地预览能力，但明确标记为本地项目，不做持久化承诺。
-      const local = createProjectFromTitle(trimmed)
-      dispatch({ type: 'CREATE_PROJECT', project: local })
-      return local
+      throw new Error('请先登录并连接服务后再创建项目。')
     }
+    const identity = sessionIdentityRef.current
     const created = await createCanvasProject({ title: trimmed })
+    if (identity !== sessionIdentityRef.current) throw new Error('账户已变化，请在原账户中查看新建项目。')
     const project = projectFromCanvasSummary({ id: created.id, title: created.title, updatedAt: created.updatedAt, nodeCount: created.nodes.length })
     dispatch({ type: 'CREATE_PROJECT', project })
     return project
@@ -455,10 +325,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   const deleteProject = useCallback(async (projectId: string) => {
     if (!projectId) throw new Error('项目标识为空')
     if (state.backendStatus !== 'connected') {
-      dispatch({ type: 'DELETE_PROJECT', projectId })
-      return
+      throw new Error('请先登录并连接服务后再删除项目。')
     }
+    const identity = sessionIdentityRef.current
     await deleteCanvasProjects([projectId])
+    if (identity !== sessionIdentityRef.current) return
     dispatch({ type: 'DELETE_PROJECT', projectId })
   }, [state.backendStatus])
 
@@ -503,21 +374,4 @@ export function getProject(state: StudioState, projectId: string) {
 
 export function getSelectedProjectShots(state: StudioState, projectId: string) {
   return state.shots.filter((shot) => shot.projectId === projectId)
-}
-
-export function createProjectFromTitle(title: string): Project {
-  return {
-    id: `project-${Date.now()}`,
-    title,
-    type: '个人作品',
-    cover: media.studio,
-    updatedAt: '刚刚',
-    status: '进行中',
-    progress: 0,
-    tags: ['新项目'],
-    shotCount: 0,
-    chapterCount: 1,
-    description: '新建项目。',
-    favorite: false,
-  }
 }

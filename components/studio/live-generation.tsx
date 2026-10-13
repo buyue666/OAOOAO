@@ -58,7 +58,7 @@ export function GenerationErrorNotice() {
   return (
     <Notice tone="warning">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 flex-1" data-testid={indeterminate ? 'generation-indeterminate' : 'generation-error'}>
+      <span role={indeterminate ? 'status' : 'alert'} className="min-w-0 flex-1" data-testid={indeterminate ? 'generation-indeterminate' : 'generation-error'}>
         <span className="block font-medium">{indeterminate ? '提交结果未确认：' : '生成失败：'}{lastError.message}</span>
         <span className="mt-0.5 block text-[11px]">{hint}{lastError.status ? `（HTTP ${lastError.status}）` : ''}</span>
       </span>
@@ -315,17 +315,18 @@ export function GenerationTaskCard({ task, compact = false }: { task: Generation
  * 真实生成任务列表。按类型过滤后展示，并包含刷新、加载、空数据与错误状态。
  */
 export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint }: { kinds?: GenerationKind[]; limit?: number; compact?: boolean; emptyHint?: string }) {
-  const { tasks, loading, refresh, activeCount } = useGeneration()
+  const { tasks, loading, refresh, queryUnavailable } = useGeneration()
+  const matching = useMemo(() => kinds?.length ? tasks.filter((task) => kinds.includes(task.kind)) : tasks, [kinds, tasks])
+  const activeCount = matching.filter((task) => isActiveStatus(task.status)).length
   const visible = useMemo(() => {
-    const list = kinds?.length ? tasks.filter((task) => kinds.includes(task.kind)) : tasks
-    return list.slice(0, limit)
-  }, [kinds, limit, tasks])
+    return matching.slice(0, limit)
+  }, [matching, limit])
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          真实任务 {visible.length} 条{activeCount > 0 ? ` · ${activeCount} 条进行中` : ''}
+          最近 {visible.length} 条任务{activeCount > 0 ? ` · ${activeCount} 条进行中` : ''}
         </p>
         <ControlButton size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} aria-hidden="true" />刷新
@@ -340,7 +341,8 @@ export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint }: {
 
       {visible.map((task) => <GenerationTaskCard key={task.id} task={task} compact={compact} />)}
 
-      {!loading && !visible.length && (
+      {queryUnavailable && <QueryUnavailableNotice />}
+      {!loading && !queryUnavailable && !visible.length && (
         <div className="studio-surface flex flex-col items-center justify-center border-dashed py-8 text-center">
           <p className="text-xs font-medium">{emptyHint || '还没有生成任务'}</p>
           <p className="mt-1 max-w-sm text-[11px] leading-5 text-muted-foreground">填写参数并点击生成后，任务会在这里显示进度、结果与积分消耗。</p>

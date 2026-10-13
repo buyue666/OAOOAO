@@ -12,6 +12,7 @@ export type CanvasActions = GenerationActions & AgentActions & {
   createNodeAt: (kind: CreatableKind, position: XYPosition) => void
   focusAgent: () => void
   exportCanvas: () => void
+  selectSkills: (nodeId: string) => void
 }
 
 const CanvasActionsContext = createContext<CanvasActions | null>(null)

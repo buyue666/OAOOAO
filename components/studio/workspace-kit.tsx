@@ -1,7 +1,7 @@
 'use client'
 
 import type { FormEvent, ReactNode } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   Upload,
   X,
@@ -28,14 +29,14 @@ const REFERENCE_PAGE_SIZE = 8
 
 /** 把 "16:9" 这类比例转成 CSS aspect-ratio，保证媒体区域尺寸稳定、不产生布局跳动。 */
 export function ratioToCss(ratio: string) {
-  const [width, height] = ratio.split(':').map((value) => Number.parseFloat(value))
-  if (!width || !height) return '16 / 9'
+  const [width, height] = ratio.split(/[:x/×]/).map((value) => Number(value.trim()))
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return '16 / 9'
   return `${width} / ${height}`
 }
 
 /**
  * 工作台骨架：桌面端左侧固定 320px 参数面板（可独立滚动、生成按钮常驻），
- * 右侧为自适应预览区；移动端预览优先，参数收进可折叠面板，生成按钮吸底。
+ * 右侧为自适应预览区；移动端参数入口在预览之前，生成按钮吸底。
  */
 export function WorkspaceShell({
   params,
@@ -48,6 +49,7 @@ export function WorkspaceShell({
   notice,
   paramsTitle = '创作参数',
   paramsHint,
+  submitHint,
 }: {
   params: ReactNode
   stage: ReactNode
@@ -59,25 +61,31 @@ export function WorkspaceShell({
   notice?: ReactNode
   paramsTitle?: string
   paramsHint?: string
+  submitHint?: string
 }) {
   const [paramsOpen, setParamsOpen] = useState(false)
+  const paramsId = useId()
 
   return (
-    <form onSubmit={onSubmit} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 py-5 sm:px-5 md:gap-5 md:px-8 md:py-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10">
+    <form onSubmit={onSubmit} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 pt-5 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-5 md:gap-5 md:px-8 md:pt-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10 xl:pb-6">
       <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="order-2 hidden min-h-0 min-w-0 xl:order-1 xl:block">
-          <div className="workspace-params-glass flex h-full min-h-0 flex-col">
-
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <aside className="order-1 min-h-0 min-w-0">
+          <button type="button" onClick={() => setParamsOpen((value) => !value)} aria-expanded={paramsOpen} aria-controls={paramsId} className="studio-surface flex min-h-12 w-full items-center justify-between gap-3 px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 xl:hidden">
+            <span>{paramsTitle}<span className="ml-2 text-xs font-normal text-muted-foreground">{paramsOpen ? '收起设置' : '展开开始创作'}</span></span>
+            <ChevronDown className={cn('size-4 shrink-0 transition-transform', paramsOpen && 'rotate-180')} aria-hidden="true" />
+          </button>
+          <div id={paramsId} className={cn('workspace-params-glass mt-3 h-full min-h-0 flex-col xl:mt-0 xl:flex', paramsOpen ? 'flex' : 'hidden')}>
+            <div className="hidden shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 xl:flex">
               <h2 className="text-sm font-semibold text-foreground">{paramsTitle}</h2>
               {paramsHint && <span className="truncate text-[11px] text-muted-foreground">{paramsHint}</span>}
             </div>
             <div className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{params}</div>
-            <div className="shrink-0 border-t border-border px-4 py-3">
+            <div className="hidden shrink-0 border-t border-border px-4 py-3 xl:block">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-muted-foreground">预计消耗</span>
                 <span className="font-semibold tabular-nums text-studio-accent">{credits} 积分</span>
               </div>
+              {submitHint && <p className="mt-2 text-[11px] leading-5 text-muted-foreground" role="status">{submitHint}</p>}
               <ControlButton type="submit" variant="primary" size="lg" className="mt-3 w-full" disabled={submitDisabled}>
                 {submitLabel}
               </ControlButton>
@@ -85,36 +93,16 @@ export function WorkspaceShell({
           </div>
         </aside>
 
-        <section className="order-1 min-h-0 min-w-0 overscroll-contain xl:order-2 xl:overflow-y-auto xl:pr-1">
+        <section className="order-2 min-h-0 min-w-0 overscroll-contain xl:overflow-y-auto xl:pr-1">
           {stageToolbar}
           {stage}
           {notice}
 
-          <div className="mt-4 xl:hidden">
-            <button
-              type="button"
-              onClick={() => setParamsOpen((value) => !value)}
-              aria-expanded={paramsOpen}
-              aria-controls="workspace-mobile-params"
-              className="studio-surface flex h-11 w-full items-center justify-between gap-3 px-3 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60"
-            >
-              <span className="flex items-center gap-2">
-                {paramsTitle}
-                <span className="text-xs font-normal text-muted-foreground">{credits} 积分</span>
-              </span>
-              <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200', paramsOpen && 'rotate-180')} aria-hidden="true" />
-            </button>
-            {paramsOpen && (
-              <div id="workspace-mobile-params" className="workspace-params-glass mt-3 p-4">
-                {params}
-              </div>
-            )}
-          </div>
         </section>
       </div>
 
       {/* 移动端吸底提交条：玻璃表面，始终可操作。 */}
-      <div className="workspace-submit-bar fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border px-4 py-3 shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
+      <div className="workspace-submit-bar fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] text-muted-foreground">预计消耗</p>
           <p className="text-sm font-semibold tabular-nums text-studio-accent">{credits} 积分</p>
@@ -122,6 +110,7 @@ export function WorkspaceShell({
         <ControlButton type="submit" variant="primary" size="lg" className="min-w-0 flex-1 sm:min-w-32 sm:flex-none" disabled={submitDisabled}>
           {submitLabel}
         </ControlButton>
+        {submitHint && <p className="w-full text-[11px] leading-5 text-muted-foreground" role="status">{submitHint}</p>}
       </div>
     </form>
   )
@@ -211,11 +200,13 @@ function formatSize(bytes: number) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-function readFileAsDataUrl(file: File) {
+function readFileAsDataUrl(file: File, onProgress?: (progress: number) => void) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('文件读取失败'))
     reader.onerror = () => reject(reader.error || new Error('文件读取失败'))
+    reader.onabort = () => reject(new Error('文件读取已取消'))
+    reader.onprogress = (event) => { if (event.lengthComputable) onProgress?.(Math.round(event.loaded / event.total * 100)) }
     reader.readAsDataURL(file)
   })
 }
@@ -250,34 +241,35 @@ export function ReferenceUploader({
   const uploadEmptyText = emptyText ?? (kind === 'video' ? '拖拽视频到此处，或点击选择' : '拖拽文件到此处，或点击选择')
   const [message, setMessage] = useState<{ tone: 'warning' | 'accent'; text: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const filesRef = useRef(new Map<string, File>())
   const dragIndex = useRef<number | null>(null)
   const itemsRef = useRef(items)
   const changeRef = useRef(onItemsChange)
   itemsRef.current = items
   changeRef.current = onItemsChange
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const current = itemsRef.current
-      if (!current.some((item) => item.status === 'uploading')) return
-      changeRef.current(
-        current.map((item) => {
-          if (item.status !== 'uploading') return item
-          const next = Math.min(100, item.progress + 14 + Math.random() * 20)
-          const ready = Boolean(item.dataUrl)
-          return next >= 100 && ready ? { ...item, progress: 100, status: 'done' as const } : { ...item, progress: Math.min(92, next) }
-        }),
-      )
-    }, 320)
-    return () => window.clearInterval(timer)
-  }, [])
+  function changeItems(next: UploadItem[]) {
+    // Keep parallel FileReader completions from overwriting a sibling's update
+    // before React has committed the parent render.
+    itemsRef.current = next
+    changeRef.current(next)
+  }
+
+  async function readItem(id: string, file: File) {
+    try {
+      const dataUrl = await readFileAsDataUrl(file, (progress) => changeItems(itemsRef.current.map((current) => current.id === id && current.status === 'uploading' ? { ...current, progress } : current)))
+      changeItems(itemsRef.current.map((current) => current.id === id && current.status === 'uploading' ? { ...current, dataUrl, progress: 100, status: 'done' } : current))
+    } catch (error) {
+      changeItems(itemsRef.current.map((current) => current.id === id && current.status === 'uploading' ? { ...current, status: 'failed' as const, error: error instanceof Error ? error.message : '文件读取失败' } : current))
+    }
+  }
 
   function addFiles(fileList: FileList | File[]) {
     const incoming = Array.from(fileList)
     const accepted: UploadItem[] = []
     const acceptedFiles: Array<{ item: UploadItem; file: File }> = []
     const problems: string[] = []
-    const existing = new Set(items.map((item) => `${item.name}:${item.size}`))
+    const existing = new Set(itemsRef.current.map((item) => `${item.name}:${item.size}`))
     let duplicates = 0
 
     for (const file of incoming) {
@@ -294,7 +286,7 @@ export function ReferenceUploader({
         problems.push(`${file.name} 超过 ${kind === 'video' ? '200 MB' : '12 MB'}`)
         continue
       }
-      if (items.length + accepted.length >= maxFiles) {
+      if (itemsRef.current.length + accepted.length >= maxFiles) {
         problems.push(`最多 ${maxFiles} 个参考文件`)
         break
       }
@@ -312,16 +304,9 @@ export function ReferenceUploader({
       acceptedFiles.push({ item, file })
     }
 
-    if (accepted.length) onItemsChange([...items, ...accepted])
+    if (accepted.length) changeItems([...itemsRef.current, ...accepted])
     if (acceptedFiles.length) {
-      void Promise.all(acceptedFiles.map(async ({ item, file }) => {
-        try {
-          const dataUrl = await readFileAsDataUrl(file)
-          changeRef.current(itemsRef.current.map((current) => current.id === item.id ? { ...current, dataUrl, progress: Math.max(current.progress, 96) } : current))
-        } catch (error) {
-          changeRef.current(itemsRef.current.map((current) => current.id === item.id ? { ...current, status: 'failed' as const, error: error instanceof Error ? error.message : '文件读取失败' } : current))
-        }
-      }))
+      for (const { item, file } of acceptedFiles) { filesRef.current.set(item.id, file); void readItem(item.id, file) }
     }
 
     const notes: string[] = []
@@ -333,21 +318,22 @@ export function ReferenceUploader({
   }
 
   function updateItem(id: string, patch: Partial<UploadItem>) {
-    onItemsChange(items.map((item) => (item.id === id ? { ...item, ...patch } : item)))
+    changeItems(itemsRef.current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
   }
 
   function removeItem(id: string) {
-    const target = items.find((item) => item.id === id)
+    const target = itemsRef.current.find((item) => item.id === id)
     if (target?.preview.startsWith('blob:')) URL.revokeObjectURL(target.preview)
-    onItemsChange(items.filter((item) => item.id !== id))
+    filesRef.current.delete(id)
+    changeItems(itemsRef.current.filter((item) => item.id !== id))
   }
 
   function reorder(from: number, to: number) {
     if (from === to) return
-    const next = [...items]
+    const next = [...itemsRef.current]
     const [moved] = next.splice(from, 1)
     next.splice(to, 0, moved)
-    onItemsChange(next)
+    changeItems(next)
   }
 
   return (
@@ -381,7 +367,7 @@ export function ReferenceUploader({
           <Upload className="size-4" aria-hidden="true" />
         </span>
         <p className="text-xs font-medium text-foreground">{dragging ? '松开即可添加文件' : uploadEmptyText}</p>
-        <p className="text-[11px] leading-5 text-muted-foreground">{uploadHint} · 最多 {maxFiles} 个</p>
+        <p className="text-[11px] leading-5 text-muted-foreground">{maxFiles > 0 ? `${uploadHint} · 最多 ${maxFiles} 个` : '参考位置已占满，请先移除部分已选素材。'}</p>
         <input
           ref={inputRef}
           type="file"
@@ -393,7 +379,7 @@ export function ReferenceUploader({
             event.target.value = ''
           }}
         />
-        <ControlButton type="button" variant="secondary" size="sm" onClick={() => inputRef.current?.click()}>
+        <ControlButton type="button" variant="secondary" size="sm" disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
           <Plus className="size-3.5" aria-hidden="true" />
           {selectLabel}
         </ControlButton>
@@ -446,7 +432,7 @@ export function ReferenceUploader({
                 {item.status === 'failed' && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-studio-ink/70 px-1 text-center">
                     <AlertTriangle className="size-3.5 text-studio-warn" aria-hidden="true" />
-                    <span className="text-[10px] leading-4 text-studio-ink-foreground">上传失败</span>
+                    <span className="text-[10px] leading-4 text-studio-ink-foreground">读取失败</span>
                   </div>
                 )}
                 {item.status === 'cancelled' && (
@@ -468,7 +454,7 @@ export function ReferenceUploader({
               </div>
               <p className="mt-1 truncate text-[10px] text-muted-foreground" title={item.name}>{item.name}</p>
               <p className="truncate text-[10px] text-muted-foreground/80">
-                {item.status === 'uploading' ? `上传中 ${Math.round(item.progress)}%` : item.status === 'done' ? formatSize(item.size) : item.status === 'failed' ? '可重试' : '已取消'}
+                {item.status === 'uploading' ? `读取中 ${Math.round(item.progress)}%` : item.status === 'done' ? formatSize(item.size) : item.status === 'failed' ? item.error || '读取失败，可重试' : '已取消'}
               </p>
               {item.status === 'uploading' && (
                 <button type="button" onClick={() => updateItem(item.id, { status: 'cancelled' })} className="mt-0.5 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
@@ -476,7 +462,12 @@ export function ReferenceUploader({
                 </button>
               )}
               {(item.status === 'failed' || item.status === 'cancelled') && (
-                <button type="button" onClick={() => updateItem(item.id, { status: 'uploading', progress: 0 })} className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-studio-accent underline-offset-2 hover:underline">
+                <button type="button" onClick={() => {
+                  const file = filesRef.current.get(item.id)
+                  if (!file) { removeItem(item.id); inputRef.current?.click(); return }
+                  updateItem(item.id, { status: 'uploading', progress: 0, error: undefined })
+                  void readItem(item.id, file)
+                }} className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-studio-accent underline-offset-2 hover:underline">
                   <RefreshCw className="size-2.5" aria-hidden="true" />
                   重试
                 </button>
@@ -597,23 +588,29 @@ export function ReferencePicker({
       */}
       <div
         role="search"
-        className="flex h-8 items-center gap-2 border border-border bg-card px-2.5 text-muted-foreground focus-within:border-studio-accent/60"
+        aria-label="搜索参考素材"
+        className="studio-search-field flex min-h-10 min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 text-muted-foreground transition-[border-color,box-shadow] focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15"
       >
-        <span className="sr-only">搜索素材</span>
+        <Search className="size-3.5 shrink-0" aria-hidden="true" />
         <input
+          type="search"
+          data-focus-managed
+          aria-label="搜索素材"
           value={keyword}
           onChange={(event) => { setKeyword(event.target.value); if (serverSearch && !event.target.value.trim()) onSearch?.('') }}
-          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); submitSearch(keyword) } }}
+          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (!event.nativeEvent.isComposing) submitSearch(keyword) } }}
           placeholder={serverSearch ? '按名称搜索素材，回车查询' : '按名称或标签搜索素材'}
           data-testid="reference-picker-search"
-          className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/70"
+          style={{ border: 0, background: 'transparent', boxShadow: 'none', outline: 'none', borderRadius: 0 }}
+          className="h-9 min-w-0 w-full flex-1 appearance-none p-0 text-xs text-foreground placeholder:text-muted-foreground/70 [&::-webkit-search-cancel-button]:appearance-none"
         />
         {keyword && (
-          <button type="button" onClick={() => submitSearch('')} aria-label="清除搜索" className="text-muted-foreground hover:text-foreground">
+          <button type="button" onClick={() => submitSearch('')} aria-label="清除搜索" className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
             <X className="size-3" aria-hidden="true" />
           </button>
         )}
       </div>
+      {shown.length > 0 && (loading || failed) && <p role="status" className="text-[11px] leading-5 text-muted-foreground">{failed ? `素材更新失败：${libraryMessage || '请稍后刷新'}。下方保留上次结果。` : '正在更新素材…'}</p>}
       {shown.length ? (
         <div className="grid grid-cols-4 gap-2">
           {shown.map((asset) => {
@@ -699,6 +696,8 @@ export function ResultStage({
   children,
   emptyHint,
   isEmpty,
+  mediaKind = 'image',
+  resultCount,
 }: {
   view: string
   onViewChange: (value: string) => void
@@ -710,42 +709,49 @@ export function ResultStage({
   children: ReactNode
   emptyHint: string
   isEmpty?: boolean
+  mediaKind?: 'image' | 'video'
+  resultCount?: number
 }) {
+  const active = status === 'queued' || status === 'processing'
+  const showContent = !isEmpty
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3" data-testid="result-stage">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 className="mr-1 text-sm font-semibold text-foreground">{mediaKind === 'video' ? '视频预览' : '画面预览'}</h2>
           <StatusBadge tone={status === 'failed' ? 'warning' : status === 'done' ? 'success' : status === 'idle' ? 'neutral' : 'accent'}>{statusLabel}</StatusBadge>
-          <span className="truncate text-xs text-muted-foreground">输出比例 {ratio}</span>
+          <span className="text-[11px] text-muted-foreground">{resultCount ? `${resultCount} 个结果 · ` : ''}{ratio}</span>
         </div>
         <SegmentedControl value={view} onChange={onViewChange} options={viewOptions} />
       </div>
 
-      <div className="relative overflow-hidden rounded-lg border border-border bg-studio-workspace p-2 shadow-sm sm:p-3 md:p-4">
-        <div className="relative w-full" style={{ aspectRatio: ratioToCss(ratio) }}>
-          {isEmpty ? (
-            <div className="flex size-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-studio-ink-line px-6 text-center">
-              <ImageIcon className="size-5 text-studio-ink-muted" aria-hidden="true" />
-              <p className="text-xs leading-5 text-studio-ink-muted">{emptyHint}</p>
+      <div className="relative overflow-hidden rounded-xl border border-border bg-muted/30 p-2 shadow-sm sm:p-3">
+        <div className="relative h-[clamp(240px,48dvh,560px)] min-w-0 sm:h-[clamp(280px,52dvh,580px)]" data-testid="result-stage-viewport" aria-busy={active || undefined}>
+          {!showContent && !active && status !== 'failed' ? (
+            <div className="flex size-full flex-col items-center justify-center rounded-lg border border-dashed border-border px-5 text-center" role="status">
+              <span className="mb-5 flex size-14 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground shadow-sm"><ImageIcon className="size-6" aria-hidden="true" /></span>
+              <p className="text-sm font-medium text-foreground">让灵感在这里成形</p>
+              <p className="mt-2 max-w-72 text-xs leading-6 text-muted-foreground">{emptyHint}</p>
+              <div className="mt-6 flex items-center gap-2 text-[10px] text-muted-foreground" aria-hidden="true"><span className="rounded-full border border-border px-2 py-1">01 描述创意</span><span>→</span><span className="rounded-full border border-border px-2 py-1">02 设置参数</span><span>→</span><span className="rounded-full border border-border px-2 py-1">03 生成</span></div>
             </div>
-          ) : (
-            children
-          )}
+          ) : showContent ? <div className="size-full overflow-auto overscroll-contain rounded-lg" data-testid="result-stage-content">{children}</div> : null}
 
-          {(status === 'queued' || status === 'processing') && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-studio-ink/70" aria-live="polite">
-              <Loader2 className="size-5 animate-spin text-studio-accent motion-reduce:animate-none" aria-hidden="true" />
-              <p className="text-xs font-medium text-studio-ink-foreground">{statusLabel}</p>
-              <div className="h-1 w-40 overflow-hidden rounded-full bg-studio-ink-line">
+          {active && !showContent && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg bg-card/80 px-6 text-center" role="status">
+              <Loader2 className="size-6 animate-spin text-studio-accent motion-reduce:animate-none" aria-hidden="true" />
+              <p className="text-sm font-medium text-foreground">{statusLabel}</p>
+              <p className="max-w-72 text-xs leading-6 text-muted-foreground">任务正在处理中，结果会自动出现在这里。你也可以到任务记录查看进度。</p>
+              <div className="mt-2 h-1 w-40 overflow-hidden rounded-full bg-muted">
                 <div className="studio-waiting h-full w-1/3 rounded-full bg-studio-accent" />
               </div>
             </div>
           )}
 
-          {status === 'failed' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-studio-ink/75 px-6 text-center" aria-live="polite">
+          {status === 'failed' && !showContent && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg bg-card/80 px-6 text-center" role="alert">
               <AlertTriangle className="size-5 text-studio-warn" aria-hidden="true" />
-              <p className="text-xs leading-5 text-studio-ink-foreground">{statusLabel}</p>
+              <p className="text-sm font-medium text-foreground">{statusLabel}</p>
+              <p className="max-w-72 text-xs leading-6 text-muted-foreground">查看下方任务卡片了解原因。已填写的描述和参考素材会保留。</p>
               {onRetry && (
                 <ControlButton type="button" variant="secondary" size="sm" onClick={onRetry}>
                   <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -756,6 +762,7 @@ export function ResultStage({
           )}
         </div>
       </div>
+      {showContent && (active || status === 'failed') && <p role="status" className="flex items-center gap-2 text-xs leading-5 text-muted-foreground">{active ? <Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <AlertTriangle className="size-3.5 shrink-0 text-studio-warn" aria-hidden="true" />}{active ? '新任务正在生成，你可以继续查看已有结果。' : '最近一次生成失败，已保留之前的结果。请查看下方任务原因。'}</p>}
     </div>
   )
 }

@@ -10,6 +10,8 @@ import { useLocale } from '@/lib/studio/i18n'
 import { Tooltip } from './ui'
 import { studioPageTitle } from './studio-nav'
 import { cn } from '@/lib/utils'
+import { AnnouncementList, useAnnouncements } from '@/components/site-announcements'
+import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
 
 const creditChipClass = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)]'
 const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70'
@@ -37,8 +39,16 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const localeLabel = locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')
   const isConnected = state.backendStatus === 'connected'
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
-  const notificationCount = isConnected ? 0 : state.notifications
+  const { unread: notificationCount } = useAnnouncements()
   const creditsLabel = `${state.credits.toLocaleString()} 积分`
+  function capturePlansDestination(event: React.MouseEvent<HTMLAnchorElement>) {
+    const returnTo = safeReturnPath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
+    const href = `/plans?returnTo=${encodeURIComponent(returnTo)}`
+    event.currentTarget.href = href
+    try { sessionStorage.setItem(RETURN_PATH_KEY, returnTo) } catch { /* Explicit query retains the return target. */ }
+    // Keep modified clicks as native link navigation while reading location at activation time.
+    if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); router.push(href) }
+  }
 
   // 通知与账户菜单共用一套关闭规则：点击外部或按 Esc 关闭。
   useEffect(() => {
@@ -95,10 +105,10 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {isConnected && (rechargeEnabled ? (
-          <Link href="/plans" aria-label={`${creditsLabel}，查看套餐`} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
+          <a href="/plans" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={`${creditsLabel}，查看套餐`} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
             <Coins className="size-4 text-studio-accent" aria-hidden="true" />
             <span className="tabular-nums">{creditsLabel}</span>
-          </Link>
+          </a>
         ) : (
           <span aria-label={creditsLabel} className={creditChipClass}>
             <Coins className="size-4 text-studio-accent" aria-hidden="true" />
@@ -122,7 +132,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           {notificationsOpen && (
             <div role="dialog" aria-label="通知" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-72 max-w-[calc(100vw-24px)] rounded-lg border border-border p-3 text-left shadow-[var(--lg-shadow-4)]">
               <p className="text-sm font-semibold text-foreground">通知</p>
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">{isConnected ? '暂无新的系统通知。' : '登录后可查看系统通知。'}</p>
+              <AnnouncementList />
             </div>
           )}
         </div>

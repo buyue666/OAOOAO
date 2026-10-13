@@ -44,6 +44,7 @@ import {
   useConfirm,
 } from './admin-kit'
 import { useAdminReload, useAdminSession } from './admin-shell'
+import { activeAnnouncements } from '@/lib/studio/announcements'
 
 const moderationLabels: Record<string, string> = { pending: '待审核', approved: '已通过', rejected: '已驳回', taken_down: '已下架' }
 const lifecycleLabels: Record<string, string> = { active: '正常', revoked: '已撤回' }
@@ -138,8 +139,8 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
       {confirm.dialog}
       <div className="grid gap-3 sm:grid-cols-3">
         <AdminStat label="公告总数" value={formatAdminNumber(data.total)} detail={`本页已发布 ${formatAdminNumber(enabled)}`} />
-        <AdminStat label="未发布" value={formatAdminNumber(data.items.length - enabled)} detail="enabled 为关闭状态" tone="warning" />
-        <AdminStat label="首页弹窗" value={formatAdminNumber(data.items.filter((item) => item.popupHome).length)} detail="访客进入首页时弹出" />
+        <AdminStat label="未发布" value={formatAdminNumber(data.items.length - enabled)} detail="保存为草稿，用户不可见" tone="warning" />
+        <AdminStat label="当前生效" value={formatAdminNumber(activeAnnouncements(data.items).length)} detail="首页弹窗适用于官网首页和开始创作页" />
       </div>
 
       {error && <AdminError message={error} retry={load} />}
@@ -161,7 +162,7 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
             {data.items.map((item) => (
               <AdminRow key={item.id} className={cn(editor !== null && editor !== 'new' && editor.id === item.id && 'bg-muted/60')}>
                 <AdminCell className="max-w-[360px]"><p className="truncate font-medium">{item.title}</p><p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.content?.slice(0, 120) || '无内容'}</p></AdminCell>
-                <AdminCell><StatusBadge tone={item.enabled ? 'success' : 'muted'}>{item.enabled ? '已发布' : '未发布'}</StatusBadge></AdminCell>
+                <AdminCell><StatusBadge tone={!item.enabled ? 'muted' : item.endsAt && Date.parse(item.endsAt) <= Date.now() ? 'warning' : item.startsAt && Date.parse(item.startsAt) > Date.now() ? 'muted' : 'success'}>{!item.enabled ? '未发布' : item.endsAt && Date.parse(item.endsAt) <= Date.now() ? '已过期' : item.startsAt && Date.parse(item.startsAt) > Date.now() ? '待生效' : '生效中'}</StatusBadge></AdminCell>
                 <AdminCell>
                   <div className="flex flex-wrap gap-1.5">
                     {canManage ? <>
@@ -241,7 +242,7 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
         <fieldset disabled={busy} className="flex flex-col gap-4">
           <AdminField label="公告标题"><AdminInput name="title" required maxLength={120} defaultValue={item?.title} /></AdminField>
           <AdminField label="公告内容"><AdminTextarea name="content" rows={8} required defaultValue={item?.content} /></AdminField>
-          <AdminField label="开始时间" hint="留空表示立即生效。"><AdminInput name="startsAt" type="datetime-local" defaultValue={toLocalInput(item?.startsAt)} /></AdminField>
+          <AdminField label="开始时间" hint="按当前设备的本地时间设置，留空表示立即生效。"><AdminInput name="startsAt" type="datetime-local" defaultValue={toLocalInput(item?.startsAt)} /></AdminField>
           <AdminField label="结束时间" hint="留空表示长期有效。"><AdminInput name="endsAt" type="datetime-local" defaultValue={toLocalInput(item?.endsAt)} /></AdminField>
           <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
             <label className="flex items-center gap-2 text-sm"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />发布公告</label>
@@ -256,7 +257,7 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
 }
 
 function toIso(value: string) {
-  if (!value) return undefined
+  if (!value) return ''
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }

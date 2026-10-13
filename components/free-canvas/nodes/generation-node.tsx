@@ -55,7 +55,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
     ? filterModelsByCapability(state.models, capabilityOf(data.kind)).find((model) => model.id === data.model)?.shortName ?? '指定模型'
     : '自动模型'
   const estimate = actions.estimateNode(data)
-  const canSubmit = data.prompt.trim().length > 0 && !busy
+  const canSubmit = (data.prompt.trim().length > 0 || data.task?.unconfirmed) && !busy
 
   const handleSettingsClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
@@ -76,15 +76,15 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
       <NodeAnchors nodeId={id} />
       <article
         className={cn(
-          'flex flex-col gap-3 rounded-2xl border bg-neutral-950 p-3 text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] transition-colors',
-          selected || settingsPlacement ? 'border-white' : 'border-white/15 hover:border-white/35',
+          'flex flex-col gap-3 rounded-[20px] border bg-[#15171b] p-3.5 text-white shadow-[0_16px_45px_rgba(0,0,0,0.32)] transition-colors focus-within:border-white/55',
+          selected || settingsPlacement ? 'border-white/65 ring-4 ring-white/[0.05]' : 'border-white/15 hover:border-white/35',
         )}
       >
         <header className="flex items-center gap-2">
           <Icon className="size-4 shrink-0 text-neutral-400" aria-hidden="true" />
           <TitleEditor nodeId={id} title={data.title} />
           <span className="ml-auto shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-neutral-300" aria-live="polite">
-            {PHASE_LABEL[phase]}
+            {data.task?.unconfirmed ? '提交待确认' : busy && data.task?.cancelRequested ? '取消待确认' : PHASE_LABEL[phase]}
           </span>
           <button
             type="button"
@@ -104,6 +104,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
           <textarea
             ref={textareaRef}
             value={data.prompt}
+            disabled={busy || data.task?.unconfirmed}
             rows={2}
             aria-label="提示词"
             placeholder={PLACEHOLDER[data.kind]}
@@ -128,15 +129,15 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
                       检查
                     </button>
                   ) : null}
-                  <button type="button" onClick={() => void actions.cancelNode(id)} disabled={!data.task?.id} className="flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                  <button type="button" onClick={() => void actions.cancelNode(id)} disabled={!data.task?.id || data.task.cancelRequested} className="flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs text-white hover:bg-white/10 disabled:opacity-40">
                     <Square className="size-3 fill-current" aria-hidden="true" />
-                    取消
+                    {data.task?.cancelRequested ? '取消待确认' : '取消'}
                   </button>
                 </>
               ) : phase === 'error' ? (
                 <button type="button" onClick={() => void actions.submitNode(id)} disabled={!canSubmit} className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-black hover:bg-neutral-200 disabled:opacity-40">
                   <RotateCcw className="size-3.5" aria-hidden="true" />
-                  重试
+                  {data.task?.unconfirmed ? '确认原提交' : '重试'}
                 </button>
               ) : (
                 <button type="button" onClick={() => void actions.submitNode(id)} disabled={!canSubmit} className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-black hover:bg-neutral-200 disabled:opacity-40">
@@ -166,7 +167,7 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
         <div className="h-px w-2/3 overflow-hidden bg-white/10">
           <div className="h-full w-1/2 animate-pulse bg-white" />
         </div>
-        <p className="text-xs text-neutral-400">正在生成，可随时取消</p>
+        <p className="px-4 text-center text-xs leading-5 text-neutral-400">{data.task?.cancelRequested ? '取消请求已发送，任务仍可能执行。请继续检查，确认停止后才能重新生成。' : '正在生成，可随时申请取消'}</p>
       </div>
     )
   }

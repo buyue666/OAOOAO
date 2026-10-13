@@ -173,7 +173,7 @@ function cloneSelection(selected: FreeCanvasNode[], edges: FreeCanvasEdge[], all
     const parentInSelection = node.parentId && selectedIds.has(node.parentId)
     const base = parentInSelection ? node.position : { x: absolute.x + offset.x, y: absolute.y + offset.y }
     const data = node.type === 'agent'
-      ? { ...node.data, runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [], clientRequestId: null, planApproval: undefined }
+      ? { ...node.data, runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [], clientRequestId: null, submission: undefined, planApproval: undefined }
       : node.data
     return {
       ...node,

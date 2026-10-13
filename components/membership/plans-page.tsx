@@ -6,25 +6,46 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MembershipPurchaseView } from './membership-purchase-view'
 import { billingOptions, toMembershipPlans } from '@/lib/studio/membership'
-import { createBillingOrder, createCheckout, listBillingProducts, request, type BillingProduct, type BillingAccess, type Checkout } from '@/lib/studio/api'
+import { listBillingProducts, type BillingProduct, type BillingAccess } from '@/lib/studio/api'
 import { useStudio } from '@/lib/studio/store'
 import type { MembershipSelection } from './types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import QRCode from 'qrcode'
+import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
+import { useBillingCheckout } from '@/lib/studio/use-billing-checkout'
 
 export function PlansPage() {
   const router = useRouter()
   const { state, refreshSession } = useStudio()
+  const [returnPath, setReturnPath] = useState('/studio')
+  useEffect(() => {
+    let previous: string | null = null
+    try { previous = sessionStorage.getItem(RETURN_PATH_KEY) } catch {}
+    setReturnPath(safeReturnPath(new URLSearchParams(window.location.search).get('returnTo') || previous))
+  }, [])
   const [products, setProducts] = useState<BillingProduct[]>([])
   const [providers, setProviders] = useState<string[]>([])
   const [provider, setProvider] = useState('')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState('')
-  const [checkout, setCheckout] = useState<Checkout | null>(null)
-  const [orderStatus, setOrderStatus] = useState('')
-  const [qrImage, setQrImage] = useState('')
-  const [pendingOrder, setPendingOrder] = useState<{ id: string; productId: string; provider: string } | null>(null)
+  const [qrState, setQrState] = useState<{ key: string; image?: string; error?: string } | null>(null)
+  const billingCheckout = useBillingCheckout({ accountId: state.user.id, connected: state.backendStatus === 'connected', refreshSession, onReady: (checkout) => {
+    if (checkout.kind === 'redirect' && checkout.url) window.location.assign(checkout.url)
+    if (checkout.kind === 'form' && checkout.form) {
+      const form = document.createElement('form')
+      form.action = checkout.form.action; form.method = checkout.form.method
+      for (const field of checkout.form.fields) {
+        const input = document.createElement('input'); input.type = 'hidden'; input.name = field.name; input.value = field.value; form.appendChild(input)
+      }
+      document.body.appendChild(form); form.submit(); form.remove()
+    }
+  } })
+  const { checkout, orderStatus } = billingCheckout
+  const qrContent = checkout?.kind === 'qr' ? checkout.qrContent || checkout.url : undefined
+  const qrKey = `${checkout?.orderId || ''}:${qrContent || ''}`
+  const qrImage = qrState?.key === qrKey ? qrState.image : undefined
+  const qrError = qrState?.key === qrKey ? qrState.error : undefined
   // 默认按自用模式处理，避免计费接口异常时把充值入口误开放。
   const [billing, setBilling] = useState<BillingAccess>({ mode: 'self_use', rechargeEnabled: false })
   const load = useCallback(async () => {
@@ -41,66 +62,20 @@ export function PlansPage() {
   useEffect(() => { void load() }, [load])
   useEffect(() => {
     let active = true
-    setQrImage('')
-    const content = checkout?.kind === 'qr' ? checkout.qrContent || checkout.url : undefined
-    if (content) void QRCode.toDataURL(content, { width: 280, margin: 2 }).then(url => { if (active) setQrImage(url) }).catch(() => { if (active) setOrderStatus('二维码生成失败，请重新打开支付') })
+    setQrState(null)
+    if (qrContent) void QRCode.toDataURL(qrContent, { width: 280, margin: 2 }).then(url => { if (active) setQrState({ key: qrKey, image: url }) }).catch(() => { if (active) setQrState({ key: qrKey, error: '二维码生成失败，请重新打开支付。' }) })
     return () => { active = false }
-  }, [checkout])
+  }, [qrContent, qrKey])
   const plans = useMemo(() => toMembershipPlans(products), [products])
   const availableCycles = billingOptions.filter(option => plans.some(plan => plan.tiers.some(t => t.pricing[option.value])))
   const options = availableCycles.length ? availableCycles : billingOptions
 
   async function purchase(selection: MembershipSelection) {
-    if (state.backendStatus !== 'connected') throw new Error('请先登录后再购买套餐。')
-    if (!provider) throw new Error('当前没有可用的支付方式。')
-    const productId = selection.pricing.productId
-    if (!productId) throw new Error('该周期没有可购买的商品。')
-    let order = pendingOrder
-    if (!order || order.productId !== productId || order.provider !== provider) {
-      const created = await createBillingOrder(productId, provider)
-      if (!created.order.id) throw new Error('未返回订单编号')
-      order = { id: String(created.order.id), productId, provider }
-      setPendingOrder(order)
-    }
-    const result = await createCheckout(order.id, provider)
-    setCheckout(result.checkout)
-    setOrderStatus('待支付')
-    if (result.checkout.kind === 'redirect' && result.checkout.url) window.location.assign(result.checkout.url)
-    if (result.checkout.kind === 'form' && result.checkout.form) {
-      const form = document.createElement('form')
-      form.action = result.checkout.form.action
-      form.method = result.checkout.form.method
-      for (const field of result.checkout.form.fields) {
-        const input = document.createElement('input'); input.type = 'hidden'; input.name = field.name; input.value = field.value; form.appendChild(input)
-      }
-      document.body.appendChild(form); form.submit(); form.remove()
-    }
-  }
-  async function refreshOrder() {
-    if (!checkout) return
-    setOrderStatus('查询中…')
-    try {
-      const result = await request<{ order: { status: string } }>(`/api/billing/orders/${encodeURIComponent(checkout.orderId)}`)
-      const labels: Record<string, string> = { paid: '支付成功', pending: '待支付', canceled: '已取消', closed: '已关闭', refunded: '已退款' }
-      setOrderStatus(labels[result.order.status] || result.order.status)
-      if (result.order.status !== 'pending') setPendingOrder(null)
-      /**
-       * 支付到账后必须同步余额与套餐权益。
-       *
-       * 早先这里只更新订单文字，用户看到「支付成功」但页头积分与套餐仍是旧值，
-       * 必须手动刷新页面。现在支付状态离开 pending 时立即重读会话
-       * （refreshSession 会刷新用户、积分、模型目录与账户数据）。
-       */
-      if (result.order.status === 'paid' || result.order.status === 'refunded') {
-        await refreshSession()
-      }
-    } catch (reason) {
-      setOrderStatus(reason instanceof Error ? reason.message : '查询失败')
-    }
+    await billingCheckout.purchase(selection.pricing.productId || '', provider)
   }
   return <div className="min-h-dvh bg-black text-zinc-100">
     <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 pr-16 text-sm">
-      <Link href="/" aria-label="返回首页" className="inline-flex items-center"><SiteBrand tone="dark" imageClassName="h-7" /></Link>
+      <Link href={returnPath} aria-label="返回创作" className="inline-flex items-center"><SiteBrand tone="dark" imageClassName="h-7" /></Link>
       <div className="flex flex-wrap items-center gap-4">
         {providers.length > 0 && <label>支付方式 <select aria-label="支付方式" value={provider} onChange={e => setProvider(e.target.value)} className="ml-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1">{providers.map(p => <option key={p} value={p}>{({manual:'人工支付', epay:'在线支付', stripe:'银行卡', ciyuan:'词元余额'} as Record<string,string>)[p] || p}</option>)}</select></label>}
         <Link href={state.backendStatus === 'connected' ? '/account' : '/login?next=/plans'}>{state.backendStatus === 'connected' ? '账户与订单' : '登录'}</Link>
@@ -119,20 +94,20 @@ export function PlansPage() {
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/60">{billing.mode === 'commercial' ? billing.purchaseReadiness?.ready ? '购买政策已发布，支付渠道尚未配置完成。支付服务准备就绪后将开放购买，已有积分仍可正常使用。' : '站点已经切换到商用模式，但购买政策和公开协议还没有完整发布。完成配置后，这里会自动开放套餐购买。' : '当前站点用于内部创作与测试，用户充值、套餐购买和在线支付入口已关闭。已有积分仍可正常使用。'}</p>
           {billing.mode === 'commercial' && billing.purchaseReadiness?.missing?.length ? <ul className="mx-auto mt-5 max-w-md space-y-1 text-left text-xs leading-5 text-amber-100/80">{billing.purchaseReadiness.missing.map((item) => <li key={item}>• {item}</li>)}</ul> : null}
           <div className="mt-7 flex flex-wrap justify-center gap-2">
-            <Link href="/studio" className="inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-85">返回工作台</Link>
+            <Link href={returnPath} className="inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-85">返回工作台</Link>
             {billing.mode === 'commercial' && state.backendStatus === 'connected' && state.user?.role === 'admin' ? <Link href="/admin/settings" className="inline-flex h-10 items-center rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">{billing.purchaseReadiness?.ready ? '打开支付设置' : '打开购买政策设置'}</Link> : null}
           </div>
         </section>
       </div>
     ) : (
-      <MembershipPurchaseView key={options.map(o => o.value).join(',')} products={plans} billingOptions={options} initialBillingCycle={options[0].value} generationColumns={[]} generationRows={[]} faqItems={[]} status={status} errorMessage={error} onRetry={load} onSelectPlan={purchase} onClose={() => router.push('/')} />
+      <MembershipPurchaseView key={`${state.user.id}:${state.backendStatus}:${options.map(o => o.value).join(',')}`} products={plans} billingOptions={options} initialBillingCycle={options[0].value} generationColumns={[]} generationRows={[]} faqItems={[]} status={status} errorMessage={error} onRetry={load} onSelectPlan={purchase} onClose={() => router.push(returnPath)} />
     )}
-    <Dialog open={!!checkout} onOpenChange={open => { if (!open) setCheckout(null) }}>
+    <Dialog open={!!checkout} onOpenChange={open => { if (!open) billingCheckout.close() }}>
       <DialogContent><DialogHeader><DialogTitle>支付订单</DialogTitle><DialogDescription>{checkout?.orderNo} · {orderStatus}</DialogDescription></DialogHeader>
         {checkout?.kind === 'manual' && <div className="space-y-3"><p className="whitespace-pre-wrap break-words">{checkout.instructions?.trim() || '订单已创建，请联系管理员获取付款说明。'}</p><p className="text-sm text-muted-foreground">管理员核实收款后，积分将计入账户。请保留订单号，避免重复付款。</p></div>}
-        {checkout?.kind === 'qr' && (qrImage ? <img src={qrImage} alt="支付二维码" width={280} height={280} className="mx-auto max-w-full" /> : <p>正在生成支付二维码</p>)}
+        {checkout?.kind === 'qr' && (qrImage ? <img src={qrImage} alt="支付二维码" width={280} height={280} className="mx-auto max-w-full" /> : <p role={qrError ? 'alert' : 'status'}>{qrError || '正在生成支付二维码'}</p>)}
         {checkout?.url && <a href={checkout.url} rel="noreferrer" target="_blank">前往支付</a>}
-        <Button onClick={refreshOrder}>查询支付结果</Button>
+        <Button onClick={billingCheckout.refreshOrder} disabled={billingCheckout.querying || state.backendStatus !== 'connected'}>{billingCheckout.querying ? '正在查询…' : '查询支付结果'}</Button>
       </DialogContent>
     </Dialog>
   </div>

@@ -36,24 +36,30 @@ function buildSaveBody(state: CanvasState) {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let inFlight: Promise<void> | null = null
+let hiddenFlushes = 0
 
-async function persistOnce() {
+async function persistOnce(keepalive: boolean) {
   const state = useCanvasStore.getState()
   if (!state.projectId || !state.hydrated || state.revision === state.savedRevision || state.saveStatus === 'conflict') return
   const projectId = state.projectId
+  // Hydration supplies a fresh metadata object, including when the same project
+  // is reopened. A previous editor session must not acknowledge the new one.
+  const projectMeta = state.projectMeta
   const revision = state.revision
   state.setSaveStatus('saving')
   try {
     const response = await request<SaveResponse>(`/api/canvas/projects/${encodeURIComponent(projectId)}`, {
       method: 'PATCH',
       body: JSON.stringify(buildSaveBody(state)),
+      ...(keepalive ? { keepalive: true } : {}),
     })
     const updatedAt = response.data?.project?.updatedAt ?? response.data?.ack?.updatedAt ?? null
+    if (!updatedAt || !Number.isFinite(Date.parse(updatedAt))) throw new Error('服务端未确认画布版本，修改尚未确认保存，请重试。')
     const current = useCanvasStore.getState()
-    if (current.projectId === projectId && current.hydrated) current.markSaved(updatedAt, revision)
+    if (current.projectId === projectId && current.projectMeta === projectMeta && current.hydrated) current.markSaved(updatedAt, revision)
   } catch (error) {
     const current = useCanvasStore.getState()
-    if (current.projectId !== projectId || !current.hydrated) return
+    if (current.projectId !== projectId || current.projectMeta !== projectMeta || !current.hydrated) return
     if (error instanceof StudioApiError && error.status === 409) {
       current.setSaveStatus('conflict', '画布已在别处更新，请刷新页面后继续编辑')
       return
@@ -80,7 +86,7 @@ export async function flushCanvasSave(): Promise<void> {
   while (inFlight) await inFlight
   const state = useCanvasStore.getState()
   if (state.revision === state.savedRevision) return
-  inFlight = persistOnce().finally(() => {
+  inFlight = persistOnce(hiddenFlushes > 0).finally(() => {
     inFlight = null
   })
   await inFlight
@@ -100,17 +106,14 @@ export function stopCanvasSaveTimer() {
   saveTimer = null
 }
 
-/** 页面隐藏或关闭时用 keepalive 发出最后一次保存，避免最近 700ms 的修改丢失。 */
+/** 页面隐藏或关闭时尽力用 keepalive 提交最后修改，仍以服务端响应确认保存。 */
 export function flushCanvasSaveOnHide() {
   const state = useCanvasStore.getState()
   if (!state.projectId || !state.hydrated || state.revision === state.savedRevision || state.saveStatus === 'conflict') return
-  void fetch(`/api/canvas/projects/${encodeURIComponent(state.projectId)}`, {
-    method: 'PATCH',
-    credentials: 'include',
-    keepalive: true,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(buildSaveBody(state)),
-  }).catch(() => undefined)
+  // Share the queue, response validation and CAS version with visible saves.
+  // Mark queued revisions keepalive too when an ordinary request is in flight.
+  hiddenFlushes += 1
+  void flushCanvasSave().catch(() => undefined).finally(() => { hiddenFlushes -= 1 })
 }
 
 async function settleInFlightSave() {
@@ -123,11 +126,12 @@ async function settleInFlightSave() {
  * 有未保存修改时只追加服务端新增的节点与连线，本地修改优先，之后的保存会使用新的版本号。
  */
 export async function syncRemoteBoard() {
-  const projectId = useCanvasStore.getState().projectId
+  const { projectId, projectMeta } = useCanvasStore.getState()
   if (!projectId) return
   await settleInFlightSave()
+  if (useCanvasStore.getState().projectId !== projectId || useCanvasStore.getState().projectMeta !== projectMeta) return
   const project = await getCanvasProject(projectId)
-  if (useCanvasStore.getState().projectId !== projectId || !useCanvasStore.getState().hydrated) return
+  if (useCanvasStore.getState().projectId !== projectId || useCanvasStore.getState().projectMeta !== projectMeta || !useCanvasStore.getState().hydrated) return
   const board = readBoard(project)
   useCanvasStore.getState().adoptRemoteBoard(board.nodes, board.edges, project.updatedAt)
 }

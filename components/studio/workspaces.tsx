@@ -43,18 +43,17 @@ import {
   ReferenceUploader,
   ResultActions,
   ResultStage,
-  TaskQueue,
   WorkspaceShell,
   ratioToCss,
   type UploadItem,
 } from './workspace-kit'
-import { getTaskLabel } from '@/lib/studio/mock-service'
 import { useStudio } from '@/lib/studio/store'
 import { useGeneration } from '@/lib/studio/generation-store'
 import { GenerationErrorNotice, GenerationNotice, LiveTaskList, LocalPreviewNotice } from './live-generation'
 import { defaultModelFor, filterModelsByCapability, qualityLabel } from '@/lib/studio/studio-models'
 import { accountDataEpoch } from '@/lib/studio/account-data-sync'
 import { useServerWorks, useLibraryAssets } from '@/lib/studio/use-account-data'
+import { useVideoReferenceLibrary } from '@/lib/studio/use-video-reference-library'
 import type { StudioWork } from '@/lib/studio/account-api'
 import { libraryAssetToReferenceAsset, mergeReferenceAssets, workToReferenceAsset } from '@/lib/studio/reference-assets'
 /**
@@ -76,13 +75,14 @@ import {
   type SelectedReference,
   type SelectionSourceKind,
 } from '@/lib/studio/reference-selection'
-import type { Asset, GenerationSettings, Work } from '@/lib/studio/types'
+import type { Asset, GenerationSettings, ModelConfig, Work } from '@/lib/studio/types'
 import { publishReferenceAsset } from '@/lib/studio/generation-api'
 import { buildVideoReferences } from '@/lib/studio/video-references'
 import type { GenerationReference } from '@/lib/studio/generation-types'
-import { downloadMedia, hasDeliverable, stageIsEmpty, type DownloadResult } from '@/lib/studio/result-delivery'
+import { downloadMedia, hasDeliverable, type DownloadResult } from '@/lib/studio/result-delivery'
 import { addMediaToProject, listProjectReferencedSourceIds, type ProjectMediaInput } from '@/lib/studio/project-media'
 import { consumeCreateIntent, dataUrlToFile, type IntentFile } from '@/lib/studio/create-intent'
+import { consumeReuseParams, type ReuseParams } from '@/lib/studio/reuse-params'
 import { readImageSize } from '@/lib/studio/account-api'
 import { cn } from '@/lib/utils'
 
@@ -139,6 +139,84 @@ const videoViewOptions = [
   { value: 'grid', label: '全部结果', icon: <Layers3 className="size-3.5" aria-hidden="true" /> },
 ]
 
+/** Preview history is independent of how many results the next request will create. */
+export function previewWorks(works: Work[], view: string, selectedId: string | null) {
+  const selected = works.find((work) => work.id === selectedId) ?? works[0]
+  if (!selected) return []
+  if (view === 'single') return [selected]
+  if (view === 'compare') return [selected, ...works.filter((work) => work.id !== selected.id)].slice(0, 2)
+  return works
+}
+
+export function generationBlockReason(backendStatus: string, hasModel: boolean, credits: number, balance: number) {
+  if (backendStatus === 'checking') return '正在连接生成服务…'
+  if (backendStatus === 'unauthenticated') return '登录后即可开始生成。'
+  if (backendStatus !== 'connected') return '生成服务暂时无法连接，请稍后重试。'
+  if (!hasModel) return '当前没有可用模型，请联系管理员配置后再试。'
+  if (Number.isFinite(balance) && Number.isFinite(credits) && credits > balance) return `积分不足：预计需要 ${credits} 积分，当前余额 ${balance}。`
+  return ''
+}
+
+export function supportedChoice(value: string, choices: string[]) {
+  return choices.includes(value) ? value : choices[0] ?? value
+}
+
+export function resolveReusedParameters(params: ReuseParams, models: Pick<ModelConfig, 'id' | 'name' | 'shortName'>[]) {
+  const exact = models.find((model) => model.id === params.model)
+  const named = models.filter((model) => model.name === params.model || model.shortName === params.model)
+  const modelId = exact?.id ?? (named.length === 1 ? named[0].id : undefined)
+  const missingModel = Boolean(params.model && !modelId)
+  const changed = [params.prompt ? '提示词' : '', modelId ? '模型' : ''].filter(Boolean).join('与')
+  return {
+    prompt: params.prompt, modelId,
+    notice: { tone: missingModel ? 'warning' as const : 'accent' as const, text: `${changed ? `已带入${changed}。` : ''}${missingModel ? '原模型当前不可用，保留现选模型；请核对模型后再生成。' : '请核对其余参数后再生成。'}` },
+  }
+}
+
+function useWorkReuseParams({ kind, accountId, connected, models, prompt, protectDraft, setPrompt, setModelId, setNotice }: {
+  kind: ReuseParams['kind']; accountId: string; connected: boolean; models: ModelConfig[]; prompt: string
+  protectDraft: { current: boolean }
+  setPrompt: (value: string) => void; setModelId: (value: string) => void
+  setNotice: (value: { tone: 'neutral' | 'warning' | 'accent'; text: string } | null) => void
+}) {
+  const consumedAccount = useRef('')
+  const promptRef = useRef(prompt)
+  promptRef.current = prompt
+  const [pending, setPending] = useState<{ accountId: string; params: ReuseParams } | null>(null)
+  const apply = useCallback((params: ReuseParams) => {
+    const resolved = resolveReusedParameters(params, models)
+    if (resolved.prompt) setPrompt(resolved.prompt)
+    if (resolved.modelId) setModelId(resolved.modelId)
+    setNotice(resolved.notice)
+    setPending(null)
+  }, [models, setPrompt, setModelId, setNotice])
+  useEffect(() => {
+    if (!connected || !accountId || consumedAccount.current === accountId) return
+    consumedAccount.current = accountId
+    setPending(null)
+    try {
+      const result = consumeReuseParams(window.sessionStorage, accountId, kind)
+      if (result.status === 'invalid') { setNotice({ tone: 'warning', text: result.message }); return }
+      if (result.status !== 'ready') return
+      // A slow session response must never overwrite text typed in the meantime.
+      if (promptRef.current.trim() || protectDraft.current) setPending({ accountId, params: result.params })
+      else apply(result.params)
+    } catch {
+      setNotice({ tone: 'warning', text: '浏览器暂时无法读取待复用参数，请回到原记录重试。' })
+    }
+  }, [accountId, connected, kind, apply, protectDraft, setNotice])
+  const available = pending?.accountId === accountId && connected
+  return {
+    pending: available,
+    applyPending: () => { if (available && pending) apply(pending.params) },
+    dismiss: () => setPending(null),
+  }
+}
+
+function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () => void }) {
+  return <Notice tone="neutral"><div className="flex min-w-0 flex-col gap-2"><p className="text-xs leading-5">已收到作品参数。套用会替换当前描述及可用的原模型，其他参数请自行核对。</p><div className="flex flex-wrap gap-2"><ControlButton type="button" size="sm" onClick={apply}>套用作品参数</ControlButton><ControlButton type="button" size="sm" variant="secondary" onClick={dismiss}>保留当前草稿</ControlButton></div></div></Notice>
+}
+
 /** 结果卡片：媒体轻微放大、操作按钮渐显，选中态用描边表达而不遮挡素材。 */function ResultTile({
   work,
   ratio,
@@ -148,6 +226,7 @@ const videoViewOptions = [
   onDownload,
   label,
   className,
+  fit = false,
 }: {
   work: Work
   ratio: string
@@ -157,18 +236,19 @@ const videoViewOptions = [
   onDownload?: () => void
   label: string
   className?: string
+  fit?: boolean
 }) {
   return (
-    <div className={cn('group relative min-w-0 overflow-hidden border bg-studio-ink', selected ? 'border-studio-accent ring-1 ring-inset ring-studio-accent' : 'border-studio-ink-line', className)}>
-      <button type="button" onClick={onSelect} aria-pressed={selected} aria-label={`选择 ${label}`} className="block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent">
-        <span className="block w-full" style={{ aspectRatio: ratioToCss(ratio) }}>
+    <div className={cn('group relative min-w-0 overflow-hidden rounded-lg border bg-studio-ink', selected ? 'border-studio-accent ring-1 ring-inset ring-studio-accent' : 'border-studio-ink-line', className)}>
+      <button type="button" onClick={onSelect} aria-pressed={selected} aria-label={`选择 ${label}`} className={cn('block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent', fit && 'h-full')}>
+        <span className={cn('block w-full', fit && 'h-full')} style={fit ? undefined : { aspectRatio: ratioToCss(work.ratio || ratio) }}>
           <MediaThumb
             src={work.src}
             poster={work.poster}
             kind={work.kind === 'video' ? 'video' : 'image'}
             alt={work.title}
-            fallback={work.fallback}
-            className="size-full [&_img]:transition-transform [&_img]:duration-300 [&_img]:ease-out group-hover:[&_img]:scale-[1.03]"
+            fallback="预览加载失败，可打开详情或重试下载"
+            className="size-full [&_img]:object-contain [&_video]:object-contain"
           />
         </span>
       </button>
@@ -180,7 +260,7 @@ const videoViewOptions = [
           </span>
         )}
       </span>
-      <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-2 pb-2 pt-6 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+      <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-2 pb-2 pt-6 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
         <span className="truncate text-[10px] text-studio-ink-foreground">{work.model}</span>
         <span className="flex shrink-0 items-center gap-0.5">
           <Tooltip label="预览">
@@ -445,8 +525,9 @@ export function ImageWorkspace() {
   const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
   const generation = useGeneration()
   const router = useRouter()
-  const [prompt, setPrompt] = useState('极夜小镇的女孩站在雪地里，远处的极光像一条缓慢移动的河，低饱和、电影写实、留出字幕空间。')
-  const imageModelList = useMemo(() => (liveModels.length ? filterModelsByCapability(liveModels, 'image') : state.models.filter((model) => model.kind === 'image')), [liveModels, state.models])
+  const [prompt, setPrompt] = useState('')
+  const intentDraft = useRef(false)
+  const imageModelList = useMemo(() => filterModelsByCapability(liveModels, 'image'), [liveModels])
   /** 真实生成结果：既作为参考素材候选，也作为结果舞台的展示来源。 */
   const serverWorksResult = useServerWorks({ pageSize: 24, kind: 'image' })
   /** 素材库搜索词（服务端 keyword 参数）：素材超过一页时用户仍能找到目标素材。 */
@@ -458,8 +539,8 @@ export function ImageWorkspace() {
    * 于是用户在 /assets 上传的图片在这里选不到，「从素材库选择」永远是空网格。
    * 视频工作台早已用 `useLibraryAssets` 修好同类问题，这里与之对齐。
    */
-  const serverLibrary = useLibraryAssets({ pageSize: 60, keyword: libraryKeyword })
-  const [modelId, setModelId] = useState(() => imageModelList[0]?.id ?? 'nova-image')
+  const serverLibrary = useLibraryAssets({ pageSize: 60, kind: 'image', keyword: libraryKeyword })
+  const [modelId, setModelId] = useState(() => imageModelList[0]?.id ?? '')
   const [ratio, setRatio] = useState(defaultModels.imageSize || '16:9')
   const [quality, setQuality] = useState(defaultModels.imageQuality || '高清')
   const [count, setCount] = useState(String(defaultModels.imageCount || 4))
@@ -507,6 +588,7 @@ export function ImageWorkspace() {
   useEffect(() => {
     const intent = consumeCreateIntent('image')
     if (!intent) return
+    intentDraft.current = true
     if (intent.prompt.trim()) setPrompt(intent.prompt)
     if (intent.settings?.model) setModelId(intent.settings.model)
     if (intent.settings?.ratio) setRatio(intent.settings.ratio)
@@ -519,8 +601,11 @@ export function ImageWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const reused = useWorkReuseParams({ kind: 'image', accountId: state.user.id, connected: state.backendStatus === 'connected', models: imageModelList, prompt, protectDraft: intentDraft, setPrompt, setModelId, setNotice })
+
   const model = imageModelList.find((item) => item.id === modelId) ?? imageModelList[0]
-  const credits = estimateCredits(model?.id ?? modelId, { ratio, quality, count: Number(count) })
+  const credits = model ? estimateCredits(model.id, { ratio, quality, count: Number(count) }) : 0
+  const submitBlock = generationBlockReason(state.backendStatus, Boolean(model), credits, state.credits)
   /**
    * 后端图片任务一次请求只产出一张图，因此批量数量来自后端 `maxBatchSize`：
    * 上限为 1 时不提供多张选项，避免界面给出后端无法满足的参数。
@@ -531,6 +616,11 @@ export function ImageWorkspace() {
   useEffect(() => {
     setCount((current) => (Number(current) > maxBatch ? String(maxBatch) : current))
   }, [maxBatch])
+  useEffect(() => {
+    if (!model) return
+    setRatio((current) => supportedChoice(current, model.capabilities.ratios.length ? model.capabilities.ratios : ['1:1', '16:9', '9:16']))
+    setQuality((current) => supportedChoice(current, model.capabilities.qualities.length ? model.capabilities.qualities : ['auto']))
+  }, [model])
 
   /**
    * 高级参数只列出后端确实支持、并且会真实提交的参数。
@@ -553,10 +643,6 @@ export function ImageWorkspace() {
     }
     return parameters
   }, [advancedValues.kind, model?.capabilities.editing])
-  const imageWorks = useMemo(() => liveReady ? state.works.filter((work) => work.kind === 'image') : [], [liveReady, state.works])
-  const imageTasks = liveReady ? state.tasks.filter((task) => task.type === 'image') : []
-  const activeTask = imageTasks.find((task) => task.status === 'processing' || task.status === 'queued')
-  const latestTask = imageTasks[0]
   const liveImageTasks = generation.tasks.filter((task) => task.kind === 'image')
   const liveLatest = liveImageTasks[0]
   /**
@@ -584,7 +670,7 @@ export function ImageWorkspace() {
       updatedAt: work.createdAt ?? new Date().toISOString(),
       duration: work.durationMs ? `${Math.round(work.durationMs / 1000)} 秒` : undefined,
     }))
-  }, [imageWorks, ratio, serverWorksResult.state, serverWorksResult.works])
+  }, [ratio, serverWorksResult.state, serverWorksResult.works])
 
   /**
    * 本次会话中已完成、但可能还没出现在作品列表里的任务结果。
@@ -627,17 +713,14 @@ export function ImageWorkspace() {
   }, [completedTaskWorks, stageWorks])
   const latestLiveMedia = liveLatest?.media ?? []
   // 真实任务可用时，舞台状态与文案来自后端任务；否则回落到本地预览状态。
-  const stageStatus: 'idle' | 'queued' | 'processing' | 'failed' | 'done' = liveReady && liveLatest
+  const stageStatus: 'idle' | 'queued' | 'processing' | 'failed' | 'done' = liveLatest
     ? liveLatest.status === 'pending' ? 'queued' : liveLatest.status === 'running' ? 'processing' : liveLatest.status === 'error' ? 'failed' : liveLatest.status === 'success' ? 'done' : 'idle'
-    : activeTask
-      ? activeTask.status === 'queued' ? 'queued' : 'processing'
-      : latestTask?.status === 'failed' ? 'failed'
-        : stageWorks.length > 0 ? 'done' : 'idle'
-  const stageLabel = liveReady && liveLatest
-    ? ({ pending: '已提交，等待上游', running: '上游生成中', success: '已完成', error: '生成失败，可重试', cancelled: '已取消' } as Record<string, string>)[liveLatest.status] ?? liveLatest.status
-    : activeTask ? getTaskLabel(activeTask.status) : latestTask?.status === 'failed' ? '生成失败，可重试' : '已就绪'
+    : stageSource.length > 0 ? 'done' : 'idle'
+  const stageLabel = liveLatest
+    ? liveLatest.unconfirmed ? '提交结果待确认' : ({ pending: '已提交，等待处理', running: '生成中', paused: '已暂停', success: '已完成', error: '生成失败', cancelled: '已取消' } as Record<string, string>)[liveLatest.status] ?? liveLatest.status
+    : stageSource.length ? '已完成' : '等待创作'
   const selectedWork = stageSource.find((work) => work.id === selectedWorkId) ?? stageSource[0]
-  const visibleWorks = stageSource.slice(0, Math.max(1, Number(count)))
+  const visibleWorks = previewWorks(stageSource, view, selectedWorkId)
   /**
    * 参考素材候选池（真实来源）。
    *
@@ -880,6 +963,7 @@ export function ImageWorkspace() {
 
   async function resolveImageReferences(): Promise<GenerationReference[]> {
     if (uploads.some((item) => item.status !== 'done')) throw new Error('参考素材仍在读取，请稍候再生成')
+    if (uploads.length + selectedRefs.length > referenceSelectionLimit) throw new Error(`当前模型最多支持 ${referenceSelectionLimit} 个参考素材，请移除多余文件后重试。`)
     /**
      * 已选素材 → 提交给后端的 references。
      *
@@ -983,6 +1067,7 @@ export function ImageWorkspace() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitBlock) { setNotice({ tone: 'warning', text: submitBlock }); return }
     if (!prompt.trim()) {
       setNotice({ tone: 'warning', text: '请先输入画面描述。' })
       return
@@ -1019,8 +1104,8 @@ export function ImageWorkspace() {
         } else {
           setNotice({ tone: 'accent', text: batch > 1 ? `已提交 ${batch} 个任务到后端，进度与结果会在下方实时更新。` : '任务已提交到后端，进度与结果会在下方实时更新。' })
         }
-      } catch {
-        setNotice({ tone: 'warning', text: '任务提交失败，请查看上方错误原因后重试。' })
+      } catch (reason) {
+        setNotice({ tone: 'warning', text: reason instanceof Error ? reason.message : '任务提交失败，请查看错误原因后重试。' })
       } finally {
         setSubmitting(false)
       }
@@ -1037,11 +1122,12 @@ export function ImageWorkspace() {
    * `toggleSelection` 同时负责去重与按上限截断。
    */
   function toggleReference(asset: Asset) {
-    setSelectedRefs((current) => toggleSelection(current, asset, referenceSelectionLimit))
+    setSelectedRefs((current) => toggleSelection(current, asset, Math.max(0, referenceSelectionLimit - uploads.length)))
   }
 
   const params = (
     <div className="flex flex-col gap-4">
+      {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
       <ParamSection title="提示词">
         <label htmlFor="image-prompt" className="sr-only">画面描述</label>
         <textarea
@@ -1055,7 +1141,8 @@ export function ImageWorkspace() {
       </ParamSection>
 
       <ParamSection title="模型">
-        <SelectField value={model?.id ?? ''} onChange={setModelId} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))} />
+        <SelectField label="图像模型" value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))} />
+        {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
         {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">模型与计费以当前账户配置为准；实际扣费以任务结果为准。</p>}
       </ParamSection>
 
@@ -1076,7 +1163,7 @@ export function ImageWorkspace() {
 
       <ParamSection title="参考素材" hint={`${selectedRefs.length}/${referenceSelectionLimit}`}>
         <div className="flex flex-col gap-3">
-          <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={referenceSelectionLimit} />
+          {referenceSelectionLimit > 0 && <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={Math.max(0, referenceSelectionLimit - selectedRefs.length)} />}
           {/*
            * 模型不接受参考图时不显示「从素材库选择」：
            * 早先无论模型能力如何都会渲染选择器，用户选中的素材最终被后端按能力丢弃。
@@ -1142,6 +1229,7 @@ export function ImageWorkspace() {
         view={view}
         onViewChange={setView}
         viewOptions={imageViewOptions}
+        resultCount={stageSource.length}
         ratio={ratio}
         status={stageStatus}
         statusLabel={stageLabel}
@@ -1169,26 +1257,21 @@ export function ImageWorkspace() {
          * 早先用 `imageWorks.length === 0`（真实账号下恒为 0），
          * 于是任务已完成、后端已有结果时舞台仍然显示空态，必须刷新才恢复。
          */
-        isEmpty={stageIsEmpty({
-          serverWorks: serverWorksResult.works.length,
-          completedTasks: completedTaskWorks.length,
-          localPreview: imageWorks.length,
-          connected: serverWorksResult.state !== 'unauthenticated',
-        })}
-        emptyHint="还没有结果。填写左侧参数后点击生成，结果会出现在这里。"
+        isEmpty={stageSource.length === 0}
+        emptyHint={serverWorksResult.state === 'loading' ? '正在读取已有结果…' : serverWorksResult.state === 'error' ? '暂时无法读取结果，请刷新页面重试。' : '写下画面描述，在创作参数中选择模型。完成的图片会自动出现在这里。'}
       >
         {view === 'single' && selectedWork && (
-          <ResultTile work={selectedWork} ratio={ratio} selected label="当前结果" onSelect={() => undefined} onOpen={() => setDetailWork(selectedWork)} onDownload={() => downloadWork(selectedWork)} className="size-full" />
+          <ResultTile work={selectedWork} ratio={ratio} fit selected label="当前结果" onSelect={() => setDetailWork(selectedWork)} onOpen={() => setDetailWork(selectedWork)} onDownload={() => downloadWork(selectedWork)} className="size-full" />
         )}
         {view === 'grid' && (
-          <div className={cn('grid size-full gap-2', visibleWorks.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
+          <div className={cn('grid min-h-full content-start gap-2', visibleWorks.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
             {visibleWorks.map((work, index) => (
               <ResultTile
                 key={work.id}
                 work={work}
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
-                label={index === 0 ? '当前选择' : `候选 ${index + 1}`}
+                label={work.id === selectedWork?.id ? '当前选择' : `结果 ${index + 1}`}
                 onSelect={() => setSelectedWorkId(work.id)}
                 onOpen={() => setDetailWork(work)}
                 onDownload={() => downloadWork(work)}
@@ -1197,7 +1280,7 @@ export function ImageWorkspace() {
           </div>
         )}
         {view === 'compare' && (
-          <div className="grid size-full grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid min-h-full grid-cols-1 content-start gap-2 sm:grid-cols-2">
             {visibleWorks.slice(0, 2).map((work, index) => (
               <ResultTile
                 key={work.id}
@@ -1210,6 +1293,7 @@ export function ImageWorkspace() {
                 onDownload={() => downloadWork(work)}
               />
             ))}
+            {visibleWorks.length < 2 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center text-xs leading-6 text-muted-foreground"><Columns2 className="size-5" aria-hidden="true" />再生成一张图片，即可并排比较。</div>}
           </div>
         )}
       </ResultStage>
@@ -1253,17 +1337,10 @@ export function ImageWorkspace() {
       <section aria-labelledby="image-queue" className="studio-surface px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <h2 id="image-queue" className="text-xs font-semibold text-foreground">生成任务</h2>
-          <span className="text-[11px] text-muted-foreground">{liveReady ? `${liveImageTasks.length} 条任务` : `${imageTasks.length} 条任务`}</span>
+          <span className="text-[11px] text-muted-foreground">{liveImageTasks.length} 条任务</span>
         </div>
         <div className="mt-2">
-          {liveReady ? (
-            <LiveTaskList kinds={['image']} limit={4} compact emptyHint="还没有图片任务" />
-          ) : (
-            <TaskQueue
-              tasks={imageTasks.slice(0, 4).map((task) => ({ id: task.id, title: task.title, status: task.status, stage: task.stage, credits: task.expectedCredits }))}
-              emptyText="暂无图片任务，提交后会在这里显示进度。"
-            />
-          )}
+          <LiveTaskList kinds={['image']} limit={4} compact emptyHint="还没有图片任务" />
         </div>
       </section>
 
@@ -1288,9 +1365,10 @@ export function ImageWorkspace() {
         onSubmit={submit}
         submitLabel={submitting ? '正在提交…' : '开始生成'}
         credits={credits}
-        submitDisabled={!prompt.trim() || submitting}
+        submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
+        submitHint={submitBlock || (!prompt.trim() ? '先写下你想生成的画面。' : undefined)}
         paramsTitle="图片参数"
-        paramsHint={`${model.shortName} · ${count} 张`}
+        paramsHint={model ? `${model.shortName} · ${count} 张` : '暂无可用模型'}
       />
       <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title="导演 Agent" description="基于当前图片参数继续拆解镜头与素材">
         <DirectorAgent context="图片工作台 · 极光之后" />
@@ -1304,9 +1382,10 @@ export function VideoWorkspace() {
   const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
   const generation = useGeneration()
   const router = useRouter()
-  const [prompt, setPrompt] = useState('女孩在雪地中回头，远处的极光开始移动，镜头缓慢向前推进。')
-  const videoModelList = useMemo(() => (liveModels.length ? filterModelsByCapability(liveModels, 'video') : state.models.filter((model) => model.kind === 'video')), [liveModels, state.models])
-  const [modelId, setModelId] = useState(() => videoModelList[0]?.id ?? 'motion-03')
+  const [prompt, setPrompt] = useState('')
+  const intentDraft = useRef(false)
+  const videoModelList = useMemo(() => filterModelsByCapability(liveModels, 'video'), [liveModels])
+  const [modelId, setModelId] = useState(() => videoModelList[0]?.id ?? '')
   const [mode, setMode] = useState('text')
   const [ratio, setRatio] = useState('16:9')
   const [duration, setDuration] = useState(`${defaultModels.videoSeconds || 8} 秒`)
@@ -1331,7 +1410,8 @@ export function VideoWorkspace() {
   const [notice, setNotice] = useState<{ tone: 'neutral' | 'warning' | 'accent'; text: string } | null>(null)
   const [detailWork, setDetailWork] = useState<Work | null>(null)
   const [agentOpen, setAgentOpen] = useState(false)
-  const [videoFailed, setVideoFailed] = useState(false)
+  const [failedVideoSrc, setFailedVideoSrc] = useState('')
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
   /** 提交锁：后端确认之前禁止重复提交，视频任务尤其不能被重复扣费。 */
   const [submitting, setSubmitting] = useState(false)
   /** 项目写入进行中：避免重复点击产生重复节点。 */
@@ -1347,7 +1427,7 @@ export function VideoWorkspace() {
   const serverWorksResult = useServerWorks({ pageSize: 24, kind: 'video' })
   /** 素材库搜索词（服务端 keyword 参数）：素材超过一页时用户仍能找到目标素材。 */
   const [libraryKeyword, setLibraryKeyword] = useState('')
-  const serverLibrary = useLibraryAssets({ pageSize: 60, keyword: libraryKeyword })
+  const serverLibrary = useVideoReferenceLibrary(mode, libraryKeyword)
 
   useEffect(() => {
     if (!videoModelList.length) return
@@ -1358,6 +1438,7 @@ export function VideoWorkspace() {
   useEffect(() => {
     const intent = consumeCreateIntent('video')
     if (!intent) return
+    intentDraft.current = true
     if (intent.prompt.trim()) setPrompt(intent.prompt)
     if (intent.settings?.model) setModelId(intent.settings.model)
     if (intent.settings?.ratio) setRatio(intent.settings.ratio)
@@ -1369,8 +1450,16 @@ export function VideoWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const reused = useWorkReuseParams({ kind: 'video', accountId: state.user.id, connected: state.backendStatus === 'connected', models: videoModelList, prompt, protectDraft: intentDraft, setPrompt, setModelId, setNotice })
+
   const model = videoModelList.find((item) => item.id === modelId) ?? videoModelList[0]
   const capabilities = model?.capabilities ?? { textToMedia: true, firstFrame: false, lastFrame: false, multiReference: false, editing: false, durations: [], ratios: [], qualities: [], maxReferences: 0 }
+  useEffect(() => {
+    if (!model) return
+    setRatio((current) => supportedChoice(current, model.capabilities.ratios))
+    setQuality((current) => supportedChoice(current, model.capabilities.qualities))
+    setDuration((current) => supportedChoice(current, model.capabilities.durations))
+  }, [model])
   const modeOptions = useMemo(
     () =>
       [
@@ -1404,7 +1493,7 @@ export function VideoWorkspace() {
      *  - 搜索无结果时凭空冒出演示素材，看起来像搜索没生效；
      *  - 搜索触发的 loading 窗口里切回演示素材，把已选素材误清空。
      */
-    const libraryUsable = serverLibrary.state !== 'idle' && serverLibrary.state !== 'unauthenticated'
+    const libraryUsable = serverLibrary.state !== 'unauthenticated'
     const pool = libraryUsable ? serverReferenceAssets : []
     if (mode === 'edit') return pool.filter((asset) => asset.kind === 'video')
     if (mode === 'references') return pool.filter((asset) => ['image', 'video', 'scene'].includes(asset.kind))
@@ -1511,7 +1600,7 @@ export function VideoWorkspace() {
     try {
       const workIds = batch.selections.filter((item) => selectionSourceOf(item) === 'work').map((item) => item.id)
       const [libraryEvidence, workEvidence] = await Promise.all([
-        serverLibrary.reloadForLiveness(),
+        serverLibrary.reloadForLiveness(batch.selections.filter((item) => selectionSourceOf(item) === 'library').map((item) => item.id)),
         serverWorksResult.verifyWorkIds(workIds),
       ])
       void serverLibrary.reload()
@@ -1564,8 +1653,9 @@ export function VideoWorkspace() {
   }, [referenceSelectionLimit])
 
   const settings: GenerationSettings = { modelId: model?.id ?? modelId, ratio, quality, duration, mode }
-  const credits = estimateCredits(model?.id ?? modelId, settings)
-  const videoWorks = useMemo<Work[]>(() => (!liveReady || serverWorksResult.state === 'unauthenticated'
+  const credits = model ? estimateCredits(model.id, settings) : 0
+  const submitBlock = generationBlockReason(state.backendStatus, Boolean(model), credits, state.credits)
+  const videoWorks = useMemo<Work[]>(() => (serverWorksResult.state === 'unauthenticated'
     ? []
     : serverWorksResult.works.map((work) => ({
         id: work.id,
@@ -1581,10 +1671,7 @@ export function VideoWorkspace() {
         createdAt: work.createdAt ?? new Date().toISOString(),
         updatedAt: work.createdAt ?? new Date().toISOString(),
         duration: work.durationMs ? `${Math.round(work.durationMs / 1000)} 秒` : undefined,
-      }))), [liveReady, ratio, serverWorksResult.state, serverWorksResult.works])
-  const videoTasks = liveReady ? state.tasks.filter((task) => task.type === 'video') : []
-  const activeTask = videoTasks.find((task) => task.status === 'processing' || task.status === 'queued')
-  const latestTask = videoTasks[0]
+      }))), [ratio, serverWorksResult.state, serverWorksResult.works])
   const liveVideoTasks = generation.tasks.filter((task) => task.kind === 'video')
   const liveLatest = liveVideoTasks[0]
   /** 本次会话已完成但还没进入作品列表的视频结果，做到「完成即可见」。 */
@@ -1608,18 +1695,15 @@ export function VideoWorkspace() {
     const seen = new Set<string>()
     return [...completedVideoWorks, ...videoWorks].filter((work) => (seen.has(work.src) ? false : (seen.add(work.src), true)))
   }, [completedVideoWorks, videoWorks])
-  const stageStatus: 'idle' | 'queued' | 'processing' | 'failed' | 'done' = liveReady && liveLatest
+  const stageStatus: 'idle' | 'queued' | 'processing' | 'failed' | 'done' = liveLatest
     ? liveLatest.status === 'pending' ? 'queued' : liveLatest.status === 'running' ? 'processing' : liveLatest.status === 'error' ? 'failed' : liveLatest.status === 'success' ? 'done' : 'idle'
-    : activeTask
-      ? activeTask.status === 'queued' ? 'queued' : 'processing'
-      : latestTask?.status === 'failed' ? 'failed'
-        : videoWorks.length > 0 ? 'done'
-        : 'idle'
-  const stageLabel = liveReady && liveLatest
-    ? ({ pending: '已提交，等待上游', running: '上游生成中', success: '已完成', error: '生成失败，可重试', cancelled: '已取消' } as Record<string, string>)[liveLatest.status] ?? liveLatest.status
-    : activeTask ? getTaskLabel(activeTask.status) : latestTask?.status === 'failed' ? '生成失败，可重试' : '已就绪'
-  const currentWork = stageSource[0]
-  const videoReady = Boolean(currentWork) && !activeTask && currentWork?.status !== '处理中'
+    : stageSource.length > 0 ? 'done' : 'idle'
+  const stageLabel = liveLatest
+    ? liveLatest.unconfirmed ? '提交结果待确认' : ({ pending: '已提交，等待处理', running: '生成中', paused: '已暂停', success: '已完成', error: '生成失败', cancelled: '已取消' } as Record<string, string>)[liveLatest.status] ?? liveLatest.status
+    : stageSource.length ? '已完成' : '等待创作'
+  const currentWork = stageSource.find((work) => work.id === selectedVideoId) ?? stageSource[0]
+  const videoReady = Boolean(currentWork) && currentWork?.status !== '处理中'
+  const videoFailed = Boolean(currentWork && currentWork.src === failedVideoSrc)
   const referenceLabel = mode === 'first' ? '首帧输入' : mode === 'ends' ? '首尾帧输入' : mode === 'references' ? '多参考素材' : mode === 'edit' ? '编辑源视频' : '参考素材'
 
   async function publishUploads(items: UploadItem[], type: 'image' | 'video', role: GenerationReference['role'] = 'reference'): Promise<GenerationReference[]> {
@@ -1633,6 +1717,9 @@ export function VideoWorkspace() {
   }
 
   async function resolveVideoReferences(): Promise<GenerationReference[]> {
+    if ((mode === 'text' || mode === 'references') && selectedRefs.length + uploads.length > capabilities.maxReferences) {
+      throw new Error(`参考素材最多 ${capabilities.maxReferences} 个，请减少上传或选择的素材`)
+    }
     /**
      * 已选素材直接由**快照**解析，不再回候选池按 id 反查。
      *
@@ -1721,6 +1808,7 @@ export function VideoWorkspace() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitBlock) { setNotice({ tone: 'warning', text: submitBlock }); return }
     if (!prompt.trim()) {
       setNotice({ tone: 'warning', text: '请先输入镜头描述。' })
       return
@@ -1772,11 +1860,12 @@ export function VideoWorkspace() {
 
   /** 切换已选（视频工作台的多参考模式）：同样按快照保存，不依赖当前搜索结果。 */
   function toggleReference(asset: Asset) {
-    setSelectedRefs((current) => toggleSelection(current, asset, referenceSelectionLimit))
+    setSelectedRefs((current) => toggleSelection(current, asset, Math.max(0, referenceSelectionLimit - uploads.length)))
   }
 
   const params = (
     <div className="flex flex-col gap-4">
+      {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
       <ParamSection title="生成模式">
         <OptionGrid value={mode} onChange={setMode} options={modeOptions} label="生成模式" />
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">当前模型不支持的模式不会显示，也不会留下空白区域。</p>
@@ -1795,7 +1884,8 @@ export function VideoWorkspace() {
       </ParamSection>
 
       <ParamSection title="模型">
-        <SelectField value={model?.id ?? ''} onChange={setModelId} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))} />
+        <SelectField label="视频模型" value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))} />
+        {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
       </ParamSection>
 
       <ParamSection title="输出">
@@ -1819,7 +1909,7 @@ export function VideoWorkspace() {
               selectLabel="选择首帧"
               hint="PNG / JPG / WEBP，单个不超过 12 MB"
             />
-            <ReferencePicker assets={referencePool} selectedIds={firstFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setFirstFrameRef, asset as Asset); setFirstFrameUploads([]) }} maxReferences={1} />
+            <ReferencePicker assets={referencePool} selectedIds={firstFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setFirstFrameRef, asset as Asset); setFirstFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
           </div>
         )}
         {mode === 'ends' && (
@@ -1846,8 +1936,8 @@ export function VideoWorkspace() {
                 hint="PNG / JPG / WEBP，单个不超过 12 MB"
               />
             </div>
-            <div><p className="mb-2 text-xs font-medium">首帧素材</p><ReferencePicker assets={referencePool} selectedIds={firstFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setFirstFrameRef, asset as Asset); setFirstFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={serverLibrary.total} onReload={() => { void refreshSources() }} onLoadMore={() => { void serverLibrary.loadMore() }} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></div>
-            <div><p className="mb-2 text-xs font-medium">尾帧素材</p><ReferencePicker assets={referencePool} selectedIds={lastFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setLastFrameRef, asset as Asset); setLastFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={serverLibrary.total} onReload={() => { void refreshSources() }} onLoadMore={() => { void serverLibrary.loadMore() }} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></div>
+            <div><p className="mb-2 text-xs font-medium">首帧素材</p><ReferencePicker assets={referencePool} selectedIds={firstFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setFirstFrameRef, asset as Asset); setFirstFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></div>
+            <div><p className="mb-2 text-xs font-medium">尾帧素材</p><ReferencePicker assets={referencePool} selectedIds={lastFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setLastFrameRef, asset as Asset); setLastFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></div>
           </div>
         )}
         {mode === 'edit' && (
@@ -1862,13 +1952,13 @@ export function VideoWorkspace() {
               selectLabel="选择视频"
               hint="MP4 / MOV / WEBM，单个不超过 200 MB"
             />
-            <ReferencePicker assets={referencePool} selectedIds={sourceVideoRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setSourceVideoRef, asset as Asset); setSourceVideoUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={serverLibrary.total} onReload={() => { void refreshSources() }} onLoadMore={() => { void serverLibrary.loadMore() }} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
+            <ReferencePicker assets={referencePool} selectedIds={sourceVideoRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setSourceVideoRef, asset as Asset); setSourceVideoUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
           </div>
         )}
         {(mode === 'text' || mode === 'references') && (
           <div className="flex flex-col gap-3">
-            <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={capabilities.maxReferences} hint="PNG / JPG / WEBP，单个不超过 12 MB" />
-            <ReferencePicker assets={referencePool} selectedIds={selectedRefs.map((item) => item.id)} onToggle={(_, asset) => toggleReference(asset as Asset)} maxReferences={referenceSelectionLimit} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={serverLibrary.total} onReload={() => { void refreshSources() }} onLoadMore={() => { void serverLibrary.loadMore() }} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
+            {capabilities.maxReferences > 0 ? <><ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={Math.max(0, capabilities.maxReferences - selectedRefs.length)} hint="PNG / JPG / WEBP，单个不超过 12 MB" />
+            <ReferencePicker assets={referencePool} selectedIds={selectedRefs.map((item) => item.id)} onToggle={(_, asset) => toggleReference(asset as Asset)} maxReferences={referenceSelectionLimit} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></> : <p className="text-xs leading-5 text-muted-foreground">当前模型使用文字描述生成视频，不支持参考素材。</p>}
           </div>
         )}
       </ParamSection>
@@ -1906,6 +1996,8 @@ export function VideoWorkspace() {
         view={view}
         onViewChange={setView}
         viewOptions={videoViewOptions}
+        mediaKind="video"
+        resultCount={stageSource.length}
         ratio={ratio}
         status={stageStatus}
         statusLabel={stageLabel}
@@ -1922,25 +2014,21 @@ export function VideoWorkspace() {
             .catch((reason) => setNotice({ tone: 'warning', text: `重试失败：${reason instanceof Error ? reason.message : '未知错误'}` }))
         }}
         /** 与图片工作台一致：空判定看真实来源，不看本地演示数据。 */
-        isEmpty={stageIsEmpty({
-          serverWorks: serverWorksResult.works.length,
-          completedTasks: completedVideoWorks.length,
-          localPreview: videoWorks.length,
-          connected: serverWorksResult.state !== 'unauthenticated',
-        })}
-        emptyHint="还没有视频结果。填写左侧参数后点击生成，视频会在这里播放。"
+        isEmpty={stageSource.length === 0}
+        emptyHint={serverWorksResult.state === 'loading' ? '正在读取已有结果…' : serverWorksResult.state === 'error' ? '暂时无法读取结果，请刷新页面重试。' : '描述主体动作与镜头运动，在创作参数中选择模型。完成的视频会在这里播放。'}
       >
         {view === 'single' && currentWork && (
           <div className="size-full">
             {videoReady && !videoFailed ? (
               <video
-                className="size-full object-cover"
+                key={currentWork.src}
+                className="size-full rounded-lg bg-studio-ink object-contain"
                 src={currentWork.src}
                 poster={currentWork.poster}
                 controls
                 playsInline
                 preload="metadata"
-                onError={() => setVideoFailed(true)}
+                onError={() => setFailedVideoSrc(currentWork.src)}
                 aria-label={`${currentWork.title} 视频结果`}
               />
             ) : (
@@ -1948,16 +2036,16 @@ export function VideoWorkspace() {
                 <MediaThumb src={currentWork.poster} alt={`${currentWork.title} 封面`} fallback={currentWork.fallback} className="size-full" />
                 <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-3 pb-3 pt-8">
                   <span className="text-[11px] text-studio-ink-foreground">{videoFailed ? '视频加载失败，已显示封面' : '视频生成中，完成后可播放'}</span>
-                  <StatusBadge tone={videoFailed ? 'warning' : 'accent'}>{videoFailed ? '加载失败' : '处理中'}</StatusBadge>
+                  {videoFailed ? <ControlButton size="sm" variant="secondary" onClick={() => setFailedVideoSrc('')}>重新加载</ControlButton> : <StatusBadge tone="accent">处理中</StatusBadge>}
                 </span>
               </div>
             )}
           </div>
         )}
         {view === 'grid' && (
-          <div className="grid size-full grid-cols-2 gap-2">
-            {videoWorks.slice(0, 4).map((work, index) => (
-              <ResultTile key={work.id} work={work} ratio={ratio} selected={index === 0} label={index === 0 ? '当前结果' : `候选 ${index + 1}`} onSelect={() => undefined} onOpen={() => setDetailWork(work)} onDownload={() => downloadWork(work)} />
+          <div className="grid min-h-full grid-cols-2 content-start gap-2">
+            {stageSource.map((work, index) => (
+              <ResultTile key={work.id} work={work} ratio={ratio} selected={work.id === currentWork?.id} label={work.id === currentWork?.id ? '当前结果' : `结果 ${index + 1}`} onSelect={() => { setSelectedVideoId(work.id); setView('single') }} onOpen={() => setDetailWork(work)} onDownload={() => downloadWork(work)} />
             ))}
           </div>
         )}
@@ -2005,17 +2093,10 @@ export function VideoWorkspace() {
       <section aria-labelledby="video-queue" className="studio-surface px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <h2 id="video-queue" className="text-xs font-semibold text-foreground">生成任务</h2>
-          <span className="text-[11px] text-muted-foreground">{liveReady ? `${liveVideoTasks.length} 条任务` : `${videoTasks.length} 条任务`}</span>
+          <span className="text-[11px] text-muted-foreground">{liveVideoTasks.length} 条任务</span>
         </div>
         <div className="mt-2">
-          {liveReady ? (
-            <LiveTaskList kinds={['video']} limit={4} compact emptyHint="还没有视频任务" />
-          ) : (
-            <TaskQueue
-              tasks={videoTasks.slice(0, 4).map((task) => ({ id: task.id, title: task.title, status: task.status, stage: task.stage, credits: task.expectedCredits }))}
-              emptyText="暂无视频任务，提交后会在这里显示进度。"
-            />
-          )}
+          <LiveTaskList kinds={['video']} limit={4} compact emptyHint="还没有视频任务" />
         </div>
       </section>
 
@@ -2040,9 +2121,10 @@ export function VideoWorkspace() {
         onSubmit={submit}
         submitLabel={submitting ? '正在提交…' : '开始生成'}
         credits={credits}
-        submitDisabled={!prompt.trim() || submitting}
+        submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
+        submitHint={submitBlock || (!prompt.trim() ? '先描述主体动作与镜头运动。' : undefined)}
         paramsTitle="视频参数"
-        paramsHint={`${model.shortName} · ${duration}`}
+        paramsHint={model ? `${model.shortName} · ${duration}` : '暂无可用模型'}
       />
       <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title="导演 Agent" description="基于当前视频参数继续拆解镜头与素材">
         <DirectorAgent context="视频工作台 · 极光之后" />

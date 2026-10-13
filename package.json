@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:acceptance": "node --test tests/admin-settings-permissions.test.mjs tests/agent-account-sync.test.mjs tests/announcements-navigation.test.mjs tests/canvas-agent-delivery.test.mjs tests/canvas-agent-recovery.test.mjs tests/canvas-generation-safety.test.mjs tests/canvas-hidden-save.test.mjs tests/canvas-skills.test.mjs tests/commerce-policy-editor.test.mjs tests/director-context.test.mjs tests/director-thread.test.mjs tests/manual-payment-editor.test.mjs tests/media-library-storage.test.mjs tests/plans-checkout-scope.test.mjs tests/project-media-preservation.test.mjs tests/project-route-redirect.test.mjs tests/reuse-params.test.mjs tests/studio-store-source.test.mjs tests/video-reference-library.test.mjs tests/workspace-preview.test.mjs tests/proxy-security.test.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "6.1.1",

@@ -11,7 +11,7 @@ export function referenceOf(asset: LibraryAssetView): NodeReference | null {
   if (asset.kind !== 'image' && asset.kind !== 'video' && asset.kind !== 'audio') return null
   const url = libraryAssetMediaUrl(asset)
   if (!isSubmittableReferenceUrl(url)) return null
-  return { id: asset.id, title: asset.title, url, mediaKind: asset.kind }
+  return { id: asset.id, libraryAssetId: asset.id, title: asset.title, url, mediaKind: asset.kind }
 }
 
 export function categoryOf(asset: LibraryAssetView) {

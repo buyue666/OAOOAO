@@ -11,6 +11,7 @@ import { categoryOf, referenceOf } from './asset-reference'
 import { readBoard, writeBoard } from './board-codec'
 import { CanvasActionsProvider, type CanvasActions } from './canvas-context'
 import { CanvasAssetLibrary } from './canvas-asset-library'
+import { CanvasSkillDialog } from './canvas-skill-dialog'
 import { CanvasNoticeToast, CanvasSelectionBar, CanvasTopBar, CanvasZoomDock, EmptyCanvasGuide } from './canvas-chrome'
 import { CanvasFlow } from './canvas-flow'
 import { CanvasContextMenu } from './canvas-menu'
@@ -51,11 +52,17 @@ export function CanvasEditor({ projectId, project, loadError }: { projectId: str
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') saveOnHide()
     }
+    const warnUnsaved = (event: BeforeUnloadEvent) => {
+      const current = useCanvasStore.getState()
+      if (current.hydrated && current.revision !== current.savedRevision) { event.preventDefault(); event.returnValue = '' }
+    }
     window.addEventListener('pagehide', saveOnHide)
+    window.addEventListener('beforeunload', warnUnsaved)
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
       stopAutosave()
       window.removeEventListener('pagehide', saveOnHide)
+      window.removeEventListener('beforeunload', warnUnsaved)
       document.removeEventListener('visibilitychange', handleVisibility)
       void flushCanvasSave().catch(() => undefined)
       stopCanvasSaveTimer()
@@ -83,6 +90,7 @@ function CanvasWorkspace() {
   const agent = useAgentActions()
   const { screenToFlowPosition, fitView } = useReactFlow()
   const [initialViewport] = useState<Viewport>(() => useCanvasStore.getState().viewport)
+  const [skillNodeId, setSkillNodeId] = useState<string | null>(null)
   const nodeCount = useCanvasStore((store) => store.nodes.length)
   const assetPanelOpen = useCanvasStore((store) => store.assetPanelOpen)
   const assetTargetNodeId = useCanvasStore((store) => store.assetTargetNodeId)
@@ -138,14 +146,7 @@ function CanvasWorkspace() {
     const store = useCanvasStore.getState()
     const target = store.assetTargetNodeId ? store.nodes.find((node) => node.id === store.assetTargetNodeId) : undefined
 
-    if (asset.kind === 'text') {
-      const prompt = String(asset.data.prompt ?? asset.data.text ?? '').trim()
-      if (target?.type !== 'generation') return store.setNotice('技能需要先选择一个生成节点')
-      if (!prompt) return store.setNotice('这个技能没有可用的提示词')
-      if (target.data.skills.some((skill) => skill.id === asset.id)) return
-      store.updateNodeData(target.id, { skills: [...target.data.skills, { id: asset.id, title: asset.title, prompt }] }, { history: true })
-      return
-    }
+    if (asset.kind === 'text') return store.setNotice('请通过节点上的“选择技能”添加创作指令')
 
     const reference = referenceOf(asset)
     if (!reference) return store.setNotice('这个素材没有可用的地址')
@@ -175,6 +176,7 @@ function CanvasWorkspace() {
     createNodeAt,
     focusAgent,
     exportCanvas,
+    selectSkills: setSkillNodeId,
   }), [generation, agent, createNodeNear, createNodeAt, focusAgent, exportCanvas])
 
   return (
@@ -186,6 +188,7 @@ function CanvasWorkspace() {
         <CanvasZoomDock />
         <CanvasSelectionBar />
         <CanvasContextMenu />
+        {skillNodeId ? <CanvasSkillDialog nodeId={skillNodeId} onClose={() => setSkillNodeId(null)} /> : null}
         {assetPanelOpen ? (
           <div className="pointer-events-auto absolute top-16 right-3 z-50 w-[min(360px,calc(100%-1.5rem))]">
             <CanvasAssetLibrary targetNodeId={assetTargetNodeId} onPick={handleAssetPick} onClose={() => setAssetPanel(false)} />

@@ -12,8 +12,8 @@ import { redirect } from 'next/navigation'
  */
 export default async function InviteLandingPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params
-  const normalized = decodeURIComponent(String(code ?? '')).trim().slice(0, 64)
+  const normalized = String(code ?? '').trim().slice(0, 64)
   // 邀请码只允许字母数字与短横线，避免把任意内容带进查询参数。
   const safe = /^[A-Za-z0-9_-]+$/.test(normalized) ? normalized : ''
-  redirect(safe ? `/login?mode=register&ref=${encodeURIComponent(safe)}` : '/login?mode=register')
+  redirect(safe ? `/register?ref=${encodeURIComponent(safe)}` : '/register')
 }

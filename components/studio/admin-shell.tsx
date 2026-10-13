@@ -43,7 +43,7 @@ export const adminNavGroups: ReadonlyArray<{ label: string; items: ReadonlyArray
     ['content', '内容与公告', Megaphone, ['content.manage']],
   ] as const },
   { label: '系统', items: [
-    ['settings', '系统设置', Settings2, ['system.manage', 'upstream.manage', 'billing.manage']],
+    ['settings', '系统设置', Settings2, ['system.manage', 'upstream.manage', 'billing.manage', 'commerce.manage']],
     ['audit', '审计日志', ShieldCheck, ['audit.read']],
   ] as const },
 ] as const

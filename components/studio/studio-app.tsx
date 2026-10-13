@@ -8,6 +8,7 @@ import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { cn } from '@/lib/utils'
 import { SiteAnnouncementBar } from '@/components/site-announcement-bar'
+import { RETURN_PATH_KEY } from '@/lib/studio/return-path'
 
 function isProtectedStudioRoute(pathname: string) {
   return pathname === '/studio'
@@ -39,6 +40,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
 
   const isLanding = pathname === '/'
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/plans'
+  const isPolicyPage = pathname === '/terms' || pathname === '/privacy'
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isWorkspace = pathname === '/image' || pathname === '/video'
   const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/')
@@ -52,6 +54,11 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
     router.replace(`/login?next=${encodeURIComponent(next)}`)
   }, [authRedirecting, pathname, router])
 
+  useEffect(() => {
+    if (!isProtectedRoute || authChecking || authRedirecting) return
+    try { sessionStorage.setItem(RETURN_PATH_KEY, `${pathname}${window.location.search}${window.location.hash}`) } catch {}
+  }, [pathname, isProtectedRoute, authChecking, authRedirecting])
+
   if (authChecking || authRedirecting) {
     return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{authRedirecting ? '正在前往登录页…' : '正在检查登录状态…'}</main>
   }
@@ -64,7 +71,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
    *
    * 因此这里只负责工作台页面（含画布、Agent、项目、素材等）。
    */
-  if (isLanding || isAuthPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
+  if (isLanding || isAuthPage || isPolicyPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isAdmin) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-black text-white"><SiteAnnouncementBar announcement={state.sessionSettings?.site?.announcementBar} placement="workbench" /><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
 

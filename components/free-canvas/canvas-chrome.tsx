@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
-import Link from 'next/link'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { useShallow } from 'zustand/react/shallow'
 import { ArrowLeft, Bot, Download, FolderOpen, Maximize2, Minus, Plus, Redo2, RefreshCw, Undo2 } from 'lucide-react'
@@ -11,6 +11,7 @@ import { flushCanvasSave } from './canvas-persistence'
 import { useCanvasStore, type SaveStatus } from './canvas-store'
 import { CREATABLE_KINDS, NODE_META, type CreatableKind } from './node-factory'
 import type { GenerationFlowNode } from './types'
+import { CanvasLeaveDialog } from './canvas-leave-dialog'
 
 const SAVE_LABEL: Record<SaveStatus, string> = {
   idle: '已加载',
@@ -22,6 +23,13 @@ const SAVE_LABEL: Record<SaveStatus, string> = {
 }
 
 export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void; onFocusAgent: () => void }) {
+  const router = useRouter()
+  const [leaveTo, setLeaveTo] = useState<string | null>(null)
+  const leave = (href: '/studio' | '/canvas') => {
+    const current = useCanvasStore.getState()
+    if (current.revision !== current.savedRevision) setLeaveTo(href)
+    else router.push(href)
+  }
   const title = useCanvasStore((state) => state.title)
   const saveStatus = useCanvasStore((state) => state.saveStatus)
   const saveError = useCanvasStore((state) => state.saveError)
@@ -34,11 +42,14 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
   const setAssetPanel = useCanvasStore((state) => state.setAssetPanel)
 
   return (
-    <header className="pointer-events-none absolute inset-x-3 top-3 z-40 flex items-start justify-between gap-2">
+    <header className="pointer-events-none absolute inset-x-3 top-3 z-40 flex flex-wrap items-start justify-between gap-2">
+      {leaveTo ? <CanvasLeaveDialog onClose={() => setLeaveTo(null)} onSaved={() => { const href = leaveTo; setLeaveTo(null); router.push(href) }} /> : null}
       <div className="pointer-events-auto flex min-w-0 items-center gap-1 rounded-2xl border border-white/15 bg-black/85 p-1.5 backdrop-blur-md">
-        <Link href="/canvas" aria-label="返回画布列表" title="返回画布列表" className="flex size-8 shrink-0 items-center justify-center rounded-xl text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">
+        <button type="button" onClick={() => leave('/studio')} aria-label="返回工作台" title="返回工作台" className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">
           <ArrowLeft className="size-4" aria-hidden="true" />
-        </Link>
+          工作台
+        </button>
+        <button type="button" onClick={() => leave('/canvas')} aria-label="返回画布列表" title="返回画布列表" className="flex size-8 shrink-0 items-center justify-center rounded-xl text-neutral-400 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white"><FolderOpen className="size-4" aria-hidden="true" /></button>
         <label className="min-w-0 flex-1">
           <span className="sr-only">画布名称</span>
           <input
@@ -83,7 +94,7 @@ function SaveStatusLabel({ status, error }: { status: SaveStatus; error: string 
   }
   if (status === 'error') {
     return (
-      <button type="button" title={error ?? undefined} onClick={() => void flushCanvasSave()} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-white hover:bg-white/10">
+      <button type="button" title={error ?? undefined} onClick={() => void flushCanvasSave().catch(() => undefined)} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-white hover:bg-white/10">
         <RefreshCw className="size-3.5" aria-hidden="true" />
         重试保存
       </button>

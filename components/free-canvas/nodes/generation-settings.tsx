@@ -24,12 +24,18 @@ const VIDEO_QUALITY_FALLBACK = [
   { value: '1080', label: '1080p' },
 ]
 const VIDEO_SECONDS_FALLBACK = ['4', '5', '8', '10']
-const IMAGE_COUNTS = ['1', '2', '3', '4']
 const SETTINGS_SIDE_GAP = 16
 
 const CAPABILITY: Record<GenerationKind, 'image' | 'video' | 'text' | 'audio'> = { image: 'image', video: 'video', text: 'text', audio: 'audio' }
 
 const SECTION_TITLE = 'text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500'
+
+export function videoDurationOptions(values: readonly string[]) {
+  return [...new Set(values.map((value) => {
+    const match = /^\s*(\d+(?:\.\d+)?)\s*(?:秒|s)?\s*$/i.exec(value)
+    return match ? Number(match[1]) : NaN
+  }).filter((value) => Number.isFinite(value) && value > 0))].map((seconds) => ({ value: String(seconds), label: `${seconds} 秒` }))
+}
 
 export function GenerationSettings({ nodeId, placement }: { nodeId: string; placement: SettingsPlacement }) {
   const node = useCanvasStore((store) => store.nodes.find((item) => item.id === nodeId))
@@ -42,6 +48,7 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
 
   if (!node || node.type !== 'generation') return null
   const data = node.data
+  const busy = data.task?.phase === 'queued' || data.task?.phase === 'running' || data.task?.unconfirmed
   const capability = CAPABILITY[data.kind]
   const models = filterModelsByCapability(state.models, capability)
   const selectedModel = models.find((model) => model.id === data.model)
@@ -82,7 +89,8 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
           <X className="size-4" aria-hidden="true" />
         </button>
       </header>
-
+      {busy ? <p role="status" className="text-xs leading-5 text-neutral-400">任务进行中，参数和技能暂时锁定。</p> : null}
+      <fieldset disabled={busy} className="contents disabled:opacity-50">
       <label className="flex flex-col gap-1.5">
         <span className={SECTION_TITLE}>模型</span>
         <select
@@ -106,11 +114,11 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
       ) : null}
 
       {data.kind === 'video' ? (
-        <Segmented label="时长" value={String(data.seconds)} options={durations.map((value) => ({ value: String(value), label: `${value} 秒` }))} onChange={(value) => updateNodeData(nodeId, { seconds: Number(value) }, { history: true })} />
+        <Segmented label="时长" value={String(data.seconds)} options={videoDurationOptions(durations)} onChange={(value) => updateNodeData(nodeId, { seconds: Number(value) }, { history: true })} />
       ) : null}
 
       {data.kind === 'image' ? (
-        <Segmented label="数量" value={String(data.count)} options={IMAGE_COUNTS.map((value) => ({ value, label: `${value} 张` }))} onChange={(value) => updateNodeData(nodeId, { count: Number(value) }, { history: true })} />
+        <p className="text-xs leading-5 text-neutral-400">每次生成 1 张图片。可在完成后再次生成。</p>
       ) : null}
 
       {data.kind === 'audio' ? (
@@ -160,7 +168,7 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
         <span className={SECTION_TITLE}>技能</span>
         <SkillChips skills={data.skills} onRemove={(id) => updateNodeData(nodeId, { skills: data.skills.filter((item) => item.id !== id) }, { history: true })} />
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => setAssetPanel(true, nodeId)} className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/15 text-xs text-neutral-200 hover:bg-white/10">
+          <button type="button" onClick={() => actions.selectSkills(nodeId)} className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-white/15 text-xs text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
             <Plus className="size-3.5" aria-hidden="true" />
             选择技能
           </button>
@@ -171,6 +179,7 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
         </div>
       </section>
 
+      </fieldset>
       <p className="border-t border-white/10 pt-3 text-xs text-neutral-400">
         {estimate > 0 ? `预计消耗 ${estimate} 积分` : '积分以任务实际结算为准'}
       </p>
@@ -232,7 +241,7 @@ function ReferenceChips({ references, onRemove }: { references: NodeReference[];
 }
 
 function SkillChips({ skills, onRemove }: { skills: NodeSkill[]; onRemove: (id: string) => void }) {
-  if (!skills.length) return <p className="text-[11px] text-neutral-500">未引用技能。技能是资产库中的文本提示词，会追加到生成内容中。</p>
+  if (!skills.length) return <p className="text-[11px] leading-5 text-neutral-400">选择可复用的创作指令。提交时会读取技能的最新内容并加入提示词。</p>
   return (
     <ul className="flex flex-wrap gap-1.5">
       {skills.map((skill) => (

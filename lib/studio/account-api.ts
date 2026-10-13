@@ -382,6 +382,7 @@ export type LibraryAssetView = {
   source?: string
   note?: string
   data: Record<string, unknown>
+  metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }

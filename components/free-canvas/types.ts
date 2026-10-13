@@ -1,4 +1,5 @@
 import type { Edge, Node } from '@xyflow/react'
+import type { AudioGenerationInput, ImageGenerationInput, TextGenerationInput, VideoGenerationInput } from '@/lib/studio/generation-types'
 
 export type GenerationKind = 'image' | 'video' | 'text' | 'audio'
 export type MediaKind = 'image' | 'video' | 'audio'
@@ -13,6 +14,8 @@ export type TaskPhase = 'queued' | 'running' | 'success' | 'error' | 'cancelled'
 
 export type NodeReference = {
   id: string
+  /** Present only when this reference was selected from the owned library. */
+  libraryAssetId?: string
   title: string
   url: string
   mediaKind: MediaKind
@@ -36,7 +39,13 @@ export type NodeTask = {
   phase: TaskPhase
   error?: string
   startedAt: number
+  clientRequestId?: string
+  unconfirmed?: boolean
+  cancelRequested?: boolean
+  submission?: NodeSubmission
 }
+
+export type NodeSubmission = { kind: 'image'; input: ImageGenerationInput } | { kind: 'video'; input: VideoGenerationInput } | { kind: 'audio'; input: AudioGenerationInput } | { kind: 'text'; input: TextGenerationInput }
 
 export type GenerationNodeData = {
   kind: GenerationKind
@@ -54,6 +63,7 @@ export type GenerationNodeData = {
   task: NodeTask | null
   results: NodeResult[]
   text: string
+  resultSource?: { runId: string; assetId: string }
 }
 
 export type MediaNodeData = {
@@ -74,6 +84,8 @@ export type AgentNodeData = {
   kind: 'agent'
   title: string
   prompt: string
+  skills: NodeSkill[]
+  collapsed?: boolean
   runId: string | null
   runStatus: string | null
   steps: AgentStep[]
@@ -82,6 +94,10 @@ export type AgentNodeData = {
   context: string[]
   /** 请求已发出但响应未知时复用，避免重试重复创建运行。 */
   clientRequestId?: string | null
+  submission?: { prompt: string; assetIds: string[]; skillIds: string[] }
+  /** Set in the same saved board version as the delivered result nodes. */
+  deliveredRunId?: string | null
+  deliveryError?: string | null
   planApproval?: { totalPoints: number; estimated: boolean; approvedAt?: number }
 }
 

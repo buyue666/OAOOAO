@@ -1,5 +1,7 @@
-import { DramaPage } from '@/components/studio/drama-page'
+import { redirect } from 'next/navigation'
 
 export default function Page() {
-  return <DramaPage />
+  // The project workspace owns the persisted outline, shot and Agent flow.
+  // Keep existing bookmarks useful without exposing the retired analyzer form.
+  redirect('/projects')
 }

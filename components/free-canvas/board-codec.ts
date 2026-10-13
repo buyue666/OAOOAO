@@ -17,6 +17,7 @@ import {
   type NodeResult,
   type NodeSkill,
   type NodeTask,
+  type NodeSubmission,
   type TaskPhase,
 } from './types'
 
@@ -67,6 +68,7 @@ function readReference(value: unknown): NodeReference | null {
   if (!url) return null
   return {
     id: textOf(raw.id, url),
+    ...(textOf(raw.libraryAssetId) ? { libraryAssetId: textOf(raw.libraryAssetId) } : {}),
     title: textOf(raw.title, '参考素材'),
     url,
     mediaKind: isMediaKind(raw.mediaKind) ? raw.mediaKind : 'image',
@@ -115,11 +117,20 @@ function readResults(kind: GenerationKind, raw: Raw, meta: Raw): NodeResult[] {
 }
 
 function readTask(raw: Raw): NodeTask | null {
-  const id = textOf(raw.generationTaskId) || asRecord(raw.task).id
-  if (typeof id !== 'string' || !id) return null
   const task = asRecord(raw.task)
-  const phase = isTaskPhase(task.phase) ? task.phase : LEGACY_PHASE[textOf(raw.status)] ?? 'running'
-  return { id: textOf(id), phase, error: textOf(task.error) || undefined, startedAt: numberOf(task.startedAt, Date.now()) }
+  const id = textOf(raw.generationTaskId) || textOf(task.id)
+  const candidate = asRecord(task.submission), input = asRecord(candidate.input)
+  const submission = isGenerationKind(textOf(candidate.kind)) && typeof input.prompt === 'string' && typeof input.clientRequestId === 'string' && input.clientRequestId
+    ? candidate as NodeSubmission : undefined
+  if (!id && !submission && !isTaskPhase(task.phase)) return null
+  const savedPhase = isTaskPhase(task.phase) ? task.phase : LEGACY_PHASE[textOf(raw.status)] ?? 'running'
+  const unconfirmed = !id && Boolean(task.unconfirmed || (savedPhase === 'queued' && submission))
+  const interrupted = !id && savedPhase === 'queued'
+  return { id, phase: unconfirmed || interrupted ? 'error' : savedPhase, unconfirmed, submission,
+    cancelRequested: Boolean(task.cancelRequested),
+    clientRequestId: textOf(task.clientRequestId) || submission?.input.clientRequestId,
+    error: unconfirmed ? '请确认上次提交结果；重试会使用原参数和标识，不会重复扣费。' : interrupted ? '提交准备已中断，请检查任务记录后重试。' : textOf(task.error) || undefined,
+    startedAt: numberOf(task.startedAt, Date.now()) }
 }
 
 function isTaskPhase(value: unknown): value is TaskPhase {
@@ -135,7 +146,7 @@ function readGeneration(kind: GenerationKind, raw: Raw, meta: Raw): GenerationNo
     ratio: textOf(raw.ratio),
     quality: textOf(raw.quality),
     seconds: numberOf(raw.seconds, 0),
-    count: Math.min(4, Math.max(1, numberOf(raw.count, 1))),
+    count: 1,
     voice: textOf(raw.voice),
     format: textOf(raw.format),
     references: Array.isArray(raw.references) ? readReferences(raw.references) : readLegacyReferences(raw.referenceUrls),
@@ -143,6 +154,7 @@ function readGeneration(kind: GenerationKind, raw: Raw, meta: Raw): GenerationNo
     task: readTask(raw),
     results: readResults(kind, raw, meta),
     text: textOf(raw.text, textOf(raw.content)),
+    ...(typeof asRecord(raw.resultSource).runId === 'string' && typeof asRecord(raw.resultSource).assetId === 'string' ? { resultSource: raw.resultSource as GenerationNodeData['resultSource'] } : {}),
   }
 }
 
@@ -165,17 +177,31 @@ function readSteps(value: unknown): AgentStep[] {
 
 function readAgent(raw: Raw): AgentNodeData {
   const pointsCost = raw.pointsCost === null || raw.pointsCost === undefined ? null : numberOf(raw.pointsCost, 0)
+  const runId = textOf(raw.runId, textOf(raw.agentRunId)) || null
+  const runStatus = textOf(raw.runStatus) || null
+  const clientRequestId = textOf(raw.clientRequestId) || null
+  const submission = raw.submission && typeof raw.submission === 'object' && typeof asRecord(raw.submission).prompt === 'string'
+    ? { prompt: String(asRecord(raw.submission).prompt), assetIds: Array.isArray(asRecord(raw.submission).assetIds) ? (asRecord(raw.submission).assetIds as unknown[]).filter((id): id is string => typeof id === 'string') : [], skillIds: Array.isArray(asRecord(raw.submission).skillIds) ? (asRecord(raw.submission).skillIds as unknown[]).filter((id): id is string => typeof id === 'string') : [] }
+    : undefined
+  // A saved pre-submit snapshot cannot prove whether the request was accepted.
+  // Reopen the existing idempotent recovery path instead of locking forever.
+  const interrupted = !runId && runStatus === 'planning' && Boolean(clientRequestId && submission)
   return {
     kind: 'agent',
     title: textOf(raw.title, 'OAO Agent'),
     prompt: textOf(raw.prompt),
-    runId: textOf(raw.runId, textOf(raw.agentRunId)) || null,
-    runStatus: textOf(raw.runStatus) || null,
+    skills: readSkills(raw.skills),
+    collapsed: raw.collapsed === true,
+    runId,
+    runStatus: interrupted ? 'unconfirmed' : runStatus,
     steps: readSteps(raw.steps),
-    failure: textOf(raw.failure) || null,
+    failure: interrupted ? '上次规划提交尚未确认，请点击“确认上次提交”沿用原请求安全恢复。' : textOf(raw.failure) || null,
     pointsCost,
     context: Array.isArray(raw.context) ? raw.context.filter((item): item is string => typeof item === 'string') : [],
-    clientRequestId: textOf(raw.clientRequestId) || null,
+    clientRequestId,
+    submission,
+    deliveredRunId: textOf(raw.deliveredRunId) || null,
+    deliveryError: textOf(raw.deliveryError) || null,
     planApproval: raw.planApproval && typeof raw.planApproval === 'object'
       ? { totalPoints: numberOf(asRecord(raw.planApproval).totalPoints), estimated: Boolean(asRecord(raw.planApproval).estimated), ...(numberOf(asRecord(raw.planApproval).approvedAt) ? { approvedAt: numberOf(asRecord(raw.planApproval).approvedAt) } : {}) }
       : undefined,

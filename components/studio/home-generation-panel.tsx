@@ -1,6 +1,7 @@
 'use client'
 
 import type { RefObject } from 'react'
+import { useId } from 'react'
 import { ArrowRight, Check, ChevronDown, LoaderCircle } from 'lucide-react'
 import type { ModelConfig } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
@@ -62,6 +63,7 @@ export type GenerationPanelProps = {
 export function GenerationPanel(props: GenerationPanelProps) {
   const { mode, estimatedCredits, canStart, starting, startError } = props
   const hasModelControls = mode === 'image' || mode === 'video'
+  const modelUnavailable = hasModelControls && !props.selectedModel
   const note = directorNotes[mode]
   const gridClass = mode === 'video'
     ? 'xl:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))]'
@@ -108,7 +110,7 @@ export function GenerationPanel(props: GenerationPanelProps) {
       <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">预计消耗</p>
-          {estimatedCredits !== null ? (
+          {modelUnavailable ? <p className="mt-0.5 text-sm font-medium text-foreground">模型配置完成后可估算</p> : estimatedCredits !== null ? (
             <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
               <span className="text-xl font-semibold tabular-nums text-foreground">{estimatedCredits.toLocaleString()}</span>
               <span className="text-sm text-muted-foreground">积分 · 按当前模型与参数估算</span>
@@ -116,12 +118,12 @@ export function GenerationPanel(props: GenerationPanelProps) {
           ) : (
             <p className="mt-0.5 text-sm font-medium text-foreground">按实际执行计费</p>
           )}
-          {!canStart && <p className="mt-1 text-xs leading-5 text-muted-foreground">输入创作描述或添加参考素材后即可开始。</p>}
+          {modelUnavailable ? <p className="mt-1 text-xs leading-5 text-muted-foreground" role="status">当前暂无可用模型，请联系管理员配置后再试。</p> : !canStart && <p className="mt-1 text-xs leading-5 text-muted-foreground">输入创作描述或添加参考素材后即可开始。</p>}
         </div>
 
         <button
           type="submit"
-          disabled={starting || !canStart}
+          disabled={starting || !canStart || modelUnavailable}
           aria-busy={starting || undefined}
           className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-md bg-foreground px-6 text-sm font-semibold text-background transition-colors duration-150 hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground sm:w-auto sm:min-w-[168px]"
         >
@@ -137,6 +139,7 @@ export function GenerationPanel(props: GenerationPanelProps) {
 }
 
 function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen, pickerRef, onToggleDropdown, onSelectModel }: GenerationPanelProps) {
+  const listId = useId()
   return (
     <div ref={pickerRef} className="relative">
       <button
@@ -145,11 +148,19 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
         aria-label="选择模型"
         aria-expanded={dropdownOpen}
         aria-haspopup="listbox"
+        aria-controls={dropdownOpen ? listId : undefined}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            if (!dropdownOpen) onToggleDropdown()
+            requestAnimationFrame(() => pickerRef.current?.querySelector<HTMLButtonElement>('[role="option"]')?.focus())
+          }
+        }}
         className="flex h-12 w-full min-w-0 items-center gap-2.5 rounded-md border border-border bg-background px-3 text-left transition-colors duration-150 hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40"
       >
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-studio-accent"><ModelIcon model={selectedModel} /></span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground">{selectedModel ? selectedModel.shortName || selectedModel.name : '选择模型'}</span>
+          <span className="block truncate text-sm font-medium text-foreground">{selectedModel ? selectedModel.shortName || selectedModel.name : modelOptions.length ? '选择模型' : '暂无可用模型'}</span>
           {selectedModel && <span className="block truncate text-xs text-muted-foreground">{selectedModel.provider || '可用模型'}</span>}
         </span>
         <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', dropdownOpen && 'rotate-180')} aria-hidden="true" />
@@ -158,8 +169,18 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
       {dropdownOpen && (
         <div
           role="listbox"
+          id={listId}
           aria-label="可选模型"
-          className="lg-glass-overlay motion-panel absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[min(440px,60dvh)] min-w-[280px] overflow-y-auto rounded-lg border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onToggleDropdown(); pickerRef.current?.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')?.focus(); return }
+            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+            event.preventDefault()
+            const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]'))
+            const index = options.indexOf(document.activeElement as HTMLButtonElement)
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length
+            options[next]?.focus()
+          }}
+          className="lg-glass-overlay motion-panel absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-[min(440px,60dvh)] min-w-0 overflow-y-auto overscroll-contain rounded-lg border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]"
         >
           {modelOptions.length ? Object.entries(groupedModels).map(([provider, items]) => (
             <div key={provider} className="border-b border-border/70 pb-1 last:border-b-0 last:pb-0">
@@ -203,7 +224,8 @@ function ParamSelect({ label, value, options, onChange }: { label: string; value
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className={fieldClass}>
+      <select value={value} disabled={!options.length} onChange={(event) => onChange(event.target.value)} className={cn(fieldClass, 'disabled:text-muted-foreground')}>
+        {!options.length && <option value="">暂无可用选项</option>}
         {options.map((item) => <option key={item} value={item}>{item}</option>)}
       </select>
     </label>
@@ -260,9 +282,11 @@ function DurationControl({
       <span className="text-xs font-medium text-muted-foreground">时长</span>
       <select
         value={durationOptions.find((item) => parseSeconds(item) === seconds) ?? durationOptions[0]}
+        disabled={!durationOptions.length}
         onChange={(event) => onSecondsChange(parseSeconds(event.target.value) ?? seconds)}
         className={fieldClass}
       >
+        {!durationOptions.length && <option value="">模型默认</option>}
         {durationOptions.map((item) => <option key={item} value={item}>{item}</option>)}
       </select>
     </label>

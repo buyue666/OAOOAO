@@ -343,7 +343,7 @@ export interface StudioContextValue {
   /** 后端生成默认参数。 */
   defaultModels: SessionGenerationDefaults
   /** 登录、退出、切换账号后立即重新同步会话，不需要整页刷新。 */
-  refreshSession: () => Promise<void>
+  refreshSession: () => Promise<{ status: 'connected' | 'unauthenticated' | 'offline' | 'superseded'; error?: string }>
   /** 新建项目：后端可用时先在后端创建，失败时抛出原因，不再只写本地状态。 */
   createProject: (title: string) => Promise<Project>
   /** 删除项目：后端可用时同步删除服务端记录。 */

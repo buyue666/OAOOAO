@@ -36,7 +36,7 @@ export const GENERATION_TITLES: Record<GenerationKind, string> = {
 export const NODE_SIZE = {
   generation: { width: 320, height: 240 },
   media: { width: 232, height: 210 },
-  agent: { width: 320, height: 220 },
+  agent: { width: 360, height: 260 },
   group: { width: 420, height: 300 },
 } as const
 
@@ -93,7 +93,7 @@ export function createAgentNode(position: XYPosition, id = newNodeId('agent')): 
     id,
     type: 'agent',
     position,
-    data: { kind: 'agent', title: 'OAO Agent', prompt: '', runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [], clientRequestId: null },
+    data: { kind: 'agent', title: 'OAO Agent', prompt: '', skills: [], runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [], clientRequestId: null },
   }
 }
 

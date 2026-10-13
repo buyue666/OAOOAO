@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo } from 'react'
-import { createLibraryAsset } from '@/lib/studio/account-api'
-import { cancelGenerationTask, getGenerationTask, normalizeTaskResult } from '@/lib/studio/generation-api'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { createLibraryAsset, listLibraryAssets } from '@/lib/studio/account-api'
+import { composeSkillPrompt, resolveCanvasSkills } from '@/lib/studio/canvas-skills'
+import { cancelGenerationTask, getGenerationTask, newClientRequestId, normalizeTaskResult } from '@/lib/studio/generation-api'
 import { useGeneration } from '@/lib/studio/generation-store'
 import type { GenerationTaskView, SessionGenerationSettings, SessionLogicalModel } from '@/lib/studio/generation-types'
 import { isSubmittableReferenceUrl } from '@/lib/studio/reference-assets'
@@ -8,7 +9,8 @@ import { defaultModelFor, filterModelsByCapability } from '@/lib/studio/studio-m
 import { useStudio } from '@/lib/studio/store'
 import type { ModelConfig } from '@/lib/studio/types'
 import { useCanvasStore, type RemoteNodePatch } from './canvas-store'
-import type { FreeCanvasEdge, FreeCanvasNode, GenerationFlowNode, GenerationKind, GenerationNodeData, NodeReference, NodeResult, NodeTask, TaskPhase } from './types'
+import { flushCanvasSave } from './canvas-persistence'
+import type { FreeCanvasEdge, FreeCanvasNode, GenerationFlowNode, GenerationKind, GenerationNodeData, NodeReference, NodeResult, NodeSubmission, NodeTask, TaskPhase } from './types'
 
 const CAPABILITY: Record<GenerationKind, SessionLogicalModel['capability']> = {
   image: 'image',
@@ -20,10 +22,10 @@ const CAPABILITY: Record<GenerationKind, SessionLogicalModel['capability']> = {
 const DEFAULT_REFERENCE_LIMIT = 4
 
 export function errorMessageOf(error: unknown) {
-  return error instanceof Error && error.message ? error.message : '请求失败，请稍后重试'
+  return error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message ? error.message : '请求失败，请稍后重试'
 }
 
-function phaseOf(view: GenerationTaskView): TaskPhase {
+function phaseOf(view: Pick<GenerationTaskView, 'status'>): TaskPhase {
   if (view.status === 'success') return 'success'
   if (view.status === 'error') return 'error'
   if (view.status === 'cancelled') return 'cancelled'
@@ -40,7 +42,7 @@ function sameResults(a: NodeResult[], b: NodeResult[]) {
 }
 
 function sameTask(a: NodeTask | null, b: NodeTask) {
-  return !!a && a.id === b.id && a.phase === b.phase && a.error === b.error
+  return !!a && a.id === b.id && a.phase === b.phase && a.error === b.error && Boolean(a.cancelRequested) === Boolean(b.cancelRequested)
 }
 
 /** 把生成接口的任务状态映射到节点：只产出真正变化的补丁，避免无意义的保存。 */
@@ -52,7 +54,7 @@ export function collectTaskPatches(nodes: FreeCanvasNode[], tasks: GenerationTas
     const view = byId.get(node.data.task.id)
     if (!view) continue
     const phase = phaseOf(view)
-    const task: NodeTask = { ...node.data.task, phase, error: phase === 'error' ? view.error || '生成失败' : undefined }
+    const task: NodeTask = { ...node.data.task, phase, cancelRequested: Boolean(view.cancelRequested && (phase === 'queued' || phase === 'running')), error: phase === 'error' ? view.error || '生成失败' : undefined }
     const results = phase === 'success' ? resultsOf(view) : node.data.results
     const text = view.text ?? node.data.text
     const resultsChanged = !sameResults(results, node.data.results)
@@ -90,10 +92,6 @@ function referencesFor(nodeId: string, data: GenerationNodeData, maxReferences: 
   return candidates.slice(0, maxReferences).map((reference) => ({ name: reference.title, type: reference.mediaKind, url: reference.url.trim() }))
 }
 
-function composePrompt(data: GenerationNodeData) {
-  return [data.prompt.trim(), ...data.skills.map((skill) => skill.prompt.trim()).filter(Boolean)].join('\n\n')
-}
-
 function setTask(nodeId: string, task: NodeTask | null) {
   useCanvasStore.getState().patchNodes([{ id: nodeId, data: { task } }])
 }
@@ -110,6 +108,19 @@ export function useGenerationActions() {
   const nodes = useCanvasStore((state) => state.nodes)
   const { tasks } = generation
   const { estimateCredits } = studio
+  const mounted = useRef(true)
+  const account = useRef(studio.state.user.id)
+  account.current = studio.state.user.id
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+
+  const currentScope = useCallback(() => {
+    const { projectId, projectMeta } = useCanvasStore.getState()
+    const owner = account.current
+    return () => {
+      const current = useCanvasStore.getState()
+      return mounted.current && account.current === owner && current.projectId === projectId && current.projectMeta === projectMeta && current.hydrated
+    }
+  }, [])
 
   useEffect(() => {
     const patches = collectTaskPatches(useCanvasStore.getState().nodes, tasks)
@@ -122,48 +133,85 @@ export function useGenerationActions() {
     if (!node || !state.projectId || !node.data.prompt.trim()) return
     if (node.data.task?.phase === 'queued' || node.data.task?.phase === 'running') return
     const data = node.data
+    const scopeCurrent = currentScope()
+    const previous = data.task
+    let submission = previous?.unconfirmed ? previous.submission : undefined
+    if (previous?.unconfirmed && !submission) return state.setNotice('上次提交尚未确认且缺少恢复参数，请到任务记录核对，勿重复生成。')
+    const clientRequestId = submission?.input.clientRequestId || newClientRequestId(`canvas-${data.kind}`)
+    const current = () => scopeCurrent() && generationNodeOf(nodeId)?.data.task?.clientRequestId === clientRequestId
     const capability = CAPABILITY[data.kind]
     const modelId = data.model || defaultModelFor(capability, settings, filterModelsByCapability(models, capability))
     const model = models.find((item) => item.id === modelId)
     const references = referencesFor(nodeId, data, maxReferencesOf(data.kind, model), state.nodes, state.edges)
-    const prompt = composePrompt(data)
-    setTask(nodeId, { id: '', phase: 'queued', startedAt: Date.now() })
+    const pending: NodeTask = { id: '', phase: 'queued', startedAt: Date.now(), clientRequestId, submission }
+    setTask(nodeId, pending)
+    let submitted = false
     try {
-      const projectId = state.projectId
-      const view = data.kind === 'image'
-        ? await generation.createImage({ prompt, model: modelId, ratio: data.ratio, quality: data.quality, count: data.count, references, title: data.title, projectId, surface: 'canvas' })
-        : data.kind === 'video'
-          ? await generation.createVideo({ prompt, model: modelId, ratio: data.ratio, quality: data.quality, seconds: data.seconds, references, projectId, surface: 'canvas' })
-          : data.kind === 'audio'
-            ? await generation.createAudio({ prompt, model: modelId, voice: data.voice, format: data.format, projectId, surface: 'canvas' })
-            : await generation.createText({ prompt, model: modelId })
-      setTask(nodeId, { id: view.id, phase: phaseOf(view), startedAt: Date.now() })
+      if (!submission) {
+        const skills = await resolveCanvasSkills(data.skills.map((skill) => skill.id), (page) => listLibraryAssets({ kind: 'text', pageSize: 100, page }))
+        if (!current()) return
+        const prompt = composeSkillPrompt(data.prompt, skills)
+        const common = { prompt, model: modelId, clientRequestId }
+        const context = { projectId: state.projectId, surface: 'canvas' as const }
+        submission = data.kind === 'image'
+          ? { kind: 'image', input: { ...common, ...context, ratio: data.ratio, quality: data.quality, count: 1, references, title: data.title } }
+          : data.kind === 'video'
+            ? { kind: 'video', input: { ...common, ...context, ratio: data.ratio, quality: data.quality, seconds: data.seconds, references } }
+            : data.kind === 'audio'
+              ? { kind: 'audio', input: { ...common, ...context, voice: data.voice, format: data.format } }
+              : { kind: 'text', input: common }
+      }
+      // Save the immutable identity before a request can charge points. Reloads
+      // can then recover the same request even if the response never arrives.
+      setTask(nodeId, { ...pending, submission })
+      await flushCanvasSave()
+      if (!current()) return
+      const saved = useCanvasStore.getState()
+      if (saved.revision !== saved.savedRevision) throw new Error('画布尚未保存，生成请求未发送。请先处理保存冲突或重试保存。')
+      submitted = true
+      const view = submission.kind === 'image' ? await generation.createImage(submission.input)
+        : submission.kind === 'video' ? await generation.createVideo(submission.input)
+          : submission.kind === 'audio' ? await generation.createAudio(submission.input)
+            : await generation.createText(submission.input)
+      if (!current()) return
+      setTask(nodeId, { id: view.id, phase: phaseOf(view), startedAt: pending.startedAt, clientRequestId })
     } catch (error) {
-      setTask(nodeId, { id: '', phase: 'error', error: errorMessageOf(error), startedAt: Date.now() })
+      if (!current()) return
+      const definite = error && typeof error === 'object' && (('indeterminate' in error && error.indeterminate === false) || ('outcome' in error && ['rejected', 'failed', 'expired', 'not-found'].includes(String(error.outcome))))
+      const unconfirmed = Boolean(previous?.unconfirmed || (submitted && !definite))
+      setTask(nodeId, { ...pending, submission, phase: 'error', unconfirmed, error: unconfirmed ? `提交结果未确认；重试会使用原参数核对，不会重复扣费。${errorMessageOf(error)}` : errorMessageOf(error) })
     }
-  }, [generation, models, settings])
+  }, [generation, models, settings, currentScope])
 
   const cancelNode = useCallback(async (nodeId: string) => {
     const node = generationNodeOf(nodeId)
     const task = node?.data.task
-    if (!node || !task?.id) return
+    if (!node || !task?.id || task.cancelRequested) return
+    const scopeCurrent = currentScope()
+    const current = () => scopeCurrent() && generationNodeOf(nodeId)?.data.task?.id === task.id
     try {
       const view = generation.tasks.find((item) => item.id === task.id)
-      if (view) await generation.cancelTask(view)
-      else await cancelGenerationTask(node.data.kind, task.id)
-      setTask(nodeId, { ...task, phase: 'cancelled', error: undefined })
+      const remote = view ? await generation.cancelTask(view) : (await cancelGenerationTask(node.data.kind, task.id)).data.task
+      if (!current()) return
+      const phase = phaseOf(remote)
+      const waiting = phase === 'queued' || phase === 'running'
+      setTask(nodeId, { ...task, phase, cancelRequested: waiting, error: phase === 'error' ? remote.error || '生成失败' : undefined })
+      useCanvasStore.getState().setNotice(waiting ? '取消请求已发送，尚未确认停止。请继续检查状态，确认前不能重新生成。' : phase === 'cancelled' ? '任务已确认取消' : '任务已结束，请核对最终结果。')
     } catch (error) {
-      useCanvasStore.getState().setNotice(errorMessageOf(error))
+      if (current()) useCanvasStore.getState().setNotice(errorMessageOf(error))
     }
-  }, [generation])
+  }, [generation, currentScope])
 
   /** 任务列表里找不到（例如换设备）时，直接向后端确认一次真实状态。 */
   const checkNode = useCallback(async (nodeId: string) => {
     const node = generationNodeOf(nodeId)
     const task = node?.data.task
     if (!node || !task?.id) return
+    const scopeCurrent = currentScope()
+    const current = () => scopeCurrent() && generationNodeOf(nodeId)?.data.task?.id === task.id
     try {
       const remote = (await getGenerationTask(node.data.kind, task.id)).data.task
+      if (!current()) return
       const normalized = normalizeTaskResult(node.data.kind, remote.result)
       const phase: TaskPhase = remote.status === 'success'
         ? 'success'
@@ -179,12 +227,12 @@ export function useGenerationActions() {
         : node.data.results
       useCanvasStore.getState().patchNodes([{
         id: nodeId,
-        data: { task: { ...task, phase, error: phase === 'error' ? remote.error || '生成失败' : undefined }, results, text: normalized.text ?? node.data.text },
+        data: { task: { ...task, phase, cancelRequested: Boolean(remote.cancelRequested && (phase === 'queued' || phase === 'running')), error: phase === 'error' ? remote.error || '生成失败' : undefined }, results, text: normalized.text ?? node.data.text },
       }])
     } catch (error) {
-      useCanvasStore.getState().setNotice(errorMessageOf(error))
+      if (current()) useCanvasStore.getState().setNotice(errorMessageOf(error))
     }
-  }, [])
+  }, [currentScope])
 
   const saveResultToLibrary = useCallback(async (nodeId: string, index: number) => {
     const node = generationNodeOf(nodeId)
@@ -216,13 +264,14 @@ export function useGenerationActions() {
     const node = generationNodeOf(nodeId)
     const prompt = node?.data.prompt.trim()
     if (!prompt) return
+    if (prompt.length > 4000) return useCanvasStore.getState().setNotice('技能指令最多 4000 字，请缩短后再保存')
     try {
       await createLibraryAsset({
         kind: 'text',
         title: prompt.slice(0, 24),
         tags: ['技能'],
         source: 'canvas-skill',
-        data: { prompt, text: prompt, assetRole: 'style' },
+        data: { prompt, skillVersion: 1 },
       })
       useCanvasStore.getState().setNotice('已保存为技能')
     } catch (error) {
@@ -235,7 +284,7 @@ export function useGenerationActions() {
     const modelId = data.model || defaultModelFor(capability, settings, filterModelsByCapability(models, capability))
     if (!modelId) return 0
     return estimateCredits(modelId, {
-      count: data.count,
+      count: 1,
       quality: data.quality,
       duration: data.kind === 'video' ? String(data.seconds) : undefined,
     })

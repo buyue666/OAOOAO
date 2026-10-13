@@ -187,6 +187,7 @@ function OverviewData({ data, retry }: { data: AdminOverviewSnapshot; retry: () 
 
 function AnalyticsPanels({ overview }: { overview: AdminGenerationOverview }) {
   const maxDaily = Math.max(1, ...overview.dailyCalls.map((item) => item.value))
+  const modelPercent = (value: number) => overview.totalCalls > 0 ? Math.max(0, Math.min(100, value / overview.totalCalls * 100)) : 0
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
       <AdminSectionCard title="生成调用趋势" description={`近 ${overview.windowDays} 日 · 北京时间 · 按生成记录创建日期统计`}>
@@ -206,8 +207,8 @@ function AnalyticsPanels({ overview }: { overview: AdminGenerationOverview }) {
       </AdminSectionCard>
       <AdminSectionCard title="常用模型" description={`近 ${overview.windowDays} 日调用最多的 6 个模型`}>
         {overview.modelDistribution.length ? <div className="flex flex-col gap-4">{overview.modelDistribution.slice(0, 6).map((item, index) => <div key={`${item.label}-${index}`}>
-          <div className="mb-2 flex items-center justify-between gap-3 text-xs"><span className="truncate" title={item.label}>{item.label}</span><span className="shrink-0 tabular-nums text-muted-foreground">{formatAdminNumber(item.value)} 次 · {Number(item.percent || 0).toFixed(1)}%</span></div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-studio-accent/65" style={{ width: `${Math.max(0, Math.min(100, Number(item.percent) || 0))}%` }} /></div>
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs"><span className="truncate" title={item.label}>{item.label}</span><span className="shrink-0 tabular-nums text-muted-foreground">{formatAdminNumber(item.value)} 次 · {modelPercent(item.value).toFixed(1)}%</span></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-studio-accent/65" style={{ width: `${modelPercent(item.value)}%` }} /></div>
         </div>)}</div> : <AdminEmpty title="暂无模型记录" description="产生生成记录后，这里会展示模型分布。" />}
       </AdminSectionCard>
     </div>
@@ -223,7 +224,7 @@ function ChannelPanel({ channels }: { channels: AdminGenerationChannel[] }) {
       const state = !channel.enabled ? '已停用' : channel.runtimeHealth.status === 'cooling' ? '冷却中' : channel.runtimeHealth.consecutiveFailures > 0 ? '存在失败' : '未处于冷却'
       return <div key={`${channel.id}-${channel.logicalModelId}-${index}`} className="py-3 first:pt-0 last:pb-0">
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-medium" title={channel.name}>{channel.name || channel.id}</p><p className="mt-1 truncate text-xs text-muted-foreground">{labelOf(capabilityLabels, channel.capability)} · {channel.logicalModelName || channel.upstreamModel}</p></div><StatusBadge tone={!channel.enabled ? 'muted' : channelNeedsAttention(channel) ? 'warning' : 'neutral'}>{state}</StatusBadge></div>
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{attempts ? `文本规划尝试成功 ${runtime?.successCount} / ${attempts} · 平均耗时 ${formatAdminDuration(runtime?.averageLatencyMs)}` : '暂无文本规划尝试计数'}{channel.runtimeHealth.consecutiveFailures > 0 ? ` · 连续失败 ${channel.runtimeHealth.consecutiveFailures} 次` : ''}</p>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{attempts ? `渠道调用成功 ${runtime?.successCount} / ${attempts} · 平均耗时 ${formatAdminDuration(runtime?.averageLatencyMs)}` : '暂无渠道调用计数'}{channel.runtimeHealth.consecutiveFailures > 0 ? ` · 连续失败 ${channel.runtimeHealth.consecutiveFailures} 次` : ''}</p>
       </div>
     })}</div> : <AdminEmpty title="暂无模型渠道绑定" description="配置模型与渠道后可在此查看运行状态。" />}
   </AdminSectionCard>

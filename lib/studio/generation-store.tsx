@@ -151,10 +151,10 @@ export type GenerationContextValue = {
   createVideo: (input: VideoGenerationInput) => Promise<GenerationTaskView>
   createAudio: (input: AudioGenerationInput) => Promise<GenerationTaskView>
   createText: (input: TextGenerationInput) => Promise<GenerationTaskView>
-  runAgent: (input: { prompt: string; surface: 'chat' | 'canvas' | 'drama'; projectId?: string; assetIds?: string[]; clientRequestId?: string }) => Promise<AgentRun>
+  runAgent: (input: { prompt: string; surface: 'chat' | 'canvas' | 'drama'; projectId?: string; assetIds?: string[]; skillIds?: string[]; clientRequestId?: string }) => Promise<AgentRun>
   getAgent: (id: string) => Promise<AgentRun>
-  cancelAgent: (run: AgentRun, action: 'pause' | 'resume' | 'retry' | 'cancel') => Promise<AgentRun>
-  cancelTask: (task: GenerationTaskView) => Promise<void>
+  cancelAgent: (run: Pick<AgentRun, 'id'>, action: 'pause' | 'resume' | 'retry' | 'cancel' | 'approve') => Promise<AgentRun>
+  cancelTask: (task: GenerationTaskView) => Promise<GenerationTaskView>
   retryTask: (task: GenerationTaskView) => Promise<void>
   recoverTask: (task: GenerationTaskView) => Promise<void>
   retryAgentTask: (runId: string, taskId: string) => Promise<void>
@@ -246,6 +246,21 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
    */
   const userIdRef = useRef(userId)
   userIdRef.current = userId
+  const agentAccountVersions = useRef(new Map<string, string>())
+  const syncAgentAccount = useCallback((run: AgentRun) => {
+    const epoch = sessionEpochRef.current
+    const owner = userIdRef.current
+    if (!owner) return
+    const key = `${owner}:${run.id}`
+    const version = `${run.status}:${run.pointsCost ?? ''}`
+    if (agentAccountVersions.current.get(key) === version) return
+    agentAccountVersions.current.set(key, version)
+    if (agentAccountVersions.current.size > 500) agentAccountVersions.current.delete(agentAccountVersions.current.keys().next().value!)
+    bumpAccountData()
+    void refreshSession().then(result => {
+      if (result.status !== 'connected' && epoch === sessionEpochRef.current && owner === userIdRef.current && agentAccountVersions.current.get(key) === version) agentAccountVersions.current.delete(key)
+    })
+  }, [refreshSession])
 
   const [localTasks, setLocalTasks] = useState<LocalTask[]>([])
   const [tasks, setTasks] = useState<GenerationTaskView[]>([])
@@ -327,6 +342,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   // 账号切换：重载该账号的缓存与未确认提交，并废弃上一个账号的在途结果。
   useEffect(() => {
     sessionEpochRef.current += 1
+    agentAccountVersions.current.clear()
     /**
      * 通知账户数据 hooks：账户已变，在途响应一律作废并重新读取。
      * 只清空本组件状态是不够的——作品/历史/流水等 hooks 各自持有在途请求，
@@ -691,8 +707,14 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       queryFailuresRef.current.delete(task.id)
       nextPollAtRef.current.delete(task.id)
       indeterminateRef.current.delete(task.id)
-      setTasks((current) => current.map((item) => item.id === task.id ? { ...item, ...toView(task.kind, response.data.task, item) } : item))
-      setLastNotice('任务已取消，上游已产生的素材不会被删除。')
+      const updated = toView(task.kind, response.data.task, task)
+      setTasks((current) => current.map((item) => item.id === task.id ? { ...item, ...updated } : item))
+      setLastNotice(updated.status === 'cancelled'
+        ? '任务已确认取消，上游已产生的素材不会被删除。'
+        : ['pending', 'running', 'paused'].includes(updated.status)
+          ? '取消请求已发送，正在等待服务端确认；任务仍可能执行和计费，请继续检查状态。'
+          : '任务已结束，请按服务端最终状态核对结果和积分。')
+      return updated
     } catch (reason) {
       if (stillCurrent()) setLastError(toError(reason, task.id))
       throw reason
@@ -821,7 +843,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
    * Agent 响应同样带积分（账号级）并会驱动界面；迟到时必须丢弃，
    * 且 `finally` 里的 `setRunning(false)` 也不能动新账号的按钮状态。
    */
-  const runAgent = useCallback(async (input: { prompt: string; surface: 'chat' | 'canvas' | 'drama'; projectId?: string; assetIds?: string[]; clientRequestId?: string }) => {
+  const runAgent = useCallback(async (input: { prompt: string; surface: 'chat' | 'canvas' | 'drama'; projectId?: string; assetIds?: string[]; skillIds?: string[]; clientRequestId?: string }) => {
     const epoch = sessionEpochRef.current
     const ownerUserId = userIdRef.current
     const stillCurrent = () => epoch === sessionEpochRef.current && ownerUserId === userIdRef.current
@@ -831,6 +853,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       if (!stillCurrent()) throw new StudioApiError('账号已切换，本次 Agent 请求结果已忽略', 409, { outcome: 'rejected' })
       applyPoints(response.points)
       setLocalOnly(false)
+      syncAgentAccount(response.data.run)
       return response.data.run
     } catch (reason) {
       const error = toError(reason)
@@ -842,27 +865,32 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
     } finally {
       if (stillCurrent()) setRunning(false)
     }
-  }, [applyPoints])
+  }, [applyPoints, syncAgentAccount])
 
   const getAgent = useCallback(async (id: string) => {
+    const epoch = sessionEpochRef.current, owner = userIdRef.current
     const response = await getAgentRun(id)
+    if (epoch !== sessionEpochRef.current || owner !== userIdRef.current) throw new StudioApiError('账号已切换，本次运行状态已忽略', 409, { outcome: 'rejected' })
+    syncAgentAccount(response.data.run)
     return response.data.run
-  }, [])
+  }, [syncAgentAccount])
 
   /** Agent 控制（暂停/继续/重试/取消）：迟到响应不得写入新账号的错误状态。 */
-  const cancelAgent = useCallback(async (run: AgentRun, action: 'pause' | 'resume' | 'retry' | 'cancel') => {
+  const cancelAgent = useCallback(async (run: Pick<AgentRun, 'id'>, action: 'pause' | 'resume' | 'retry' | 'cancel' | 'approve') => {
     const epoch = sessionEpochRef.current
     const ownerUserId = userIdRef.current
     const stillCurrent = () => epoch === sessionEpochRef.current && ownerUserId === userIdRef.current
     setLastError(null)
     try {
       const response = await (await import('./generation-api')).controlAgentRun(run.id, action)
+      if (!stillCurrent()) throw new StudioApiError('账号已切换，本次运行状态已忽略', 409, { outcome: 'rejected' })
+      syncAgentAccount(response.data.run)
       return response.data.run
     } catch (reason) {
       if (stillCurrent()) setLastError(toError(reason, run.id))
       throw reason
     }
-  }, [])
+  }, [syncAgentAccount])
 
   /** Agent 子任务重试：同上。 */
   const retryAgentTask = useCallback(async (runId: string, taskId: string) => {

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { ASSET_DRAG_TYPE, categoryOf, referenceOf } from './asset-reference'
 import { errorMessageOf } from './use-generation-actions'
 
-type TabId = 'all' | 'character' | 'scene' | 'prop' | 'style' | 'image' | 'video' | 'upload' | 'favorite' | 'skill'
+type TabId = 'all' | 'character' | 'scene' | 'prop' | 'style' | 'image' | 'video' | 'upload' | 'favorite'
 
 const TABS: { id: TabId; label: string; match: (asset: LibraryAssetView) => boolean }[] = [
   { id: 'all', label: '全部', match: () => true },
@@ -21,7 +21,6 @@ const TABS: { id: TabId; label: string; match: (asset: LibraryAssetView) => bool
   { id: 'video', label: '参考视频', match: (asset) => asset.kind === 'video' },
   { id: 'upload', label: '用户上传文件', match: (asset) => asset.source === 'user-upload' },
   { id: 'favorite', label: '生成结果收藏', match: (asset) => asset.tags.includes('收藏') },
-  { id: 'skill', label: '技能', match: (asset) => asset.kind === 'text' },
 ]
 
 type CanvasAssetLibraryProps = {
@@ -36,7 +35,7 @@ export function CanvasAssetLibrary({ targetNodeId, onPick, onClose }: CanvasAsse
   const [notice, setNotice] = useState<string | null>(null)
   const library = useLibraryAssets({ pageSize: 60 })
   const activeTab = TABS.find((item) => item.id === tab) ?? TABS[0]
-  const visible = library.assets.filter(activeTab.match)
+  const visible = library.assets.filter((asset) => asset.kind !== 'text' && activeTab.match(asset))
 
   const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? [])

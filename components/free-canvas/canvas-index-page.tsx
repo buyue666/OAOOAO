@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { deleteCanvasProjects, type CanvasSummary } from '@/lib/studio/api'
 import { createFreeCanvas, renameFreeCanvas } from './canvas-persistence'
 import { errorMessageOf } from './use-generation-actions'
@@ -33,6 +33,10 @@ export function CanvasIndexPage({ projects, loadError }: { projects: CanvasSumma
   return (
     <main className="h-full min-h-0 overflow-y-auto bg-black text-white">
       <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
+        <nav aria-label="画布导航" className="flex items-center gap-5 text-sm text-neutral-300">
+          <Link href="/studio" className="inline-flex items-center gap-2 rounded-lg hover:text-white"><ArrowLeft className="size-4" aria-hidden="true" />返回创作首页</Link>
+          <Link href="/projects" className="rounded-lg hover:text-white">我的项目</Link>
+        </nav>
         <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <p className="text-[11px] tracking-[0.2em] text-neutral-500 uppercase">自由画布</p>

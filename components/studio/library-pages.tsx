@@ -54,10 +54,12 @@ import {
   type LibraryAssetView,
   type StudioWork,
 } from '@/lib/studio/account-api'
-import { useLibraryAssets, useServerHistory, useServerWorks } from '@/lib/studio/use-account-data'
+import { useServerHistory, useServerWorks } from '@/lib/studio/use-account-data'
+import { useMediaLibrary } from '@/lib/studio/use-media-library'
 import { bumpAccountData } from '@/lib/studio/account-data-sync'
 import { addMediaToProject, removeMediaFromProject } from '@/lib/studio/project-media'
 import { cn } from '@/lib/utils'
+import { writeReuseParams } from '@/lib/studio/reuse-params'
 import type { AssetCategory, AssetKind, Asset, Task, TaskStatus } from '@/lib/studio/types'
 import { assetCategoryLabels, assetCategoryOf } from '@/lib/studio/reference-assets'
 
@@ -97,7 +99,7 @@ function libraryAssetToAsset(record: LibraryAssetView): Asset {
     poster: record.kind === 'video' ? record.coverUrl : undefined,
     fallback: record.coverUrl ?? src,
     dimensions: data.width && data.height ? `${data.width}×${data.height}` : undefined,
-    tags: record.tags?.length ? record.tags : ['上传'],
+    tags: record.tags?.length ? record.tags : [record.source === 'agent' ? 'Agent 生成' : '素材'],
     size: bytes ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : '',
     status: '可用',
     projectIds: [],
@@ -150,16 +152,16 @@ export function AssetsPage() {
    * 「已记录 N 个待上传文件，演示版不会发送到外部存储。」，什么都不落库。
    */
   const serverWorks = useServerWorks({ pageSize: 50 })
-  const serverLibrary = useLibraryAssets({ pageSize: 60 })
+  const serverLibrary = useMediaLibrary()
   const serverAssets = useMemo(() => serverWorks.works.map(workToAsset), [serverWorks.works])
   const libraryAssets = useMemo(() => serverLibrary.assets.map(libraryAssetToAsset), [serverLibrary.assets])
   // 服务端结果优先：后端已经有的结果不再显示重复的本地副本。
   const mergedAssets = useMemo(() => {
     if (state.backendStatus !== 'connected') return state.assets
     const seen = new Set<string>()
-    const dedupe = (asset: Asset) => (seen.has(asset.src) ? false : (seen.add(asset.src), true))
+    const dedupe = (asset: Asset) => { const key = asset.src || `id:${asset.id}`; return seen.has(key) ? false : (seen.add(key), true) }
     return [...libraryAssets, ...serverAssets].filter(dedupe)
-  }, [libraryAssets, serverAssets, state.backendStatus])
+  }, [libraryAssets, serverAssets, state.backendStatus, state.assets])
   const visible = useMemo(() => mergedAssets.filter((asset) => {
     const definition = assetFilters.find((item) => item.value === filter)
     const categoryMatch = definition?.kind === 'character' || definition?.kind === 'scene'
@@ -317,9 +319,10 @@ export function AssetsPage() {
       <PageHeader
         eyebrow="资源库"
         title="素材"
-        description="图片、视频、音频、角色和场景共享同一组资产 ID。"
+        description="管理图片、视频与音频素材；文本技能请前往技能库。"
         actions={(
           <>
+            <Link href="/skills" className="inline-flex h-9 items-center px-3 text-sm text-muted-foreground underline">技能库</Link>
             <input ref={fileRef} type="file" multiple className="sr-only" onChange={onFiles} disabled={uploading} />
             <ControlButton variant="secondary" disabled={uploading} onClick={() => fileRef.current?.click()}><Upload className="size-4" />{uploading ? '上传中…' : '上传素材'}</ControlButton>
             {selected.length > 0 && <ControlButton variant="primary" disabled={projectBusy} onClick={() => void addToProject()}><FolderPlus className="size-4" />{projectBusy ? '处理中…' : `加入项目（${selected.length}）`}</ControlButton>}
@@ -345,22 +348,28 @@ export function AssetsPage() {
         于是素材库接口失败时页面只剩"生成结果"，
         用户会以为"素材都没了"——把失败伪装成了空数据。
       */}
-      {serverLibrary.state === 'error' && (
+      {(serverLibrary.state === 'error' || serverLibrary.message) && (
         <Notice tone="warning">
           <span className="min-w-0 flex-1">素材库读取失败：{serverLibrary.message || '请稍后重试'}。下方仅显示已获取到的内容。</span>
           <button type="button" onClick={() => void serverLibrary.reload()} className="shrink-0 text-[11px] underline">重试</button>
         </Notice>
       )}
+      {serverWorks.message && <Notice tone="warning">生成结果读取失败：{serverWorks.message}。下方仅显示已获取到的内容。</Notice>}
+      {serverWorks.truncated && <Notice tone="neutral">生成结果较多，当前仅载入最近一批。</Notice>}
+      <p className="text-xs leading-5 text-muted-foreground" aria-live="polite">
+        当前筛选显示 {visible.length} 项。已载入素材库媒体 {libraryAssets.length} 项{serverLibrary.totalKnown ? ` / 共 ${serverLibrary.total} 项` : '（总数尚未确认）'}，生成结果 {serverAssets.length} 项；重复地址合并显示。
+        {(serverLibrary.hasMore || serverWorks.truncated) && '搜索与筛选仅针对已载入内容。'}
+      </p>
       {/* 首次读取素材库时给出加载反馈（此前完全没有提示，页面看起来像"已经空了"）。 */}
       {serverLibrary.state === 'loading' && serverLibrary.assets.length === 0 && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
           <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />正在读取素材库…
         </p>
       )}
-      {visible.length === 0 ? (
+      {visible.length === 0 && (serverLibrary.state === 'loading' || serverWorks.state === 'loading') ? null : visible.length === 0 ? (
         <EmptyState
           title={serverLibrary.state === 'error' ? '素材库暂时无法读取' : '没有找到素材'}
-          description={serverLibrary.state === 'error' ? '当前无法读取素材库，请稍后重试。' : '上传一个文件或更换当前筛选条件。'}
+          description={serverLibrary.state === 'error' ? '当前无法读取素材库，请稍后重试。' : serverLibrary.hasMore ? '已载入内容中没有匹配素材，可继续加载更多或更换筛选条件。' : '上传一个文件或更换当前筛选条件；文本技能在技能库管理。'}
           action={<ControlButton variant="primary" onClick={() => fileRef.current?.click()}><Upload className="size-3.5" />上传素材</ControlButton>}
         />
       ) : view === 'grid' ? (
@@ -381,6 +390,7 @@ export function AssetsPage() {
           ))}
         </div>
       )}
+      {serverLibrary.hasMore && <div className="flex justify-center"><ControlButton variant="secondary" onClick={() => void serverLibrary.loadMore()} disabled={serverLibrary.loadingMore || serverLibrary.state === 'loading'}>{serverLibrary.loadingMore ? '正在加载…' : '加载更多素材'}</ControlButton></div>}
       <Modal
         open={Boolean(deleteId)}
         onClose={() => setDeleteId(null)}
@@ -577,6 +587,7 @@ export function TasksPage() {
 function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
   const router = useRouter()
   const { state } = useStudio()
+  const [reuseError, setReuseError] = useState('')
   const meta = item.status === 'success' ? { label: '已完成', tone: 'success' as const } : item.status === 'error' || item.status === 'failed' ? { label: '失败', tone: 'warning' as const } : item.status === 'cancelled' ? { label: '已取消', tone: 'muted' as const } : { label: item.status || '未知', tone: 'accent' as const }
   const kindLabel = item.kind === 'video' ? '视频' : item.kind === 'audio' ? '音频' : item.kind === 'text' ? '文本' : '图片'
   const firstAsset = item.assets[0]
@@ -593,11 +604,15 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
   }
 
   /** 复用参数：把历史记录带回对应工作台。 */
-  function reuse() {
+  function reuse(event: React.MouseEvent<HTMLAnchorElement>) {
     try {
-      window.localStorage.setItem('oaooao-reuse-params', JSON.stringify({ kind: item.kind, prompt: item.prompt, model: item.model, taskId: item.taskId ?? item.id, createdAt: Date.now() }))
-    } catch {
-      // 存储不可用时仍可跳转工作台。
+      if (state.backendStatus !== 'connected') throw new Error('请登录后复用参数。')
+      if (item.kind !== 'image' && item.kind !== 'video') throw new Error('目前只支持复用图片或视频参数。')
+      writeReuseParams(window.sessionStorage, state.user.id, { kind: item.kind, prompt: item.prompt, model: item.model, taskId: item.taskId ?? item.id })
+      setReuseError('')
+    } catch (reason) {
+      event.preventDefault()
+      setReuseError(reason instanceof Error ? reason.message : '参数暂时无法带入工作台，请重试。')
     }
   }
 
@@ -620,9 +635,10 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
         </div>
       )}
       {item.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] leading-5 text-destructive" role="alert">失败原因：{item.error}</p>}
+      {reuseError && <p role="alert" className="text-xs text-destructive">{reuseError}</p>}
       <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
         {firstAsset?.url && <ControlButton variant="ghost" size="sm" onClick={download}><Download className="size-3.5" />下载结果</ControlButton>}
-        <Link href={item.kind === 'video' ? '/video' : item.kind === 'audio' ? '/image' : '/image'} onClick={reuse} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link>
+        {(item.kind === 'image' || item.kind === 'video') && (item.prompt || item.model) && <Link href={item.kind === 'video' ? '/video' : '/image'} onClick={reuse} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link>}
         <ControlButton variant="ghost" size="sm" onClick={() => router.push('/works')}>在我的作品中查看</ControlButton>
         {state.backendStatus !== 'connected' && <span className="text-[11px] text-muted-foreground">登录后可继续操作</span>}
       </div>

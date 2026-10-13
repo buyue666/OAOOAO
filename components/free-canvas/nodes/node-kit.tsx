@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -39,15 +39,15 @@ const MENU_ORIGIN: Record<NodeSide, string> = {
   left: 'top right',
 }
 
-const HANDLE_STYLE: CSSProperties = { width: 10, height: 10, background: '#fafafa', border: '2px solid #050505' }
+const HANDLE_STYLE: CSSProperties = { width: 12, height: 12, background: '#cbd0d8', border: '3px solid #15171b', zIndex: 10 }
 
 export function NodeHandles() {
   return (
     <>
-      <Handle type="target" position={Position.Left} id={HANDLE_IDS.inLeft} className="opacity-40 transition-opacity group-hover:opacity-100" style={HANDLE_STYLE} />
-      <Handle type="target" position={Position.Top} id={HANDLE_IDS.inTop} className="opacity-40 transition-opacity group-hover:opacity-100" style={HANDLE_STYLE} />
-      <Handle type="source" position={Position.Right} id={HANDLE_IDS.outRight} className="opacity-40 transition-opacity group-hover:opacity-100" style={HANDLE_STYLE} />
-      <Handle type="source" position={Position.Bottom} id={HANDLE_IDS.outBottom} className="opacity-40 transition-opacity group-hover:opacity-100" style={HANDLE_STYLE} />
+      <Handle type="target" position={Position.Left} id={HANDLE_IDS.inLeft} title="输入连接" aria-label="左侧输入连接" className="opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" style={HANDLE_STYLE} />
+      <Handle type="target" position={Position.Top} id={HANDLE_IDS.inTop} title="输入连接" aria-label="上方输入连接" className="opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" style={HANDLE_STYLE} />
+      <Handle type="source" position={Position.Right} id={HANDLE_IDS.outRight} title="拖动连接到下游节点" aria-label="右侧输出连接" className="opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" style={HANDLE_STYLE} />
+      <Handle type="source" position={Position.Bottom} id={HANDLE_IDS.outBottom} title="拖动连接到下游节点" aria-label="下方输出连接" className="opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" style={HANDLE_STYLE} />
     </>
   )
 }
@@ -88,7 +88,7 @@ function NodeAnchor({ nodeId, side }: { nodeId: string; side: NodeSide }) {
           'absolute flex size-6 items-center justify-center rounded-full border border-white/30 bg-neutral-950 text-white transition-opacity duration-150 hover:bg-white hover:text-black focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
           open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-data-[selected=true]:opacity-100',
         )}
-        style={{ left: -12, top: -12, transform: COUNTER_SCALE }}
+        style={{ left: side === 'right' ? 14 : side === 'left' ? -38 : -12, top: side === 'bottom' ? 14 : side === 'top' ? -38 : -12, transform: COUNTER_SCALE }}
       >
         <Plus className="size-3.5" aria-hidden="true" />
       </button>
@@ -98,14 +98,26 @@ function NodeAnchor({ nodeId, side }: { nodeId: string; side: NodeSide }) {
 }
 
 function NodeTypeMenu({ side, onPick }: { side: NodeSide; onPick: (kind: CreatableKind) => void }) {
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => { root.current?.querySelector<HTMLButtonElement>('button')?.focus() }, [])
   return (
     <div
+      ref={root}
       role="menu"
       aria-label="选择节点类型"
       className="nowheel nodrag rounded-2xl border border-white/15 bg-neutral-950 p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.7)]"
       style={{ position: 'absolute', width: MENU_WIDTH, transform: COUNTER_SCALE, transformOrigin: MENU_ORIGIN[side], ...MENU_POSITION[side] }}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') { event.stopPropagation(); useCanvasStore.getState().openTypeMenu(null); return }
+        if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
+        event.preventDefault()
+        const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'))
+        const current = items.indexOf(document.activeElement as HTMLButtonElement)
+        const index = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+        items[index]?.focus()
+      }}
     >
       {CREATABLE_KINDS.map((kind) => {
         const meta = NODE_META[kind]
@@ -147,6 +159,7 @@ export function TitleEditor({ nodeId, title, className }: { nodeId: string; titl
           setDraft(title)
           setEditing(true)
         }}
+        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); setDraft(title); setEditing(true) } }}
         className={cn('min-w-0 truncate text-left text-sm font-medium text-white', className)}
       >
         {title}
