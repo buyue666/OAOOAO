@@ -18,7 +18,7 @@ this limitation. Native SWC/libvips linked-dependency coverage also needs separa
 This inventory is not a certification of every OS-specific binary, external
 FFmpeg/codec distribution, project asset, or user-uploaded material.
 
-pnpm-lock.yaml SHA-256: 2d93f8cba94f6c8acc1fd83b6d936e1fd0b6d1ad52c55a63739bb319ea9f5f8b
+pnpm-lock.yaml SHA-256: 9a784ef2b25978dfba8b7a8fd8c226449d64dd1972a34e27103e2056705c467a
 
 ========================================================================
 @alloc/quick-lru@5.2.0
