@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { ArrowUpRight, Mail } from 'lucide-react'
+import GithubOutlined from '@ant-design/icons/lib/icons/GithubOutlined'
 import { useStudio } from '@/lib/studio/store'
 import { useLocale } from '@/lib/studio/i18n'
 import { resolveSiteBrand, type SiteBrandInput } from '@/lib/studio/site-brand'
-import { DEFAULT_FOOTER_DESCRIPTION, normalizeSiteFooter, safeFooterHref, type SiteFooterSettings } from '@/lib/studio/site-footer'
+import { DEFAULT_FOOTER_DESCRIPTION, SITE_SOURCE_LICENSE, SITE_SOURCE_REPOSITORY, normalizeSiteFooter, safeFooterHref, type SiteFooterSettings } from '@/lib/studio/site-footer'
 import { SiteBrand } from './site-brand'
 import styles from './site-footer.module.css'
 
@@ -27,13 +28,15 @@ export function SiteFooter({ placement = 'landing', site, preview = false }: { p
         <FooterLink href="/" preview={preview}><SiteBrand site={current} tone={placement === 'landing' ? 'light' : 'theme'} imageClassName="h-8 max-w-[180px]" /></FooterLink>
         <span className={styles.brandName}>{brand.title}</span>
         {description && <p>{description}</p>}
-        <p className={styles.copyright}>© {new Date().getFullYear()} {footer.copyrightHolder || brand.title}<br />{english ? 'All rights reserved.' : '保留所有权利。'}</p>
+        <p className={styles.copyright}>© {new Date().getFullYear()} {footer.copyrightHolder || brand.title}</p>
         {footer.registrationLabel && <p className={styles.registration}>{footer.registrationUrl ? <FooterLink href={footer.registrationUrl} preview={preview}>{footer.registrationLabel}</FooterLink> : footer.registrationLabel}</p>}
       </div>
       {footer.productLinks.length > 0 && <FooterColumn title={english ? 'Create with us' : '产品与创作'}>{footer.productLinks.map((item, index) => <li key={`${index}:${item.url}`}><FooterLink href={item.url} preview={preview}>{item.label}</FooterLink></li>)}</FooterColumn>}
       <FooterColumn title={english ? 'Platform policies' : '平台协议'}>
         <li><FooterLink href={safeFooterHref(current?.termsUrl) || '/terms'} preview={preview}>{english ? 'Terms of service' : '服务条款'}</FooterLink></li>
         <li><FooterLink href={safeFooterHref(current?.privacyUrl) || '/privacy'} preview={preview}>{english ? 'Privacy policy' : '隐私政策'}</FooterLink></li>
+        <li><FooterLink href={SITE_SOURCE_REPOSITORY} preview={preview}><GithubOutlined style={{ fontSize: 14 }} aria-hidden="true" />{english ? 'Source on GitHub' : 'GitHub 开源仓库'}</FooterLink></li>
+        <li><FooterLink href={SITE_SOURCE_LICENSE} preview={preview}>{english ? 'AGPL-3.0 license' : 'AGPL-3.0 许可证'}</FooterLink></li>
       </FooterColumn>
       {(footer.contactEmail || footer.contactUrl || footer.socialLinks.length > 0) && <FooterColumn title={english ? 'Contact us' : '联系我们'}>
         {footer.contactEmail && <li><FooterLink href={`mailto:${encodeURIComponent(footer.contactEmail)}`} preview={preview}><Mail size={14} aria-hidden="true" />{footer.contactEmail}</FooterLink></li>}

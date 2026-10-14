@@ -14,6 +14,9 @@ export type SiteFooterSettings = {
 }
 
 export const DEFAULT_FOOTER_DESCRIPTION = '把想法变成画面、镜头与故事。为下一次灵感，留一片自由的空间。'
+// Source access belongs to the published application, not editable marketing links.
+export const SITE_SOURCE_REPOSITORY = 'https://github.com/buyue666/OAOOAO'
+export const SITE_SOURCE_LICENSE = `${SITE_SOURCE_REPOSITORY}/blob/main/LICENSE`
 export const DEFAULT_FOOTER_PRODUCTS: SiteFooterLink[] = [
   { label: '图片生成', url: '/image' }, { label: '视频生成', url: '/video' },
   { label: '自由画布', url: '/canvas' }, { label: '创作助手', url: '/agent' },

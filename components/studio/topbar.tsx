@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { AnnouncementList, useAnnouncements } from '@/components/site-announcements'
 import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
 import { useCheckIn } from '@/lib/studio/use-check-in'
+import { checkInDisplay } from '@/lib/studio/check-in-rules'
 import { AccountWatermarkMenuItem } from './account-watermark'
 
 const creditChipClass = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)]'
@@ -44,6 +45,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { unread: notificationCount } = useAnnouncements()
   const creditsLabel = `${state.credits.toLocaleString()} 积分`
   const checkIn = useCheckIn({ accountId: state.user.id, connected: isConnected, active: accountOpen, refreshSession })
+  const checkInDetails = checkIn.status ? checkInDisplay(checkIn.status) : null
   function capturePlansDestination(event: React.MouseEvent<HTMLAnchorElement>) {
     const returnTo = safeReturnPath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
     const destination = event.currentTarget.dataset?.storefront === 'plans' ? '/plans' : '/credits'
@@ -158,16 +160,17 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             </button>
           </Tooltip>
           {isConnected && (
-            <div hidden={!accountOpen} role="menu" aria-label="账户菜单" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-72 max-w-[calc(100vw-24px)] rounded-xl border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]">
+            <div hidden={!accountOpen} role="menu" aria-label="账户菜单" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 max-h-[calc(100dvh-5rem)] w-72 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-xl border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]">
               <div className="border-b border-border px-2.5 pb-2.5 pt-1.5">
                 <p className="truncate text-sm font-semibold text-foreground">{state.user.name}</p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{state.user.email || '未设置邮箱'}</p>
                 <p className="mt-1.5 text-xs font-medium text-studio-accent">{creditsLabel} · {state.user.plan}</p>
                 <div className="mt-3 rounded-lg border border-studio-accent/20 bg-studio-accent/5 p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <div><p className="flex items-center gap-1 text-xs font-semibold"><CalendarCheck className="size-3.5" aria-hidden="true" />每日签到</p><p className="mt-1 text-[11px] text-muted-foreground">{checkIn.status?.claimed ? '今日已领取' : checkIn.status?.enabled ? `可领 ${checkIn.status.rewardPoints.toLocaleString('zh-CN')} 积分` : checkIn.loading ? '正在读取…' : checkIn.status ? '签到暂未开放' : '查看今日签到状态'}</p></div>
+                    <div className="min-w-0"><p className="flex items-center gap-1 text-xs font-semibold"><CalendarCheck className="size-3.5" aria-hidden="true" />每日签到</p><p className="mt-1 text-[11px] text-muted-foreground">{checkInDetails?.title ?? (checkIn.loading ? '正在读取…' : '查看今日签到状态')}</p></div>
                     <button type="button" role="menuitem" onClick={() => void (checkIn.status ? checkIn.claim() : checkIn.refresh())} disabled={checkIn.loading || checkIn.claiming || Boolean(checkIn.status && (!checkIn.status.enabled || checkIn.status.claimed))} className="rounded-md bg-studio-accent px-3 py-1.5 text-xs font-semibold text-studio-accent-foreground transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-60">{checkIn.claiming ? '领取中…' : checkIn.loading ? '读取中…' : checkIn.status?.claimed ? '已签到' : checkIn.status?.enabled ? '签到领取' : checkIn.status ? '未开放' : '重新读取'}</button>
                   </div>
+                  {checkInDetails && (checkIn.status?.enabled || checkIn.status?.claimed) && <div className="mt-2 space-y-1 border-t border-studio-accent/15 pt-2 text-[11px] leading-4 text-muted-foreground"><p>{checkInDetails.rule}</p><p>{checkInDetails.validity}</p></div>}
                   {checkIn.status && <p className="mt-1.5 text-[10px] text-muted-foreground">{checkIn.status.date} · 按北京时间每日一次</p>}
                   {checkIn.error && <p role="status" className="mt-1.5 text-[11px] leading-4 text-destructive">{checkIn.error}</p>}
                 </div>

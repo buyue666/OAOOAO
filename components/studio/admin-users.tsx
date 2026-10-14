@@ -12,6 +12,7 @@ import {
 } from '@/lib/studio/admin-api'
 import { ADMIN_PERMISSIONS, type AdminPermission, type AdminUser, type AdminUserListPayload, type AdminUserUpdateInput, type AdminUserSummary, type BillingOrder, type AdminGenerationTask } from '@/lib/studio/admin-types'
 import type { Paged } from '@/lib/studio/admin-api'
+import { formatPointsExpiry } from '@/lib/studio/check-in-rules'
 import { ControlButton, StatusBadge } from './ui'
 import {
   AdminCell,
@@ -146,6 +147,7 @@ export function AdminUsersPanel() {
                 <AdminCell>
                   <p className="font-medium">{formatAdminNumber(user.pointsBalance)}</p>
                   {Boolean(user.dailyPointsBalance) && <p className="mt-1 text-[11px] text-muted-foreground">含每日 {formatAdminNumber(user.dailyPointsBalance)}</p>}
+                  {Boolean(user.timedPointsBalance) && <p className="mt-1 text-[11px] text-muted-foreground">含限时 {formatAdminNumber(user.timedPointsBalance)}</p>}
                 </AdminCell>
                 <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(user.lastLoginAt)}</AdminCell>
                 <AdminCell>
@@ -233,7 +235,10 @@ function UserDetailDrawer({ user, canManage, onClose, onEdit }: { user: AdminUse
               <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(user.status)}>{user.status === 'disabled' ? '已禁用' : '正常'}</StatusBadge>} />
               <AdminDefinition label="套餐" value={user.planName || user.planId || '免费用户'} />
               <AdminDefinition label="积分余额" value={formatAdminNumber(user.pointsBalance)} />
+              <AdminDefinition label="其中永久积分" value={formatAdminNumber(user.permanentPointsBalance)} />
               <AdminDefinition label="其中每日积分" value={formatAdminNumber(user.dailyPointsBalance)} />
+              <AdminDefinition label="其中限时积分" value={formatAdminNumber(user.timedPointsBalance)} />
+              <AdminDefinition label="限时积分最近到期（北京时间）" value={formatPointsExpiry(user.timedPointsExpiresAt) ?? '—'} />
               <AdminDefinition label="注册时间" value={formatAdminDate(user.createdAt)} />
               <AdminDefinition label="最近登录" value={formatAdminDate(user.lastLoginAt)} />
               <AdminDefinition label="两步验证" value={user.mfaEnabled ? '已开启' : '未开启'} />
@@ -329,7 +334,7 @@ function UserEditor({ user, canGrant, onClose, onSaved }: { user?: AdminUser; ca
       }
       if (pointsText) {
         const points = Number(pointsText)
-        if (!Number.isFinite(points) || points < 0) throw new Error('积分余额必须是不小于 0 的数字')
+        if (!Number.isFinite(points) || points < 0) throw new Error('永久积分余额必须是不小于 0 的数字')
         patch.pointsBalance = points
       }
       const password = value('password')
@@ -368,7 +373,7 @@ function UserEditor({ user, canGrant, onClose, onSaved }: { user?: AdminUser; ca
           <AdminField label="账户状态">
             <AdminSelect name="status" defaultValue={user?.status === 'disabled' ? 'disabled' : 'active'}><option value="active">正常</option><option value="disabled">已禁用</option></AdminSelect>
           </AdminField>
-          <AdminField label="积分余额" hint="直接设为该数值，不是增量。"><AdminInput name="pointsBalance" type="number" min="0" step="1" placeholder={user ? String(user.pointsBalance) : '0'} /></AdminField>
+          <AdminField label="永久积分余额" hint="留空不修改。填写后将永久积分设为该数值，不是增量；不影响每日额度和限时积分。"><AdminInput name="pointsBalance" type="number" min="0" step="1" placeholder={user ? user.permanentPointsBalance == null ? '永久余额未返回' : String(user.permanentPointsBalance) : '0'} /></AdminField>
           <AdminField label="套餐" hint="套餐决定每日积分与调用上限；方案在系统设置中维护。">
             <AdminSelect name="planId" defaultValue={user?.planId || 'free'}>
               {!plans.some((plan) => plan.id === (user?.planId || 'free')) && user?.planId && <option value={user.planId}>{user.planName || user.planId}</option>}

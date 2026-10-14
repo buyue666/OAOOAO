@@ -27,6 +27,8 @@ import { addMediaToProject } from '@/lib/studio/project-media'
 import { MediaDownloadButton } from './media-download-button'
 import { writeReuseParams } from '@/lib/studio/reuse-params'
 import { writeWorkHandoff } from '@/lib/studio/work-handoff'
+import { formatPointsExpiry } from '@/lib/studio/check-in-rules'
+import { pointRecordBreakdown } from '@/lib/studio/ledger'
 
 /* ------------------------------- 我的作品 ------------------------------- */
 
@@ -330,7 +332,7 @@ export function AccountPage() {
         </nav>
         <section className="min-w-0">
           {tab === 'profile' && <ProfilePanel state={state} onNotice={setNotice} />}
-          {tab === 'credits' && <CreditsPanel state={state} rechargeEnabled={rechargeEnabled} />}
+          {tab === 'credits' && <CreditsPanel key={state.user.id} state={state} rechargeEnabled={rechargeEnabled} />}
           {tab === 'orders' && <OrdersPanel />}
           {tab === 'invite' && <InvitePanel onNotice={setNotice} />}
           {notice && <Notice tone="accent"><Check className="mt-0.5 size-3.5 shrink-0" />{notice}</Notice>}
@@ -517,6 +519,8 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
   const display = (value: number) => loadState === 'loading' ? '…' : loadState === 'ready' ? value.toLocaleString() : '—'
   const [monthYear, monthNumber] = monthKey.split('-')
   const monthLabel = `${monthYear} 年 ${Number(monthNumber)} 月`
+  const bucketDisplay = (value: number | undefined) => connected && typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('zh-CN') : '—'
+  const timedExpiry = connected ? formatPointsExpiry(state.user.timedPointsExpiresAt) : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -531,6 +535,12 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
         <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}赠送</p><p className="mt-1.5 text-xl font-semibold text-foreground">{display(monthGrant)}</p></div>
       </div>
 
+      <div className="studio-surface p-4">
+        <h3 className="text-sm font-medium">可用积分构成</h3>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-3">{([['永久积分', state.user.permanentPointsBalance], ['每日自动额度', state.user.dailyPointsBalance], ['限时积分', state.user.timedPointsBalance]] as const).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{bucketDisplay(value)}</dd></div>)}</dl>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">限时签到奖励按领取时的规则到期。{timedExpiry ? `最近一批将于 ${timedExpiry} 到期（北京时间）。` : '具体奖励有效期以领取记录为准。'}每日自动额度独立刷新。</p>
+      </div>
+
       <div className="studio-surface p-5">
         <SectionHeading title="流水明细" description="按消费、退款、充值、赠送与过期分类查看积分变化。" />
         <div className="mt-3 overflow-x-auto">
@@ -539,11 +549,13 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
             <tbody>
               {records.slice(0, 10).map((record) => {
                 const category = ledgerCategoryOf(record.type, { amount: record.amount, idempotencyKey: record.idempotencyKey })
+                const breakdown = pointRecordBreakdown(record)
+                const expiry = formatPointsExpiry(record.expiresAt)
                 return (
                   <tr key={record.id} className="border-b border-border/60 last:border-b-0">
-                    <td className="max-w-[280px] truncate py-3 text-sm text-foreground" title={record.description}>{record.description || record.model || record.id}</td>
+                    <td className="max-w-[280px] py-3 text-sm text-foreground"><p className="truncate" title={record.description}>{record.description || record.model || record.id}</p>{expiry && <p className="mt-1 text-[11px] text-muted-foreground">有效期至 {expiry}（北京时间）</p>}{Number(record.expiredRefundPoints) > 0 && <p className="mt-1 text-[11px] text-muted-foreground">另有 {record.expiredRefundPoints?.toLocaleString('zh-CN')} 限时积分已到期，未恢复</p>}</td>
                     <td className="py-3 text-xs text-muted-foreground">{ledgerCategoryLabels[category]}</td>
-                    <td className={cn('py-3 text-xs', Number(record.amount) < 0 ? 'text-foreground' : 'text-studio-accent')}>{Number(record.amount) > 0 ? '+' : ''}{Number(record.amount).toLocaleString()}</td>
+                    <td className={cn('py-3 text-xs', Number(record.amount) < 0 ? 'text-foreground' : 'text-studio-accent')}><span>{Number(record.amount) > 0 ? '+' : ''}{Number(record.amount).toLocaleString()}</span>{breakdown && <p className="mt-1 max-w-60 text-[11px] text-muted-foreground">{breakdown}</p>}</td>
                     <td className="py-3 text-xs text-muted-foreground">{record.createdAt ? new Date(record.createdAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td>
                   </tr>
                 )

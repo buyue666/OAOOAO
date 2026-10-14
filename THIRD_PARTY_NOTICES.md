@@ -26,4 +26,4 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## Scope
 
-上述许可仅覆盖对应第三方材料，不自动许可 OAOOAO 的其他代码或任何外部业务后端。通过 npm 引入的依赖仍适用各自许可证。商标、图片、视频、模板等资源的使用权也应分别核实。本文件不是对全部代码或资产“无侵权”的保证。
+上述许可覆盖对应第三方材料，原版权及许可继续保留。OAOOAO 应用采用根目录 [LICENSE](LICENSE) 中的 GNU AGPL v3.0（AGPL-3.0-only）；独立后端的许可见其自身仓库。通过 npm 引入的依赖仍适用各自许可证。商标、图片、视频、模板等资源的使用权应分别核实。本文件不是对全部代码或资产“无侵权”的保证。

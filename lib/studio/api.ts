@@ -18,6 +18,9 @@ export type BackendUser = {
   pointsBalance?: number
   permanentPointsBalance?: number
   dailyPointsBalance?: number
+  dailyPointsExpiresAt?: string | null
+  timedPointsBalance?: number
+  timedPointsExpiresAt?: string | null
 }
 
 export type SessionResponse = {
@@ -527,6 +530,11 @@ export function backendUserToStudioUser(user: BackendUser, fallbackAvatar: strin
     avatar: user.avatarUrl || fallbackAvatar,
     plan: user.planName || '免费用户',
     credits: Math.max(0, Number(user.pointsBalance ?? user.permanentPointsBalance ?? 0) || 0),
+    permanentPointsBalance: user.permanentPointsBalance,
+    dailyPointsBalance: user.dailyPointsBalance,
+    dailyPointsExpiresAt: user.dailyPointsExpiresAt,
+    timedPointsBalance: user.timedPointsBalance,
+    timedPointsExpiresAt: user.timedPointsExpiresAt,
   }
 }
 

@@ -18,14 +18,26 @@ export type PointRecord = {
   balanceAfter: number
   permanentAmount: number
   dailyAmount: number
+  timedAmount?: number
   permanentBalanceAfter: number
   dailyBalanceAfter: number
+  timedBalanceAfter?: number
+  expiresAt?: string | null
+  expiredRefundPoints?: number
   description?: string
   model?: string
   idempotencyKey?: string
   sourceRecordId?: string
   sourceDate?: string
   createdAt: string
+}
+
+/** Keep server bucket changes separate; a total must never be added a second time. */
+export function pointRecordBreakdown(record: Pick<PointRecord, 'permanentAmount' | 'dailyAmount' | 'timedAmount'>) {
+  return ([['永久', record.permanentAmount], ['每日', record.dailyAmount], ['限时', record.timedAmount]] as const)
+    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value !== 0)
+    .map(([label, value]) => `${label} ${value! > 0 ? '+' : ''}${value!.toLocaleString('zh-CN')}`)
+    .join(' · ')
 }
 
 /**

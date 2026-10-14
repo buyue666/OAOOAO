@@ -272,6 +272,8 @@ export type AccountProfile = {
   permanentPointsBalance?: number
   dailyPointsBalance?: number
   dailyPointsExpiresAt?: string
+  timedPointsBalance?: number
+  timedPointsExpiresAt?: string | null
   createdAt?: string
   lastLoginAt?: string
 }

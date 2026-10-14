@@ -1,139 +1,130 @@
-# OAOOAO Studio
+<div align="center">
 
-这是 OAOOAO Studio 的前端工作台，基于 Next.js 16、React 19、TypeScript 和 React Flow。
+![OAOOAO — Open Creative Workspace](docs/assets/repository-banner.svg)
+
+**把想法变成画面、镜头与故事。**
+
+一个连接 AI 生成、自由画布、创作项目与运营管理的开源工作台。
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-168c82?style=flat-square)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-171717?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-087ea4?style=flat-square&logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+
+[访问 OAOOAO](https://oao.lunapi.xyz) · [独立后端](https://github.com/buyue666/OAOOAO-backend) · [部署指南](DEPLOYMENT.md) · [反馈问题](https://github.com/buyue666/OAOOAO/issues)
+
+</div>
+
+---
+
+## 从灵感到作品
+
+不必在一组互不相通的生成工具之间搬运素材。OAOOAO 将描述、参考、生成结果与镜头组织在同一套创作流程里：先探索一张图，再把它接入画布，或发展成一个持续迭代的项目。
+
+| 创作空间 | 可以做什么 |
+| --- | --- |
+| **图片与视频** | 输入描述、上传参考、选择已配置模型，查看费用、任务进度与生成记录，再复用结果。 |
+| **自由画布** | 连接素材与生成节点，使用小地图、整理布局、编组、撤销重做与版本化保存；将节点交给创作助手。 |
+| **镜头项目** | 管理创作提纲、分集、主体参考与镜头候选，采用满意版本，组织视频与交付文件。 |
+| **创作助手** | 携带当前项目或画布上下文规划步骤，确认费用后执行，跟踪任务并将结果写回创作空间。 |
+| **技能与资产** | 保存可复用的提示词指令，选择技能参与生成，管理图片、视频、音频及历史素材。 |
+| **账户与运营** | 套餐、独立积分超市、签到规则、积分流水、订单、公告横幅和弹窗、品牌与页脚配置。 |
+
+### 让规则和使用体验保持一致
+
+- **按身份签到**：普通用户与有效套餐可以分别设置赠送数量、永久或限时有效期；领取结果记录当时规则，之后调整配置不追溯修改已领积分。
+- **看得懂的积分**：区分永久、每日与限时积分，展示有效期和流水；生成扣费、退款与到期处理由后端事务执行。
+- **可配置的品牌**：前台与管理后台共享站点品牌，公告支持颜色、动效、跳转和预览；页脚固定提供开源入口。
+- **导出偏好**：用户可以在了解说明后设置 AI 显式水印偏好；实际导出仍取决于媒体类型与服务端支持。
+
+> 当前技能是可复用的文本指令，不是任意代码插件。生成能力取决于已实现的模型适配器与实际渠道配置；没有可用模型时，界面会明确提示。
+
+## 前后端
+
+| 仓库 | 职责 | 技术 |
+| --- | --- | --- |
+| [OAOOAO](https://github.com/buyue666/OAOOAO) | 创作界面、管理后台、同源 API 代理 | Next.js · React · TypeScript · React Flow |
+| [OAOOAO-backend](https://github.com/buyue666/OAOOAO-backend) | 账户、钱包、订单、任务、素材与项目持久化 | Node.js · Fastify · PostgreSQL · FFmpeg |
+
+```text
+浏览器 ──→ OAOOAO / Next.js ──→ 独立后端 / Fastify
+                  同源 API              ├─ PostgreSQL：账户、积分、任务、项目
+                                        ├─ 持久化媒体目录
+                                        └─ 配置好的模型与邮件服务
+```
+
+本仓库是前端；完整使用需要同时运行后端。渠道密钥由后端保存和使用，不放入浏览器环境变量。
 
 ## 本地运行
 
-```powershell
+需要 **Node.js 22+** 和 **pnpm 12.3.4**。先按[后端快速开始](https://github.com/buyue666/OAOOAO-backend#快速开始)准备 PostgreSQL、迁移数据库并启动后端。
+
+```sh
+git clone https://github.com/buyue666/OAOOAO.git
+cd OAOOAO
 pnpm install --frozen-lockfile
+```
+
+将 `.env.example` 复制为 `.env.local`，填入本地地址：
+
+```dotenv
+OAOAO_BACKEND_URL=http://127.0.0.1:3001
+OAOAO_PUBLIC_URL=http://localhost:3000
+```
+
+```sh
 pnpm dev
 ```
 
-默认读取 `.env.local` 中的 `OAOAO_BACKEND_URL`，当前本地配置指向 `http://127.0.0.1:3200`。`app/api/[...path]/route.ts` 校验浏览器来源后转发 API，保留会话 Cookie 和流式响应。反向代理部署可设置 `OAOAO_PUBLIC_URL`。
+打开 `http://localhost:3000`。后端的 `PUBLIC_ORIGIN` 应匹配浏览器访问源；`ALLOWED_ORIGINS` 还应包含前端代理使用的精确后端地址。生产环境的 HTTPS、Cookie、代理信任和环境变量说明见[部署指南](DEPLOYMENT.md)。
 
-真实客户端 IP 转发默认关闭。仅在入口代理覆盖 `X-Real-IP`、且 Next 服务不能被外部直接访问时，设置 `OAOAO_TRUST_REVERSE_PROXY=true`。代理只转发验证通过的单一 IP，清除客户端自带的转发链；独立后端还需将该前端的内部地址加入 `TRUSTED_PROXY_CIDRS`。Caddy 入口可使用 `header_up X-Real-IP {remote_host}`，不要直接信任浏览器提交的该头。
+## 管理与配置
 
-本仓库包含完整前端与 API 转发层，不包含独立业务后端、数据库、实际密钥或用户数据。首页 `/` 可独立预览，创作工作台为 `/studio`；登录、生成、支付和管理功能需要兼容后端。首页素材与验收说明见 `LANDING_PAGE_NOTES.md`。
+首次管理员通过后端显式初始化命令创建，仓库不附带默认管理员密码。
 
-登录入口：`/login`
+| 配置入口 | 内容 |
+| --- | --- |
+| 系统设置 → 站点与品牌 | 品牌图标、名称、页脚、独立服务条款与隐私政策。 |
+| 系统设置 → 注册与积分 | 注册策略、签到开关、普通用户及各套餐的签到积分和有效期。 |
+| 系统设置 → 运营与支付 | 运营模式、购买政策及当前支持的人工收款配置。 |
+| 商品与套餐 | 套餐权益、展示颜色、价格与单独出售的积分包。 |
+| 模型与渠道 | 实际模型、渠道绑定、计费与可用能力。 |
+| 内容与公告 | 顶部横幅、文字或图片弹窗、跳转链接、展示时段及预览。 |
 
-订阅页：`/plans`，组件来源为用户提供的 `D:\下载\订阅.zip`，保留黑色背景、横向套餐栏、周期和档位选择、权益分组。沿用此前去掉顶部活动横幅的改动。价格、商品、周期和权益读取真实后台；不导入压缩包中的虚拟售价。
+**配置商品不等于启用收款。** 当前独立后端支持人工收款与人工退款记录，需要管理员核实外部到账；支付宝、微信支付、Stripe 自动支付尚未实现。微信登录、MFA、创作对象存储写入、任意可执行技能和剪映官方格式导出也不属于当前已实现能力。
 
-商品管理：`/admin/products`；订单管理：`/admin/orders`。支持新增、编辑、上架、下架，以及订阅页名称、分组、档位、配色、权益配置。相同 `metadata.membership.groupId` 和 `tierId` 的商品按实际有效期归入不同周期，购买时使用对应商品 ID。金额以分存储，年付为整期价格。
+## 开发与验证
 
-旧管理入口 `/management` 只会按 `section` 参数跳转到 `/admin` 下的对应页面，不再进入任何外部管理端。
-
-## OAOOAO 管理后台
-
-独立后台入口为 `/admin`，使用 OAOOAO 的黑白灰工作台样式，全部数据来自当前后端的真实管理接口：
-
-- `/admin`：今日与近 7/30 日调用、成功率、失败率、活跃用户、调用类型分布、模型排行、渠道成功率、排队任务、收入与退款摘要
-- `/admin/users`：用户搜索与分页、详情抽屉、资料编辑、启用/禁用、积分与套餐调整、管理员职责分配、调用记录与订单消费
-- `/admin/generation`：按用户/模型/渠道/类型/状态/时间筛选，任务详情、耗时、上游任务 ID、错误原因、积分消耗、重试、取消与人工接管
-- `/admin/channels`：渠道新增/编辑/删除/启停、连通性测试、拉取模型列表、模型能力与协议配置、逻辑模型显示名称、优先级/权重/并发、失败次数与冷却状态
-- `/admin/products`：订阅套餐与积分包的新增、编辑、上下架、周期/价格/积分/权益配置，以及促销活动
-- `/admin/orders`：订单搜索分页与状态筛选、订单详情、关闭、退款、支付状态，以及财务摘要、优惠券、邀请返利与支付渠道统计
-- `/admin/content`：公告新增/编辑/发布/下线、首页与登录后弹窗、生效区间，作品审核、下架、推荐与举报治理
-- `/admin/settings`：站点品牌、注册开关、每日免费积分、计费与权益、生成并发与默认参数、邮件服务（含测试发信）、对象存储、数据保留
-- `/admin/audit`：管理员操作、登录、配置变更、用户与渠道修改、退款与积分调整，支持关键词/操作类型/结果/目标/时间筛选，敏感字段自动脱敏
-
-后台导航与页面按钮都由后端返回的管理员职责控制。未登录或无管理员职责时只显示登录提示；接口失败会显示明确错误与重试入口，不使用本地 mock 数据冒充线上管理数据。危险操作（禁用用户、退款、关闭订单、下架作品、删除渠道等）统一走确认弹窗；API Key、密码与令牌类字段始终脱敏，编辑时只能写入新值。
-
-## 作品创作空间
-
-主导航为「开始创作 / 我的项目 / 创作资产」。首页提供直接进入图片、视频工具的快速入口，以及带创作描述和持久参考图的项目创建表单。
-
-新创作项目保存在现有 DramaProject 接口中，`/projects/drama-*` 和 `/drama/:id` 使用统一工作区：
-
-- 镜头：编辑描述、时长、视频提示词和字幕，关联角色、产品与场景；保存使用读取时的 `updatedAt`，冲突保留草稿。
-- 草稿：站内离开提示未保存修改，当前标签页按账号与项目保存临时备份。重新进入后可选择恢复；服务器版本变化时只允许下载备份后手动合并。
-- 候选：单镜头生成使用明确的项目、分集、镜头和请求标识。真实输出登记到素材库，关联元数据保存于 `metadata.creativeCandidate`。采用版本只更新对应镜头的图片或视频字段，保留其他版本；需要后端已持久化的媒体地址。
-- 画布：从同一项目的参考、主体、镜头和采用结果派生关系视图；当前为自动布局和镜头选择。独立自由画布仍保留完整编辑能力。
-- 主体与参考：保存角色、产品、场景的稳定身份、主要参考、外观和一致性约束，显示实际关联镜头；已有结果不会自动重做。
-- 交付：使用采用的视频调用现有合成接口，可下载成功成片、SRT 字幕及项目 JSON。服务器未启用合成时明确显示不可用。镜头视频、时长或字幕变化会使旧成片失效。
-
-任务创建后项目保存失败，或未确认请求从任务中心恢复时，工作区提供「关联并检查原任务」，不会通过重新生成掩盖丢失的关联。新工作区不修改用户积分、套餐或支付配置。旧画布项目链接仍兼容原编辑器。
-
-隔离验收（不依赖数据库，不调用外部模型，不扣费）：
-
-```powershell
-node --test tests/creative-workspace.test.cjs
-node tests/creative-fixture-server.mjs
-# 另一个终端：
-$env:OAOAO_BACKEND_URL='http://127.0.0.1:3461'
-$env:OAOAO_PUBLIC_URL='http://127.0.0.1:3460'
-pnpm dev --port 3460 --hostname 127.0.0.1
-```
-
-夹具账号、项目和媒体均标记为本地验收数据，重启夹具即重置。它覆盖页面、代理、项目保存、候选登记与读取，不证明真实模型生成、视频编码或生产部署已经验收；上线仍需在配置正确的业务后端验证这些能力。
-
-## 已接入接口
-
-- `/api/auth/session`：启动时读取真实会话、积分与**真实逻辑模型目录**（模型下拉与积分估算的唯一来源）
-- `/api/auth/login`：真实登录并保存后端会话 Cookie
-- `/api/image-tasks`、`/api/video-generation-tasks`、`/api/audio-tasks`、`/api/text-tasks`：真实创建生成任务
-- 任务详情 `GET /api/{image,video,audio,text}-tasks/{id}`：轮询状态、结果、错误原因与积分消耗
-- 任务取消 `PATCH`、重新检查上游 `POST {action:"recover"}`：作用于后端真实任务
-- `/api/agent/runs`：导演 Agent 真实运行创建、详情轮询、暂停/恢复/重试/取消与子任务重试
-- `/api/generation-logs`：生成记录分页读取
-- `/api/billing/products`：套餐页读取后台启用商品、价格和权益
-- `/api/billing/orders` 与订单 checkout：登录后创建真实订单并进入后端支付流程
-- `/api/canvas/projects`：画布项目创建、读取和版本化保存
-- 画布同步状态：已同步、保存中、本地预览、版本冲突、同步失败
-
-## 真实生成业务
-
-前台生成流程已接入后端真实接口，模型目录、任务、结果与积分全部来自后端：
-
-- **模型目录**：来自会话 `settings.logicalModels` 与 `defaultModels`。下拉里只有后台已配置且至少有一条启用绑定的逻辑模型；没有真实目录时不会伪造模型。
-- **任务创建**：图片、视频、音频、文本分别提交到对应后端接口，并携带 `clientRequestId`。后端据此去重，重复提交不会产生第二条任务。
-- **状态轮询**：活跃任务每 2.5 秒查询一次后端详情，进入 success / error / cancelled 后停止；最长轮询 30 分钟。
-- **结果展示**：图片、视频、音频结果解析为可播放媒体；文本任务展示返回文本。不同接口的 result 结构在 `lib/studio/generation-api.ts` 统一归一化。
-- **失败原因**：后端返回的错误原文展示在任务卡片与任务详情中，不替换成笼统文案。
-- **积分消耗**：优先读取任务返回的积分字段，同时解析后端 `x-vozeb-pro-points-*` 响应头得到实时余额。
-- **取消 / 重试 / 重新检查**：全部作用于后端任务。取消前有确认提示；后端返回 409 时把冲突原因展示给用户。
-- **刷新恢复**：最近任务 ID 保存在浏览器本地，页面刷新后按 ID 重新向后端拉取，任务不会丢失。
-- **导演 Agent**：通过 `/api/agent/runs` 创建真实运行，展示后端返回的子任务状态，并支持暂停、恢复、整体重试、取消与单个子任务重试。
-- **自由画布**：`/canvas` 是画布管理入口，可新建、选择和删除画布；画布内支持空白处/节点右键菜单、图片/视频/Agent 任务创建、参考素材上传、节点复制删除、任务状态回写、撤销重做与自动保存，不需要先跳到其它工作台再把结果导回。
-- **本地预览**：未登录或后端不可用时，工作台与任务中心明确显示「本地预览」并说明不会提交；不会把演示数据显示成真实成功。
-
-## 支付流程
-
-- **手动支付**：`/api/billing/orders` 创建订单 → `/api/billing/orders/{id}/checkout` 返回人工支付信息 → 用户付款后由管理员在 `/admin/orders` 标记已支付或关闭。
-- **订单查询**：`GET /api/billing/orders/{id}` 读取当前支付状态与快照。
-- **关闭**：`POST /api/billing/orders/{id}/cancel` 关闭未支付订单。
-- **退款**：独立后端的人工退款先预留可回收积分，再由管理员在线下完成实际款项退款，最后记录退款完成；未汇款时可取消预留。后台操作不会自动转移现金。
-- **支付渠道**：独立后端当前只实现人工收款渠道，需在后台明确启用。在线支付协议与回调尚未接入，配置密钥不会使其自动可用；页面读取后端的实际可用渠道，不伪造支付成功。
-
-## 检查
-
-```powershell
+```sh
 pnpm exec tsc --noEmit --pretty false
+pnpm test:acceptance
 pnpm build
-node --test tests/membership.test.cjs
 ```
 
-验收脚本（需要本地后端 3200 与前端 3310 正在运行，且已存在管理员账号）：
+验收测试覆盖主要状态、权限、交互与接口契约；后端另有使用临时 PostgreSQL schema 的集成测试。真实模型消费、邮件投递与实际收退款需要在已配置的隔离环境单独验收。请不要把测试脚本指向生产数据库或真实客户账号。
 
-需要登录的旧验收脚本使用隔离环境中的 `fusion_admin`，密码必须通过 `OAOAO_TEST_PASSWORD` 环境变量提供，仓库不附带密码。部分脚本复用本地后端目录的 Playwright 与 sharp 安装，需按本机路径配置后运行；首页检查支持 `PLAYWRIGHT_ROOT` 指定依赖所在项目。夹具数据库连接使用 `OAOAO_TEST_DATABASE_URL`，仅限隔离测试库。不要将这些有写入操作的脚本用于生产环境。含内部环境信息的历史运营报告仅保留在本地，不随公开仓库发布。
-
-```powershell
-node tests/proxy-config.test.mjs         # 代理配置：非法 OAOAO_BACKEND_URL 返回 503 而非 500
-node tests/api-robustness.test.mjs       # 接口健壮性：畸形输入不产生 5xx，干净任务可正常取消
-node tests/generation-flow.test.mjs      # 真实生成：登录、模型目录、创建、轮询、终态、积分、取消、去重、刷新恢复、未登录 401
-node tests/generation-browser-check.mjs  # 浏览器生成：真实模型下拉、任务中心、刷新恢复、界面取消打到后端、本地预览标记
-node tests/admin-smoke.mjs               # 9 个页面 + 17 个管理接口 + 未登录 401
-node tests/admin-write-check.mjs         # 写入路径：公告、设置、渠道密钥保持、用户资料、越权与跨站拦截
-node tests/admin-browser-check.mjs       # 真实浏览器渲染、品牌文字、横向溢出与控制台错误
-node tests/admin-interaction-check.mjs   # 抽屉、确认弹窗、标签页、用户详情分页与设置分节交互
+```text
+app/                   页面路由与同源 API 代理
+components/studio/     创作工作台与管理界面
+components/oao-canvas/ 画布编辑器
+lib/studio/            数据契约、客户端状态与业务工具
+public/media/brand/    OAOOAO 品牌资源
+tests/                 回归与验收测试
+docs/                  设计记录与验收范围
 ```
 
-`generation-flow.test.mjs`、`admin-write-check.mjs` 与 `admin-interaction-check.mjs` 只操作自建测试数据并清理，不会修改既有用户、订单或配置。
+欢迎提交问题与改进。提交时说明复现步骤、预期结果和验证方式；请移除密钥、会话、数据库导出和用户素材。安全问题请发送至 **siyuesy@gmail.com**，不要在公开 Issue 中附带凭据。
 
-后端的登录与视频接口有频率限制（登录 15 分钟 8 次、视频 1 分钟 6 次）。频繁运行测试会触发 429，脚本会识别为环境节流并跳过或标记，不会误报为失败。
+## 开源许可
 
-遇到「系统接口 500」时的排查顺序见 `DEPLOYMENT.md` 第 6 节。三类成因（代理地址缺协议、请求体格式、上游任务标识冲突）均已修复，并分别由 `tests/proxy-config.test.mjs` 与 `tests/api-robustness.test.mjs` 持续回归。
+OAOOAO 前端与独立后端采用 **GNU Affero General Public License v3.0**（`AGPL-3.0-only`），与 [VOZEB 社区版](https://github.com/csyqlz/VOZEB-PRO/blob/main/LICENSE)采用相同协议版本。完整条文见 [LICENSE](LICENSE)。
 
-后端的套餐与画布接口仍需按现有服务的数据库、Redis 和支付配置运行。支付按钮在未登录状态会被保护，不会创建订单。
+可以按许可证使用、修改和分发，包括商业用途；对修改版本提供网络服务时，应按 AGPL 第 13 条向交互用户提供该版本的对应源码。保留许可证、版权与第三方声明；部署时应让页脚的源码入口能找到实际运行版本及其前后端源码。
 
-本次订阅与管理验收记录见 `SUBSCRIPTION_ADMIN_TEST_REPORT.md`。生产部署的环境变量、HTTPS、Cookie 与反向代理要求见 `DEPLOYMENT.md`。
+第三方材料仍适用各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库许可不授予第三方商标、用户素材或外部模型服务的使用权。独立后端的实现来源与历史审查边界记录在其文档中。
+
+<div align="center">
+
+**OAOOAO · 为下一次灵感，留一片自由的空间。**
+
+</div>

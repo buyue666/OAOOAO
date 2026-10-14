@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ArrowDown, ArrowUp, Monitor, Plus, Smartphone, Trash2 } from 'lucide-react'
 import { SiteFooter } from '@/components/site-footer'
 import type { SiteSettings } from '@/lib/studio/admin-types'
-import { FOOTER_LINK_LIMIT, type SiteFooterLink, type SiteFooterSettings } from '@/lib/studio/site-footer'
+import { FOOTER_LINK_LIMIT, SITE_SOURCE_REPOSITORY, type SiteFooterLink, type SiteFooterSettings } from '@/lib/studio/site-footer'
 import { AdminField, AdminInput, AdminSectionCard, AdminTextarea } from './admin-kit'
 import { ControlButton } from './ui'
 
@@ -24,6 +24,7 @@ export function AdminSiteFooter({ value, site, disabled, onChange }: { value: Si
         <AdminField label="联系页面或客服网址" hint="支持 /contact 等站内路径或完整 HTTP(S) 地址；留空不显示。" className="sm:col-span-2"><AdminInput {...field('contactUrl')} maxLength={2048} placeholder="https://…" /></AdminField>
       </fieldset>
       <p className="mt-4 text-xs leading-5 text-muted-foreground">服务条款与隐私政策使用“条款与隐私”中的页面地址，留空时使用本站独立协议页面。</p>
+      <p className="mt-2 break-words text-xs leading-5 text-muted-foreground">页脚固定显示 GitHub 开源仓库和 AGPL-3.0 许可证入口，不可在此修改或移除，也不受产品和社媒链接配置影响。仓库：{SITE_SOURCE_REPOSITORY}。</p>
     </AdminSectionCard>
     <div className="grid min-w-0 gap-5 xl:grid-cols-2">
       <FooterLinksEditor title="产品与创作链接" name="productLinks" value={value.productLinks} disabled={disabled} onChange={productLinks => onChange({ ...value, productLinks })} />

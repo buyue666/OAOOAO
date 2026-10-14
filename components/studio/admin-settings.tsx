@@ -34,6 +34,8 @@ import {
 import { useAdminNavigation, useAdminReload, useAdminSession } from './admin-shell'
 import { CommercePolicyEditor } from './commerce-policy-editor'
 import { AdminSiteSettings } from './admin-site-settings'
+import { AdminCheckInSettings } from './admin-check-in-settings'
+import { checkInRuleChanges, readCheckInForm } from '@/lib/studio/check-in-rules'
 import { assertStorageSaved, CREATIVE_STORAGE_NOTICE, storageTestMessage, storageUpdateInput } from '@/lib/studio/object-storage-status'
 import { assertManualPaymentSaved, canConfigureManualPayment, MANUAL_INSTRUCTIONS_LIMIT, manualPaymentInput, manualPaymentInstructions } from '@/lib/studio/manual-payment-config'
 
@@ -319,9 +321,11 @@ function PaymentProviderEditor({
 
 function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { settings: AdminSettings; canSystem: boolean; canCommerce: boolean; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
   const checkIn = settings.checkIn ?? { enabled: false, rewardPoints: 10 }
+  const [formError, setFormError] = useState('')
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (saving) return
+    setFormError('')
     const data = new FormData(event.currentTarget)
     const patch: AdminSettingsPatch = {}
     const summary: string[] = []
@@ -337,9 +341,9 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
       patch.freeDailyPoints = amount
       if (enabled !== settings.freeDailyPointsEnabled) summary.push('每日自动额度开关')
       if (amount !== settings.freeDailyPoints) summary.push('每日自动额度数量')
-      patch.checkIn = { enabled: data.has('checkInEnabled'), rewardPoints: Number(data.get('checkInRewardPoints')) }
-      if (patch.checkIn.enabled !== checkIn.enabled) summary.push('手动签到开关')
-      if (patch.checkIn.rewardPoints !== checkIn.rewardPoints) summary.push('签到奖励积分')
+      try { patch.checkIn = readCheckInForm(data, settings.entitlements.plans) }
+      catch (reason) { setFormError(reason instanceof Error ? reason.message : '请检查签到奖励规则。'); return }
+      summary.push(...checkInRuleChanges(checkIn, patch.checkIn, settings.entitlements.plans))
     }
     onSave(patch, summary)
   }
@@ -348,22 +352,20 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
       {canSystem && <AdminSectionCard title="注册开关" description="控制新用户注册入口。关闭后仅管理员可以创建账号。">
         <fieldset disabled={saving} className="flex flex-col gap-3">
           <label className="flex items-center justify-between gap-4 border-b border-border pb-3 text-sm"><span><span className="font-medium">开放注册</span><span className="mt-1 block text-xs text-muted-foreground">关闭后站点注册入口对所有访客隐藏。</span></span><input type="checkbox" name="registrationEnabled" defaultChecked={settings.registrationEnabled} /></label>
-          <div className="flex items-center justify-between gap-4 text-sm"><span><span className="font-medium">邮箱验证（注册必需）</span><span className="mt-1 block text-xs text-muted-foreground">普通账号注册必须通过邮箱验证码；配置并启用微信扫码登录后，微信新用户可走独立的微信身份验证。</span></span><span className="shrink-0 rounded-full border border-studio-accent/30 bg-studio-accent/10 px-2.5 py-1 text-xs font-medium text-studio-accent">固定开启</span></div>
+          <div className="flex items-center justify-between gap-4 text-sm"><span><span className="font-medium">邮箱验证（注册必需）</span><span className="mt-1 block text-xs text-muted-foreground">普通账号注册必须通过邮箱验证码；开放注册前，请先配置并验证邮件服务。</span></span><span className="shrink-0 rounded-full border border-studio-accent/30 bg-studio-accent/10 px-2.5 py-1 text-xs font-medium text-studio-accent">固定开启</span></div>
         </fieldset>
       </AdminSectionCard>}
-      {canCommerce && <AdminSectionCard title="每日签到" description="用户主动点击签到后获得永久积分，不会自动发放。按北京时间（Asia/Shanghai）每天 00:00 开始新一天，同一账号每天只能领取一次。">
-        <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="checkInEnabled" defaultChecked={checkIn.enabled} />开启手动签到</label>
-          <AdminField label="每次签到奖励（永久积分）"><AdminInput name="checkInRewardPoints" type="number" min="1" max="1000000" step="1" required defaultValue={checkIn.rewardPoints} /></AdminField>
-        </fieldset>
-        <p className="mt-3 text-xs leading-5 text-muted-foreground">修改奖励金额不会补发当天已领取的积分；关闭后停止新的领取，已到账积分保留。</p>
+      {canCommerce && <AdminSectionCard title="每日签到" description="用户主动点击后领取积分，不会自动发放。按北京时间（Asia/Shanghai）每天 00:00 换日，同一账号每天只能领取一次。">
+        <AdminCheckInSettings settings={checkIn} plans={settings.entitlements.plans} saving={saving} />
+        <p className="mt-4 text-xs leading-5 text-muted-foreground">规则仅影响之后的签到，已有奖励的金额和到期时间不变。同一天升级套餐不能再次领取。关闭签到后停止新的领取；已到账奖励仍按领取时的有效期使用。</p>
       </AdminSectionCard>}
-      {canCommerce && <AdminSectionCard title="每日自动额度" description="系统在读取钱包时自动刷新当天额度，无需签到。按 UTC 00:00（北京时间 08:00）换日，未用额度到期清零；与签到获得的永久积分分别记录。">
+      {canCommerce && <AdminSectionCard title="每日自动额度" description="系统在读取钱包时自动刷新当天额度，无需签到。按 UTC 00:00（北京时间 08:00）换日，未用额度到期清零；与手动签到奖励分别记录。">
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="freeDailyPointsEnabled" defaultChecked={settings.freeDailyPointsEnabled} />启用每日自动额度</label>
           <AdminField label="每日积分额度"><AdminInput name="freeDailyPoints" type="number" min="0" step="1" defaultValue={settings.freeDailyPoints} /></AdminField>
         </fieldset>
       </AdminSectionCard>}
+      {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
       <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : '保存注册与积分'}</ControlButton></AdminSaveBar>
     </form>
   )

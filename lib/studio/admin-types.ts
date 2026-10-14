@@ -1,3 +1,5 @@
+import type { CheckInSettings } from './check-in-rules'
+
 /**
  * OAOOAO 管理后台的数据契约。
  * 所有字段来自当前后端管理接口；页面只消费这里的类型，不直接判断后端原始结构。
@@ -57,6 +59,8 @@ export type AdminUser = {
   permanentPointsBalance?: number
   dailyPointsBalance?: number
   dailyPointsExpiresAt?: string
+  timedPointsBalance?: number
+  timedPointsExpiresAt?: string | null
   mfaEnabled?: boolean
   createdAt?: string
   updatedAt?: string
@@ -425,7 +429,7 @@ export type AdminSettings = {
   emailRegistrationEnabled: boolean
   freeDailyPointsEnabled: boolean
   freeDailyPoints: number
-  checkIn?: { enabled: boolean; rewardPoints: number }
+  checkIn?: CheckInSettings
   mail: MailSettings
   allowUserApiConfig?: boolean
   modelPointCosts: Record<string, number>

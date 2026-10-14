@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { request } from './api'
+import type { CheckInStatus } from './check-in-rules'
 
-export type CheckInStatus = { enabled: boolean; rewardPoints: number; claimed: boolean; date: string; timeZone: string }
+export type { CheckInStatus } from './check-in-rules'
 type Snapshot = { epoch: number; status?: CheckInStatus; loading: boolean; claiming: boolean; error: string }
 
 /** The server owns the reward and day boundary; a response never crosses accounts. */

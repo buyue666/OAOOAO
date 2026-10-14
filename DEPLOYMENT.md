@@ -1,263 +1,178 @@
 # OAOOAO 生产部署说明
 
-本文说明 OAOOAO 前端（Next.js 16）在生产环境部署时必须配置的内容。
-本文不保存任何密码、API Key、支付密钥或数据库连接串明文。
+本文适用于本仓库的 Next.js 前端和 [OAOOAO 独立后端](https://github.com/buyue666/OAOOAO-backend)。示例统一使用 `https://example.com`、前端端口 `3000` 和后端端口 `3001`；替换为实际部署配置。不要将密码、渠道密钥、完整环境文件、数据库备份或用户数据提交到仓库。
 
-## 1. 架构与角色
+## 1. 运行架构与当前能力
 
+```text
+浏览器 → HTTPS 反向代理 → Next.js 前端 :3000
+                              │ /api/* 服务端代理
+                              └→ 独立后端 :3001 → PostgreSQL
+                                                   持久化媒体目录
+                                                   后台任务 worker
 ```
-浏览器 ──HTTPS──> OAOOAO 前端（Next.js）
-                      │  服务端转发，携带会话 Cookie
-                      └──HTTP──> 后端服务（真实业务与数据）
+
+- 前端使用 Node.js 22、Next.js 16 和 pnpm 12；pnpm 精确版本以 `package.json` 的 `packageManager` 为准，依赖以锁文件为准。需要 Node 服务运行 `/api` 代理，不能只发布静态 HTML。
+- 后端使用 Node.js 22、TypeScript、Fastify 和 PostgreSQL。会话、积分、订单和任务保存在 PostgreSQL，**不需要 Redis**。
+- 后端本地媒体目录必须持久化，并对运行账户可写。视频合成与水印导出依赖 FFmpeg、FFprobe、所需编解码器和字体；详见后端 README。备份数据库不会自动备份媒体文件。
+- 浏览器提交逻辑模型 ID，后端使用已实现且已配置的上游适配器调用模型。配置字段存在不代表相应协议已实现或已验收。
+- 当前收款方式只有 `manual`。微信扫码登录、短信登录、MFA 注册/验证、易支付、支付宝/微信支付/Stripe 的实际支付执行均未实现，不能通过填写凭证把它们变成可用能力。
+- 创作媒体写入对象存储尚未实现。S3 配置检测只执行 `HeadBucket`，不是上传或写入验收；开启对象存储会阻止不支持的创作媒体操作，应继续使用受支持的持久化本地媒体目录。
+- SMTP 邮件功能需要配置并验证真实投递。不要把短信、微信或 MFA 当作未配置 SMTP 时的替代登录方式。
+
+后端功能边界、迁移细节和容器要求以 [后端 README](https://github.com/buyue666/OAOOAO-backend#readme) 及 [部署与回滚文档](https://github.com/buyue666/OAOOAO-backend/blob/main/docs/DEPLOYMENT.md) 为准。
+
+## 2. 环境变量
+
+### 前端
+
+通过进程环境或未入库的 `.env.production.local` 配置。下列变量只在服务端使用，不要改成 `NEXT_PUBLIC_*`：
+
+```dotenv
+OAOAO_BACKEND_URL=http://127.0.0.1:3001
+OAOAO_PUBLIC_URL=https://example.com
+OAOAO_TRUST_REVERSE_PROXY=false
 ```
 
-- 浏览器只与前端的 `/api/*` 通信，前端通过 `app/api/[...path]/route.ts` 转发到后端。
-- 前端不保存渠道密钥：生成任务只提交逻辑模型 ID，真正的渠道与密钥由后端解析。
-- 会话 Cookie 由后端下发，前端转发时保持同源与凭据。
+| 变量 | 说明 |
+| --- | --- |
+| `OAOAO_BACKEND_URL` | 必填。前端服务器能访问的后端 HTTP(S) 地址，不是浏览器地址，也不要附加 `/api`。前端会追加完整的 `/api/*` 路径。容器间使用实际服务地址，例如 `http://backend:3001`。 |
+| `OAOAO_PUBLIC_URL` | 生产必须显式设置为浏览器访问的源，包含协议及非默认端口，例如 `https://example.com`。代理用它验证写入请求的 `Origin` / `Referer`。 |
+| `OAOAO_TRUST_REVERSE_PROXY` | 默认关闭。仅当可信入口覆盖 `X-Real-IP`，且浏览器无法绕过入口直连 Next.js 时，才设为 `true`。它允许前端把经验证格式的客户端 IP 转交后端。 |
 
-## 2. 必须配置的环境变量
+反向代理终止 TLS 时，`OAOAO_PUBLIC_URL` 仍是外部 HTTPS 源。未设置时源码会从当前请求推断源，这只适合受控本地开发，不能替代生产的显式配置。
 
-### 前端（OAOOAO，本项目）
+### 后端
 
-| 变量 | 必填 | 说明 |
-| --- | --- | --- |
-| `OAOAO_BACKEND_URL` | 是 | 后端服务地址，形如 `http://127.0.0.1:3200`。必须是前端服务器可访问的地址，不能填浏览器地址。 |
-| `OAOAO_PUBLIC_URL` | 生产建议 | 站点的对外源，形如 `https://studio.example.com`。用于校验写入请求的 `Origin`/`Referer`。 |
+后端不会自动加载 `.env`：使用进程环境、容器 `--env-file`，或 Node.js 的 `--env-file`。名称与前端不同：
 
-说明：
+| 变量 | 说明 |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL 连接串。使用专用数据库与账户，通过秘密管理系统注入。 |
+| `ENCRYPTION_KEY` | 32 个随机字节的 Base64 编码。保护已保存的集成秘密及验证令牌；随受保护的备份保留，不可随意轮换。 |
+| `NODE_ENV` | 生产设为 `production`。 |
+| `PUBLIC_ORIGIN` | 与前端公网源一致，此例为 `https://example.com`。生产模式要求 HTTPS。 |
+| `ALLOWED_ORIGINS` | 前端先校验浏览器来源，再将上游 `Origin` 改成后端目标源。因此本例必须包含 `http://127.0.0.1:3001`；容器目标是 `http://backend:3001` 时填写该精确源。不要用关闭 CSRF 检查代替配置。 |
+| `HOST` / `PORT` | 同机进程可设 `127.0.0.1` / `3001`；容器内部使用 `0.0.0.0` / `3001`，对外暴露仍受私网或回环限制。 |
+| `MEDIA_ROOT` | 持久化媒体目录；容器挂载位置和权限应与后端镜像约定一致。 |
+| `WORKER_ENABLED` | 导入、对账、候选版本验收期间设为 `false`。默认开启；验收通过后设为 `true` 并重启后端，恢复生成和商业维护任务。 |
+| `TRUSTED_PROXY_CIDRS` | 只列直接连接后端的可信代理 IP 或有边界的 CIDR。空值不信任转发 IP；不要信任任意公网转发链。 |
+| `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` | 仅初次创建管理员时使用，完成后移除。不得用它覆盖已有管理员。 |
+| `TEST_DATABASE_URL` | 自动化测试专用的一次性数据库，绝不能指向生产数据库。 |
 
-- **必须与浏览器访问的源完全一致**（协议、域名、端口）。不一致时所有 `POST`/`PATCH`/`DELETE` 都会返回 403「跨站请求已被拦截」。
-- 反向代理终止 TLS 时，仍需把 `OAOAO_PUBLIC_URL` 设为 `https://` 开头的公网地址。
-- 未设置 `OAOAO_PUBLIC_URL` 时，前端会回退为按请求头推断当前源。仅在单节点、无代理的本地环境可接受。
+`WORKER_ENABLED=false` 不会禁止 HTTP 写入，候选环境仍需访问隔离。前后端代理信任必须成套配置；否则后端可能把所有用户视为同一个代理 IP，影响限流。启用前验证真实客户端 IP 和伪造转发头的处理结果。
 
-### 后端（由后端服务自身配置）
+## 3. 构建、迁移与启动
 
-后端需要配置的内容不属于本仓库，但生产环境至少需要：
+前端仓库中使用锁定的 pnpm 版本：
 
-- 数据库连接与 Redis 连接
-- 会话/加密密钥
-- 对象存储（如启用）
-- 邮件 SMTP（如启用邮箱注册）
-- 各上游渠道的 API Key（在管理后台 `/admin/channels` 配置，或通过环境变量注入后由后端读取）
-- 支付渠道密钥（如启用在线支付，见第 5 节）
+```sh
+pnpm install --frozen-lockfile
+pnpm exec tsc --noEmit
+pnpm run test:acceptance
+pnpm build
+pnpm exec next start --hostname 127.0.0.1 --port 3000
+```
 
-前端不会读取、记录或转发这些密钥的明文。
+前端环境变量必须在服务启动时存在。生产进程使用服务管理器或容器管理，不使用开发服务器。
 
-## 3. HTTPS 与 Cookie
+在独立后端仓库中，先注入目标数据库及运行配置，再执行：
 
-### HTTPS
+```sh
+npm ci
+npm run typecheck
+npm run build
+node --env-file=.env dist/src/migrate.js
+node --env-file=.env dist/src/server.js
+```
 
-生产环境必须使用 HTTPS：
+这些命令假定 `.env` 是本机受保护且已正确配置的文件；部署平台也可以直接注入环境变量并省略 `--env-file`。构建会将迁移 SQL 复制到 `dist/migrations`，迁移必须作为独立的一次性步骤执行，启动 API 不会自动迁移。
 
-1. 在反向代理（Nginx / Caddy / 云负载均衡）终止 TLS，证书需覆盖实际域名。
-2. 将 HTTP 永久重定向到 HTTPS（301）。
-3. 前端与后端之间的内网跳转可以是 HTTP，但对外链路必须加密。
+全新空站点且没有导入管理员时，才使用 `node --env-file=.env dist/src/bootstrap.js` 创建初始管理员。迁入已有用户时，不要提前 bootstrap；数据导入要求空的目标业务表。
 
-### Cookie 属性
+- `/api/health/live` 检查进程；`/api/health/ready` 检查数据库访问与打包迁移清单、校验和。后端私网还有 `/health` 和 `/ready`。
+- readiness 返回 503 时先核对数据库和迁移，不要编辑已执行的迁移 SQL 来绕过校验。
+- 健康检查通过不等于模型调用、邮件投递、人工收款或数据迁移已通过验收。
 
-会话 Cookie 由**后端**下发，请在服务器配置中确保：
+容器构建和媒体卷权限请按后端仓库说明执行。发布记录应同时记录两个源码提交、锁文件、构建产物或镜像摘要，以及实际运行环境配置的非秘密标识。
 
-| 属性 | 要求 | 原因 |
-| --- | --- | --- |
-| `Secure` | 生产必须开启 | 只在 HTTPS 上传输，避免明文泄露。HTTPS 未就绪前开启会导致登录态完全失效。 |
-| `HttpOnly` | 必须开启 | 阻止脚本读取会话，降低 XSS 影响。前端不需要读取 Cookie。 |
-| `SameSite` | `Lax`（推荐）或 `Strict` | 阻断裂站请求携带会话。若使用第三方支付回跳，`Lax` 兼容性更好；`None` 只在确实需要跨站时使用，且必须同时有 `Secure`。 |
-| `Domain` | 建议不设置（主机级 Cookie） | 不设置时 Cookie 绑定到确切主机，范围最小。前后端不同子域时按需设置为父域，但会扩大到该域下所有子域。 |
-| `Path` | `/` | 前端统一在 `/api` 下访问后端接口。 |
+## 4. HTTPS、Cookie 与反向代理
 
-注意：
+生产公网入口必须使用 HTTPS，并将 HTTP 重定向到 HTTPS。后端和 PostgreSQL 只允许受控内网或回环访问。
 
-- 如果前端与后端在不同站点（不同注册域），需要评估 `SameSite` 与 CORS 策略；更推荐让前端与后端处于同一个站点、通过同源 `/api` 路径访问，本项目的代理架构正是为此设计。
-- 修改 `Domain` 或 `SameSite` 后必须重新登录验证，旧 Cookie 不会自动迁移。
+后端生产会话 Cookie 为 `__Host-oaooao_session`，设置 `Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/`，不设置 `Domain`。开发模式使用另一个 Cookie 名称。不要重写 Cookie 的域或去掉安全属性；部署切换后重新验证登录、退出和会话撤销。
 
-## 4. 反向代理要求
+前端代理会原样转发请求体和 Cookie，逐条转发多个 `Set-Cookie`，不缓存 API 响应，并移除不应跨代理传递的连接头及浏览器提供的转发头。公网入口需保留请求方法、`Origin`、`Referer` 和 `Sec-Fetch-Site`，不要缓存认证接口、积分或账户响应，也不要对流式响应进行缓冲或再次压缩。
 
-前端代理 `app/api/[...path]/route.ts` 已经处理了以下事项，反向代理需要与之配合：
-
-1. **保留请求方法**：`POST`、`PATCH`、`PUT`、`DELETE` 必须原样转发，不能被改写为 `GET`。
-2. **保留请求body**：不要缓冲或截断 JSON body；生成任务的 body 可能较大（含参考图 data URL，单次上限 32 MB）。
-3. **保留 Cookie**：请求方向必须携带 `Cookie` 头，响应方向必须回传 `Set-Cookie`。多个 `Set-Cookie` 都要保留，不能合并成一个。
-4. **流式响应**：生成任务与 Agent 事件使用流式响应（SSE）。代理必须关闭响应缓冲：
-   - Nginx：`proxy_buffering off;`，并适当提高 `proxy_read_timeout`（生成任务可能长时间轮询）。
-   - Caddy：默认不缓冲，无需额外配置。
-5. **不要添加压缩**：前端转发时已设置 `accept-encoding: identity` 并移除 `content-encoding`，代理不要再次压缩流式响应。
-6. **超时**：视频与 Agent 任务最长可能运行数十分钟。反向代理的读写超时建议不低于 30 分钟，否则长任务会在代理层被断开（后端任务仍会继续，但前端会失去连接）。
-7. **来源校验**：前端已校验 `Origin`/`Referer` 与 `Sec-Fetch-Site`。反向代理不要改写或移除这些头，否则写入请求会被判为跨站。
-
-参考的 Nginx 片段（仅关键项）：
+下面是 HTTPS 虚拟主机中的 Nginx 片段，证书与 HTTP 重定向另行配置：
 
 ```nginx
 location / {
-    proxy_pass http://127.0.0.1:3310;
+    proxy_pass http://127.0.0.1:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Origin $http_origin;
     proxy_set_header Referer $http_referer;
     proxy_buffering off;
-    proxy_read_timeout 1800s;
-    proxy_send_timeout 1800s;
-    client_max_body_size 40m;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+    client_max_body_size 64m;
 }
 ```
 
-## 5. 支付配置
+入口超时按实际流式请求调整。后台任务持久化运行，不能依赖浏览器连接保持整个生成周期；断线后应读取已有任务状态，不要直接重提收费任务。JSON 请求当前受后端 8 MiB 限制，multipart 还有每文件 50 MiB 等限制，具体接口可能更严格。示例入口总请求上限为 64 MiB；允许多文件上传时需同步核对总大小，不能通过放宽入口限制绕过业务限制。
 
-### 当前状态
+## 5. 商用模式与人工收款
 
-- 站点有两种运营模式，默认是**自用模式**。自用模式下，前台不展示套餐/充值入口，`/api/billing/products` 不返回公开支付渠道，创建订单、报价和发起支付的服务端接口也会拒绝请求；管理员仍可手动调整积分。
-- 切换到**商用模式**后，前台才会展示套餐与在线支付入口。切换位置：管理员后台 → **运营与支付** → **站点运营模式**。
-- 后端已有真实支付回调接口 `/api/billing/webhooks/{provider}`（支持 `POST` 与 `GET`），会校验签名密钥后驱动订单与积分结算。
-- 未配置支付密钥时，渠道会显示「待配置」，回调返回「支付回调密钥未配置」。这是**配置缺失**，不是实现缺失。
+默认自用模式不开放公开购买。商用模式也不代表支付已经就绪。上线购买前，需要同时完成：
 
-### 生产启用在线支付需要做
+1. 发布真实适用的购买政策、服务条款、隐私政策及联系渠道。
+2. 配置并启用 `manual` 收款说明，让用户知道实际收款方式和订单核对流程。
+3. 启用有效商品；套餐商品还需要对应的有效权益方案。价格、积分数量和期限必须经过核对。
+4. 验证下单、重复请求处理和后台订单权限。配置未就绪时保持购买关闭，不伪造渠道 ready 或支付成功。
 
-1. 先在后台切到**商用模式**，再进入同页的支付配置区域。
-2. 对于**易支付**，填写网关地址、商户号 PID、商户密钥和支付方式（支付宝/微信/QQ 钱包），勾选启用并保存。密钥只写入，不会回显；再次编辑时留空表示沿用已保存的值。
-3. 将后台显示的异步回调地址复制到易支付商户后台。通常是：
-   `https://你的域名/api/billing/webhooks/epay`
-   不要把商户密钥写入 URL，也不要把回调地址指向前端静态页面。
-4. 其他渠道的字段和环境变量以 `GET /api/admin/billing/payment-config` 返回的 `fields[].envNames` 为准；管理后台会分别显示「下单已就绪」和「回调已就绪」。
-5. 回调地址必须是**公网可达的 HTTPS**，且不能被登录鉴权、验证码或安装向导重定向拦截。
-6. 配置完成后回到 `/admin/orders`，确认「支付渠道统计」出现该渠道，并用一笔小额真实订单验证：下单 → 支付 → 回调 → 订单变为已支付 → 积分到账。
-7. 退款同样依赖渠道配置；未配置时退款会失败并返回后端错误。
+用户创建订单不会自动获得积分。管理员必须在服务外核实实际到账、金额和订单归属后，才确认订单已支付。当前没有可启用的在线支付签名回调协议；不要照旧文档配置易支付或微信回调来期待自动入账。
 
-### 未配置在线支付时
+人工退款同样不会转账：先通过退款准备流程冻结相应购买积分及已结算邀请奖励，取得 reservation ID；再执行并核实外部退款，最后用该 ID 确认退款完成。如果尚未对外退款，核实后才能取消准备并解除冻结。准备记录不会自动到期。详细接口与对账规则见后端部署文档。
 
-- 只使用人工支付：用户下单后由管理员在 `/admin/orders` 人工标记已支付或关闭订单。
-- 不要为了让测试通过而放宽后端校验或伪造支付成功。
+## 6. 数据、备份与版本切换
 
-## 6. 微信公众号扫码登录
+日常升级和首次迁移都必须保留可恢复的 PostgreSQL 备份、媒体数据、匹配的 `ENCRYPTION_KEY`、审计记录及旧版本产物。备份包含敏感数据，使用受控存储并实际演练恢复。
 
-微信登录是**默认关闭**的，只有配置公众号凭证后才会在登录页显示「微信扫码登录」。这套流程使用带参数二维码、服务端验签和一次性登录会话，不会把二维码里的参数直接当作用户身份。
+迁移或切换按后端部署文档执行，至少做到：
 
-### 后端环境变量
+1. 在隔离数据库与媒体目录演练迁移、导入和对账，关闭候选 worker。真实用户资料不作为测试夹具或发布附件。
+2. 核对账户、永久/每日/限时积分、订单、历史流水、项目、画布与媒体读取；历史套餐标签不能触发重复补发。
+3. 正式切换前冻结旧服务的写入和 worker，处理未决订单及上游任务，保存最终一致的数据基线。全程只保留一个有效业务写入方。
+4. 迁移、校验和代表性验收通过后，再切换前端代理目标、开启新 worker 与用户写入。
+5. 新后端尚无新写入时可以按已验证基线回退；出现新订单、积分变化或项目编辑后，不得直接指向旧数据库。先冻结、保留证据并核对新增数据，再决定修复或经验证的回迁。
 
-在后端 `web/.env` 或部署环境中设置：
+不要反复导入旧快照、重放历史积分发放或删除旧数据库来完成回滚。本项目没有自动破坏性 down migration，也没有自动反向迁移工具。
 
-```dotenv
-OAOAO_WECHAT_OFFICIAL_APP_ID=
-OAOAO_WECHAT_OFFICIAL_APP_SECRET=
-OAOAO_WECHAT_OFFICIAL_TOKEN=
-OAOAO_WECHAT_OFFICIAL_QR_EXPIRE_SECONDS=600
-OAOAO_WECHAT_LOGIN_MESSAGE=授权成功，请返回网页完成登录
-OAOAO_WECHAT_AUTO_REGISTER=false
-```
+## 7. 发布后的验证与排查
 
-- 微信公众号后台的服务器配置 URL 填：
-  `https://你的域名/api/auth/wechat-official/callback`
-- Token 必须与 `OAOAO_WECHAT_OFFICIAL_TOKEN` 完全一致；公众号后台还需要按微信要求填写同一个 Token 并完成首次校验。
-- `OAOAO_WECHAT_AUTO_REGISTER=false` 时，仅允许已经绑定到站内账号的微信登录；未绑定用户会看到明确提示，不会自动创建账号。
-- 确认注册策略、隐私政策和风控后，才将 `OAOAO_WECHAT_AUTO_REGISTER` 改为 `true`。自动注册会遵守后端的注册开关；微信身份验证是独立路径，不依赖普通邮箱验证码。
-- 微信回调必须公网可达，不能被前端登录页、安装向导、Cloudflare Access 或管理员鉴权拦截。
+在隔离测试数据库运行后端 `npm test`。前端的 `pnpm run test:acceptance` 是当前维护的验收入口；不要把依赖旧服务结构、私有夹具或可能写入数据的历史脚本直接对生产运行。
 
-普通账号注册与微信登录是两条独立路径：
+正式放量前验证登录与退出、跨账户隔离、管理员权限、项目保存与刷新恢复、媒体读取、积分流水和已启用的购买入口。真实模型、邮件与人工收款需单独端到端核实；模拟测试和健康检查不能替代这些结果。
 
-- 普通注册必须填写邮箱并完成邮箱验证码验证；管理员后台的“邮箱验证”已固定为注册必需项。
-- 微信自动注册使用公众号身份验证，不要求邮箱验证码；只有在明确开启 `OAOAO_WECHAT_AUTO_REGISTER=true` 后才会创建新账号。
-- 管理员 MFA 仍保留为可选的后台安全能力。未启用时，登录页不会显示动态验证码输入框；只有服务端明确返回 MFA 挑战时才会显示。
-
-### 调试顺序
-
-1. 登录页出现「微信扫码登录」按钮，说明三个必填凭证已被后端读到。
-2. 点击后能显示二维码，并且 `/api/auth/wechat-official/sessions` 返回 200。
-3. 扫码后轮询状态变为 `authorized`，随后一次性消费会话并跳回站点。
-4. 重复刷新或重复消费同一个会话必须失效；如果未绑定，先检查 `wechat_identities` 是否存在对应映射。
-
-## 7. 接口返回 500 时的排查顺序
-
-「系统接口 500」出现过三类原因，均已在 2026-09 修复。按以下顺序排查：
-
-### 1) `OAOAO_BACKEND_URL` 配置错误（最常见）
-
-当该变量缺少 `http://` 或 `https://` 前缀（例如写成 `127.0.0.1:3200`）时，
-地址解析会失败，导致**所有** `/api/*` 请求异常。
-
-已修复为返回 503 并给出明确提示：
-
-```
-{"error":"后端服务地址无效，请检查 OAOAO_BACKEND_URL 是否包含 http:// 或 https:// 前缀"}
-```
-
-看到这条信息即说明是环境变量问题，不需要改代码。
-可用 `node tests/proxy-config.test.mjs` 复现与验证该行为。
-
-### 2) 请求体格式不正确（已修复为 400）
-
-后端 `readJsonBody` 此前会放行 `null`、数字、字符串、顶层数组等**合法 JSON 但不是请求对象**的内容，
-后续 `body.xxx` 抛 TypeError 或以 500 结束；部分路由又把入参错误重新抛出。
-现在统一返回 400 与明确原因：
-
-| 情况 | 响应 |
+| 现象 | 先检查 |
 | --- | --- |
-| 畸形 JSON（`{`） | 400 `请求内容不是有效 JSON` |
-| `null` / 数字 / 字符串 / 顶层数组 | 400 `请求体必须是 JSON 对象` |
-| 图片任务 `prompt` 非字符串 | 400 `画面描述必须是文本` |
-| 视频/音频 `prompt` 非字符串 | 400 `镜头描述必须是文本` / `音频文本必须是文本` |
-| 请求体超过大小上限 | 413 `请求体过大` |
+| 前端 `/api/*` 返回 503，提示后端未配置或地址无效 | `OAOAO_BACKEND_URL` 是否存在、使用 HTTP(S)，以及实际服务启动环境。 |
+| 返回 502 后端连接失败 | 私网地址、端口、DNS、网络规则、后端进程与代理日志；不要输出密钥或 Cookie。 |
+| 写入返回 403 | 公网 `OAOAO_PUBLIC_URL`、后端 `PUBLIC_ORIGIN`、精确内部 `ALLOWED_ORIGINS` 以及被入口保留的来源头。 |
+| 登录后仍未登录 | HTTPS、生产 Cookie、多个 `Set-Cookie` 是否完整传递、旧会话是否已失效。 |
+| readiness 返回 503 | 数据库可达性、迁移清单与校验和；不要修改已应用迁移。 |
+| 请求返回 413 | 入口总请求限制、后端 JSON 或文件限制及对应接口限制。 |
+| 已下单但无积分 | 先核实是否真的到账并由有权限的管理员确认；人工方式没有自动支付回调。 |
+| 任务等待或需要人工检查 | worker 状态、逻辑模型/渠道配置、上游真实结果与日志；未知结果不得当作确认失败重复收费或自动重发。 |
 
-覆盖范围：`/api/admin/settings`、`/api/admin/billing/promotions`、`/api/admin/models`、
-作品审核/下架/推荐、治理案件、作品申诉、关注/点赞/举报、生成记录增删改、图片/视频/音频/文本任务、Agent 运行等
-共 30+ 个接口。回归测试：`node tests/api-robustness.test.mjs`。
+## 8. 源码版本与第三方声明
 
-### 3) 上游任务标识冲突（已修复为 409）
+前端页脚固定链接到 [OAOOAO 开源仓库](https://github.com/buyue666/OAOOAO) 和 [AGPL-3.0 许可证](LICENSE)，从主仓库 README 可找到独立后端。部署前确认两个仓库与相应源码可公开访问，不能让入口指向私有或缺失的源码。
 
-`generation_tasks` 上有唯一索引 `(channel_id, upstream_task_id)`，用于保证同一渠道下
-同一个上游任务只被一个本地任务接管。当该标识已被占用时 Postgres 抛 `23505`，
-旧实现未捕获，导致视频/音频任务的**取消**与**重新检查**直接 500。
+每次发布为实际构建的前后端提交保留可检出的版本标记、锁文件、迁移和构建/运行说明。运行自定义修改时也要提供对应修改的源码；只链接一个与线上版本不同的最新分支不能说明当前运行版本。发布记录应明确前端提交、后端提交和产物摘要之间的对应关系，避免源码链接与部署版本脱节。
 
-现在识别该错误码并按冲突处理，返回 `409 当前任务无法取消` / `409 视频任务状态已变化，请刷新后重试`。
-非唯一约束的数据库错误仍会正常抛出并记录，不会被误吞。
-
-若已存在卡在 `needs_review` 且操作返回 409 的历史任务，可用管理后台
-「生成运维 → 人工确认 → 确认上游未创建，结束任务」把它们收敛到终态。
-
-## 8. 密钥与敏感信息
-以下要求必须满足，本项目已按此实现多个环节：
-
-- 前端不读取渠道 API Key：生成任务只提交逻辑模型 ID。
-- 管理后台的渠道密钥字段始终脱敏返回，编辑时只能写入新值（留空表示沿用已保存的值）。
-- 审计日志与设置接口中的密钥、密码、令牌类字段在展示前被遮蔽。
-- 邮件与对象存储密钥字段同样是只写不可回显。
-- 日志中不要输出 API Key、密码、Token 或 Cookie。
-
-部署检查清单：
-
-- [ ] 确认 `OAOAO_BACKEND_URL` 指向正确后端，且前端服务器可访问
-- [ ] 确认 `OAOAO_PUBLIC_URL` 与浏览器实际访问源完全一致（含协议）
-- [ ] 确认 HTTPS 已生效，HTTP 已重定向
-- [ ] 确认会话 Cookie 具备 `Secure`、`HttpOnly`、合适的 `SameSite`
-- [ ] 确认反向代理保留方法、body、Cookie 与流式响应，并放宽长任务超时
-- [ ] 确认支付回调地址可从公网访问（如启用在线支付）
-- [ ] 确认前端与后端日志中不含密钥明文
-
-## 9. 部署后验证
-
-```powershell
-# 类型与构建
-pnpm exec tsc --noEmit --pretty false
-pnpm build
-
-# 回归测试（需要后端与前端在运行）
-node --test tests/membership.test.cjs
-node tests/proxy-config.test.mjs
-node tests/api-robustness.test.mjs
-node tests/generation-flow.test.mjs
-node tests/generation-browser-check.mjs
-node tests/admin-smoke.mjs
-node tests/admin-write-check.mjs
-node tests/admin-browser-check.mjs
-node tests/admin-interaction-check.mjs
-```
-
-手工验证至少覆盖：
-
-1. 登录后 `/image` 的模型下拉只出现后台已配置的模型。
-2. 提交一次真实生成，任务中心能看到状态推进、结果或失败原因、积分消耗。
-3. 刷新页面后任务仍在。
-4. 取消一个进行中任务，后端状态变为已取消。
-5. 未登录访问 `/image` 时明确显示「本地预览」。
-6. `/admin` 下 9 个页面均可打开，危险操作有确认弹窗。
-7. 故意把 `OAOAO_BACKEND_URL` 写成缺少协议的地址，确认接口返回 503 且提示明确（而不是 500）。
+保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、依赖许可证及后端第三方声明。应用许可证不会替代依赖、图标、字体和素材的许可；后端镜像中的 FFmpeg 与系统包还各有其声明和源码义务，分发镜像时需按实际包含的版本处理。

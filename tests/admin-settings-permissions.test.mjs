@@ -22,10 +22,10 @@ const declarations = ['AdminSettingsPanel', 'BillingSection', 'AccountSection'].
   assert.ok(node)
   return `export ${node.getText(settingsSource).replace(/^export /, '')}`
 }).join('\n')
-const ui = Object.fromEntries(['AdminError', 'AdminLoading', 'AdminNotice', 'AdminSectionCard', 'AdminSelect', 'AdminTabs', 'StatusBadge', 'AdminField', 'AdminInput', 'AdminSaveBar', 'ControlButton', 'Save', 'PaymentProviderEditor', 'CommercePolicyEditor', 'AdminSiteSettings', 'PointsSection', 'GenerationSection', 'MailSection', 'StorageSection', 'LifecycleSection'].map(name => [name, name]))
-const imports = `import { useState, useRef, useEffect, useCallback } from 'react'; import { useAdminSession, useAdminReload, useAdminNavigation, useConfirm } from './context'; import { getAdminSettings, getObjectStorage, getPaymentConfig, updateAdminSettings } from './api'; import { canConfigureManualPayment } from './helpers'; import { ${Object.keys(ui).join(',')} } from './ui';`
+const ui = Object.fromEntries(['AdminError', 'AdminLoading', 'AdminNotice', 'AdminSectionCard', 'AdminSelect', 'AdminTabs', 'StatusBadge', 'AdminField', 'AdminInput', 'AdminSaveBar', 'ControlButton', 'Save', 'PaymentProviderEditor', 'CommercePolicyEditor', 'AdminSiteSettings', 'AdminCheckInSettings', 'PointsSection', 'GenerationSection', 'MailSection', 'StorageSection', 'LifecycleSection'].map(name => [name, name]))
+const imports = `import { useState, useRef, useEffect, useCallback } from 'react'; import { useAdminSession, useAdminReload, useAdminNavigation, useConfirm } from './context'; import { getAdminSettings, getObjectStorage, getPaymentConfig, updateAdminSettings } from './api'; import { canConfigureManualPayment } from './helpers'; import { checkInRuleChanges, readCheckInForm } from './check-in-rules'; import { ${Object.keys(ui).join(',')} } from './ui';`
 function all(node) { return node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(all)] : [] }
-const fixtureSettings = { operationMode: 'self_use', registrationEnabled: false, freeDailyPointsEnabled: false, freeDailyPoints: 0, commercePolicy: { status: 'draft' }, site: {} }
+const fixtureSettings = { operationMode: 'self_use', registrationEnabled: false, freeDailyPointsEnabled: false, freeDailyPoints: 0, entitlements: { plans: [] }, commercePolicy: { status: 'draft' }, site: {} }
 const paymentConfig = { providers: [{ id: 'manual', checkoutKind: 'manual', ready: false, enabled: false, fields: [{ key: 'instructions', kind: 'textarea', value: '', configured: false }] }] }
 
 async function fixture(initialPermissions) {
@@ -42,7 +42,7 @@ async function fixture(initialPermissions) {
   const confirm = { dialog: null, confirm: data => confirmations.push(data) }
   const navigation = { registerGuard() {} }
   const api = compile(imports + declarations, {
-    react, './ui': ui, './helpers': compile(read('../lib/studio/manual-payment-config.ts')),
+    react, './ui': ui, './helpers': compile(read('../lib/studio/manual-payment-config.ts')), './check-in-rules': compile(read('../lib/studio/check-in-rules.ts')),
     './context': { useAdminSession: () => ({ can: permission => permissions.includes(permission) }), useAdminReload: () => ({ reloadKey: 0 }), useAdminNavigation: () => navigation, useConfirm: () => confirm },
     './api': { getAdminSettings: async () => { reads.settings++; return fixtureSettings }, getObjectStorage: async () => { reads.storage++; return {} }, getPaymentConfig: async () => { reads.payment++; return paymentConfig }, updateAdminSettings: async patch => { writes.push(plain(patch)); return { settings: { ...fixtureSettings, ...patch } } } },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
@@ -115,7 +115,7 @@ test('losing billing permission hides previously fetched payment data and does n
 
 test('registration, manual check-in and daily allowance submit only the fields owned by the current role', async () => {
   for (const [permissions, expected, titles] of [
-    [['commerce.manage'], { freeDailyPointsEnabled: true, freeDailyPoints: 7, checkIn: { enabled: true, rewardPoints: 12 } }, ['每日签到', '每日自动额度']],
+    [['commerce.manage'], { freeDailyPointsEnabled: true, freeDailyPoints: 7, checkIn: { enabled: true, rewardPoints: 12, validityDays: 0, planRewards: [] } }, ['每日签到', '每日自动额度']],
     [['system.manage'], { registrationEnabled: true }, ['注册开关']],
   ]) {
     const f = await fixture(permissions)
@@ -134,10 +134,10 @@ test('legacy settings default check-in to disabled, preserve a saved reward, and
   await f.select('account')
   const item = f.nodes().find(node => node.type === f.api.AccountSection)
   const defaults = all(f.api.AccountSection(item.props))
-  assert.equal(defaults.find(node => node.props?.name === 'checkInEnabled').props.defaultChecked, false)
-  assert.equal(defaults.find(node => node.props?.name === 'checkInRewardPoints').props.defaultValue, 10)
+  assert.deepEqual(plain(defaults.find(node => node.type === 'AdminCheckInSettings').props.settings), { enabled: false, rewardPoints: 10 })
   const edited = all(f.api.AccountSection({ ...item.props, settings: { ...fixtureSettings, checkIn: { enabled: true, rewardPoints: 25 } }, saving: true }))
-  assert.equal(edited.find(node => node.props?.name === 'checkInRewardPoints').props.defaultValue, 25)
+  assert.equal(edited.find(node => node.type === 'AdminCheckInSettings').props.settings.rewardPoints, 25)
+  assert.equal(edited.find(node => node.type === 'AdminCheckInSettings').props.saving, true)
   assert.ok(edited.filter(node => node.type === 'fieldset').every(node => node.props.disabled))
   edited.find(node => node.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: { checkInEnabled: 'on', checkInRewardPoints: '25' } })
   assert.equal(f.confirmations.length, 0)
@@ -148,4 +148,21 @@ test('upstream-only settings do not reveal the operation and payment group', asy
   assert.deepEqual(f.sections(), ['generation'])
   assert.deepEqual(f.reads, { settings: 1, payment: 0, storage: 0 })
   assert.equal(f.billing().length, 0)
+})
+
+test('invalid expiry prevents a confirmation and a custom plan can be cleared with a full replacement', async () => {
+  const f = await fixture(['commerce.manage'])
+  await f.select('account')
+  const item = f.nodes().find(node => node.type === f.api.AccountSection)
+  const customSettings = { ...fixtureSettings, entitlements: { plans: [{ id: 'pro', name: '专业套餐', enabled: true }] }, checkIn: { enabled: true, rewardPoints: 10, validityDays: 7, planRewards: [{ planId: 'pro', rewardPoints: 100, validityDays: 30 }] } }
+  const fields = { checkInEnabled: 'on', checkInRewardPoints: '10', checkInValidityMode: 'limited', checkInValidityDays: '3651' }
+  let nodes = all(f.api.AccountSection({ ...item.props, settings: customSettings }))
+  nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: fields })
+  assert.equal(f.confirmations.length, 0)
+  fields.checkInValidityDays = '7'
+  nodes = all(f.api.AccountSection({ ...item.props, settings: customSettings }))
+  nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: fields })
+  assert.equal(f.confirmations.length, 1)
+  await f.confirmations[0].onConfirm()
+  assert.deepEqual(f.writes[0].checkIn, { enabled: true, rewardPoints: 10, validityDays: 7, planRewards: [] })
 })

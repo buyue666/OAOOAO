@@ -27,6 +27,16 @@ const apiAst = ts.createSourceFile('api.ts', apiSource, ts.ScriptTarget.ES2022, 
 const mapper = apiAst.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === 'backendUserToStudioUser')
 const { backendUserToStudioUser } = evaluate(mapper.getText(apiAst))
 
+test('session maps all real wallet buckets but never adds timed points on top of the server total', () => {
+  const user = backendUserToStudioUser({ id: 'account-a', pointsBalance: 33, permanentPointsBalance: 20, dailyPointsBalance: 3, timedPointsBalance: 10, timedPointsExpiresAt: '2026-10-15T16:00:00Z' }, '/icon.svg')
+  assert.equal(user.credits, 33)
+  assert.equal(user.timedPointsBalance, 10)
+  assert.equal(user.timedPointsExpiresAt, '2026-10-15T16:00:00Z')
+  const legacy = backendUserToStudioUser({ id: 'account-b', pointsBalance: 7 }, '/icon.svg')
+  assert.equal(legacy.timedPointsBalance, undefined)
+  assert.equal(legacy.timedPointsExpiresAt, undefined)
+})
+
 function sessionHarness() {
   let state = helpers.getInitialState()
   const sessions = [], projects = [], cleared = []

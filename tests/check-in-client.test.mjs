@@ -67,3 +67,18 @@ test('unmount prevents outstanding claim from refreshing the account and release
   const h = harness(); const ui = await ready(h); const work = ui.claim(); h.unmount(); h.requests[1].resolve(status({ claimed: true })); await work
   assert.equal(h.refreshed.length, 0); assert.equal(h.timers.size, 0)
 })
+
+test('claim and refresh retain server reward snapshots after the effective rule changes', async () => {
+  const h = harness()
+  const ui = await ready(h, status({ rewardPoints: 25, validityDays: 1, rulePlanName: '专业套餐' }))
+  const claimed = status({ claimed: true, rewardPoints: 25, validityDays: 1, claimedRewardPoints: 25, claimedValidityDays: 1, claimedPlanName: '专业套餐', expiresAt: '2026-10-15T16:00:00.000Z' })
+  const work = ui.claim(); h.requests[1].resolve(claimed); await work
+  assert.deepEqual(h.render().status, claimed)
+  const read = h.render().refresh()
+  const changed = { ...claimed, rewardPoints: 500, validityDays: 0, rulePlanName: '新套餐' }
+  h.requests[2].resolve(changed); await read
+  assert.equal(h.render().status.claimedRewardPoints, 25)
+  assert.equal(h.render().status.expiresAt, claimed.expiresAt)
+  await h.render().claim()
+  assert.equal(h.requests.filter(row => row.method === 'POST').length, 1)
+})

@@ -59,6 +59,11 @@ export interface User {
   avatar: string
   plan: string
   credits: number
+  permanentPointsBalance?: number
+  dailyPointsBalance?: number
+  dailyPointsExpiresAt?: string | null
+  timedPointsBalance?: number
+  timedPointsExpiresAt?: string | null
 }
 
 export interface Project {
