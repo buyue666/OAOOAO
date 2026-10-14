@@ -40,6 +40,16 @@ All automated adapter and worker tests use synthetic users, isolated disposable 
 
 The creative routes cover canvas/drama project CRUD, optimistic saves and handoff creation; library CRUD; reference upload and authenticated media reads; text/image/video/audio create/query/cancel/recover; merged generation history; Agent create/list/query/events/actions/child retry; drama rendering and versions; and administrative generation overview, operations and audited review. The Jianying route is deliberately present with an unavailable response. Numeric entitlement limits for daily calls, generation counts and point spending are enforced. Arbitrary entitlement `features` strings remain stored display metadata because the supplied consumer contract does not define executable feature identifiers or their access rules.
 
+## Capability restrictions, 2026-10-14
+
+The original arbitrary `features` labels remain compatibility metadata. The later
+`allowedGenerationKinds` field is a distinct executable policy controlling text,
+image, video, audio and render tasks before provider calls or debit, including Agent
+steps. Concurrent plan revocation and task creation serialize on the account row;
+this does not retroactively change the original module author's provenance statement.
+The current behavior and isolated regression scope are described in
+[the integration audit](../docs/INTEGRATION-AUDIT-2026-10-14.md).
+
 ## Follow-up acceptance fixes, 2026-10-14
 
 The coordinating implementer added prompt-skill selection and `src/agent-context.ts`

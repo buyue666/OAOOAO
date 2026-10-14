@@ -1,983 +1,126 @@
-/**
- * 主题与响应式作用域。
- *
- * 两个关键点：
- * ① 变量必须定义在**可复用的作用域类**上，而不是只挂在 `.root`。
- *    此前实时预览只用了 `.planGrid`，导致 --membership-page / --membership-ink
- *    为空，卡片背景透明、文字继承后台浅色主题，与真实套餐页不一致。
- * ② 响应式规则改用**容器查询**，由 `.viewportScope` 的宽度驱动，
- *    而不是由浏览器窗口宽度驱动。这样后台里 390px 宽的预览框
- *    会与真实 390px 手机视口得到完全相同的布局，
- *    而不是「只缩小外框、媒体查询仍按 1440px 生效」。
- *    真实套餐页同样使用这套规则，因此两者不可能分叉。
- */
+/* New storefront composition. Responsive decisions use the preview's own width. */
 .themeScope {
-  --membership-page: #000000;
-  --membership-ink: #f5f5f5;
-  --membership-muted: #8d8d8d;
-  --membership-cyan: #20b7d8;
-  --membership-orange: #ff5a0a;
+  --membership-page: #0a101b;
+  --membership-ink: #eff5ff;
+  --membership-muted: #a6b4ca;
   background: var(--membership-page);
   color: var(--membership-ink);
-  font-family: var(--font-sans);
-  font-size: 14px;
+  font-family: inherit;
   line-height: 1.5;
+  color-scheme: dark;
+}
+.themeScope, .themeScope *, .toneSwatch { box-sizing: border-box; }
+.themeScope :where(button, a, input, summary):focus-visible, .toneSwatch:focus-visible {
+  outline: 3px solid #5ecdf6;
+  outline-offset: 4px;
+}
+.viewportScope { container: membership-viewport / inline-size; width: 100%; min-width: 0; }
+.storeRoot { position: relative; min-height: 78dvh; padding: 42px 24px 64px; }
+.previewRoot { position: relative; padding: 42px 24px 64px; min-height: 0; }
+.storeContent { width: 100%; max-width: 1440px; margin-inline: auto; }
+.storeHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; max-width: 1160px; margin: 0 auto 30px; }
+.storeHeader h1 { margin: 4px 0 10px; font-size: clamp(26px, 3cqw, 40px); font-weight: 650; letter-spacing: -.04em; line-height: 1.25; }
+.storeEyebrow { margin: 0; color: #68d5bc; font-size: 12px; letter-spacing: .14em; }
+.storeIntro { margin: 0; color: var(--membership-muted); font-size: 14px; }
+.exitButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: 0 0 auto; min-height: 44px; padding: 8px 14px; border: 1px solid #344255; border-radius: 14px; background: #142030; color: var(--membership-ink); cursor: pointer; }
+.exitButton > span:first-child { font-size: 22px; line-height: 1; }
+.browseBar { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; margin: 28px auto; }
+.browseGroup { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; padding: 5px; border: 1px solid #344255; border-radius: 15px; background: #121e2e; }
+.browseGroup button { min-height: 40px; padding: 8px 20px; border: 0; border-radius: 10px; color: #c0cde0; font: inherit; font-size: 14px; background: transparent; cursor: pointer; }
+.browseGroup button[aria-pressed="true"] { color: #08131b; background: #ccecdf; font-weight: 650; }
+.browseGroup button:hover:not([aria-pressed="true"]) { background: #223248; }
+.previewNotice { margin: 0 auto 22px; text-align: center; color: #b5c5de; font-size: 12px; }
+.planGrid { display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 20px; width: 100%; max-width: min(100%, calc(var(--plan-count, 5) * 280px + (var(--plan-count, 5) - 1) * 20px)); margin-inline: auto; }
+.offerCard { --offer-paper: #ddf9ec; --offer-accent: #107357; --offer-line: #95c9b7; display: flex; flex: 1 1 228px; flex-direction: column; min-width: 0; max-width: 280px; overflow-wrap: anywhere; border: 1px solid var(--offer-line); border-radius: 22px; background: var(--offer-paper); color: #142239; color-scheme: light; box-shadow: 0 12px 28px #00000020; }
+.offerCard[data-tone="advanced"], .toneSwatch[data-tone="advanced"] { --offer-paper: #def0ff; --offer-accent: #215eaf; --offer-line: #9bbddf; }
+.offerCard[data-tone="premium"], .toneSwatch[data-tone="premium"] { --offer-paper: #ece1ff; --offer-accent: #7138b5; --offer-line: #bf9edf; }
+.offerCard[data-tone="luxury"], .toneSwatch[data-tone="luxury"] { --offer-paper: #ffe2ee; --offer-accent: #a52b60; --offer-line: #dfa0ba; }
+.offerCard[data-tone="ultimate"], .toneSwatch[data-tone="ultimate"] { --offer-paper: #ffefc0; --offer-accent: #8b590a; --offer-line: #d7bc6e; }
+.offerHeader { position: relative; min-height: 118px; padding: 24px 22px 18px; border-bottom: 1px solid var(--offer-line); }
+.offerMarker { width: 24px; height: 6px; margin-bottom: 14px; border-radius: 2px; background: var(--offer-accent); }
+.offerHeading { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+.offerHeading h2 { flex: 1 1 auto; margin: 0; font-size: 20px; line-height: 1.3; letter-spacing: -.025em; font-weight: 700; }
+.offerBadge { padding: 3px 8px; border: 1px solid var(--offer-line); border-radius: 7px; color: var(--offer-accent); background: #ffffff85; font-size: 11px; font-weight: 650; }
+.offerPromotion { margin: 12px 0 0; color: var(--offer-accent); font-size: 12px; font-weight: 650; }
+.offerBody { display: flex; flex-direction: column; align-items: flex-start; min-height: 292px; padding: 18px 22px 22px; }
+.tierChoices { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-bottom: 18px; }
+.tierChoices button { flex: 1 1 auto; min-width: 0; min-height: 36px; border: 1px solid var(--offer-line); border-radius: 8px; padding: 7px 10px; color: #42536b; background: #ffffff80; font: inherit; font-size: 12px; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+.tierChoices button[aria-pressed="true"] { border-color: var(--offer-accent); background: var(--offer-accent); color: #fff; }
+.creditMetric { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.creditMetric strong { font-size: 30px; line-height: 1.2; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.creditMetric span { font-size: 11px; color: #4c5c70; }
+.dailyMetric { margin: 8px 0 0; font-size: 12px; color: var(--offer-accent); }
+.costLine { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin-top: 18px; }
+.costLine strong { font-size: 26px; line-height: 1.3; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.costLine span { font-size: 12px; color: #4c5c70; }
+.previousCost { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; color: #56657b; font-size: 12px; }
+.previousCost span { color: var(--offer-accent); font-weight: 650; }
+.paymentNote { margin: 7px 0 0; color: #4c5c70; font-size: 11px; line-height: 1.65; }
+.offerAction { width: 100%; min-height: 44px; height: auto; margin-top: auto; padding: 11px 12px; border: 1px solid var(--offer-accent); border-radius: 10px; color: white; background: var(--offer-accent); font-weight: 650; white-space: normal; cursor: pointer; }
+.offerBody .offerAction { margin-top: 22px; }
+.offerAction:hover:not(:disabled) { filter: brightness(.92); }
+.offerAction:disabled { opacity: .58; cursor: default; }
+.unavailableNote { margin: 4px 0 16px; color: #4c5c70; font-size: 13px; }
+.entitlementBlock { flex: 1 0 auto; padding: 18px 22px 24px; border-top: 1px solid var(--offer-line); background: #ffffff40; border-radius: 0 0 22px 22px; }
+.entitlementCaption { margin: 0 0 14px; color: #4c5c70; font-size: 11px; letter-spacing: .05em; }
+.entitlementBlock ul { display: flex; flex-direction: column; gap: 11px; list-style: none; padding: 0; margin: 0; }
+.entitlementBlock li { display: flex; align-items: flex-start; gap: 9px; min-width: 0; font-size: 12px; line-height: 1.65; }
+.entitlementDot { flex: 0 0 5px; height: 5px; margin-top: 7px; border-radius: 50%; background: var(--offer-accent); }
+.entitlementBlock small { display: block; margin-top: 3px; color: #56657b; font-size: 11px; }
+.foldHint { margin: 16px 0 0; color: #56657b; font-size: 11px; }
+.moreBenefitsButton { display: block; min-height: 44px; margin: 24px auto 0; padding: 10px 22px; border: 1px solid #40526a; border-radius: 12px; background: #152236; color: #d2e0f1; font: inherit; font-size: 13px; cursor: pointer; }
+.catalogState { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 240px; padding: 32px 20px; border: 1px dashed #344255; border-radius: 20px; text-align: center; color: #c2d0e3; font-size: 14px; }
+.catalogState p { margin: 0; }
+.catalogState > span { font-size: 12px; color: var(--membership-muted); }
+.campaignPanel { display: flex; align-items: center; gap: 18px; max-width: 1160px; margin: 0 auto 24px; border: 1px solid #344255; border-radius: 18px; padding: 16px; background: #142033; overflow-wrap: anywhere; }
+.campaignPanel img { width: 80px; height: 80px; flex: 0 0 80px; border-radius: 10px; object-fit: cover; }
+.campaignPanel p { margin: 0 0 5px; font-weight: 650; }
+.campaignPanel span { color: var(--membership-muted); font-size: 13px; }
+.detailSection { max-width: 1000px; margin: 48px auto 0; }
+.detailSection h2 { margin: 0 0 18px; font-size: 20px; font-weight: 650; }
+.comparisonScroll { max-width: 100%; overflow-x: auto; border: 1px solid #344255; border-radius: 12px; }
+.comparisonScroll table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.comparisonScroll caption { padding: 12px; color: var(--membership-muted); }
+.comparisonScroll th, .comparisonScroll td { padding: 13px 16px; border-top: 1px solid #344255; }
+.comparisonScroll th { font-weight: 550; }
+.questionRow { border-top: 1px solid #344255; padding: 16px 0; font-size: 14px; }
+.questionRow summary { cursor: pointer; }
+.questionRow p { color: var(--membership-muted); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reviewPanel { width: min(540px, calc(100vw - 32px)); max-width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; border: 1px solid #344255; border-radius: 20px; }
+.reviewSummary { display: grid; gap: 12px; margin: 4px 0; padding: 18px; border: 1px solid #344255; border-radius: 12px; background: #142033; font-size: 13px; }
+.reviewSummary > div { display: flex; justify-content: space-between; gap: 16px; }
+.reviewSummary dt { flex: 0 0 auto; color: var(--membership-muted); }
+.reviewSummary dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.reviewSummary strong { color: #9ce4cb; font-size: 20px; }
+.reviewNote { margin: 0; font-size: 12px; color: var(--membership-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.policyList { display: grid; gap: 14px; margin: 0; font-size: 12px; }
+.policyList dt { color: #d7e4f3; font-weight: 600; }
+.policyList dd { margin: 4px 0 0; color: var(--membership-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.policyList a { display: inline-block; margin-right: 12px; color: #97d9f1; text-decoration: underline; }
+.agreementRow { display: flex; align-items: flex-start; gap: 10px; border-top: 1px solid #344255; padding-top: 16px; font-size: 12px; line-height: 1.75; }
+.agreementRow input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; accent-color: #5dc9a6; }
+.agreementRow a { margin-inline: 3px; color: #97d9f1; text-decoration: underline; }
+.reviewError { margin: 0; color: #ffc7c7; font-size: 13px; }
+.reviewActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.reviewActions > button { min-height: 42px; height: auto; padding: 10px 14px; }
+.toneOptions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.toneSwatch { --offer-paper: #ddf9ec; --offer-accent: #107357; --offer-line: #95c9b7; width: 30px; height: 30px; border: 3px solid var(--offer-paper); border-radius: 9px; background: var(--offer-accent); outline: 1px solid var(--offer-line); cursor: pointer; }
+.toneSwatch[aria-pressed="true"] { box-shadow: 0 0 0 3px #8297b5; }
+@container membership-viewport (max-width: 620px) {
+  .storeHeader { gap: 12px; margin-bottom: 24px; }
+  .storeHeader h1 { font-size: 26px; }
+  .storeIntro { font-size: 13px; }
+  .exitButton { width: 44px; padding: 8px; }
+  .exitButton > span:last-child { display: none; }
+  .browseBar { align-items: stretch; flex-direction: column; gap: 10px; margin-block: 22px; }
+  .browseGroup button { flex: 1 1 auto; padding-inline: 14px; }
+  .planGrid { max-width: 100%; gap: 18px; }
+  .offerCard { flex-basis: 100%; width: 100%; max-width: 420px; }
+  .offerHeader { min-height: 0; padding: 22px; }
+  .offerBody { min-height: 0; }
+  .campaignPanel { align-items: flex-start; }
+  .detailSection { margin-top: 34px; }
 }
-
-.root {
-  min-height: 100vh;
-  overflow-x: clip;
-  position: relative;
-}
-
-.viewportScope {
-  container-type: inline-size;
-  padding: 18px 24px 96px;
-}
-
-/**
- * 预览模式：在后台内嵌渲染套餐页时使用。
- *
- * 与真实页的差异只有两点，且都是**容器化**所必需：
- * ① 去掉 `min-height: 100vh`，避免在抽屉里撑出整屏高度；
- * ② 关闭按钮从 `fixed` 改为 `absolute`，并让作用域自身裁切，
- *    否则 `.closeButton` 会跑到整个后台窗口右上角（实测 position=absolute
- *    但父级未裁切时仍溢出到后台窗口边缘）。
- * 其余主题变量、容器查询、间距规则全部与真实页共用同一份声明。
- */
-.previewRoot {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.previewRoot .closeButton {
-  position: absolute;
-}
-
-.main {
-  width: min(100%, 1200px);
-  margin: 0 auto;
-}
-
-.closeButton {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 1px solid color-mix(in srgb, var(--membership-ink) 18%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
-  color: var(--membership-muted);
-  cursor: pointer;
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
-}
-
-.closeButton:hover {
-  border-color: color-mix(in srgb, var(--membership-ink) 38%, transparent);
-  background: color-mix(in srgb, var(--membership-ink) 12%, var(--membership-page));
-  color: var(--membership-ink);
-}
-
-.closeButton svg,
-.pointsRulesButton svg {
-  width: 18px;
-  height: 18px;
-}
-
-.closeButton:focus-visible,
-.audienceTabs button:focus-visible,
-.billingSwitch button:focus-visible,
-.pointsRulesButton:focus-visible,
-.tierPills button:focus-visible,
-.installmentButton:focus-visible,
-.moreBenefitsButton:focus-visible,
-.faqItem button:focus-visible,
-.planScroller:focus-visible,
-.tableScroller:focus-visible {
-  outline: 2px solid var(--membership-cyan);
-  outline-offset: 3px;
-}
-
-.campaignBanner {
-  position: relative;
-  width: min(100%, 920px);
-  height: 104px;
-  margin: 0 auto 18px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--membership-ink) 9%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--membership-cyan) 8%, var(--membership-page));
-}
-
-.campaignBanner::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, var(--membership-page) 0%, transparent 62%);
-  content: '';
-  opacity: 0.72;
-}
-
-.campaignBanner img {
-  object-fit: cover;
-}
-
-.campaignCopy {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  width: 56%;
-  height: 100%;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 28px;
-}
-
-.campaignCopy strong {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.campaignCopy span {
-  color: color-mix(in srgb, var(--membership-ink) 74%, var(--membership-muted));
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.selectorArea {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.audienceTabs {
-  display: flex;
-  justify-content: center;
-  gap: 64px;
-  border-bottom: 1px solid color-mix(in srgb, var(--membership-ink) 12%, transparent);
-}
-
-.audienceTabs button {
-  position: relative;
-  min-width: 92px;
-  height: 42px;
-  border: 0;
-  background: transparent;
-  color: var(--membership-muted);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
-}
-
-.audienceTabs button[aria-selected='true'] {
-  color: var(--membership-ink);
-}
-
-.audienceTabs button[aria-selected='true']::after {
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: var(--membership-ink);
-  content: '';
-}
-
-.billingRow {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 38px;
-}
-
-.billingSwitch {
-  display: flex;
-  align-items: stretch;
-  padding: 3px;
-  border: 1px solid color-mix(in srgb, var(--membership-ink) 14%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
-}
-
-.billingSwitch button {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--membership-muted);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
-}
-
-.billingSwitch button[aria-pressed='true'] {
-  background: color-mix(in srgb, var(--membership-ink) 16%, var(--membership-page));
-  color: var(--membership-ink);
-}
-
-.billingSwitch [data-slot='badge'] {
-  height: 20px;
-  border: 0;
-  background: color-mix(in srgb, var(--membership-orange) 18%, var(--membership-page));
-  color: var(--membership-orange);
-  font-size: 12px;
-}
-
-.pointsRulesButton {
-  position: absolute;
-  right: 0;
-  display: flex;
-  height: 34px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  border: 1px solid var(--membership-cyan);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--membership-cyan) 8%, var(--membership-page));
-  color: var(--membership-cyan);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 600;
-}
-
-.plansSection {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  margin-top: 26px;
-}
-
-.planScroller {
-  width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-color: color-mix(in srgb, var(--membership-ink) 20%, transparent) transparent;
-  scrollbar-width: thin;
-}
-
-.planGrid {
-  display: grid;
-  width: 100%;
-  margin-inline: auto;
-  grid-template-columns: repeat(var(--plan-count, 5), minmax(0, 1fr));
-  max-width: calc(var(--plan-count, 5) * 280px);
-  gap: 12px;
-  align-items: start;
-}
-
-.planCard,
-.loadingCard {
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--membership-ink) 10%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
-}
-
-/* The same palette powers published cards and the admin's live swatches. */
-.planCard[data-tone='standard'], .toneSwatch[data-tone='standard'] { --plan-accent: #5ee3bc; --plan-deep: #143d36; }
-.planCard[data-tone='advanced'], .toneSwatch[data-tone='advanced'] { --plan-accent: #8dbaff; --plan-deep: #1c345e; }
-.planCard[data-tone='premium'], .toneSwatch[data-tone='premium'] { --plan-accent: #c0a0ff; --plan-deep: #392553; }
-.planCard[data-tone='luxury'], .toneSwatch[data-tone='luxury'] { --plan-accent: #ffadcc; --plan-deep: #532d43; }
-.planCard[data-tone='ultimate'], .toneSwatch[data-tone='ultimate'] { --plan-accent: #ffd17b; --plan-deep: #513c20; }
-.planCard[data-tone] {
-  border-color: color-mix(in srgb, var(--plan-accent) 48%, #1b2027);
-  border-radius: 18px;
-  background: radial-gradient(ellipse at 92% 0%, color-mix(in srgb, var(--plan-accent) 17%, transparent), transparent 56%), linear-gradient(155deg, var(--plan-deep), #11171d 76%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--plan-accent) 20%, transparent);
-}
-.planCard[data-tone] .purchaseButton:not(:disabled) { background: var(--plan-accent); color: #101820; }
-.planCard[data-tone] .creditValue strong { color: var(--plan-accent); }
-.planCard[data-tone] .promotionStrip { background: var(--plan-accent); color: #101820; }
-.planCard[data-tone] .renewalCopy, .planCard[data-tone] .equivalentCopy, .planCard[data-tone] .generationSummary { color: #b8c3ce; }
-.toneOptions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.toneSwatch { width: 30px; height: 30px; border: 2px solid transparent; border-radius: 50%; background: linear-gradient(135deg, var(--plan-accent), var(--plan-deep)); cursor: pointer; }
-.toneSwatch[aria-pressed='true'] { outline: 2px solid var(--foreground); outline-offset: 2px; }
-.toneSwatch:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
-.storefrontHeading { padding: 34px 0 30px; text-align: center; }
-.storefrontHeading > span { color: #99c4eb; letter-spacing: .18em; font-size: 11px; font-weight: 700; }
-.storefrontHeading h1 { margin: 12px 0; color: #f7faff; font-size: clamp(26px, 4vw, 40px); font-weight: 700; letter-spacing: -.04em; }
-.storefrontHeading p { color: #b8c3ce; font-size: 14px; line-height: 1.8; }
-.pointsRulesLink { margin-top: 16px; color: #9fe8d2; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
-.purchasePolicy { display: grid; gap: 12px; max-height: 200px; overflow: auto; padding: 14px; border: 1px solid #39434e; border-radius: 12px; font-size: 12px; line-height: 1.7; }
-.purchasePolicy dt { font-weight: 700; color: #f1f5f9; }
-.purchasePolicy dd { margin: 2px 0 0; color: #cbd5e1; white-space: pre-wrap; overflow-wrap: anywhere; }
-.legalLinks { color: #bac4cf; font-size: 12px; line-height: 1.8; }
-.legalLinks a { color: #b5d8ff; text-decoration: underline; text-underline-offset: 3px; }
-
-.promotionStrip {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  background: var(--membership-cyan);
-  color: var(--membership-page);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-
-.planSummary {
-  display: flex;
-  min-height: 356px;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px 16px 16px;
-}
-
-.planHeading {
-  display: flex;
-  min-height: 26px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.planHeading h2 {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.planHeading [data-slot='badge'] {
-  border: 0;
-  background: color-mix(in srgb, var(--membership-cyan) 20%, var(--membership-page));
-  color: var(--membership-cyan);
-  font-size: 12px;
-}
-
-.planCard[data-tone='ultimate'] .planHeading [data-slot='badge'] {
-  background: color-mix(in srgb, var(--membership-orange) 20%, var(--membership-page));
-  color: var(--membership-orange);
-}
-
-.priceLine {
-  display: flex;
-  min-height: 48px;
-  align-items: baseline;
-  gap: 3px;
-  white-space: nowrap;
-}
-
-.priceLine > span {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.priceLine strong {
-  font-size: 36px;
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.priceLine small {
-  color: color-mix(in srgb, var(--membership-ink) 80%, var(--membership-muted));
-  font-size: 14px;
-}
-
-.priceLine del {
-  margin-left: 2px;
-  color: var(--membership-muted);
-  font-size: 14px;
-}
-
-/** 折扣标签：由「日常价 / 活动价」计算得出，紧跟在价格后面。 */
-.discountTag {
-  align-self: center;
-  margin-left: 6px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--membership-cyan) 22%, var(--membership-page));
-  color: var(--membership-cyan);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.planCard[data-tone='ultimate'] .discountTag {
-  background: color-mix(in srgb, var(--membership-orange) 22%, var(--membership-page));
-  color: var(--membership-orange);
-}
-
-/** 单档位标签沿用 tierPills 视觉，但表现为只读状态而不是可点按钮。 */
-.tierPills button:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.priceUnavailable {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  color: var(--membership-muted);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.renewalCopy,
-.equivalentCopy,
-.generationSummary {
-  min-height: 21px;
-  color: var(--membership-muted);
-  font-size: 14px;
-}
-
-.creditValue {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  margin-top: 4px;
-}
-
-.creditValue strong {
-  font-size: 22px;
-}
-
-.creditValue span {
-  color: color-mix(in srgb, var(--membership-ink) 78%, var(--membership-muted));
-}
-
-/**
- * 档位切换区。
- *
- * 列数必须**随档位数量**变化：早先硬编码 `repeat(2, …)`，
- * 单档位时按钮只占容器 47%（116px / 246px），长档位名被挤在半个格子里换行；
- * 3 个以上档位时又会挤成两列再折行。
- * 这里改用 `--tier-count` 由组件按真实档位数注入。
- */
-.tierPills {
-  display: grid;
-  grid-template-columns: repeat(var(--tier-count, 1), minmax(0, 1fr));
-  gap: 6px;
-  padding: 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
-}
-
-.tierPills button {
-  min-width: 0;
-  min-height: 32px;
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--membership-muted);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  /* 长档位名：优先完整显示（允许换行），极端长度再省略，绝不溢出容器。 */
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  text-overflow: ellipsis;
-}
-
-.tierPills button[aria-pressed='true'] {
-  background: var(--membership-ink);
-  color: var(--membership-page);
-}
-
-.generationSummary {
-  margin-top: auto;
-}
-
-.purchaseButton {
-  width: 100%;
-  border: 0;
-  border-radius: 999px;
-  background: var(--membership-ink);
-  color: var(--membership-page);
-  font-weight: 800;
-}
-
-
-.purchaseButton:disabled {
-  background: color-mix(in srgb, var(--membership-ink) 12%, var(--membership-page));
-  color: var(--membership-muted);
-  opacity: 1;
-}
-
-.installmentButton {
-  display: flex;
-  min-height: 28px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  color: var(--membership-orange);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-}
-
-.installmentButton [data-slot='badge'] {
-  height: 20px;
-  border-color: color-mix(in srgb, var(--membership-orange) 48%, transparent);
-  color: var(--membership-orange);
-  font-size: 12px;
-}
-
-.installmentPlaceholder {
-  min-height: 28px;
-}
-
-.planBenefits {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px 16px 22px;
-  border-top: 1px solid color-mix(in srgb, var(--membership-ink) 10%, transparent);
-}
-
-.promotionGroup,
-.benefitGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.benefitGroup {
-  padding-top: 14px;
-  border-top: 1px solid color-mix(in srgb, var(--membership-ink) 10%, transparent);
-}
-
-.promotionGroup h3,
-.benefitGroup h3 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.promotionGroup h3 {
-  color: var(--membership-cyan);
-}
-
-.planCard[data-tone='ultimate'] .promotionGroup h3 {
-  color: var(--membership-orange);
-}
-
-.promotionGroup ul,
-.benefitGroup ul {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  list-style: none;
-}
-
-.promotionGroup li,
-.benefitGroup li {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  color: color-mix(in srgb, var(--membership-ink) 84%, var(--membership-muted));
-  font-size: 14px;
-}
-
-.promotionGroup li {
-  padding: 9px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
-}
-
-.promotionGroup svg,
-.benefitGroup svg,
-.promotionGroup h3 svg,
-.moreBenefitsButton svg {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
-
-.promotionGroup li svg:last-child {
-  margin-left: auto;
-  color: var(--membership-muted);
-}
-
-.moreBenefitsButton {
-  display: flex;
-  min-height: 36px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  border: 1px solid color-mix(in srgb, var(--membership-ink) 14%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--membership-ink) 9%, var(--membership-page));
-  color: var(--membership-ink);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-}
-
-.moreBenefitsButton svg {
-  transition: transform 160ms ease;
-}
-
-.moreBenefitsButton svg[data-open='true'] {
-  transform: rotate(180deg);
-}
-
-.demoNotice {
-  color: var(--membership-muted);
-  font-size: 14px;
-  text-align: center;
-}
-
-.statePanel {
-  display: flex;
-  min-height: 340px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  border: 1px solid color-mix(in srgb, var(--membership-ink) 12%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--membership-ink) 7%, var(--membership-page));
-  color: var(--membership-muted);
-  text-align: center;
-}
-
-.statePanel strong {
-  color: var(--membership-ink);
-  font-size: 18px;
-}
-
-.loadingCard {
-  min-height: 720px;
-  padding: 18px 16px;
-}
-
-.loadingTitle,
-.loadingPrice,
-.loadingButton,
-.loadingBody {
-  background: color-mix(in srgb, var(--membership-ink) 12%, var(--membership-page));
-}
-
-.loadingTitle { width: 50%; height: 24px; }
-.loadingPrice { width: 75%; height: 48px; margin-top: 20px; }
-.loadingButton { width: 100%; height: 38px; margin-top: 180px; border-radius: 999px; }
-.loadingBody { width: 100%; height: 260px; margin-top: 30px; }
-
-.comparisonSection,
-.faqSection {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  margin-top: 78px;
-}
-
-.comparisonSection h2,
-.faqSection h2 {
-  font-size: 22px;
-  font-weight: 800;
-  text-align: center;
-}
-
-.tableScroller {
-  width: 100%;
-  overflow-x: auto;
-  border-radius: 8px;
-  scrollbar-color: color-mix(in srgb, var(--membership-ink) 20%, transparent) transparent;
-  scrollbar-width: thin;
-}
-
-.tableScroller table {
-  width: 100%;
-  min-width: 1040px;
-  border-collapse: collapse;
-  background: color-mix(in srgb, var(--membership-ink) 5%, var(--membership-page));
-}
-
-.tableScroller th,
-.tableScroller td {
-  height: 48px;
-  padding: 0 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--membership-ink) 9%, transparent);
-  font-size: 14px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.tableScroller thead th {
-  background: color-mix(in srgb, var(--membership-ink) 10%, var(--membership-page));
-  color: var(--membership-muted);
-  font-weight: 700;
-}
-
-.tableScroller tbody tr:not(.tableGroupRow):nth-child(odd) {
-  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
-}
-
-.tableScroller tbody tr:not(.tableGroupRow):nth-child(even) {
-  background: color-mix(in srgb, var(--membership-ink) 13%, var(--membership-page));
-}
-
-.tableScroller tbody th {
-  color: var(--membership-ink);
-  font-weight: 700;
-}
-
-.tableScroller tbody td {
-  color: color-mix(in srgb, var(--membership-ink) 86%, var(--membership-muted));
-}
-
-.tableGroupRow th {
-  height: 40px;
-  background: var(--membership-page);
-  color: var(--membership-muted);
-  font-weight: 700;
-}
-
-.tableNotice {
-  color: var(--membership-muted);
-  font-size: 14px;
-}
-
-.faqSection {
-  width: min(100%, 820px);
-  margin-right: auto;
-  margin-left: auto;
-}
-
-.faqList {
-  border-top: 1px solid color-mix(in srgb, var(--membership-ink) 15%, transparent);
-}
-
-.faqItem {
-  border-bottom: 1px solid color-mix(in srgb, var(--membership-ink) 15%, transparent);
-}
-
-.faqItem button {
-  display: flex;
-  width: 100%;
-  min-height: 58px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border: 0;
-  background: transparent;
-  color: var(--membership-ink);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 650;
-  text-align: left;
-}
-
-.faqItem button svg {
-  width: 18px;
-  height: 18px;
-  color: var(--membership-muted);
-  transition: transform 160ms ease;
-}
-
-.faqItem button[aria-expanded='true'] svg {
-  transform: rotate(180deg);
-}
-
-.faqItem p {
-  padding: 0 0 18px;
-  color: var(--membership-muted);
-  line-height: 1.6;
-}
-
-.dialogContent {
-  max-height: calc(100dvh - 32px);
-  overflow-y: auto;
-  --membership-page: #000000;
-  --membership-ink: #f5f5f5;
-  --membership-muted: #8d8d8d;
-  border-color: color-mix(in srgb, var(--membership-ink) 16%, transparent);
-  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
-  color: var(--membership-ink);
-}
-
-/* Dialogs are rendered through a portal, outside `.themeScope`; keep their
-   semantic controls on the membership palette instead of the app theme. */
-.dialogContent [data-slot='badge'] {
-  border-color: color-mix(in srgb, var(--membership-ink) 30%, transparent);
-  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
-  color: var(--membership-ink);
-}
-
-.dialogContent [data-slot='dialog-description'] {
-  color: #c6c9cd;
-}
-
-.dialogContent [data-slot='dialog-footer'] {
-  border-top-color: color-mix(in srgb, var(--membership-ink) 16%, transparent);
-  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
-}
-
-.dialogCancelButton,
-.dialogConfirmButton {
-  border-radius: 8px;
-  font-weight: 700;
-}
-
-.dialogCancelButton {
-  border-color: color-mix(in srgb, var(--membership-ink) 30%, transparent) !important;
-  background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page)) !important;
-  color: var(--membership-ink) !important;
-}
-
-.dialogCancelButton:hover {
-  background: color-mix(in srgb, var(--membership-ink) 15%, var(--membership-page)) !important;
-}
-
-.dialogConfirmButton {
-  background: var(--membership-ink) !important;
-  color: var(--membership-page) !important;
-}
-
-.dialogConfirmButton:hover {
-  background: #ffffff !important;
-}
-
-.dialogSummary {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--membership-ink) 6%, var(--membership-page));
-}
-
-.dialogSummary div {
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.dialogSummary dt {
-  color: var(--membership-muted);
-}
-
-.dialogSummary dd {
-  font-weight: 700;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-.policyPlaceholder {
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--membership-ink) 12%, transparent);
-  border-radius: 8px;
-  color: var(--membership-muted);
-  line-height: 1.6;
-}
-
-.closedState {
-  display: flex;
-  min-height: 100vh;
-  align-items: center;
-  justify-content: center;
-  background: var(--background);
-}
-
-/**
- * 中屏与手机布局使用**容器查询**（`@container`），宽度来自 `.viewportScope`。
- *
- * 这样真实套餐页（容器 = 视口）与后台预览（容器 = 预览框）走的是同一套规则：
- * 390px 预览框与 390px 真实手机页必然得到一致的列宽、内边距与间距，
- * 不会出现「预览只缩了外框、媒体查询仍按 1440px 生效」的偏差。
- */
-@container (max-width: 1100px) {
-  .planGrid {
-    width: max-content;
-    grid-template-columns: repeat(var(--plan-count, 5), 226px);
-    scroll-snap-type: x mandatory;
-  }
-
-  .planCard,
-  .loadingCard {
-    scroll-snap-align: start;
-  }
-}
-
-@container (max-width: 760px) {
-  .viewportScope {
-    padding: 48px 14px 72px;
-  }
-
-  .campaignBanner {
-    height: 112px;
-  }
-
-  .campaignCopy {
-    width: 76%;
-    padding: 0 18px;
-  }
-
-  .campaignCopy strong {
-    font-size: 16px;
-  }
-
-  .campaignCopy span {
-    font-size: 14px;
-  }
-
-  .audienceTabs {
-    gap: 24px;
-  }
-
-  .billingRow {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .billingSwitch {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .billingSwitch button {
-    flex: 1 0 auto;
-    justify-content: center;
-    padding: 0 12px;
-  }
-
-  .pointsRulesButton {
-    position: static;
-    align-self: flex-end;
-  }
-
-  .planScroller {
-    width: calc(100% + 14px);
-    padding-right: 14px;
-  }
-
-  /* 手机卡宽：min(82cqw, 300px)。用容器单位而非 vw，
-     保证 390px 预览框与 390px 真实手机页得到同样的卡宽。 */
-  .planGrid {
-    grid-template-columns: repeat(var(--plan-count, 5), min(82cqw, 300px));
-  }
-
-  .comparisonSection,
-  .faqSection {
-    margin-top: 56px;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .root,
-  .root * {
-    scroll-behavior: auto !important;
-    transition: none !important;
-  }
+  .themeScope *, .themeScope *::before, .themeScope *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

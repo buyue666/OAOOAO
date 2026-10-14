@@ -24,6 +24,22 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## shadcn/ui (MIT)
+
+来源：[shadcn-ui/ui](https://github.com/shadcn-ui/ui)，[官方 MIT 许可](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md)。`components.json` 使用 `base-nova`，`components/ui/` 中的基础界面组件及 `app/globals.css` 中的主题变量约定包含相应生成或改编内容。2026-10-14 补记此来源；本项目的业务调整不改变原组件的版权。
+
+Copyright (c) 2023 shadcn
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Package dependencies
+
+前端依赖可取得的许可及版权文本见 [THIRD_PARTY_DEPENDENCY_NOTICES.txt](THIRD_PARTY_DEPENDENCY_NOTICES.txt)，包版本、来源和未提供原始正文或署名的例外见 [docs/frontend-dependency-inventory.json](docs/frontend-dependency-inventory.json)。浏览器发行包随附相同文本 `public/legal/third-party-dependencies.txt`，部署后可从 `/legal/third-party-dependencies.txt` 访问。后端依赖单独列于 [backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt](backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt)。源码组件的许可通知与 npm 包的许可通知分别保留，不能用包名清单代替原始声明。
+
 ## Scope
 
 上述许可覆盖对应第三方材料，原版权及许可继续保留。OAOOAO 应用采用根目录 [LICENSE](LICENSE) 中的 GNU AGPL v3.0（AGPL-3.0-only）；后端许可见同一仓库的 [backend/LICENSE](backend/LICENSE)，其依赖声明见 [backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt](backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt)。通过 npm 引入的依赖仍适用各自许可证。商标、图片、视频、模板等资源的使用权应分别核实。本文件不是对全部代码或资产“无侵权”的保证。

@@ -45,7 +45,7 @@ as a claim that the coordinator had no historical exposure.
 Cross-module integration used only new repository sources and the documented
 Context, settings, user, project and migration interfaces. Fastify's installed
 public type declarations were consulted for route lookup in the contract test.
-No external payment provider protocol has been claimed or simulated as implemented.
+The initial commerce contribution did not implement an external payment provider. The later V1/V2 EPay implementation and its consulted official sources are documented in [EPAY-PROVENANCE.md](EPAY-PROVENANCE.md); synthetic regression coverage does not establish live merchant acceptance.
 
 Verification uses synthetic users and disposable PostgreSQL schemas. The wallet
 suite verifies precision, contention, rollback, idempotency, expiry and imports;

@@ -120,7 +120,9 @@ Opaque sessions, granular administration, wallets/orders, projects/history,
 durable generation/Agent jobs and moderation metadata use PostgreSQL persistence.
 External operations run only through implemented, configured adapters.
 
-Currently unavailable capabilities include WeChat login, MFA enrollment/verification,
+EPay V1/V2 and WeChat Official Account login are implemented but require real credentials,
+provider permissions and live acceptance; their default configuration is disabled.
+Currently unavailable capabilities include MFA enrollment/verification,
 Alipay/WeChat Pay/Stripe execution, custom executable Agent skills, vision chat,
 non-OpenAI generation protocols, creative object-storage persistence and Jianying
 export. The S3 configuration test performs a real `HeadBucket`, not a write test.
@@ -130,7 +132,8 @@ transfers. Manual refunds reserve purchased credits and settled referral rewards
 before reimbursement, then require the reservation ID and explicit confirmation
 to finish. Cancellation requires confirmation that no reimbursement was sent;
 reservations do not expire automatically. Internal work ingestion helpers do not
-imply a public author submission or publication feed.
+imply a public author submission flow. The public gallery exposes only server-approved
+published versions; it is documented in [PUBLIC-GALLERY-PROVENANCE.md](PUBLIC-GALLERY-PROVENANCE.md).
 
 Follow [the deployment and rollback procedure](DEPLOYMENT.md) before any
 production cutover. Source records and balances must be reconciled; an existing

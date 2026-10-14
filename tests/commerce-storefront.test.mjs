@@ -1,34 +1,6 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import ts from 'typescript'
-
-const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
-function compile(path, imports = {}) {
-  const code = ts.transpileModule(read(path), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
-  const exports = {}
-  new Function('require', 'exports', code)(name => { assert.ok(name in imports, `Unexpected import ${name}`); return imports[name] }, exports)
-  return exports
-}
-const jsx = { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' }
-const styles = { default: new Proxy({}, { get: (_, key) => key }) }
-const icons = new Proxy({}, { get: (_, key) => key })
-const membership = compile('lib/studio/membership.ts')
-const drafts = compile('lib/studio/product-draft.ts')
-const benefitHelpers = compile('components/membership/benefits.ts', { '@/lib/studio/membership': membership })
-const card = compile('components/membership/plan-card.tsx', { 'react/jsx-runtime': jsx, 'lucide-react': icons, '@/components/ui/badge': { Badge: 'Badge' }, '@/components/ui/button': { Button: 'Button' }, '@/lib/studio/membership': membership, './membership.module.css': styles }).PlanCard
-const view = compile('components/membership/membership-purchase-view.tsx', {
-  'react/jsx-runtime': jsx, 'lucide-react': icons, react: { useState: value => [value, () => {}], useMemo: fn => fn() },
-  '@/components/ui/button': { Button: 'Button' }, '@/components/ui/skeleton': { Skeleton: 'Skeleton' }, './billing-selector': { BillingSelector: 'BillingSelector' },
-  './benefits': benefitHelpers, './campaign-banner': { CampaignBanner: 'CampaignBanner' }, './comparison-table': { ComparisonTable: 'ComparisonTable' },
-  './membership-dialogs': { MembershipDialogs: 'MembershipDialogs' }, './membership-faq': { MembershipFaq: 'MembershipFaq' }, './membership.module.css': styles, './plan-card': { PlanCard: card },
-}).MembershipPurchaseView
-const dialog = compile('components/membership/membership-dialogs.tsx', {
-  'react/jsx-runtime': jsx, '@/components/ui/button': { Button: 'Button' }, '@/components/ui/badge': { Badge: 'Badge' }, './membership.module.css': styles,
-  '@/components/ui/dialog': Object.fromEntries(['Dialog', 'DialogContent', 'DialogDescription', 'DialogFooter', 'DialogHeader', 'DialogTitle'].map(name => [name, name])),
-}).MembershipDialogs
-const all = node => node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(all)] : []
-const text = node => typeof node === 'string' || typeof node === 'number' ? String(node) : node && typeof node === 'object' ? [node.props?.children].flat(Infinity).map(text).join('') : ''
+import { all, card, compile, confirmation as dialog, drafts, membership, text, view } from './helpers/membership-harness.mjs'
 const product = (id, extra = {}) => ({ id, name: id, productKind: 'points', amountCents: 1980, currency: 'CNY', pointsAmount: 880, dailyPoints: 0, periodDays: 0, enabled: true, sortOrder: 0, ...extra })
 const baseProps = { generationColumns: [], generationRows: [], faqItems: [], onSelectPlan() {}, onClose() {} }
 
@@ -76,7 +48,7 @@ test('admin color draft roundtrip preserves metadata and exact purchased product
 test('order confirmation explains one-time credits and renders published policy, not a fabricated expiry', () => {
   const plan = membership.toMembershipPlans([product('pack')])[0]
   const selection = { plan, tier: plan.tiers[0], billingCycle: 'once', pricing: plan.tiers[0].pricing.once }
-  const props = { selection, billingOption: membership.billingOptions.find(o => o.value === 'once'), commercePolicy: { version: 'synthetic-1', status: 'published', pointsExpiryPolicy: 'Synthetic confirmed permanent credits', refundPolicy: 'Synthetic refunds', renewalPolicy: 'No automatic renewal', invoicePolicy: 'Synthetic invoices' } }
+  const props = { selection, billingOption: membership.billingOptions.find(o => o.value === 'once'), commercePolicy: { version: 'synthetic-1', status: 'published', pointsExpiryPolicy: 'Synthetic confirmed permanent credits', refundPolicy: 'Synthetic refunds', renewalPolicy: 'No automatic renewal', invoicePolicy: 'Synthetic invoices', supportEmail: 'support@example.invalid', supportUrl: '' } }
   const tree = dialog(props)
   assert.match(text(tree), /确认购买积分/); assert.match(text(tree), /Synthetic confirmed permanent credits/)
   assert.doesNotMatch(text(tree), /确认开通会员/)

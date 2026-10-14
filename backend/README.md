@@ -113,7 +113,7 @@ MFA、支付宝/微信支付/Stripe 直接协议、自动邀请风控、任意�
 
 应用采用 **GNU AGPL v3.0**（`AGPL-3.0-only`），详见 [LICENSE](LICENSE)。允许按许可证使用、修改与分发；修改版本通过网络服务用户时，应按第 13 条提供对应源码。前后端部署版本都应可以从站点开源入口找到。
 
-本后端根据功能规格、OAOOAO 前端 HTTP 契约与官方依赖文档独立实现。模块实现者没有读取或复用受限制的上游后端实现；协调审查曾接触上游，因此不宣称正式净室认证，也不作零侵权保证。参见[基础模块来源](docs/CORE-PROVENANCE.md)、[创作模块来源](CREATIVE_PROVENANCE.md)、[商业与内容来源](docs/COMMERCE-CONTENT-PROVENANCE.md)、[易支付来源](docs/EPAY-PROVENANCE.md)、[微信来源](docs/WECHAT-PROVENANCE.md)及[许可审查记录](docs/LICENSING_REVIEW.md)。
+本后端根据功能规格、OAOOAO 前端 HTTP 契约与官方依赖文档独立实现。各模块文档中的“未读取上游实现”说明只适用于文档明确记录的原实施者及其对应贡献；后续协调者曾接触上游并参与修正，不能将原实施者的经历扩大为全项目声明。本项目不宣称正式净室认证，也不作零侵权保证。参见[基础模块来源](docs/CORE-PROVENANCE.md)、[创作模块来源](CREATIVE_PROVENANCE.md)、[商业与内容来源](docs/COMMERCE-CONTENT-PROVENANCE.md)、[易支付来源](docs/EPAY-PROVENANCE.md)、[微信来源](docs/WECHAT-PROVENANCE.md)及[许可审查记录](docs/LICENSING_REVIEW.md)。
 
 保留[第三方依赖声明](THIRD_PARTY_DEPENDENCY_NOTICES.txt)与容器内系统包版权文件。Debian FFmpeg 包含 GPL 组件；公开应用源码不自动完成所有二进制或容器再分发义务。模型、商标、用户素材及其他第三方内容的权利需分别核实。
 

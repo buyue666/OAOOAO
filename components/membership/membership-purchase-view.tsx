@@ -1,257 +1,111 @@
 'use client'
 
-import { ChevronDown, RefreshCw, X } from 'lucide-react'
-import { useMemo, useState, type CSSProperties } from 'react'
-
+import { useRef, useState, type CSSProperties } from 'react'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-
-import { BillingSelector } from './billing-selector'
-import { benefitGroupsOf, planNeedsFold } from './benefits'
-import { CampaignBanner } from './campaign-banner'
-import { ComparisonTable } from './comparison-table'
-import { MembershipDialogs } from './membership-dialogs'
-import { MembershipFaq } from './membership-faq'
-import membershipStyles from './membership.module.css'
+import { planNeedsFold } from './benefits'
 import { PlanCard } from './plan-card'
-import type {
-  BillingCycle,
-  MembershipAudience,
-  MembershipPlan,
-  MembershipPurchaseViewProps,
-  MembershipSelection,
-} from './types'
+import { isCurrentSelection, liveSelection, selectedBenefits, validPricing } from './purchase-helpers'
+import { policyCanBeReviewed, PurchaseConfirmation } from './purchase-confirmation'
+import type { BillingCycle, MembershipAudience, MembershipPurchaseViewProps, MembershipSelection } from './types'
+import styles from './membership.module.css'
 
-function LoadingPlans() {
-  return (
-    <div className={membershipStyles.planGrid} aria-label="套餐加载中">
-      {Array.from({ length: 5 }, (_, index) => (
-        <div className={membershipStyles.loadingCard} key={index}>
-          <Skeleton className={membershipStyles.loadingTitle} />
-          <Skeleton className={membershipStyles.loadingPrice} />
-          <Skeleton className={membershipStyles.loadingButton} />
-          <Skeleton className={membershipStyles.loadingBody} />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function MembershipPurchaseView({
-  storefront = 'plans',
-  commercePolicy,
-  products,
-  campaign,
-  billingOptions,
-  generationColumns,
-  generationRows,
-  faqItems,
-  currentMembership,
-  initialAudience = 'creator',
-  initialBillingCycle = 'annual',
-  status = 'ready',
-  errorMessage = '会员套餐加载失败，请稍后重试。',
-  // 预览模式：复用同一套主题与容器查询规则，只调整整屏高度与关闭按钮定位。
-  preview = false,
-  interactive = true,
-  showMoreDefault = false,
-  controlledAudience,
-  controlledBillingCycle,
-  onAudienceChange,
-  onBillingCycleChange,
-  onTierChange,
-  onRetry,
-  onSelectPlan,
-  onClose,
-}: MembershipPurchaseViewProps) {
-  const [audience, setAudience] = useState<MembershipAudience>(initialAudience)
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>(initialBillingCycle)
-  const [tierByPlan, setTierByPlan] = useState<Record<string, string>>({})
-  // 默认为折叠：与真实用户页一致（此前预览固定 showMore，与真实页不一致）。
+export function MembershipPurchaseView({ storefront = 'plans', products, campaign, billingOptions, generationColumns, generationRows, faqItems, currentMembership, initialAudience, initialBillingCycle, controlledAudience, controlledBillingCycle, onAudienceChange, onBillingCycleChange, onTierChange, commercePolicy, status = 'ready', errorMessage, onRetry, preview = false, interactive = true, showMoreDefault = false, onSelectPlan, onClose }: MembershipPurchaseViewProps) {
+  const creditsStore = storefront === 'credits'
+  const [localAudience, setLocalAudience] = useState<MembershipAudience>(initialAudience ?? products[0]?.audience ?? 'creator')
+  const [localCycle, setLocalCycle] = useState<BillingCycle>(initialBillingCycle ?? billingOptions[0]?.value ?? 'monthly')
+  const [tierIds, setTierIds] = useState<Record<string, string>>({})
   const [showMore, setShowMore] = useState(showMoreDefault)
   const [selection, setSelection] = useState<MembershipSelection | null>(null)
-  const [pointsRulesOpen, setPointsRulesOpen] = useState(false)
-  const [installmentPlan, setInstallmentPlan] = useState<MembershipPlan | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [agreementPolicy, setAgreementPolicy] = useState('')
+  const [busy, setBusy] = useState(false)
   const [purchaseError, setPurchaseError] = useState('')
+  const purchaseLock = useRef(false)
+  const audience = controlledAudience ?? localAudience
+  const cycle = creditsStore ? 'once' : controlledBillingCycle ?? localCycle
+  const option = billingOptions.find(item => item.value === cycle)
+  const browseOptions = billingOptions.filter(item => creditsStore ? item.value === 'once' : item.value !== 'once')
+  const audiences = [...new Set(products.map(item => item.audience))]
+  const visiblePlans = products.filter(plan => creditsStore || plan.audience === audience)
+  const offers = option ? visiblePlans.flatMap(plan => {
+    const tiers = plan.tiers.filter(tier => validPricing(tier.pricing[cycle]))
+    const tier = tiers.find(item => item.id === tierIds[plan.id]) ?? tiers[0]
+    return tier ? [{ plan, tier }] : []
+  }) : []
+  const folds = offers.some(({ plan, tier }) => planNeedsFold(selectedBenefits(plan, tier, cycle)))
+  const canPurchase = interactive && !preview && status === 'ready'
+  const policyIdentity = commercePolicy ? JSON.stringify(commercePolicy) : ''
+  const agreed = Boolean(agreementPolicy) && agreementPolicy === policyIdentity
 
-  /**
-   * 受控受众与周期。
-   *
-   * 预览需要把「受众/周期变化」同步给外部（否则会员类型改成 team 后
-   * 完整预览仍停留在 creator，显示「暂无可用套餐」）。因此当外部传入
-   * 受控值时以外部为准。
-   */
-  const effectiveAudience = controlledAudience ?? audience
-  const effectiveCycle = storefront === 'credits' ? 'once' : controlledBillingCycle ?? billingCycle
-
-  const visibleProducts = useMemo(
-    () => products.filter((product) => (storefront === 'credits' || product.audience === effectiveAudience) && product.tiers.some(t => t.pricing[effectiveCycle])),
-    [storefront, effectiveAudience, products, effectiveCycle],
-  )
-  const billingOption = billingOptions.find((option) => option.value === effectiveCycle)
-    ?? billingOptions[0]
-
-  const changeAudience = (nextAudience: MembershipAudience) => {
-    setAudience(nextAudience)
-    onAudienceChange?.(nextAudience)
-    setSelection(null)
+  function changeAudience(next: MembershipAudience) {
+    if (purchaseLock.current) return
+    setLocalAudience(next)
+    onAudienceChange?.(next)
   }
-
-  const changeBillingCycle = (nextCycle: BillingCycle) => {
-    setBillingCycle(nextCycle)
-    onBillingCycleChange?.(nextCycle)
-    setSelection(null)
+  function changeCycle(next: BillingCycle) {
+    if (purchaseLock.current) return
+    setLocalCycle(next)
+    onBillingCycleChange?.(next)
   }
-
-  const confirmSelection = async () => {
-    if (!selection) return
-    setSubmitting(true)
+  function review(next: MembershipSelection) {
+    if (!canPurchase || purchaseLock.current || isCurrentSelection(next, currentMembership)) return
+    const live = liveSelection(next, products)
+    if (!live) return
+    setSelection({ ...live, pricing: { ...live.pricing } })
+    setAgreementPolicy('')
+    setPurchaseError('')
+  }
+  function cancelReview() {
+    if (purchaseLock.current) return
+    setSelection(null)
+    setAgreementPolicy('')
+    setPurchaseError('')
+  }
+  async function confirm() {
+    if (!selection || purchaseLock.current || !canPurchase || !agreed || !policyCanBeReviewed(commercePolicy)) return
+    const live = liveSelection(selection, products)
+    if (!live || isCurrentSelection(selection, currentMembership)) {
+      setPurchaseError('商品或会员状态已变更，请返回重新选择并核对。')
+      setAgreementPolicy('')
+      return
+    }
+    purchaseLock.current = true
+    setBusy(true)
     setPurchaseError('')
     try {
-      await onSelectPlan(selection)
+      await onSelectPlan(live)
       setSelection(null)
-    } catch (error) {
-      setPurchaseError(error instanceof Error ? error.message : '订单创建失败，请稍后重试')
+      setAgreementPolicy('')
+    } catch (reason) {
+      setPurchaseError(reason instanceof Error ? reason.message : '购买暂未完成，请重试。')
     } finally {
-      setSubmitting(false)
+      purchaseLock.current = false
+      setBusy(false)
     }
   }
 
-  return (
-    // themeScope 提供与真实套餐页完全一致的主题变量；viewportScope 提供容器查询上下文。
-    <div className={[membershipStyles.themeScope, membershipStyles.root, membershipStyles.viewportScope, preview ? membershipStyles.previewRoot : ''].filter(Boolean).join(' ')} data-membership-preview={preview ? 'true' : undefined}>
-      <button className={membershipStyles.closeButton} type="button" onClick={onClose} aria-label={storefront === 'credits' ? '关闭积分超市' : '关闭会员页面'} tabIndex={interactive ? undefined : -1}>
-        <X aria-hidden="true" />
-      </button>
+  return <section className={`${styles.themeScope} ${styles.viewportScope} ${preview ? styles.previewRoot : styles.storeRoot}`} aria-label={creditsStore ? '积分超市' : '会员套餐'} aria-busy={busy || status === 'loading'} data-storefront={storefront}>
+    <div className={styles.storeContent}>
+      <header className={styles.storeHeader}>
+        <div><p className={styles.storeEyebrow}>{creditsStore ? '积分购买' : '会员选择'}</p><h1>{creditsStore ? '为创作补充积分' : '选择适合你的会员'}</h1><p className={styles.storeIntro}>{creditsStore ? '按需购买积分，无需开通会员。' : '比较所选周期的价格与权益，确认后继续付款。'}</p></div>
+        <button className={styles.exitButton} type="button" aria-label="关闭并返回" disabled={busy} onClick={onClose}><span aria-hidden="true">×</span><span>返回</span></button>
+      </header>
+      {campaign ? <aside className={styles.campaignPanel}><img src={campaign.imageSrc} alt={campaign.imageAlt} /><div><p>{campaign.title}</p><span>{campaign.subtitle}</span></div></aside> : null}
+      {!creditsStore ? <div className={styles.browseBar}>
+        {audiences.length > 1 ? <div className={styles.browseGroup} role="group" aria-label="会员类型">{audiences.map(value => <button type="button" key={value} aria-pressed={audience === value} disabled={busy} onClick={() => changeAudience(value)}>{value === 'team' ? '团队版' : '创作会员'}</button>)}</div> : null}
+        <div className={styles.browseGroup} role="group" aria-label="付款周期">{browseOptions.map(item => <button type="button" key={item.value} aria-pressed={cycle === item.value} disabled={busy} onClick={() => changeCycle(item.value)}>{item.label}</button>)}</div>
+      </div> : null}
+      {preview || !interactive ? <p className={styles.previewNotice}>仅供预览 · 可切换商品选项，购买功能已关闭。</p> : null}
 
-      <main className={membershipStyles.main}>
-        <header className={membershipStyles.storefrontHeading}>
-          <span>{storefront === 'credits' ? 'CREDITS STORE' : 'CREATOR MEMBERSHIP'}</span>
-          <h1>{storefront === 'credits' ? '给灵感，多一点可能' : '为下一部作品，选好创作空间'}</h1>
-          <p>{storefront === 'credits' ? '积分超市 · 无需开通会员，按需购买，支付确认后计入账户。' : '选择适合你的套餐，积分与权益清晰可见。'}</p>
-          {storefront === 'credits' && <button type="button" className={membershipStyles.pointsRulesLink} onClick={() => setPointsRulesOpen(true)}>查看积分与购买规则</button>}
-        </header>
-        {campaign ? <CampaignBanner campaign={campaign} /> : null}
-        {storefront === 'plans' && <BillingSelector
-          audience={effectiveAudience}
-          billingCycle={effectiveCycle}
-          options={billingOptions}
-          onAudienceChange={changeAudience}
-          onBillingCycleChange={changeBillingCycle}
-          onOpenPointsRules={() => setPointsRulesOpen(true)}
-          disabled={!interactive}
-        />}
+      {status === 'loading' ? <div className={styles.catalogState} role="status">正在读取商品与价格…</div> : status === 'error' ? <div className={styles.catalogState} role="alert"><p>{errorMessage || '商品加载失败。'}</p>{onRetry ? <Button type="button" onClick={onRetry}>重新加载</Button> : null}</div> : offers.length ? <>
+        <div className={styles.planGrid} style={{ '--plan-count': offers.length } as CSSProperties}>
+          {offers.map(({ plan, tier }) => <PlanCard key={plan.id} plan={plan} tier={tier} billingCycle={cycle} billingOption={option!} showMore={showMore} isCurrent={isCurrentSelection({ plan, tier, billingCycle: cycle }, currentMembership)} interactive={canPurchase} busy={busy} onTierChange={next => { if (purchaseLock.current) return; setTierIds(previous => ({ ...previous, [plan.id]: next.id })); onTierChange?.(plan.id, next.id) }} onSelect={review} onInstallment={() => undefined} />)}
+        </div>
+        {folds ? <button className={styles.moreBenefitsButton} type="button" aria-expanded={showMore} onClick={() => setShowMore(value => !value)}>{showMore ? '收起更多权益' : '查看更多权益'}</button> : null}
+      </> : <div className={styles.catalogState}><p>{creditsStore ? '还没有上架的积分包。' : '当前类型和周期暂无可购买的商品。'}</p><span>{creditsStore ? '商品上架后会在这里显示真实价格与积分。' : '可以切换其他周期或会员类型查看。'}</span></div>}
 
-        <section className={membershipStyles.plansSection} aria-label={storefront === 'credits' ? '积分商品' : '会员套餐'}>
-          <div className={membershipStyles.planScroller} tabIndex={0} aria-label={storefront === 'credits' ? '积分商品，可横向滚动' : '会员套餐，可横向滚动'}>
-            {status === 'loading' ? <LoadingPlans /> : null}
-
-            {status === 'error' ? (
-              <div className={membershipStyles.statePanel} role="alert">
-                <p>{errorMessage}</p>
-                {onRetry ? (
-                  <Button variant="outline" onClick={onRetry}>
-                    <RefreshCw data-icon="inline-start" aria-hidden="true" />
-                    重试
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-
-            {status === 'ready' && visibleProducts.length === 0 ? (
-              <div className={membershipStyles.statePanel}>
-                <strong>{storefront === 'credits' ? '积分商品即将上架' : effectiveAudience === 'team' ? '团队版会员方案待配置' : '暂无可用套餐'}</strong>
-                <p>{storefront === 'credits' ? '目前还没有上架的积分包。管理员可在「商品与套餐」中配置积分商品，保存并上架后会显示在这里。' : '暂未上架该类型的会员套餐，请稍后再来。'}</p>
-              </div>
-            ) : null}
-
-            {status === 'ready' && visibleProducts.length > 0 ? (
-              <div className={membershipStyles.planGrid} style={{ '--plan-count': Math.min(5, visibleProducts.length) } as CSSProperties}>
-                {visibleProducts.map((plan) => {
-                  const availablePlan = { ...plan, tiers: plan.tiers.filter(t => t.pricing[effectiveCycle]) }
-                  const tier = availablePlan.tiers.find((item) => item.id === tierByPlan[plan.id])
-                    ?? availablePlan.tiers[0]
-                  const isCurrent = currentMembership?.planId === plan.id
-                    && currentMembership.tierId === tier.id
-                    && currentMembership.billingCycle === effectiveCycle
-
-                  return (
-                    <PlanCard
-                      key={plan.id}
-                      plan={availablePlan}
-                      tier={tier}
-                      billingCycle={effectiveCycle}
-                      billingOption={billingOption}
-                      showMore={showMore}
-                      isCurrent={isCurrent}
-                      /* 预览中档位切换是只读浏览：允许切换查看，但不会下单或写入。 */
-                      onTierChange={(nextTier) => {
-                        setTierByPlan((current) => ({ ...current, [plan.id]: nextTier.id }))
-                        onTierChange?.(plan.id, nextTier.id)
-                      }}
-                      /* interactive=false（预览）时不进入下单流程；浏览与键盘导航仍然可用。 */
-                      onSelect={interactive ? setSelection : () => undefined}
-                      /* 预览中分期入口同样不应产生订单，交由父层决定是否可用。 */
-                      onInstallment={setInstallmentPlan}
-                    />
-                  )
-                })}
-              </div>
-            ) : null}
-          </div>
-
-          {/**
-            * 「查看更多权益」按钮。
-            *
-            * 出现条件是**卡片权益行数超过阈值**（自动折叠），
-            * 而不是「是否配置了 extraBenefits」：
-            * 早先没配 extraBenefits 的卡片即使有十几行权益也不会折叠，
-            * 按钮也不出现，运营看不到折叠效果。
-            */}
-          {/* 折叠状态按「当前档位 + 当前周期」的行数判定，与卡片展示同一份来源。 */}
-          {status === 'ready' && visibleProducts.some((plan) => {
-            const active = plan.tiers.find((tier) => tier.id === tierByPlan[plan.id] && tier.pricing[effectiveCycle]) ?? plan.tiers.find((tier) => tier.pricing[effectiveCycle]) ?? plan.tiers[0]
-            return planNeedsFold(benefitGroupsOf(plan, active, effectiveCycle))
-          }) ? (
-            <button
-              className={membershipStyles.moreBenefitsButton}
-              type="button"
-              aria-expanded={showMore}
-              data-testid="plan-more-benefits"
-              onClick={() => setShowMore((current) => !current)}
-            >
-              {showMore ? '收起更多权益' : '查看更多权益'}
-              <ChevronDown data-open={showMore ? 'true' : 'false'} aria-hidden="true" />
-            </button>
-          ) : null}
-        </section>
-
-        {status === 'ready' && effectiveAudience === 'creator' && visibleProducts.length > 0 ? (
-          <>
-            {generationColumns.length > 0 && generationRows.length > 0 ? <ComparisonTable columns={generationColumns} rows={generationRows} /> : null}
-            {faqItems.length > 0 ? <MembershipFaq items={faqItems} /> : null}
-          </>
-        ) : null}
-      </main>
-
-      <MembershipDialogs
-        commercePolicy={commercePolicy}
-        selection={selection}
-        billingOption={billingOption}
-        pointsRulesOpen={pointsRulesOpen}
-        installmentPlan={installmentPlan}
-        submitting={submitting}
-        errorMessage={purchaseError}
-        onSelectionOpenChange={(open) => {
-          if (!open && !submitting) setSelection(null)
-        }}
-        onPointsRulesOpenChange={setPointsRulesOpen}
-        onInstallmentOpenChange={(open) => {
-          if (!open) setInstallmentPlan(null)
-        }}
-        onConfirm={confirmSelection}
-      />
+      {generationColumns.length > 0 && generationRows.length > 0 ? <section className={styles.detailSection} aria-label="商品能力对比"><h2>商品能力对比</h2><div className={styles.comparisonScroll} tabIndex={0}><table><caption>以下数值由商品配置提供</caption><thead><tr><th scope="col">项目</th>{generationColumns.map(column => <th scope="col" key={column.id}>{column.label}</th>)}</tr></thead><tbody>{generationRows.map((row, index) => <tr key={`${row.name}-${index}`}><th scope="row">{row.name}（{row.unit}）</th>{generationColumns.map(column => <td key={column.id}>{row.values[column.id] ?? '—'}</td>)}</tr>)}</tbody></table></div></section> : null}
+      {faqItems.length > 0 ? <section className={styles.detailSection} aria-label="购买常见问题"><h2>常见问题</h2>{faqItems.map((item, index) => <details className={styles.questionRow} key={`${index}-${item.question}`}><summary>{item.question}</summary>{item.answer ? <p>{item.answer}</p> : null}</details>)}</section> : null}
     </div>
-  )
+    {selection && canPurchase ? <PurchaseConfirmation selection={selection} billingOption={billingOptions.find(item => item.value === selection.billingCycle)} commercePolicy={commercePolicy} agreed={agreed} busy={busy} error={purchaseError} onAgreementChange={value => setAgreementPolicy(value ? policyIdentity : '')} onConfirm={confirm} onCancel={cancelReview} /> : null}
+  </section>
 }

@@ -116,7 +116,7 @@ pnpm build
 ```text
 app/                   页面路由与同源 API 代理
 components/studio/     创作工作台与管理界面
-components/oao-canvas/ 画布编辑器
+components/studio/    创作工具、画布编辑器与管理后台
 lib/studio/            数据契约、客户端状态与业务工具
 public/media/brand/    OAOOAO 品牌资源
 tests/                 回归与验收测试
@@ -132,7 +132,7 @@ OAOOAO 前端与独立后端采用 **GNU Affero General Public License v3.0**（
 
 可以按许可证使用、修改和分发，包括商业用途；对修改版本提供网络服务时，应按 AGPL 第 13 条向交互用户提供该版本的对应源码。保留许可证、版权与第三方声明；部署时应让页脚的源码入口能找到实际运行版本及其前后端源码。
 
-第三方材料仍适用各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库许可不授予第三方商标、用户素材或外部模型服务的使用权。后端的实现来源与历史审查边界记录在 [backend/README.md](backend/README.md#来源与许可) 及相关文档中。
+第三方材料仍适用各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 及[完整前端依赖声明](THIRD_PARTY_DEPENDENCY_NOTICES.txt)。仓库许可不授予第三方商标、用户素材或外部模型服务的使用权。后端的实现来源与历史审查边界记录在 [backend/README.md](backend/README.md#来源与许可)；当前来源核对及整改范围见[来源复核记录](docs/SOURCE-REVIEW-2026-10-14.md)。
 
 <div align="center">
 

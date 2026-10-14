@@ -72,7 +72,7 @@ Core operational boundaries:
 - Storage test performs actual S3 HeadBucket. It reports writeVerified=false.
 - Model discovery implements an OpenAI-compatible /models catalog. Unsupported
   protocols return an explicit unavailable response.
-- WeChat login is explicitly unavailable and hidden in public session settings.
+- WeChat login was unavailable in the initial core version. The subsequent independently implemented Official Account integration is documented in [WECHAT-PROVENANCE.md](WECHAT-PROVENANCE.md); its default remains disabled until real configuration and acceptance.
 - No MFA accounts were required by the normalized source inventory. TOTP enrollment
   and verification are not implemented; do not import MFA-enabled accounts as enabled
   until a compatible verifier has been implemented and tested.

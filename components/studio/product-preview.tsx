@@ -411,6 +411,7 @@ export function ProductPreviewPanel({
                       /* 折叠状态默认与真实用户页一致（折叠）；展开是纯浏览行为。 */
                       showMore={showMore}
                       isCurrent={false}
+                      interactive={false}
                       onTierChange={(nextTier) => handleTierChange(currentPlan.id, nextTier.id)}
                       onSelect={noop as (selection: MembershipSelection) => void}
                       onInstallment={noop}
