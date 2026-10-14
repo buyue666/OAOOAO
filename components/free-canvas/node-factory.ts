@@ -34,9 +34,10 @@ export const GENERATION_TITLES: Record<GenerationKind, string> = {
 }
 
 export const NODE_SIZE = {
-  generation: { width: 320, height: 240 },
-  media: { width: 232, height: 210 },
-  agent: { width: 360, height: 260 },
+  // Initial empty-card dimensions; React Flow measurements take over afterward.
+  generation: { width: 320, height: 415 },
+  media: { width: 232, height: 246 },
+  agent: { width: 360, height: 420 },
   group: { width: 420, height: 300 },
 } as const
 

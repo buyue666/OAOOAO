@@ -11,13 +11,14 @@ import {
 } from '@xyflow/react'
 import { createGroupNode, NODE_GAP, newNodeId, sizeOf } from './node-factory'
 import { arrangeCanvasNodes } from './canvas-layout'
+import { absoluteNodePosition, absoluteNodePositions, orderNodesParentsFirst, selectionNodes, selectionRoots, selectionSnapshot } from './canvas-selection'
 import { DEFAULT_SETTINGS_PLACEMENT, HANDLE_IDS, type AgentNodeData, type FreeCanvasEdge, type FreeCanvasNode, type GenerationNodeData, type MediaNodeData, type NodeSide, type SettingsPlacement } from './types'
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
 
 type Snapshot = { nodes: FreeCanvasNode[]; edges: FreeCanvasEdge[] }
 
-export type TrashEntry = Snapshot & { id: string; label: string }
+export type TrashEntry = Snapshot & { id: string; label: string; absolutePositions?: Record<string, XYPosition> }
 
 export type ContextTarget = { type: 'pane'; position: XYPosition } | { type: 'node'; nodeId: string }
 export type ContextMenuState = { x: number; y: number; target: ContextTarget } | null
@@ -84,7 +85,7 @@ export type CanvasState = {
   beginEdit: () => void
   undo: () => void
   redo: () => void
-  insertNodes: (nodes: FreeCanvasNode[], edges?: FreeCanvasEdge[], options?: { select?: boolean; focus?: boolean }) => void
+  insertNodes: (nodes: FreeCanvasNode[], edges?: FreeCanvasEdge[], options?: { select?: boolean; focus?: boolean; selectRoots?: boolean }) => void
   insertNodeNear: (sourceId: string, side: NodeSide, node: FreeCanvasNode) => string | null
   updateNodeData: (nodeId: string, patch: Record<string, unknown>, options?: { history?: boolean }) => void
   patchNodes: (patches: RemoteNodePatch[], options?: { persist?: boolean }) => void
@@ -112,18 +113,11 @@ export type CanvasState = {
 }
 
 function absoluteOf(node: FreeCanvasNode, nodes: FreeCanvasNode[]): XYPosition {
-  if (!node.parentId) return node.position
-  const parent = nodes.find((item) => item.id === node.parentId)
-  return parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position
-}
-
-function releaseFromParent(node: FreeCanvasNode, nodes: FreeCanvasNode[]): FreeCanvasNode {
-  if (!node.parentId) return node
-  return { ...node, parentId: undefined, position: absoluteOf(node, nodes) } as FreeCanvasNode
+  return absoluteNodePosition(node, nodes)
 }
 
 function sortGroupsFirst(nodes: FreeCanvasNode[]) {
-  return [...nodes].sort((a, b) => Number(b.type === 'group') - Number(a.type === 'group'))
+  return orderNodesParentsFirst([...nodes].sort((a, b) => Number(b.type === 'group') - Number(a.type === 'group')))
 }
 
 function selectOnly(nodes: FreeCanvasNode[], ids: Set<string>): FreeCanvasNode[] {
@@ -147,19 +141,18 @@ function dirtyPatch(state: CanvasState): Partial<CanvasState> {
 }
 
 function removalPatch(state: CanvasState, ids: string[], label: string): Partial<CanvasState> {
-  const removeIds = new Set(ids)
-  const removed = state.nodes.filter((node) => removeIds.has(node.id))
+  const removed = selectionNodes(state.nodes, ids)
+  const removeIds = new Set(removed.map(node => node.id))
   if (!removed.length) return {}
   const removedGroupIds = new Set(removed.filter((node) => node.type === 'group').map((node) => node.id))
-  const nodes = state.nodes
-    .filter((node) => !removeIds.has(node.id))
-    .map((node) => (node.parentId && removedGroupIds.has(node.parentId) ? releaseFromParent(node, state.nodes) : node))
+  const nodes = state.nodes.filter((node) => !removeIds.has(node.id))
   const removedEdges = state.edges.filter((edge) => removeIds.has(edge.source) || removeIds.has(edge.target))
   const entry: TrashEntry = {
     id: newNodeId('trash'),
-    label,
+    label: removedGroupIds.size ? '删除分组及内容' : label,
     nodes: removed,
     edges: removedEdges,
+    absolutePositions: Object.fromEntries([...absoluteNodePositions(state.nodes)].filter(([id]) => removeIds.has(id))),
   }
   return {
     ...historyPatch(state),
@@ -170,24 +163,23 @@ function removalPatch(state: CanvasState, ids: string[], label: string): Partial
     settingsNodeId: state.settingsNodeId && removeIds.has(state.settingsNodeId) ? null : state.settingsNodeId,
     typeMenu: state.typeMenu && removeIds.has(state.typeMenu.nodeId) ? null : state.typeMenu,
     contextMenu: null,
+    ...(removedGroupIds.size ? { notice: `已删除 ${removedGroupIds.size} 个分组及其中内容（共 ${removed.length} 个节点），可撤销。` } : {}),
   }
 }
 
-function cloneSelection(selected: FreeCanvasNode[], edges: FreeCanvasEdge[], allNodes: FreeCanvasNode[], offset: XYPosition): Snapshot {
+function cloneSelection(selected: FreeCanvasNode[], edges: FreeCanvasEdge[], offset: XYPosition): Snapshot {
   const selectedIds = new Set(selected.map((node) => node.id))
   const idMap = new Map(selected.map((node) => [node.id, newNodeId(String(node.type ?? 'node'))]))
   const nodes = selected.map((node): FreeCanvasNode => {
-    const absolute = absoluteOf(node, allNodes)
     const parentInSelection = node.parentId && selectedIds.has(node.parentId)
-    const base = parentInSelection ? node.position : { x: absolute.x + offset.x, y: absolute.y + offset.y }
     const data = node.type === 'agent'
-      ? { ...node.data, runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [], clientRequestId: null, submission: undefined, planApproval: undefined }
-      : node.data
+      ? { ...node.data, runId: null, runStatus: null, steps: [], failure: null, pointsCost: null, context: [], clientRequestId: null, submission: undefined, planApproval: undefined, deliveredRunId: null, deliveryError: null }
+      : node.type === 'generation' ? { ...node.data, task: null } : node.data
     return {
       ...node,
       id: idMap.get(node.id) ?? node.id,
       data,
-      position: parentInSelection ? { x: base.x + offset.x, y: base.y + offset.y } : base,
+      position: parentInSelection ? { ...node.position } : { x: node.position.x + offset.x, y: node.position.y + offset.y },
       parentId: parentInSelection && node.parentId ? idMap.get(node.parentId) : undefined,
       selected: true,
       dragging: false,
@@ -206,8 +198,9 @@ function cloneSelection(selected: FreeCanvasNode[], edges: FreeCanvasEdge[], all
 }
 
 function overlaps(position: XYPosition, size: { width: number; height: number }, nodes: FreeCanvasNode[]) {
+  const positions = absoluteNodePositions(nodes)
   return nodes.some((node) => {
-    const origin = absoluteOf(node, nodes)
+    const origin = positions.get(node.id)!
     const other = sizeOf(node)
     return position.x < origin.x + other.width + 12
       && position.x + size.width + 12 > origin.x
@@ -389,10 +382,11 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       const fresh = nodes.filter((node) => !existing.has(node.id))
       if (!fresh.length) return {}
       const freshIds = new Set(fresh.map((node) => node.id))
+      const selectedIds = options?.selectRoots ? new Set(selectionRoots(fresh, [...freshIds]).map(node => node.id)) : freshIds
       const knownEdges = new Set(state.edges.map((edge) => edge.id))
       const addedEdges = edges.filter((edge) => !knownEdges.has(edge.id))
       const merged = options?.select
-        ? [...selectOnly(state.nodes, freshIds), ...fresh.map((node) => ({ ...node, selected: true }) as FreeCanvasNode)]
+        ? [...selectOnly(state.nodes, selectedIds), ...fresh.map((node) => ({ ...node, selected: selectedIds.has(node.id) }) as FreeCanvasNode)]
         : [...state.nodes, ...fresh]
       return {
         nodes: sortGroupsFirst(merged),
@@ -471,8 +465,14 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
       const entry = state.trash.find((item) => item.id === entryId)
       if (!entry) return {}
       const existing = new Set(state.nodes.map((node) => node.id))
-      const restored = entry.nodes.filter((node) => !existing.has(node.id)).map((node) => ({ ...node, selected: false }) as FreeCanvasNode)
-      const available = new Set([...existing, ...restored.map((node) => node.id)])
+      const available = new Set([...existing, ...entry.nodes.map((node) => node.id)])
+      const restored = entry.nodes.filter((node) => !existing.has(node.id)).map((node) => {
+        const missingParent = node.parentId && !available.has(node.parentId)
+        return {
+          ...node, selected: false,
+          ...(missingParent ? { parentId: undefined, extent: node.extent === 'parent' ? undefined : node.extent, position: entry.absolutePositions?.[node.id] ?? node.position } : {}),
+        } as FreeCanvasNode
+      })
       const knownEdges = new Set(state.edges.map((edge) => edge.id))
       const edges = [
         ...state.edges,
@@ -489,60 +489,66 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   duplicateSelection: () => {
     const state = get()
-    const selected = state.nodes.filter((node) => node.selected)
-    if (!selected.length) return
-    const copy = cloneSelection(selected, state.edges, state.nodes, { x: 48, y: 48 })
-    get().insertNodes(copy.nodes, copy.edges, { select: true })
+    const snapshot = selectionSnapshot(state.nodes, state.edges)
+    if (!snapshot.nodes.length) return
+    if (!selectionRoots(snapshot.nodes, snapshot.nodes.map(node => node.id)).length) return set({ notice: '分组的父级关系异常，请先整理分组后再复制。' })
+    const copy = cloneSelection(snapshot.nodes, snapshot.edges, { x: 48, y: 48 })
+    get().insertNodes(copy.nodes, copy.edges, { select: true, selectRoots: true })
   },
 
   copySelection: () => {
     const state = get()
-    const selected = state.nodes.filter((node) => node.selected)
-    if (!selected.length) return
-    const ids = new Set(selected.map((node) => node.id))
+    const snapshot = selectionSnapshot(state.nodes, state.edges)
+    if (!snapshot.nodes.length) return
     set({
-      clipboard: {
-        nodes: selected,
-        edges: state.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
-      },
-      notice: `已复制 ${selected.length} 个节点`,
+      clipboard: snapshot,
+      notice: `已复制 ${snapshot.nodes.length} 个节点${snapshot.nodes.some(node => node.type === 'group') ? '（包含分组内容）' : ''}`,
     })
   },
 
   pasteClipboard: (position) => {
     const clipboard = get().clipboard
     if (!clipboard?.nodes.length) return
-    const origin = clipboard.nodes.reduce(
+    const roots = selectionRoots(clipboard.nodes, clipboard.nodes.map(node => node.id))
+    if (!roots.length) return set({ notice: '复制的分组父级关系异常，无法粘贴。' })
+    const origin = roots.reduce(
       (min, node) => ({ x: Math.min(min.x, node.position.x), y: Math.min(min.y, node.position.y) }),
       { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY },
     )
     const offset = position
       ? { x: position.x - origin.x, y: position.y - origin.y }
       : { x: 48, y: 48 }
-    const copy = cloneSelection(clipboard.nodes, clipboard.edges, get().nodes, offset)
-    get().insertNodes(copy.nodes, copy.edges, { select: true })
+    // Clipboard coordinates were frozen at copy time; later moves/deletions of
+    // the source parent must never change the pasted result.
+    const snapshot = selectionSnapshot(clipboard.nodes, clipboard.edges, clipboard.nodes.map(node => node.id))
+    const copy = cloneSelection(snapshot.nodes, snapshot.edges, offset)
+    get().insertNodes(copy.nodes, copy.edges, { select: true, selectRoots: true })
   },
 
   groupSelection: () => {
     const state = get()
-    const selected = state.nodes.filter((node) => node.selected && node.type !== 'group')
+    const selected = selectionRoots(state.nodes)
     if (selected.length < 2) {
       set({ notice: '至少选择两个节点才能分组' })
       return
     }
-    const rects = selected.map((node) => ({ origin: absoluteOf(node, state.nodes), size: sizeOf(node) }))
+    const positions = absoluteNodePositions(state.nodes)
+    const rects = selectionNodes(state.nodes).map((node) => ({ origin: positions.get(node.id)!, size: sizeOf(node) }))
     const left = Math.min(...rects.map((rect) => rect.origin.x)) - GROUP_PADDING
     const top = Math.min(...rects.map((rect) => rect.origin.y)) - GROUP_PADDING - GROUP_HEADER
     const right = Math.max(...rects.map((rect) => rect.origin.x + rect.size.width)) + GROUP_PADDING
     const bottom = Math.max(...rects.map((rect) => rect.origin.y + rect.size.height)) + GROUP_PADDING
-    const group = { ...createGroupNode({ x: left, y: top }, { width: right - left, height: bottom - top }), selected: true }
+    const firstParent = selected[0].parentId
+    const commonParent = firstParent && selected.every(node => node.parentId === firstParent) && positions.has(firstParent) ? firstParent : undefined
+    const parentOrigin = commonParent ? positions.get(commonParent)! : { x: 0, y: 0 }
+    const group = { ...createGroupNode({ x: left - parentOrigin.x, y: top - parentOrigin.y }, { width: right - left, height: bottom - top }), ...(commonParent ? { parentId: commonParent } : {}), selected: true }
     const ids = new Set(selected.map((node) => node.id))
     const children = selected.map((node) => {
-      const origin = absoluteOf(node, state.nodes)
+      const origin = positions.get(node.id)!
       return { ...node, parentId: group.id, position: { x: origin.x - left, y: origin.y - top }, selected: false } as FreeCanvasNode
     })
     set({
-      nodes: [group as FreeCanvasNode, ...state.nodes.filter((node) => !ids.has(node.id) && node.id !== group.id), ...children],
+      nodes: sortGroupsFirst([group as FreeCanvasNode, ...state.nodes.filter((node) => !ids.has(node.id) && node.id !== group.id).map(node => node.selected ? { ...node, selected: false } as FreeCanvasNode : node), ...children]),
       ...historyPatch(state),
       ...dirtyPatch(state),
     })
@@ -552,24 +558,43 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     set((state) => {
       const groupIds = new Set(state.nodes.filter((node) => node.type === 'group' && node.selected).map((node) => node.id))
       if (!groupIds.size) return {}
+      const byId = new Map(state.nodes.map(node => [node.id, node]))
+      const positions = absoluteNodePositions(state.nodes)
       const nodes = state.nodes
         .filter((node) => !groupIds.has(node.id))
-        .map((node) => (node.parentId && groupIds.has(node.parentId) ? releaseFromParent(node, state.nodes) : node))
-      return { nodes, ...historyPatch(state), ...dirtyPatch(state) }
+        .map((node) => {
+          if (!node.parentId || !groupIds.has(node.parentId)) return node
+          const seen = new Set<string>()
+          let parentId: string | undefined = node.parentId
+          while (parentId && groupIds.has(parentId)) {
+            if (seen.has(parentId)) { parentId = undefined; break }
+            seen.add(parentId)
+            parentId = byId.get(parentId)?.parentId
+          }
+          if (parentId && !byId.has(parentId)) parentId = undefined
+          const origin = positions.get(node.id)!, parentOrigin = parentId ? positions.get(parentId)! : { x: 0, y: 0 }
+          return { ...node, parentId, position: { x: origin.x - parentOrigin.x, y: origin.y - parentOrigin.y }, selected: true, ...(node.extent === 'parent' && !parentId ? { extent: undefined } : {}) } as FreeCanvasNode
+        })
+      return { nodes: sortGroupsFirst(nodes), edges: state.edges.filter(edge => !groupIds.has(edge.source) && !groupIds.has(edge.target)), ...historyPatch(state), ...dirtyPatch(state), notice: '已解散分组，内容保持原位置。' }
     }),
 
   alignSelection: (axis) =>
     set((state) => {
-      const selected = state.nodes.filter((node) => node.selected && !node.parentId)
+      const selected = selectionRoots(state.nodes)
       if (selected.length < 2) return {}
-      const target = Math.min(...selected.map((node) => (axis === 'x' ? node.position.x : node.position.y)))
+      const positions = absoluteNodePositions(state.nodes)
+      const target = Math.min(...selected.map(node => positions.get(node.id)![axis]))
       const ids = new Set(selected.map((node) => node.id))
+      let changed = false
       const nodes = state.nodes.map((node) => {
         if (!ids.has(node.id)) return node
-        const position = axis === 'x' ? { x: target, y: node.position.y } : { x: node.position.x, y: target }
+        const offset = target - positions.get(node.id)![axis]
+        if (!offset) return node
+        changed = true
+        const position = { ...node.position, [axis]: node.position[axis] + offset }
         return { ...node, position } as FreeCanvasNode
       })
-      return { nodes, ...historyPatch(state), ...dirtyPatch(state) }
+      return changed ? { nodes, ...historyPatch(state), ...dirtyPatch(state) } : {}
     }),
 
   adoptRemoteBoard: (nodes, edges, updatedAt) =>

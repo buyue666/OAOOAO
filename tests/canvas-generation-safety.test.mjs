@@ -14,6 +14,7 @@ function sourceModule(path, mocks = {}) {
 const types = sourceModule('../components/free-canvas/types.ts')
 const factory = sourceModule('../components/free-canvas/node-factory.ts')
 const layout = sourceModule('../components/free-canvas/canvas-layout.ts', { './node-factory': factory })
+const selection = sourceModule('../components/free-canvas/canvas-selection.ts')
 const codec = sourceModule('../components/free-canvas/board-codec.ts', { './types': types, './node-factory': factory })
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 const settle = () => new Promise(resolve => setImmediate(resolve))
@@ -21,7 +22,7 @@ const plain = value => JSON.parse(JSON.stringify(value))
 const defaults = { imageSize: '1:1', imageQuality: 'auto', imageCount: 4, videoQuality: '720', videoSeconds: 8, audioVoice: 'alloy', audioFormat: 'mp3' }
 
 function harness({ submit, loadSkills, save, restored, query, cancel, knownTasks = [], cancelInStore } = {}) {
-  const actual = sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types, './canvas-layout': layout }).useCanvasStore
+  const actual = sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types, './canvas-layout': layout, './canvas-selection': selection }).useCanvasStore
   const useCanvasStore = selector => selector(actual.getState()); useCanvasStore.getState = actual.getState
   const node = restored || factory.createGenerationNode('image', { x: 0, y: 0 }, defaults, 'shared-node')
   if (!restored) node.data = { ...node.data, model: 'image-model', prompt: 'Original synthetic prompt' }
@@ -34,7 +35,7 @@ function harness({ submit, loadSkills, save, restored, query, cancel, knownTasks
     react: { useCallback: fn => fn, useMemo: fn => fn(), useRef: value => ({ current: value }), useEffect: fn => { const cleanup = fn(); if (cleanup) cleanups.push(cleanup) } },
     '@/lib/studio/account-api': { listLibraryAssets: loadSkills },
     '@/lib/studio/canvas-skills': sourceModule('../lib/studio/canvas-skills.ts'),
-    '@/lib/studio/generation-api': { newClientRequestId: () => `request-${++identities}`, getGenerationTask: query, cancelGenerationTask: cancel, normalizeTaskResult: value => value },
+    '@/lib/studio/generation-api': { newClientRequestId: () => `request-${++identities}`, getGenerationTask: query, cancelGenerationTask: cancel, normalizeTaskResult: (_kind, value) => value ?? { media: [] } },
     '@/lib/studio/generation-store': { useGeneration: () => ({ tasks: knownTasks, cancelTask: cancelInStore, createImage: create, createVideo: create, createAudio: create, createText: create }) },
     '@/lib/studio/reference-assets': { isSubmittableReferenceUrl: () => true }, '@/lib/studio/studio-models': {},
     '@/lib/studio/store': { useStudio: () => ({ state: { models: [], user: { id: 'synthetic-owner' } }, estimateCredits: (_, input) => { estimates.push(input); return input.count } }) },
@@ -159,6 +160,51 @@ test('normal task polling carries cancellation-request state and clears it only 
   assert.equal(h.node.data.task.phase, 'running'); assert.equal(h.node.data.task.cancelRequested, true)
   h.actual.getState().patchNodes(h.collectTaskPatches([h.node], [{ id: 'server-task', status: 'cancelled', cancelRequested: true, media: [] }]))
   assert.equal(h.node.data.task.phase, 'cancelled'); assert.equal(h.node.data.task.cancelRequested, false)
+})
+
+test('polling and manual checks clear library provenance only after successful replacement, making new output saveable', async () => {
+  const selectionActions = sourceModule('../components/free-canvas/canvas-selection-actions.ts', { './canvas-selection': selection })
+  for (const path of ['poll', 'manual']) {
+    const oldText = '资产库中的原文本', source = { runId: 'original-agent-run', assetId: 'original-library-asset' }
+    let status = 'running', text = '未完成或失败的临时内容'
+    const h = harness({ query: async () => ({ data: { task: { id: 'server-task', status, result: { media: [], text } } } }) })
+    h.actual.getState().patchNodes([{ id: 'shared-node', data: { kind: 'text', text: oldText, resultSource: source, task: { id: 'server-task', phase: 'running', startedAt: 1 } } }])
+    const check = async () => {
+      if (path === 'manual') await h.actions.checkNode('shared-node')
+      else h.actual.getState().patchNodes(h.collectTaskPatches([h.node], [{ id: 'server-task', status, media: [], text }]))
+    }
+    for (const waiting of ['pending', 'running', 'error', 'cancelled']) {
+      status = waiting; await check()
+      assert.equal(h.node.data.text, oldText, `${path}/${waiting}`)
+      assert.deepEqual(h.node.data.resultSource, source)
+      assert.match(selectionActions.selectionResults([h.node], [h.node.id])[0].skipped, /已来自资产库/)
+    }
+    status = 'success'; text = oldText; await check()
+    assert.deepEqual(h.node.data.resultSource, source, 'reading the original result again must not duplicate the library asset')
+    text = '重新生成的新文本'; await check()
+    assert.equal(h.node.data.text, text); assert.equal(h.node.data.resultSource, undefined)
+    assert.equal(selectionActions.selectionResults([h.node], [h.node.id])[0].skipped, undefined)
+    const restored = codec.readBoard(codec.writeBoard([h.node], [])).nodes[0]
+    assert.equal(restored.data.resultSource, undefined)
+    assert.equal(restored.data.text, text)
+  }
+})
+
+test('successful media replacement clears source while unsuccessful media responses preserve prior results', async () => {
+  const oldResults = [{ url: '/media/owned.png', mediaKind: 'image' }], source = { runId: 'original-run', assetId: 'owned-image' }
+  for (const path of ['poll', 'manual']) {
+    let status = 'error'
+    const media = [{ url: '/media/new.png', kind: 'image' }]
+    const h = harness({ query: async () => ({ data: { task: { id: 'server-task', status, result: { media } } } }) })
+    h.actual.getState().patchNodes([{ id: 'shared-node', data: { results: oldResults, resultSource: source, task: { id: 'server-task', phase: 'running', startedAt: 1 } } }])
+    const check = async () => {
+      if (path === 'manual') await h.actions.checkNode('shared-node')
+      else h.actual.getState().patchNodes(h.collectTaskPatches([h.node], [{ id: 'server-task', status, media }]))
+    }
+    await check(); assert.deepEqual(h.node.data.results, oldResults); assert.deepEqual(h.node.data.resultSource, source)
+    status = 'success'; await check()
+    assert.equal(h.node.data.results[0].url, '/media/new.png'); assert.equal(h.node.data.resultSource, undefined)
+  }
 })
 
 test('actual generation-store cancellation returns the authoritative status and gives an honest notice', async () => {

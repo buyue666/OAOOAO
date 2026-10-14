@@ -14,7 +14,8 @@ function sourceModule(path, modules = {}) {
 const types = sourceModule('../components/free-canvas/types.ts')
 const factory = sourceModule('../components/free-canvas/node-factory.ts')
 const layout = sourceModule('../components/free-canvas/canvas-layout.ts', { './node-factory': factory })
-const storeModule = () => sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types, './canvas-layout': layout }).useCanvasStore
+const selection = sourceModule('../components/free-canvas/canvas-selection.ts')
+const storeModule = () => sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types, './canvas-layout': layout, './canvas-selection': selection }).useCanvasStore
 
 function fixture(store, projectId = 'synthetic-canvas') {
   const nodes = [

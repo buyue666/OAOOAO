@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ReactFlowProvider, useReactFlow, type Viewport, type XYPosition } from '@xyflow/react'
 import type { LibraryAssetView } from '@/lib/studio/account-api'
@@ -12,8 +12,11 @@ import { readBoard, writeBoard } from './board-codec'
 import { CanvasActionsProvider, type CanvasActions } from './canvas-context'
 import { CanvasAssetLibrary } from './canvas-asset-library'
 import { CanvasSkillDialog } from './canvas-skill-dialog'
+import { CanvasSelectionSkillDialog, type SelectionSkillSession } from './canvas-selection-skill-dialog'
+import { createSelectionSkillDraft } from './canvas-selection-skill'
 import { CanvasNoticeToast, CanvasSelectionBar, CanvasTopBar, CanvasZoomDock, EmptyCanvasGuide } from './canvas-chrome'
 import { CanvasFlow } from './canvas-flow'
+import { nodePositionAtCenter } from './canvas-position'
 import { CanvasContextMenu } from './canvas-menu'
 import { flushCanvasSave, flushCanvasSaveOnHide, startCanvasAutosave, stopCanvasSaveTimer } from './canvas-persistence'
 import { useCanvasStore } from './canvas-store'
@@ -22,6 +25,7 @@ import type { NodeSide } from './types'
 import { useAgentActions } from './use-agent-actions'
 import { useGenerationActions } from './use-generation-actions'
 import { useWorkHandoff } from './use-work-handoff'
+import { useCanvasSelectionActions } from './use-canvas-selection-actions'
 
 const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
 const MAX_REFERENCES = 4
@@ -88,9 +92,12 @@ function CanvasWorkspace() {
   const defaults = useMemo(() => defaultGenerationDefaults(state.sessionSettings), [state.sessionSettings])
   const generation = useGenerationActions()
   const agent = useAgentActions()
+  const selectionActions = useCanvasSelectionActions()
   const { screenToFlowPosition, fitView } = useReactFlow()
   const [initialViewport] = useState<Viewport>(() => useCanvasStore.getState().viewport)
   const [skillNodeId, setSkillNodeId] = useState<string | null>(null)
+  const [selectionSkill, setSelectionSkill] = useState<(SelectionSkillSession & { id: number }) | null>(null)
+  const skillDraftSequence = useRef(0)
   const nodeCount = useCanvasStore((store) => store.nodes.length)
   const assetPanelOpen = useCanvasStore((store) => store.assetPanelOpen)
   const assetTargetNodeId = useCanvasStore((store) => store.assetTargetNodeId)
@@ -101,6 +108,21 @@ function CanvasWorkspace() {
     [screenToFlowPosition],
   )
   useWorkHandoff(viewportCenter)
+
+  const closeSelectionSkill = useCallback(() => setSelectionSkill(null), [])
+  const createSkillFromSelection = useCallback((nodeIds?: readonly string[]) => {
+    const store = useCanvasStore.getState()
+    if (!store.hydrated || !store.projectId || !state.user.id) return store.setNotice('请先登录并打开画布，再创建技能')
+    try {
+      const selection = createSelectionSkillDraft(store.nodes, store.edges, nodeIds, state.models)
+      store.closeOverlays()
+      setSkillNodeId(null)
+      setSelectionSkill({ id: ++skillDraftSequence.current, selection, projectId: store.projectId, projectMeta: store.projectMeta, accountId: state.user.id })
+    } catch (cause) {
+      store.setNotice(cause instanceof Error ? cause.message : '无法从这些节点创建技能，请重新选择')
+    }
+  }, [state.models, state.user.id])
+  const saveSkillFromNode = useCallback(async (nodeId: string) => { createSkillFromSelection([nodeId]) }, [createSkillFromSelection])
 
   const createNodeAt = useCallback((kind: CreatableKind, position: XYPosition) => {
     const store = useCanvasStore.getState()
@@ -124,7 +146,7 @@ function CanvasWorkspace() {
       void fitView({ nodes: [{ id: existing.id }], padding: 0.6, duration: 240, maxZoom: 1 })
       return
     }
-    createNodeAt('agent', viewportCenter())
+    createNodeAt('agent', nodePositionAtCenter('agent', viewportCenter()))
   }, [createNodeAt, fitView, viewportCenter])
 
   const exportCanvas = useCallback(() => {
@@ -177,18 +199,25 @@ function CanvasWorkspace() {
     focusAgent,
     exportCanvas,
     selectSkills: setSkillNodeId,
-  }), [generation, agent, createNodeNear, createNodeAt, focusAgent, exportCanvas])
+    createSkillFromSelection,
+    saveSkillFromNode,
+    saveSelectionResults: selectionActions.saveSelectionResults,
+    draftAgentFromSelection: selectionActions.draftAgentFromSelection,
+    exportSelection: selectionActions.exportSelection,
+  }), [generation, agent, createNodeNear, createNodeAt, focusAgent, exportCanvas, createSkillFromSelection, saveSkillFromNode, selectionActions.saveSelectionResults, selectionActions.draftAgentFromSelection, selectionActions.exportSelection])
 
   return (
     <CanvasActionsProvider value={actions}>
       <main className="relative h-full min-h-0 w-full overflow-hidden bg-black text-white">
         <CanvasFlow initialViewport={initialViewport} />
         <CanvasTopBar onExport={exportCanvas} onFocusAgent={focusAgent} />
-        {nodeCount === 0 ? <EmptyCanvasGuide onCreate={(kind) => createNodeAt(kind, viewportCenter())} /> : null}
+        {nodeCount === 0 ? <EmptyCanvasGuide onCreate={(kind) => createNodeAt(kind, nodePositionAtCenter(kind, viewportCenter()))} /> : null}
         <CanvasZoomDock />
         <CanvasSelectionBar />
         <CanvasContextMenu />
         {skillNodeId ? <CanvasSkillDialog nodeId={skillNodeId} onClose={() => setSkillNodeId(null)} /> : null}
+        {selectionSkill ? <CanvasSelectionSkillDialog key={selectionSkill.id} session={selectionSkill} onClose={closeSelectionSkill} /> : null}
+        {selectionActions.dialogs}
         {assetPanelOpen ? (
           <div className="pointer-events-auto absolute top-16 right-3 z-50 w-[min(360px,calc(100%-1.5rem))]">
             <CanvasAssetLibrary targetNodeId={assetTargetNodeId} onPick={handleAssetPick} onClose={() => setAssetPanel(false)} />

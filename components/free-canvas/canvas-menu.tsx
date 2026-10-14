@@ -8,6 +8,7 @@ import { useCanvasStore } from './canvas-store'
 import { CREATABLE_KINDS, NODE_META } from './node-factory'
 import type { FreeCanvasNode } from './types'
 import { settingsPlacementFor } from './nodes/node-kit'
+import { selectionNodes, selectionRoots } from './canvas-selection'
 
 type MenuEntry =
   | { type: 'item'; key: string; label: string; onSelect: () => void; disabled?: boolean }
@@ -32,11 +33,16 @@ export function CanvasContextMenu() {
 
   useEffect(() => {
     if (!menu) return
+    const previous = document.activeElement
+    ref.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus()
     const handlePointerDown = (event: PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) openContextMenu(null)
     }
     window.addEventListener('pointerdown', handlePointerDown)
-    return () => window.removeEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      if (document.activeElement === document.body && previous instanceof HTMLElement && previous.isConnected) previous.focus()
+    }
   }, [menu, openContextMenu])
 
   if (!menu) return null
@@ -55,9 +61,21 @@ export function CanvasContextMenu() {
       ref={ref}
       role="menu"
       aria-label="画布菜单"
-      className="fixed z-[70] max-h-[calc(100dvh-16px)] w-[232px] overflow-y-auto rounded-2xl border border-white/15 bg-neutral-950 p-1.5 text-white shadow-[0_24px_60px_rgba(0,0,0,0.75)]"
-      style={{ left, top }}
+      className="fixed z-[70] w-[232px] overflow-y-auto rounded-2xl border border-white/15 bg-neutral-950 p-1.5 text-white shadow-[0_24px_60px_rgba(0,0,0,0.75)]"
+      style={{ left, top, maxHeight: `calc(100dvh - ${top + 8}px)` }}
       onContextMenu={(event) => event.preventDefault()}
+      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close() }}
+      onKeyDown={event => {
+        // Canvas shortcuts must not run while a menu owns keyboard focus.
+        event.stopPropagation()
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() }
+        if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+          event.preventDefault()
+          const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')]
+          const index = items.indexOf(document.activeElement as HTMLButtonElement)
+          items[event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+        }
+      }}
     >
       {entries.map((entry) => {
         if (entry.type === 'separator') return <div key={entry.key} role="separator" className="my-1 h-px bg-white/10" />
@@ -67,6 +85,7 @@ export function CanvasContextMenu() {
             key={entry.key}
             type="button"
             role="menuitem"
+            tabIndex={-1}
             disabled={entry.disabled}
             onClick={() => {
               entry.onSelect()
@@ -82,17 +101,23 @@ export function CanvasContextMenu() {
   )
 }
 
-function selectOnly(nodeId: string) {
-  useCanvasStore.getState().selectNodeOnly(nodeId)
-}
-
 function nodeEntries(
   node: FreeCanvasNode,
   actions: ReturnType<typeof useCanvasActions>,
   store: () => ReturnType<typeof useCanvasStore.getState>,
 ): MenuEntry[] {
-  const entries: MenuEntry[] = []
-  if (node.type === 'generation') {
+  // Right-clicking an already selected node operates on the full selection.
+  // Right-clicking another node leaves the current selection alone until an action.
+  const currentNodes = store().nodes
+  const inSelection = selectionNodes(currentNodes).some(item => item.id === node.id)
+  const selectedIds = inSelection ? currentNodes.filter(item => item.selected).map(item => item.id) : [node.id]
+  const chosen = selectionNodes(currentNodes, selectedIds)
+  const roots = selectionRoots(currentNodes, selectedIds)
+  const prepare = () => { if (!inSelection) store().selectNodeOnly(node.id) }
+  const hasGroup = chosen.some(item => item.type === 'group')
+  const multiple = chosen.length > 1
+  const entries: MenuEntry[] = [{ type: 'heading', key: 'scope', label: multiple || hasGroup ? `所选内容 · ${chosen.length} 个节点（含分组）` : node.data.title }]
+  if (!multiple && node.type === 'generation') {
     const phase = node.data.task?.phase
     const busy = phase === 'queued' || phase === 'running'
     entries.push(busy
@@ -107,22 +132,24 @@ function nodeEntries(
         store().openSettings(node.id, settingsPlacementFor(element))
       },
     })
-    entries.push({ type: 'item', key: 'favorite', label: '收藏第一个结果', disabled: !node.data.results.length, onSelect: () => void actions.saveResultToLibrary(node.id, 0) })
-    entries.push({ type: 'item', key: 'skill', label: '存为技能', disabled: !node.data.prompt.trim(), onSelect: () => void actions.saveSkillFromNode(node.id) })
   }
-  if (node.type === 'media') {
+  if (!multiple && node.type === 'media') {
     entries.push({ type: 'item', key: 'replace', label: node.data.media ? '替换素材' : '选择素材', onSelect: () => store().setAssetPanel(true, node.id) })
   }
-  if (node.type === 'agent') {
+  if (!multiple && node.type === 'agent') {
     entries.push({ type: 'item', key: 'run', label: '运行 Agent', disabled: !node.data.prompt.trim(), onSelect: () => void actions.startAgent(node.id) })
   }
-  if (node.type === 'group') {
+  entries.push({ type: 'item', key: 'save-results', label: '保存结果到资产…', disabled: !chosen.some(item => item.type === 'media' ? Boolean(item.data.media) : item.type === 'generation' && (item.data.results.length > 0 || Boolean(item.data.text?.trim()))), onSelect: () => actions.saveSelectionResults(selectedIds) })
+  entries.push({ type: 'item', key: 'agent-draft', label: '交给助手…', onSelect: () => actions.draftAgentFromSelection(selectedIds) })
+  entries.push({ type: 'item', key: 'skill-draft', label: '创建 Skill…', disabled: !chosen.some(item => item.type === 'generation' && item.data.prompt.trim()), onSelect: () => actions.createSkillFromSelection(selectedIds) })
+  if (roots.length >= 2) entries.push({ type: 'item', key: 'group', label: '分组', onSelect: () => { prepare(); store().groupSelection() } })
+  if (hasGroup) {
     entries.push({
       type: 'item',
       key: 'ungroup',
       label: '解散分组',
       onSelect: () => {
-        selectOnly(node.id)
+        prepare()
         store().ungroupSelection()
       },
     })
@@ -131,13 +158,15 @@ function nodeEntries(
   entries.push({
     type: 'item',
     key: 'duplicate',
-    label: '复制节点',
+    label: '创建副本',
     onSelect: () => {
-      selectOnly(node.id)
+      prepare()
       store().duplicateSelection()
     },
   })
-  entries.push({ type: 'item', key: 'delete', label: '删除节点', onSelect: () => store().removeNodes([node.id]) })
+  entries.push({ type: 'item', key: 'copy', label: '复制到画布剪贴板', onSelect: () => { prepare(); store().copySelection() } })
+  entries.push({ type: 'item', key: 'export-selection', label: '导出选中内容 JSON', onSelect: () => actions.exportSelection(selectedIds) })
+  entries.push({ type: 'item', key: 'delete', label: hasGroup ? '删除整组（含内容，可撤销）' : '删除选中内容（可撤销）', onSelect: () => { prepare(); store().deleteSelection() } })
   return entries
 }
 

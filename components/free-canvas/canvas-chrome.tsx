@@ -2,16 +2,15 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { useShallow } from 'zustand/react/shallow'
 import { ArrowLeft, Bot, Check, CircleAlert, Download, FolderOpen, LoaderCircle, Redo2, RefreshCw, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useCanvasActions } from './canvas-context'
 import { flushCanvasSave } from './canvas-persistence'
 import { useCanvasStore, type SaveStatus } from './canvas-store'
 import { CREATABLE_KINDS, NODE_META, type CreatableKind } from './node-factory'
-import type { GenerationFlowNode } from './types'
 import { CanvasLeaveDialog } from './canvas-leave-dialog'
 import { CanvasNameEditor } from './canvas-name-editor'
+import { CanvasCreateMenu } from './canvas-create-menu'
+export { CanvasSelectionBar } from './canvas-selection-toolbar'
 export { CanvasNavigationDock as CanvasZoomDock } from './canvas-navigation'
 
 const SAVE_LABEL: Record<SaveStatus, string> = {
@@ -56,6 +55,7 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
         <SaveStatusLabel status={saveStatus} error={saveError} onExport={onExport} />
       </div>
       <div className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border border-white/15 bg-black/85 p-1.5 backdrop-blur-md">
+        <CanvasCreateMenu />
         <ToolbarButton label="撤销" disabled={!canUndo} onClick={() => undo()}>
           <Undo2 className="size-4" aria-hidden="true" />
         </ToolbarButton>
@@ -144,59 +144,6 @@ export function EmptyCanvasGuide({ onCreate }: { onCreate: (kind: CreatableKind)
         })}
       </div>
     </section>
-  )
-}
-
-export function CanvasSelectionBar() {
-  const selected = useCanvasStore(useShallow((state) => state.nodes.filter((node) => node.selected)))
-  const groupSelection = useCanvasStore((state) => state.groupSelection)
-  const ungroupSelection = useCanvasStore((state) => state.ungroupSelection)
-  const alignSelection = useCanvasStore((state) => state.alignSelection)
-  const copySelection = useCanvasStore((state) => state.copySelection)
-  const duplicateSelection = useCanvasStore((state) => state.duplicateSelection)
-  const deleteSelection = useCanvasStore((state) => state.deleteSelection)
-  const actions = useCanvasActions()
-
-  if (selected.length < 2) return null
-
-  const runnable = selected.filter((node): node is GenerationFlowNode => node.type === 'generation' && node.data.prompt.trim().length > 0)
-  const allGeneration = selected.every((node) => node.type === 'generation')
-  const hasGroup = selected.some((node) => node.type === 'group')
-  const topLevelCount = selected.filter((node) => !node.parentId).length
-
-  return (
-    <div role="toolbar" aria-label="批量操作" className="pointer-events-auto absolute bottom-[76px] left-1/2 z-40 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-2xl border border-white/15 bg-black/90 p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.7)] backdrop-blur-md">
-      <span className="px-2 text-xs text-neutral-400">已选 {selected.length}</span>
-      <BarButton onClick={() => groupSelection()}>分组</BarButton>
-      {hasGroup ? <BarButton onClick={() => ungroupSelection()}>解组</BarButton> : null}
-      {topLevelCount >= 2 ? (
-        <>
-          <BarButton onClick={() => alignSelection('x')}>左对齐</BarButton>
-          <BarButton onClick={() => alignSelection('y')}>顶对齐</BarButton>
-        </>
-      ) : null}
-      <BarButton onClick={() => copySelection()}>复制</BarButton>
-      <BarButton onClick={() => duplicateSelection()}>副本</BarButton>
-      {allGeneration && runnable.length ? (
-        <BarButton primary onClick={() => runnable.forEach((node) => void actions.submitNode(node.id))}>批量生成 {runnable.length}</BarButton>
-      ) : null}
-      <BarButton onClick={() => deleteSelection()}>删除</BarButton>
-    </div>
-  )
-}
-
-function BarButton({ children, onClick, primary }: { children: ReactNode; onClick: () => void; primary?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'h-8 rounded-xl px-2.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-white',
-        primary ? 'bg-white font-medium text-black hover:bg-neutral-200' : 'text-neutral-200 hover:bg-white/10 hover:text-white',
-      )}
-    >
-      {children}
-    </button>
   )
 }
 

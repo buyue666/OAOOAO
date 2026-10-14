@@ -56,10 +56,13 @@ export function collectTaskPatches(nodes: FreeCanvasNode[], tasks: GenerationTas
     const phase = phaseOf(view)
     const task: NodeTask = { ...node.data.task, phase, cancelRequested: Boolean(view.cancelRequested && (phase === 'queued' || phase === 'running')), error: phase === 'error' ? view.error || '生成失败' : undefined }
     const results = phase === 'success' ? resultsOf(view) : node.data.results
-    const text = view.text ?? node.data.text
+    const text = phase === 'success' ? view.text ?? node.data.text : node.data.text
     const resultsChanged = !sameResults(results, node.data.results)
     if (sameTask(node.data.task, task) && !resultsChanged && text === node.data.text) continue
-    patches.push({ id: node.id, data: { task, results, text } })
+    // The source describes the old library output, not future generations on
+    // this node. Preserve it while pending/failed or re-reading that same output.
+    const outputReplaced = phase === 'success' && (resultsChanged || text !== node.data.text)
+    patches.push({ id: node.id, data: { task, results, text, ...(outputReplaced ? { resultSource: undefined } : {}) } })
   }
   return patches
 }
@@ -225,9 +228,11 @@ export function useGenerationActions() {
       const results: NodeResult[] = remote.status === 'success'
         ? normalized.media.map((media) => ({ url: media.url, poster: media.poster, mediaKind: media.kind }))
         : node.data.results
+      const text = phase === 'success' ? normalized.text ?? node.data.text : node.data.text
+      const outputReplaced = phase === 'success' && (!sameResults(results, node.data.results) || text !== node.data.text)
       useCanvasStore.getState().patchNodes([{
         id: nodeId,
-        data: { task: { ...task, phase, cancelRequested: Boolean(remote.cancelRequested && (phase === 'queued' || phase === 'running')), error: phase === 'error' ? remote.error || '生成失败' : undefined }, results, text: normalized.text ?? node.data.text },
+        data: { task: { ...task, phase, cancelRequested: Boolean(remote.cancelRequested && (phase === 'queued' || phase === 'running')), error: phase === 'error' ? remote.error || '生成失败' : undefined }, results, text, ...(outputReplaced ? { resultSource: undefined } : {}) },
       }])
     } catch (error) {
       if (current()) useCanvasStore.getState().setNotice(errorMessageOf(error))
@@ -260,25 +265,6 @@ export function useGenerationActions() {
     }
   }, [])
 
-  const saveSkillFromNode = useCallback(async (nodeId: string) => {
-    const node = generationNodeOf(nodeId)
-    const prompt = node?.data.prompt.trim()
-    if (!prompt) return
-    if (prompt.length > 4000) return useCanvasStore.getState().setNotice('技能指令最多 4000 字，请缩短后再保存')
-    try {
-      await createLibraryAsset({
-        kind: 'text',
-        title: prompt.slice(0, 24),
-        tags: ['技能'],
-        source: 'canvas-skill',
-        data: { prompt, skillVersion: 1 },
-      })
-      useCanvasStore.getState().setNotice('已保存为技能')
-    } catch (error) {
-      useCanvasStore.getState().setNotice(errorMessageOf(error))
-    }
-  }, [])
-
   const estimateNode = useCallback((data: GenerationNodeData) => {
     const capability = CAPABILITY[data.kind]
     const modelId = data.model || defaultModelFor(capability, settings, filterModelsByCapability(models, capability))
@@ -295,9 +281,8 @@ export function useGenerationActions() {
     cancelNode,
     checkNode,
     saveResultToLibrary,
-    saveSkillFromNode,
     estimateNode,
-  }), [submitNode, cancelNode, checkNode, saveResultToLibrary, saveSkillFromNode, estimateNode])
+  }), [submitNode, cancelNode, checkNode, saveResultToLibrary, estimateNode])
 }
 
 export type GenerationActions = ReturnType<typeof useGenerationActions>

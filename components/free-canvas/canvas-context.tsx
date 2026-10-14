@@ -13,6 +13,12 @@ export type CanvasActions = GenerationActions & AgentActions & {
   focusAgent: () => void
   exportCanvas: () => void
   selectSkills: (nodeId: string) => void
+  createSkillFromSelection: (nodeIds?: readonly string[]) => void
+  /** Legacy single-node entry opens the same editable draft; it never saves immediately. */
+  saveSkillFromNode: (nodeId: string) => Promise<void>
+  saveSelectionResults: (nodeIds?: readonly string[]) => void
+  draftAgentFromSelection: (nodeIds?: readonly string[]) => void
+  exportSelection: (nodeIds?: readonly string[]) => void
 }
 
 const CanvasActionsContext = createContext<CanvasActions | null>(null)

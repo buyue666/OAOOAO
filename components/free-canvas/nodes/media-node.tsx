@@ -29,7 +29,7 @@ export const MediaNode = memo(function MediaNode({ id, data, selected }: NodePro
         </header>
         {media ? <MediaPreview media={media} /> : <EmptyMedia onPick={() => setAssetPanel(true, id)} />}
         <div className="flex items-center gap-2 px-0.5">
-          <TitleEditor nodeId={id} title={media?.title ?? kindLabel} className="text-xs text-neutral-200" />
+          <TitleEditor nodeId={id} title={data.title || media?.title || kindLabel} className="text-xs text-neutral-200" />
         </div>
         {media ? (
           <button type="button" onClick={() => setAssetPanel(true, id)} className="nodrag flex h-8 items-center justify-center gap-1.5 rounded-lg border border-white/15 text-xs text-neutral-200 transition-colors hover:bg-white/10">

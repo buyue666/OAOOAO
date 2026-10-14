@@ -70,7 +70,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   const miniMapOpen = useCanvasStore((state) => state.miniMapOpen)
   const snapToGrid = useCanvasStore((state) => state.snapToGrid)
   const showEdges = useCanvasStore((state) => state.showEdges)
-  const hasMultiSelection = useCanvasStore((state) => state.nodes.filter(node => node.selected).length >= 2)
+  const hasSelection = useCanvasStore((state) => state.nodes.some(node => node.selected))
   const settingsNodeId = useCanvasStore((state) => state.settingsNodeId)
   const onNodesChange = useCanvasStore((state) => state.onNodesChange)
   const onEdgesChange = useCanvasStore((state) => state.onEdgesChange)
@@ -222,7 +222,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
           zoomable
           position="bottom-left"
           className="overflow-hidden rounded-xl border border-white/20 shadow-xl"
-          style={{ left: 12, bottom: hasMultiSelection ? 216 : 72, margin: 0, width: 192, height: 120 }}
+          style={{ left: 12, bottom: hasSelection ? 216 : 72, margin: 0, width: 192, height: 120 }}
           bgColor="#111113"
           maskColor="rgba(0,0,0,0.52)"
           maskStrokeColor="rgba(255,255,255,0.65)"
