@@ -5,6 +5,8 @@
 .brandName { font-size: 14px; font-weight: 650; }
 .brand p { max-width: 320px; margin: 0; font-size: 13px; line-height: 1.9; color: var(--footer-muted); white-space: pre-line; overflow-wrap: anywhere; }
 .brand .copyright, .brand .registration { font-size: 12px; }
+.registration { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.registrationNumber { min-width: 0; max-width: 100%; }
 .column { display: flex; min-width: 0; flex-direction: column; gap: 22px; }
 .column h2 { margin: 0; font-size: 14px; font-weight: 650; line-height: 1.6; }
 .column ul { display: flex; flex-direction: column; gap: 15px; list-style: none; margin: 0; padding: 0; }

@@ -78,17 +78,17 @@ test('footer preview displays unsaved values without any live links, while empty
   assert.match(html, /未保存品牌/)
   assert.match(html, /未保存介绍/)
   assert.doesNotMatch(html, /<a\b|联系我们|产品与创作|siyuesy|备案号/)
-  assert.match(html, /GitHub 开源仓库/)
-  assert.match(html, /AGPL-3.0 许可证/)
+  assert.match(html, /GitHub 仓库/)
+  assert.doesNotMatch(html, /AGPL|许可证/)
   assert.match(html, /title="预览链接：https:\/\/github.com\/buyue666\/OAOOAO"/)
 })
 
-test('fixed open-source links survive empty marketing settings and retain copyright without an all-rights restriction', () => {
+test('fixed repository link survives empty marketing settings and retains copyright without an all-rights restriction', () => {
   const html = footerRender({ title: '新品牌', footer: { copyrightHolder: '实际版权主体', contactEmail: '', productLinks: [], socialLinks: [] } })
   assert.match(html, /href="https:\/\/github.com\/buyue666\/OAOOAO" target="_blank" rel="noopener noreferrer"/)
-  assert.match(html, /href="https:\/\/github.com\/buyue666\/OAOOAO\/blob\/main\/LICENSE"/)
+  assert.doesNotMatch(html, /\/blob\/main\/LICENSE|AGPL|许可证/)
   assert.match(html, /anticon-github/)
-  assert.match(html, /GitHub 开源仓库/)
+  assert.match(html, /GitHub 仓库/)
   assert.ok(html.includes(`© ${new Date().getFullYear()} 实际版权主体`))
   assert.doesNotMatch(html, /保留所有权利|All rights reserved/)
 })
