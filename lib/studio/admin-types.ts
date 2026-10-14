@@ -352,7 +352,8 @@ export type SiteAnnouncementBar = {
   enabled?: boolean
   text?: string
   href?: string
-  tone?: 'promo' | 'info' | 'warning' | string
+  tone?: import('./announcement-appearance').AnnouncementTone | string
+  effect?: import('./announcement-appearance').AnnouncementEffect | string
   dismissible?: boolean
 }
 
@@ -711,6 +712,8 @@ export type Announcement = {
   enabled: boolean
   popupHome: boolean
   popupAfterLogin: boolean
+  bannerTone?: import('./announcement-appearance').AnnouncementTone
+  bannerEffect?: import('./announcement-appearance').AnnouncementEffect
   startsAt?: string
   endsAt?: string
   createdAt: string
@@ -723,6 +726,8 @@ export type AnnouncementInput = {
   enabled?: boolean
   popupHome?: boolean
   popupAfterLogin?: boolean
+  bannerTone?: import('./announcement-appearance').AnnouncementTone
+  bannerEffect?: import('./announcement-appearance').AnnouncementEffect
   startsAt?: string
   endsAt?: string
 }

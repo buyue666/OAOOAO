@@ -45,6 +45,8 @@ import {
 } from './admin-kit'
 import { useAdminReload, useAdminSession } from './admin-shell'
 import { activeAnnouncements } from '@/lib/studio/announcements'
+import { normalizeAnnouncementEffect, normalizeAnnouncementTone } from '@/lib/studio/announcement-appearance'
+import { AdminAnnouncementAppearance } from './admin-announcement-appearance'
 
 const moderationLabels: Record<string, string> = { pending: '待审核', approved: '已通过', rejected: '已驳回', taken_down: '已下架' }
 const lifecycleLabels: Record<string, string> = { active: '正常', revoked: '已撤回' }
@@ -186,7 +188,7 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
           </AdminTable>
         </AdminDataPanel>
 
-        {editor && <AnnouncementEditor item={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} onSaved={(text) => { setMessage(text); setEditor(null); load() }} />}
+        {editor && <AnnouncementEditor key={editor === 'new' ? 'new' : editor.id} item={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} onSaved={(text) => { setMessage(text); setEditor(null); load() }} />}
       </AdminWorkbench>
     </div>
   )
@@ -195,9 +197,15 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
 function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; onClose: () => void; onSaved: (message: string) => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [title, setTitle] = useState(item?.title ?? '')
+  const [content, setContent] = useState(item?.content ?? '')
+  const [bannerTone, setBannerTone] = useState(() => normalizeAnnouncementTone(item?.bannerTone))
+  const [bannerEffect, setBannerEffect] = useState(() => normalizeAnnouncementEffect(item?.bannerEffect))
 
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError('')
+    event.preventDefault()
+    if (busy) return
+    setBusy(true); setError('')
     const data = new FormData(event.currentTarget)
     const value = (key: string) => String(data.get(key) ?? '').trim()
     try {
@@ -205,8 +213,10 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
       const endsAt = value('endsAt')
       if (startsAt && endsAt && new Date(startsAt).getTime() >= new Date(endsAt).getTime()) throw new Error('结束时间必须晚于开始时间')
       const payload: AnnouncementInput = {
-        title: value('title'),
-        content: value('content'),
+        title: title.trim(),
+        content: content.trim(),
+        bannerTone,
+        bannerEffect,
         enabled: data.has('enabled'),
         popupHome: data.has('popupHome'),
         popupAfterLogin: data.has('popupAfterLogin'),
@@ -226,9 +236,8 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
   return (
     <AdminDrawer
       open
-      dock
-      onClose={onClose}
-      width="sm:max-w-xl"
+      onClose={() => { if (!busy) onClose() }}
+      width="sm:max-w-3xl"
       title={item ? '编辑公告' : '新增公告'}
       description={item ? item.title : '默认在首页顶部展示横幅；发布后按开始和结束时间生效。未发布的公告仅保存在后台。'}
       footer={
@@ -240,8 +249,9 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
     >
       <form id="announcement-editor-form" onSubmit={submit} className="flex flex-col gap-4">
         <fieldset disabled={busy} className="flex flex-col gap-4">
-          <AdminField label="公告标题" hint="直接展示在首页顶部横幅中，建议简短明确。"><AdminInput name="title" required maxLength={120} defaultValue={item?.title} /></AdminField>
-          <AdminField label="公告内容" hint="横幅显示正文摘要，用户点击「查看详情」后阅读完整内容。"><AdminTextarea name="content" rows={8} required defaultValue={item?.content} /></AdminField>
+          <AdminField label="公告标题" hint="直接展示在首页顶部横幅中，建议简短明确。"><AdminInput name="title" required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></AdminField>
+          <AdminField label="公告内容" hint="横幅显示正文摘要，用户点击「查看详情」后阅读完整内容。"><AdminTextarea name="content" rows={5} required value={content} onChange={(event) => setContent(event.target.value)} /></AdminField>
+          <AdminAnnouncementAppearance tone={bannerTone} effect={bannerEffect} onToneChange={setBannerTone} onEffectChange={setBannerEffect} text={title} description={content} hasDetails disabled={busy} />
           <AdminField label="开始时间" hint="按当前设备的本地时间设置，留空表示立即生效。"><AdminInput name="startsAt" type="datetime-local" defaultValue={toLocalInput(item?.startsAt)} /></AdminField>
           <AdminField label="结束时间" hint="留空表示长期有效。"><AdminInput name="endsAt" type="datetime-local" defaultValue={toLocalInput(item?.endsAt)} /></AdminField>
           <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">

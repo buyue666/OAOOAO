@@ -5,10 +5,12 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ExternalLink, RotateCcw, Save } from 'lucide-react'
 import { SiteBrand } from '@/components/site-brand'
 import { safeBrandImageUrl } from '@/lib/studio/site-brand'
+import { normalizeAnnouncementEffect, normalizeAnnouncementTone } from '@/lib/studio/announcement-appearance'
 import type { AdminSettingsPatch } from '@/lib/studio/admin-api'
 import type { SiteSettings } from '@/lib/studio/admin-types'
 import { ControlButton, StatusBadge } from './ui'
-import { AdminField, AdminInput, AdminNotice, AdminSaveBar, AdminSectionCard, AdminSelect, AdminTabs, AdminTextarea } from './admin-kit'
+import { AdminField, AdminInput, AdminNotice, AdminSaveBar, AdminSectionCard, AdminTabs, AdminTextarea } from './admin-kit'
+import { AdminAnnouncementAppearance } from './admin-announcement-appearance'
 
 const textFields = ['title', 'logoUrl', 'iconUrl', 'seoTitle', 'seoDescription', 'seoKeywords', 'footerCopyright', 'termsUrl', 'termsVersion', 'termsContent', 'privacyUrl', 'privacyVersion', 'privacyContent'] as const
 const labels: Record<(typeof textFields)[number], string> = { title: '站点名称', logoUrl: '品牌 Logo', iconUrl: '浏览器图标', seoTitle: '搜索标题', seoDescription: '搜索描述', seoKeywords: '搜索关键词', footerCopyright: '页脚版权', termsUrl: '服务条款地址', termsVersion: '服务条款版本', termsContent: '服务条款正文', privacyUrl: '隐私政策地址', privacyVersion: '隐私政策版本', privacyContent: '隐私政策正文' }
@@ -18,7 +20,7 @@ type BrandTab = (typeof tabs)[number][0]
 function draftFromSite(site: SiteSettings) {
   return {
     ...Object.fromEntries(textFields.map((key) => [key, String(site[key] ?? '')])) as Record<(typeof textFields)[number], string>,
-    announcementBar: { enabled: site.announcementBar?.enabled === true, text: site.announcementBar?.text ?? '', href: site.announcementBar?.href ?? '', tone: site.announcementBar?.tone || 'promo', dismissible: site.announcementBar?.dismissible !== false },
+    announcementBar: { enabled: site.announcementBar?.enabled === true, text: site.announcementBar?.text ?? '', href: site.announcementBar?.href ?? '', tone: normalizeAnnouncementTone(site.announcementBar?.tone), effect: normalizeAnnouncementEffect(site.announcementBar?.effect), dismissible: site.announcementBar?.dismissible !== false },
   }
 }
 
@@ -114,9 +116,20 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
           <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
             <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm sm:col-span-2"><input type="checkbox" checked={draft.announcementBar.enabled} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, enabled: event.target.checked } }))} />启用备用首页横幅</label>
             <AdminField label="横幅文案" className="sm:col-span-2"><AdminInput maxLength={180} value={draft.announcementBar.text} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, text: event.target.value } }))} /></AdminField>
-            <AdminField label="点击跳转地址" hint="留空时只展示文案。"><AdminInput value={draft.announcementBar.href} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, href: event.target.value } }))} /></AdminField>
-            <AdminField label="强调色"><AdminSelect value={draft.announcementBar.tone} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, tone: event.target.value } }))}><option value="promo">品牌青绿</option><option value="info">冷静蓝</option><option value="warning">提醒橙</option></AdminSelect></AdminField>
+            <AdminField label="点击跳转地址" hint="留空时只展示文案。" className="sm:col-span-2"><AdminInput value={draft.announcementBar.href} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, href: event.target.value } }))} /></AdminField>
             <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={draft.announcementBar.dismissible} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, dismissible: event.target.checked } }))} />允许用户关闭</label>
+            <div className="sm:col-span-2">
+              <AdminAnnouncementAppearance
+                tone={draft.announcementBar.tone}
+                effect={draft.announcementBar.effect}
+                onToneChange={(tone) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, tone } }))}
+                onEffectChange={(effect) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, effect } }))}
+                text={draft.announcementBar.text}
+                href={draft.announcementBar.href}
+                dismissible={draft.announcementBar.dismissible}
+                disabled={saving}
+              />
+            </div>
           </fieldset>
         </AdminSectionCard>
       </div>
