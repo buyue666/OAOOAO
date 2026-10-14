@@ -668,6 +668,8 @@
 
 .motion-drawer-left { animation: studio-drawer-left 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
 .motion-page { animation: studio-page-in 220ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+/* Clear the completed admin entrance transform so fixed editors use the viewport. */
+.admin-console .motion-page { animation-fill-mode: backwards; }
 .motion-fade { animation: studio-fade-in 200ms ease-out both; }
 .motion-panel { animation: studio-panel-in 200ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
 .motion-media { transition: transform 240ms cubic-bezier(0.22, 0.61, 0.36, 1); }
