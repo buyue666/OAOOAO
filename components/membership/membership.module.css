@@ -270,6 +270,7 @@
 .planGrid {
   display: grid;
   width: 100%;
+  margin-inline: auto;
   grid-template-columns: repeat(var(--plan-count, 5), minmax(0, 1fr));
   max-width: calc(var(--plan-count, 5) * 280px);
   gap: 12px;
