@@ -51,22 +51,23 @@ export function PlanCard({ plan, tier, billingCycle, billingOption, showMore, is
       </div>
 
       <div className={styles.offerBody}>
-        <div className={styles.tierChoices} role="group" aria-label={`${plan.name}积分档位`} data-testid={plan.tiers.length > 1 ? 'plan-tiers' : 'plan-tier-single'}>
-          {plan.tiers.map(item => (
-            <button key={item.id} type="button" aria-pressed={item.id === tier.id} disabled={!validPricing(item.pricing[billingCycle]) || busy} onClick={() => onTierChange(item)}>{item.label}</button>
-          ))}
-        </div>
         {available && pricing ? (
           <>
-            <div className={styles.creditMetric}><strong>{pricing.credits?.toLocaleString('zh-CN')}</strong><span>{pricing.creditLabel || '积分 / 次发放'}</span></div>
-            {display.dailyPoints !== undefined && display.dailyPoints > 0 ? <p className={styles.dailyMetric}>每日 {display.dailyPoints.toLocaleString('zh-CN')} 积分</p> : null}
             <div className={styles.costLine}><strong>{formatPrice(pricing)}</strong><span>/{billingOption.priceSuffix}</span></div>
             {pricing.originalPriceInCents !== undefined && pricing.originalPriceInCents > (pricing.priceInCents ?? 0) ? <p className={styles.previousCost}><s>{formatPrice({ ...pricing, priceInCents: pricing.originalPriceInCents })}</s>{display.discountLabel ? <span data-testid="plan-discount">{display.discountLabel}</span> : null}</p> : null}
             {pricing.renewalText ? <p className={styles.paymentNote}>{pricing.renewalText}</p> : null}
+            {(pricing.credits ?? 0) > 0 ? <p className={styles.paymentNote}>1 积分约 {formatPrice({ ...pricing, priceInCents: pricing.priceInCents! / pricing.credits! }, 4)}</p> : null}
+            <div className={styles.creditMetric}><strong>{pricing.credits?.toLocaleString('zh-CN')}</strong><span>{pricing.creditLabel || '积分 / 次发放'}</span></div>
+            {display.dailyPoints !== undefined && display.dailyPoints > 0 ? <p className={styles.dailyMetric}>每日 {display.dailyPoints.toLocaleString('zh-CN')} 积分</p> : null}
             {pricing.equivalentText ? <p className={styles.paymentNote}>{pricing.equivalentText}</p> : null}
             {display.generationSummary ? <p className={styles.paymentNote}>{display.generationSummary}</p> : null}
           </>
         ) : <p className={styles.unavailableNote}>此档位在当前周期没有可购买的商品。</p>}
+        <div className={styles.tierChoices} role="group" aria-label={`${plan.name}积分档位`} data-testid={plan.tiers.length > 1 ? 'plan-tiers' : 'plan-tier-single'}>
+          {plan.tiers.map(item => (
+            <button key={item.id} type="button" aria-pressed={item.id === tier.id} disabled={plan.tiers.length === 1 || !validPricing(item.pricing[billingCycle]) || busy} onClick={() => onTierChange(item)}>{item.label}</button>
+          ))}
+        </div>
         <Button type="button" className={styles.offerAction} disabled={disabled} onClick={select}>{busy ? '正在处理…' : label}</Button>
         {plan.disabledReason ? <p className={styles.paymentNote}>{plan.disabledReason}</p> : null}
       </div>

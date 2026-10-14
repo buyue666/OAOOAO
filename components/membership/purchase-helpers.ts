@@ -6,13 +6,13 @@ export function validPricing(pricing: TierPricing | undefined): pricing is TierP
     && Number.isFinite(pricing?.credits) && (pricing?.credits ?? -1) >= 0
 }
 
-export function formatPrice(pricing: TierPricing) {
+export function formatPrice(pricing: TierPricing, fractionDigits = 2) {
   const amount = (pricing.priceInCents ?? 0) / 100
   const currency = pricing.currency || 'CNY'
   try {
-    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency, minimumFractionDigits: 2 }).format(amount)
+    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency, minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(amount)
   } catch {
-    return `${currency} ${amount.toFixed(2)}`
+    return `${currency} ${amount.toFixed(fractionDigits)}`
   }
 }
 

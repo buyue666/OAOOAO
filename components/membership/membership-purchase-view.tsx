@@ -86,7 +86,7 @@ export function MembershipPurchaseView({ storefront = 'plans', products, campaig
   return <section className={`${styles.themeScope} ${styles.viewportScope} ${preview ? styles.previewRoot : styles.storeRoot}`} aria-label={creditsStore ? '积分超市' : '会员套餐'} aria-busy={busy || status === 'loading'} data-storefront={storefront}>
     <div className={styles.storeContent}>
       <header className={styles.storeHeader}>
-        <div><p className={styles.storeEyebrow}>{creditsStore ? '积分购买' : '会员选择'}</p><h1>{creditsStore ? '为创作补充积分' : '选择适合你的会员'}</h1><p className={styles.storeIntro}>{creditsStore ? '按需购买积分，无需开通会员。' : '比较所选周期的价格与权益，确认后继续付款。'}</p></div>
+        <div><p className={styles.storeEyebrow}>{creditsStore ? '积分超市' : '创作会员'}</p><h1>{creditsStore ? '给灵感，多一点可能' : '为下一部作品，选好创作空间'}</h1><p className={styles.storeIntro}>{creditsStore ? '无需开通会员，按需购买，支付确认后计入账户。' : '选择适合你的套餐，积分与权益清晰可见。'}</p></div>
         <button className={styles.exitButton} type="button" aria-label="关闭并返回" disabled={busy} onClick={onClose}><span aria-hidden="true">×</span><span>返回</span></button>
       </header>
       {campaign ? <aside className={styles.campaignPanel}><img src={campaign.imageSrc} alt={campaign.imageAlt} /><div><p>{campaign.title}</p><span>{campaign.subtitle}</span></div></aside> : null}
