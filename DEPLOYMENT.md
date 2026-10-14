@@ -1,6 +1,6 @@
 # OAOOAO 生产部署说明
 
-本文适用于本仓库的 Next.js 前端和 [OAOOAO 独立后端](https://github.com/buyue666/OAOOAO-backend)。示例统一使用 `https://example.com`、前端端口 `3000` 和后端端口 `3001`；替换为实际部署配置。不要将密码、渠道密钥、完整环境文件、数据库备份或用户数据提交到仓库。
+本文适用于本仓库的 Next.js 前端和 [backend/ 后端](backend/README.md)。示例统一使用 `https://example.com`、前端端口 `3000` 和后端端口 `3001`；替换为实际部署配置。不要将密码、渠道密钥、完整环境文件、数据库备份或用户数据提交到仓库。
 
 ## 1. 运行架构与当前能力
 
@@ -20,7 +20,7 @@
 - 创作媒体写入对象存储尚未实现。S3 配置检测只执行 `HeadBucket`，不是上传或写入验收；开启对象存储会阻止不支持的创作媒体操作，应继续使用受支持的持久化本地媒体目录。
 - SMTP 邮件功能需要配置并验证真实投递。不要把短信、微信或 MFA 当作未配置 SMTP 时的替代登录方式。
 
-后端功能边界、迁移细节和容器要求以 [后端 README](https://github.com/buyue666/OAOOAO-backend#readme) 及 [部署与回滚文档](https://github.com/buyue666/OAOOAO-backend/blob/main/docs/DEPLOYMENT.md) 为准。
+后端功能边界、迁移细节和容器要求以 [后端 README](backend/README.md) 及 [部署与回滚文档](backend/docs/DEPLOYMENT.md) 为准。
 
 ## 2. 环境变量
 
@@ -64,7 +64,7 @@ OAOAO_TRUST_REVERSE_PROXY=false
 
 ## 3. 构建、迁移与启动
 
-前端仓库中使用锁定的 pnpm 版本：
+在同一仓库根目录中使用锁定的 pnpm 版本，只安装和构建前端：
 
 ```sh
 pnpm install --frozen-lockfile
@@ -76,9 +76,10 @@ pnpm exec next start --hostname 127.0.0.1 --port 3000
 
 前端环境变量必须在服务启动时存在。生产进程使用服务管理器或容器管理，不使用开发服务器。
 
-在独立后端仓库中，先注入目标数据库及运行配置，再执行：
+在另一个终端，从同一仓库根目录进入 `backend/`，使用后端独立的 npm 锁文件。先注入目标数据库及运行配置，再执行：
 
 ```sh
+cd backend
 npm ci
 npm run typecheck
 npm run build
@@ -86,7 +87,7 @@ node --env-file=.env dist/src/migrate.js
 node --env-file=.env dist/src/server.js
 ```
 
-这些命令假定 `.env` 是本机受保护且已正确配置的文件；部署平台也可以直接注入环境变量并省略 `--env-file`。构建会将迁移 SQL 复制到 `dist/migrations`，迁移必须作为独立的一次性步骤执行，启动 API 不会自动迁移。
+这些后端命令的工作目录均为 `backend/`，假定其中的 `.env` 是本机受保护且已正确配置的文件；部署平台也可以直接注入环境变量并省略 `--env-file`。构建会将迁移 SQL 复制到 `dist/migrations`，迁移必须作为独立的一次性步骤执行，启动 API 不会自动迁移。
 
 全新空站点且没有导入管理员时，才使用 `node --env-file=.env dist/src/bootstrap.js` 创建初始管理员。迁入已有用户时，不要提前 bootstrap；数据导入要求空的目标业务表。
 
@@ -94,7 +95,7 @@ node --env-file=.env dist/src/server.js
 - readiness 返回 503 时先核对数据库和迁移，不要编辑已执行的迁移 SQL 来绕过校验。
 - 健康检查通过不等于模型调用、邮件投递、人工收款或数据迁移已通过验收。
 
-容器构建和媒体卷权限请按后端仓库说明执行。发布记录应同时记录两个源码提交、锁文件、构建产物或镜像摘要，以及实际运行环境配置的非秘密标识。
+容器构建和媒体卷权限请按 [后端说明](backend/README.md#配置与部署) 执行；从根目录构建后端镜像时使用 `docker build -f backend/Dockerfile backend`，构建上下文只包含后端目录。前端和后端仍是两个进程或镜像，必须从同一个已审查的仓库提交构建。发布记录应记录该提交、两个锁文件、前后端产物或镜像摘要，以及实际运行环境配置的非秘密标识。
 
 ## 4. HTTPS、Cookie 与反向代理
 
@@ -171,8 +172,8 @@ location / {
 
 ## 8. 源码版本与第三方声明
 
-前端页脚固定链接到 [OAOOAO 开源仓库](https://github.com/buyue666/OAOOAO) 和 [AGPL-3.0 许可证](LICENSE)，从主仓库 README 可找到独立后端。部署前确认两个仓库与相应源码可公开访问，不能让入口指向私有或缺失的源码。
+前端页脚固定链接到 [OAOOAO 开源仓库](https://github.com/buyue666/OAOOAO) 和 [AGPL-3.0 许可证](LICENSE)。前端在根目录，后端在同一仓库的 [backend/](backend/README.md)。部署前确认该提交及两个目录的完整源码可公开访问，不能让入口指向私有或缺失的源码。
 
-每次发布为实际构建的前后端提交保留可检出的版本标记、锁文件、迁移和构建/运行说明。运行自定义修改时也要提供对应修改的源码；只链接一个与线上版本不同的最新分支不能说明当前运行版本。发布记录应明确前端提交、后端提交和产物摘要之间的对应关系，避免源码链接与部署版本脱节。
+每次发布为实际构建的同一仓库提交保留可检出的版本标记、前后端锁文件、迁移和构建/运行说明。运行自定义修改时也要提供对应修改的源码；只链接一个与线上版本不同的最新分支不能说明当前运行版本。发布记录应明确该提交与前后端产物摘要之间的对应关系，避免源码链接与部署版本脱节。
 
-保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、依赖许可证及后端第三方声明。应用许可证不会替代依赖、图标、字体和素材的许可；后端镜像中的 FFmpeg 与系统包还各有其声明和源码义务，分发镜像时需按实际包含的版本处理。
+保留 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)、依赖许可证及 [后端第三方声明](backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt)。应用许可证不会替代依赖、图标、字体和素材的许可；后端镜像中的 FFmpeg 与系统包还各有其声明和源码义务，分发镜像时需按实际包含的版本处理。

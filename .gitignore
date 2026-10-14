@@ -32,3 +32,19 @@ tests/artifacts/
 
 # Temporary local source copied while preparing the cropped transparent logo.
 public/media/brand/oao-logo-transparent-source.png
+
+# Independent backend package: commit source and examples, never local runtime data.
+/backend/node_modules/
+/backend/dist/
+/backend/coverage/
+/backend/.private/
+/backend/.env*
+!/backend/.env.example
+/backend/media/
+/backend/data/
+/backend/backups/
+/backend/test-results/
+/backend/__pycache__/
+/backend/**/*.py[cod]
+/backend/**/*.dump
+/backend/**/*.backup

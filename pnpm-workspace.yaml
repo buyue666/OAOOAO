@@ -1,3 +1,7 @@
+# Only the frontend uses pnpm; backend/ has its own npm lockfile.
+packages:
+  - '.'
+
 pmOnFail: ignore
 
 minimumReleaseAgeExclude:

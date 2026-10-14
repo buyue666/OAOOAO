@@ -11,7 +11,7 @@
 [![React](https://img.shields.io/badge/React-19-087ea4?style=flat-square&logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 
-[访问 OAOOAO](https://oao.lunapi.xyz) · [独立后端](https://github.com/buyue666/OAOOAO-backend) · [部署指南](DEPLOYMENT.md) · [反馈问题](https://github.com/buyue666/OAOOAO/issues)
+[访问 OAOOAO](https://oao.lunapi.xyz) · [后端文档](backend/README.md) · [部署指南](DEPLOYMENT.md) · [反馈问题](https://github.com/buyue666/OAOOAO/issues)
 
 </div>
 
@@ -41,10 +41,10 @@
 
 ## 前后端
 
-| 仓库 | 职责 | 技术 |
+| 目录 | 职责 | 技术 |
 | --- | --- | --- |
-| [OAOOAO](https://github.com/buyue666/OAOOAO) | 创作界面、管理后台、同源 API 代理 | Next.js · React · TypeScript · React Flow |
-| [OAOOAO-backend](https://github.com/buyue666/OAOOAO-backend) | 账户、钱包、订单、任务、素材与项目持久化 | Node.js · Fastify · PostgreSQL · FFmpeg |
+| 仓库根目录 | 创作界面、管理后台、同源 API 代理 | Next.js · React · TypeScript · React Flow |
+| [backend/](backend/README.md) | 账户、钱包、订单、任务、素材与项目持久化 | Node.js · Fastify · PostgreSQL · FFmpeg |
 
 ```text
 浏览器 ──→ OAOOAO / Next.js ──→ 独立后端 / Fastify
@@ -53,11 +53,11 @@
                                         └─ 配置好的模型与邮件服务
 ```
 
-本仓库是前端；完整使用需要同时运行后端。渠道密钥由后端保存和使用，不放入浏览器环境变量。
+前后端源码位于同一仓库，由同一个提交标识完整版本。根目录使用 pnpm 管理前端，`backend/` 使用自己的 `package-lock.json` 和 npm；两者分别安装、构建并运行。渠道密钥由后端保存和使用，不放入浏览器环境变量。
 
 ## 本地运行
 
-需要 **Node.js 22+** 和 **pnpm 12.3.4**。先按[后端快速开始](https://github.com/buyue666/OAOOAO-backend#快速开始)准备 PostgreSQL、迁移数据库并启动后端。
+需要 **Node.js 22+**、**pnpm 12.3.4** 和 npm。克隆一次仓库，在根目录安装前端依赖：
 
 ```sh
 git clone https://github.com/buyue666/OAOOAO.git
@@ -65,7 +65,9 @@ cd OAOOAO
 pnpm install --frozen-lockfile
 ```
 
-将 `.env.example` 复制为 `.env.local`，填入本地地址：
+再按[后端快速开始](backend/README.md#快速开始)准备 PostgreSQL。在另一个终端进入 `backend/`，用 `npm ci` 安装后端依赖，配置 `backend/.env`、迁移数据库并启动服务；根目录的 pnpm 命令只处理前端。
+
+将根目录的 `.env.example` 复制为 `.env.local`，填入本地地址：
 
 ```dotenv
 OAOAO_BACKEND_URL=http://127.0.0.1:3001
@@ -101,6 +103,8 @@ pnpm test:acceptance
 pnpm build
 ```
 
+后端验证在 `backend/` 中分别运行 `npm run typecheck`、`npm run build` 和 `npm test`；运行集成测试前按[后端验证说明](backend/README.md#验证)配置专用测试数据库。
+
 验收测试覆盖主要状态、权限、交互与接口契约；后端另有使用临时 PostgreSQL schema 的集成测试。真实模型消费、邮件投递与实际收退款需要在已配置的隔离环境单独验收。请不要把测试脚本指向生产数据库或真实客户账号。
 
 ```text
@@ -111,6 +115,7 @@ lib/studio/            数据契约、客户端状态与业务工具
 public/media/brand/    OAOOAO 品牌资源
 tests/                 回归与验收测试
 docs/                  设计记录与验收范围
+backend/               Fastify 后端、SQL 迁移、独立 npm 锁文件与后端文档
 ```
 
 欢迎提交问题与改进。提交时说明复现步骤、预期结果和验证方式；请移除密钥、会话、数据库导出和用户素材。安全问题请发送至 **siyuesy@gmail.com**，不要在公开 Issue 中附带凭据。
@@ -121,7 +126,7 @@ OAOOAO 前端与独立后端采用 **GNU Affero General Public License v3.0**（
 
 可以按许可证使用、修改和分发，包括商业用途；对修改版本提供网络服务时，应按 AGPL 第 13 条向交互用户提供该版本的对应源码。保留许可证、版权与第三方声明；部署时应让页脚的源码入口能找到实际运行版本及其前后端源码。
 
-第三方材料仍适用各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库许可不授予第三方商标、用户素材或外部模型服务的使用权。独立后端的实现来源与历史审查边界记录在其文档中。
+第三方材料仍适用各自许可证，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库许可不授予第三方商标、用户素材或外部模型服务的使用权。后端的实现来源与历史审查边界记录在 [backend/README.md](backend/README.md#来源与许可) 及相关文档中。
 
 <div align="center">
 

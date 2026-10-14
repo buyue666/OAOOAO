@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.private/
+.env
+.env.*
+!.env.example
+*.log
+test-results/
+media/
+__pycache__/
+*.py[cod]
