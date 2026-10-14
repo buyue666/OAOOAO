@@ -1,76 +1,57 @@
 'use client'
 
 import { ArrowUpRight, Megaphone, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { SiteAnnouncementBar as AnnouncementConfig } from '@/lib/studio/admin-types'
+import { safeAnnouncementHref } from '@/lib/studio/announcements'
 import { cn } from '@/lib/utils'
 
-type AnnouncementPlacement = 'landing' | 'workbench'
-
-/**
- * 站点级顶部通知。
- *
- * 配置来自公开会话里的 `settings.site.announcementBar`，因此访客不需要登录
- * 也能看到最新文案。关闭状态按「文案 + 链接」生成浏览器本地键，管理员换文案
- * 后会自然重新出现；不会把用户的关闭操作写回服务端。
- */
-export function SiteAnnouncementBar({
-  announcement,
-  placement = 'workbench',
-}: {
+/** One homepage strip; dismissal belongs to this notice revision, independently of dialog read state. */
+export function SiteAnnouncementBar({ announcement, placement = 'workbench', description, identity, onOpen }: {
   announcement?: AnnouncementConfig
-  placement?: AnnouncementPlacement
+  placement?: 'landing' | 'workbench'
+  description?: string
+  identity?: string
+  onOpen?: () => void
 }) {
   const text = String(announcement?.text ?? '').trim()
-  const href = String(announcement?.href ?? '').trim()
+  const href = safeAnnouncementHref(announcement?.href)
   const enabled = announcement?.enabled === true && Boolean(text)
   const dismissible = announcement?.dismissible !== false
   const tone = announcement?.tone === 'info' || announcement?.tone === 'warning' ? announcement.tone : 'promo'
-  const storageKey = useMemo(() => {
-    if (!text) return ''
-    return `oaooao-announcement-dismissed:${text}:${href}`
-  }, [href, text])
-  const [dismissed, setDismissed] = useState(false)
+  const storageKey = `oaooao-home-banner:v1:${identity || `${text}:${href}`}`
+  const [dismissal, setDismissal] = useState({ key: '', closed: false })
 
   useEffect(() => {
-    if (!enabled || !dismissible || !storageKey) {
-      setDismissed(false)
-      return
+    const restore = () => {
+      let closed = false
+      try { closed = window.localStorage.getItem(storageKey) === '1' } catch { /* Storage is optional. */ }
+      setDismissal({ key: storageKey, closed })
     }
-    try {
-      setDismissed(window.localStorage.getItem(storageKey) === '1')
-    } catch {
-      setDismissed(false)
-    }
-  }, [dismissible, enabled, storageKey])
+    restore()
+    const sync = (event: StorageEvent) => { if (event.key === storageKey || event.key === null) restore() }
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
+  }, [storageKey])
 
-  if (!enabled || dismissed) return null
+  if (!enabled || (dismissible && (dismissal.key !== storageKey || dismissal.closed))) return null
 
   function close() {
-    if (!dismissible) return
-    setDismissed(true)
-    try { window.localStorage.setItem(storageKey, '1') } catch { /* 浏览器禁用存储时仍允许本次关闭 */ }
+    setDismissal({ key: storageKey, closed: true })
+    try { window.localStorage.setItem(storageKey, '1') } catch { /* Allow closing with storage disabled. */ }
   }
 
-  const content = (
-    <span className="oao-announcement-content">
-      <Megaphone className="oao-announcement-icon" aria-hidden="true" />
-      <span className="oao-announcement-text">{text}</span>
-      {href && <ArrowUpRight className="oao-announcement-arrow" aria-hidden="true" />}
-    </span>
-  )
-
   return (
-    <aside
-      className={cn('oao-announcement-bar', `oao-announcement-${tone}`)}
-      data-placement={placement}
-      data-dismissible={dismissible ? 'true' : 'false'}
-      role="status"
-      aria-label="站点通知"
-    >
+    <aside className={cn('oao-announcement-bar', `oao-announcement-${tone}`)} data-placement={placement} aria-label="首页公告">
       <div className="oao-announcement-inner">
-        {href ? <a href={href} className="oao-announcement-link" target={/^https?:\/\//i.test(href) ? '_blank' : undefined} rel={/^https?:\/\//i.test(href) ? 'noreferrer' : undefined}>{content}</a> : content}
-        {dismissible && <button type="button" className="oao-announcement-close" onClick={close} aria-label="关闭通知"><X aria-hidden="true" /></button>}
+        <span className="oao-announcement-badge"><Megaphone aria-hidden="true" />公告</span>
+        <div className="oao-announcement-copy">
+          <p className="oao-announcement-title">{text}</p>
+          {description && <p className="oao-announcement-description">{description}</p>}
+        </div>
+        {onOpen ? <button type="button" className="oao-announcement-action" onClick={onOpen}>查看详情<ArrowUpRight aria-hidden="true" /></button>
+          : href ? <a href={href} className="oao-announcement-action" target={/^https?:\/\//i.test(href) ? '_blank' : undefined} rel={/^https?:\/\//i.test(href) ? 'noopener noreferrer' : undefined}>了解更多<ArrowUpRight aria-hidden="true" /></a> : null}
+        {dismissible && <button type="button" className="oao-announcement-close" onClick={close} aria-label="关闭首页公告"><X aria-hidden="true" /></button>}
       </div>
     </aside>
   )

@@ -7,7 +7,7 @@ import { MobileNav } from './mobile-nav'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { cn } from '@/lib/utils'
-import { SiteAnnouncementBar } from '@/components/site-announcement-bar'
+import { HomepageAnnouncement } from '@/components/homepage-announcement'
 import { RETURN_PATH_KEY } from '@/lib/studio/return-path'
 
 function isProtectedStudioRoute(pathname: string) {
@@ -73,16 +73,15 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
    */
   if (isLanding || isAuthPage || isPolicyPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isAdmin) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
-  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-black text-white"><SiteAnnouncementBar announcement={state.sessionSettings?.site?.announcementBar} placement="workbench" /><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
+  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-black text-white"><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
 
   return (
-    <>
-      <SiteAnnouncementBar announcement={state.sessionSettings?.site?.announcementBar} placement="workbench" />
       <div
         data-studio-route={pathname === '/studio' ? 'home' : isWorkspace ? 'workspace' : 'inner'}
         data-studio-skin={state.skin}
         className="studio-app-shell relative min-h-dvh text-foreground"
       >
+      {pathname === '/studio' && <HomepageAnnouncement placement="workbench" />}
       <Sidebar />
       {/*
         内容列只做左侧内边距过渡。这里**不能**加 filter / backdrop-filter /
@@ -99,6 +98,5 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
       <MobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
       <div data-studio-portal-root />
       </div>
-    </>
   )
 }

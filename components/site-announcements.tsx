@@ -53,7 +53,7 @@ export function SiteAnnouncements({ children }: { children: React.ReactNode }) {
     const onFocus = () => { void load() }
     window.addEventListener('focus', onFocus)
     return () => { active = false; clearInterval(timer); window.removeEventListener('focus', onFocus) }
-  }, [revision])
+  }, [revision, pathname])
 
   useEffect(() => {
     const deadlines = items.flatMap(item => [Date.parse(item.startsAt || ''), Date.parse(item.endsAt || '')]).filter(time => time > Date.now())

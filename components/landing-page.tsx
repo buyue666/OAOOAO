@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowDown, ArrowRight, Bot, Clapperboard, FileText, ImageIcon, Languages, LayoutPanelTop, Menu, Sparkles, Video, X } from 'lucide-react'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import styles from './landing-page.module.css'
-import { SiteAnnouncementBar } from './site-announcement-bar'
+import { HomepageAnnouncement } from './homepage-announcement'
 import { SiteBrand, useSiteBrand } from './site-brand'
 import { useStudio } from '@/lib/studio/store'
 import { useLocale } from '@/lib/studio/i18n'
@@ -197,8 +197,5 @@ function Footer() {
 }
 
 export function LandingPage() {
-  const { state } = useStudio()
-  const announcement = state.sessionSettings?.site?.announcementBar
-  const hasAnnouncement = announcement?.enabled === true && Boolean(announcement.text?.trim())
-  return <main className={styles.landing} data-landing-version="oao-zh-v9-ai-platform" data-announcement={hasAnnouncement ? 'true' : 'false'}><SiteAnnouncementBar announcement={announcement} placement="landing" /><Header /><Hero /><PlatformIntro /><Capabilities /><Workflow /><Gallery /><CreationRoutes /><Editorial /><About /><Footer /></main>
+  return <main className={styles.landing} data-landing-version="oao-zh-v9-ai-platform"><HomepageAnnouncement placement="landing" /><Header /><Hero /><PlatformIntro /><Capabilities /><Workflow /><Gallery /><CreationRoutes /><Editorial /><About /><Footer /></main>
 }

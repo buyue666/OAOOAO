@@ -12,7 +12,7 @@ import { AdminField, AdminInput, AdminNotice, AdminSaveBar, AdminSectionCard, Ad
 
 const textFields = ['title', 'logoUrl', 'iconUrl', 'seoTitle', 'seoDescription', 'seoKeywords', 'footerCopyright', 'termsUrl', 'termsVersion', 'termsContent', 'privacyUrl', 'privacyVersion', 'privacyContent'] as const
 const labels: Record<(typeof textFields)[number], string> = { title: '站点名称', logoUrl: '品牌 Logo', iconUrl: '浏览器图标', seoTitle: '搜索标题', seoDescription: '搜索描述', seoKeywords: '搜索关键词', footerCopyright: '页脚版权', termsUrl: '服务条款地址', termsVersion: '服务条款版本', termsContent: '服务条款正文', privacyUrl: '隐私政策地址', privacyVersion: '隐私政策版本', privacyContent: '隐私政策正文' }
-const tabs = [['brand', '品牌标识'], ['search', '搜索与页脚'], ['policies', '条款与隐私'], ['announcement', '站点通知']] as const
+const tabs = [['brand', '品牌标识'], ['search', '搜索与页脚'], ['policies', '条款与隐私'], ['announcement', '备用首页横幅']] as const
 type BrandTab = (typeof tabs)[number][0]
 
 function draftFromSite(site: SiteSettings) {
@@ -51,7 +51,7 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
     }
     setError('')
     const next: SiteSettings = { ...Object.fromEntries(changed.map((key) => [key, draft[key].trim()])), ...(bannerChanged ? { announcementBar: { ...site.announcementBar, ...draft.announcementBar, text: draft.announcementBar.text.trim(), href: draft.announcementBar.href.trim() } } : {}) }
-    onSave({ site: next }, [...changed.map((key) => labels[key]), ...(bannerChanged ? ['顶部通知横幅'] : [])])
+    onSave({ site: next }, [...changed.map((key) => labels[key]), ...(bannerChanged ? ['备用首页横幅'] : [])])
   }
 
   return (
@@ -110,18 +110,18 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
       </div>
 
       <div hidden={active !== 'announcement'}>
-        <AdminSectionCard title="顶部通知横幅" description="在首页与创作工作台展示一条通知，适合模型上线、活动或维护提醒。">
+        <AdminSectionCard title="备用首页横幅" description="公告管理中当前生效的首页横幅优先展示；没有有效首页公告时，才在官网首页和开始创作页顶部显示这条备用通知。" action={<Link href="/admin/content" className="inline-flex items-center gap-1.5 text-xs text-studio-accent hover:underline">前往公告管理<ExternalLink className="size-3.5" /></Link>}>
           <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
-            <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm sm:col-span-2"><input type="checkbox" checked={draft.announcementBar.enabled} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, enabled: event.target.checked } }))} />显示顶部通知横幅</label>
+            <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm sm:col-span-2"><input type="checkbox" checked={draft.announcementBar.enabled} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, enabled: event.target.checked } }))} />启用备用首页横幅</label>
             <AdminField label="横幅文案" className="sm:col-span-2"><AdminInput maxLength={180} value={draft.announcementBar.text} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, text: event.target.value } }))} /></AdminField>
             <AdminField label="点击跳转地址" hint="留空时只展示文案。"><AdminInput value={draft.announcementBar.href} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, href: event.target.value } }))} /></AdminField>
-            <AdminField label="强调色"><AdminSelect value={draft.announcementBar.tone} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, tone: event.target.value } }))}><option value="promo">品牌紫蓝</option><option value="info">冷静蓝</option><option value="warning">提醒橙</option></AdminSelect></AdminField>
+            <AdminField label="强调色"><AdminSelect value={draft.announcementBar.tone} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, tone: event.target.value } }))}><option value="promo">品牌青绿</option><option value="info">冷静蓝</option><option value="warning">提醒橙</option></AdminSelect></AdminField>
             <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={draft.announcementBar.dismissible} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, dismissible: event.target.checked } }))} />允许用户关闭</label>
           </fieldset>
         </AdminSectionCard>
       </div>
 
-      <AdminSaveBar hint={dirty ? `待保存：${[...changed.map((key) => labels[key]), ...(bannerChanged ? ['顶部通知横幅'] : [])].join('、')}` : '品牌预览和线上展示使用同一套配置。'}>
+      <AdminSaveBar hint={dirty ? `待保存：${[...changed.map((key) => labels[key]), ...(bannerChanged ? ['备用首页横幅'] : [])].join('、')}` : '品牌预览和线上展示使用同一套配置。'}>
         {dirty && <ControlButton type="button" disabled={saving} onClick={() => { setDraft(original); setError('') }}>撤销更改</ControlButton>}
         <ControlButton type="submit" variant="primary" disabled={saving || !dirty}><Save className="size-3.5" />{saving ? '保存中' : '保存站点设置'}</ControlButton>
       </AdminSaveBar>

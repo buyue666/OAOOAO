@@ -17,10 +17,11 @@
 .landing button { cursor: pointer; }
 .landing a:focus-visible, .landing button:focus-visible { outline: 2px solid #28736c; outline-offset: 5px; }
 .landing section[id] { scroll-margin-top: 88px; }
+.landing:has(> :global(.oao-announcement-bar)) section[id] { scroll-margin-top: 160px; }
 .cover { object-fit: cover; }
 
 .header { position: fixed; z-index: 50; top: 16px; left: 50%; width: min(92%, 920px); opacity: 0; transform: translate(-50%, -10px); border-radius: 12px; transition: opacity 700ms ease, transform 700ms ease, background-color 700ms ease, box-shadow 700ms ease; }
-.landing[data-announcement='true'] .header { top: 58px; }
+.landing:has(> :global(.oao-announcement-bar)) .header { top: 80px; }
 .header:is([data-ready='true'], [data-scrolled='true'], [data-open='true'], :focus-within) { opacity: 1; transform: translate(-50%, 0); border: 1px solid rgb(255 255 255 / 74%); background: rgb(255 255 255 / 92%); box-shadow: 0 14px 36px rgb(20 25 30 / 13%); backdrop-filter: blur(18px); }
 .headerRow { min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; gap: 24px; }
 .logo { display: inline-flex; flex-shrink: 0; align-items: center; }
@@ -158,7 +159,7 @@
 @media (max-width: 767px) {
   .landing { --page-gutter: 24px; }
   .header { top: 12px; }
-  .landing[data-announcement='true'] .header { top: 50px; }
+  .landing:has(> :global(.oao-announcement-bar)) .header { top: 84px; }
   .headerRow { padding: 6px 8px 6px 18px; gap: 12px; }
   .header[data-open='true'] { border-radius: 12px; background: #fff; }
   .desktopNav, .headerActions { display: none; }
@@ -211,8 +212,12 @@
 @media (prefers-reduced-motion: reduce) {
   .landing *, .landing *::before, .landing *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   .header { opacity: 1; transform: translate(-50%, 0); background: rgb(255 255 255 / 92%); }
-  .landing[data-announcement='true'] .header { top: 50px; }
+  .landing:has(> :global(.oao-announcement-bar)) .header { top: 84px; }
   .hero, .gallery { height: auto; min-height: 0; }
   .heroStage, .galleryStage { position: relative; }
   .galleryStage { height: 70svh; }
+}
+
+@media (max-width: 600px) {
+  .landing:has(> :global(.oao-announcement-bar)) .header { top: 86px; }
 }

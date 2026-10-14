@@ -244,69 +244,52 @@
   }
 }
 
-/* --------------------------- 站点顶部通知横幅 --------------------------- */
+/* --------------------------- 首页公告横幅 --------------------------- */
 .oao-announcement-bar {
-  position: sticky;
-  top: 0;
-  z-index: 90;
-  width: 100%;
-  color: #fff;
-  box-shadow: 0 1px 0 rgb(255 255 255 / 18%), 0 10px 24px rgb(18 23 43 / 12%);
-}
-
-.oao-announcement-bar[data-placement='landing'] {
   position: fixed;
   inset: 0 0 auto;
+  z-index: 45;
+  height: 64px;
+  width: 100%;
+  color: #ecfffc;
+  border-bottom: 1px solid rgb(115 240 209 / 18%);
+  box-shadow: 0 4px 22px rgb(0 35 34 / 12%);
 }
-
-.oao-announcement-promo { background: linear-gradient(100deg, #5a5fe0 0%, #6667dc 52%, #4f8de4 100%); }
-.oao-announcement-info { background: linear-gradient(100deg, #216aa2 0%, #3282bd 100%); }
-.oao-announcement-warning { background: linear-gradient(100deg, #bd632d 0%, #d78736 100%); }
-
-.oao-announcement-inner {
-  display: flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 7px 16px 7px 20px;
+.oao-announcement-promo { background: radial-gradient(ellipse at 18% 0%, #216b60 0%, transparent 55%), linear-gradient(110deg, #073d39, #092a32 65%, #064d46); }
+.oao-announcement-info { background: linear-gradient(110deg, #143b59, #1c5572); }
+.oao-announcement-warning { background: linear-gradient(110deg, #663718, #784b20); }
+.oao-announcement-inner { display: flex; height: 100%; align-items: center; justify-content: center; gap: 18px; padding: 10px 72px; }
+.oao-announcement-badge { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: #a5f6df; font-size: 12px; font-weight: 650; }
+.oao-announcement-badge svg { width: 16px; height: 16px; }
+.oao-announcement-copy { min-width: 0; max-width: 760px; }
+.oao-announcement-title { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 650; line-height: 22px; }
+.oao-announcement-description { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c0dedb; font-size: 12px; line-height: 18px; }
+.oao-announcement-action { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; border: 1px solid #bcefe0; border-radius: 8px; background: #dcf7ee; color: #103c34 !important; padding: 7px 12px; text-decoration: none; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background 160ms ease, transform 160ms ease; }
+.oao-announcement-action svg { width: 14px; height: 14px; }
+.oao-announcement-action:hover { background: #fff; transform: translateY(-1px); }
+.oao-announcement-close { position: absolute; right: 20px; top: 50%; display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; transform: translateY(-50%); border: 0; border-radius: 8px; color: #d6f4ed; background: transparent; cursor: pointer; }
+.oao-announcement-close svg { width: 16px; height: 16px; }
+.oao-announcement-close:hover { background: rgb(255 255 255 / 12%); }
+.oao-announcement-bar :is(a, button):focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.studio-app-shell { --oao-home-banner-height: 0px; }
+.studio-app-shell:has(> .oao-announcement-bar) { --oao-home-banner-height: 64px; padding-top: var(--oao-home-banner-height); }
+.studio-app-shell > .studio-sidebar { top: var(--oao-home-banner-height); }
+.studio-app-shell .studio-topbar { top: var(--oao-home-banner-height); }
+.studio-app-shell:has(> .oao-announcement-bar) > .relative { min-height: calc(100dvh - var(--oao-home-banner-height)); }
+@media (max-width: 600px) {
+  .oao-announcement-bar { height: 76px; }
+  .oao-announcement-inner { justify-content: flex-start; gap: 10px; padding: 10px 44px 10px 14px; }
+  .oao-announcement-badge { display: none; }
+  .oao-announcement-copy { flex: 1; }
+  .oao-announcement-title { font-size: 12px; }
+  .oao-announcement-description { font-size: 11px; }
+  .oao-announcement-action { padding: 7px 8px; font-size: 11px; }
+  .oao-announcement-action svg { display: none; }
+  .oao-announcement-close { right: 5px; }
+  .studio-app-shell:has(> .oao-announcement-bar) { --oao-home-banner-height: 76px; }
 }
-
-.oao-announcement-link {
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-}
-
-.oao-announcement-content {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
-  letter-spacing: 0;
-}
-
-.oao-announcement-icon { width: 15px; height: 15px; flex: 0 0 auto; }
-.oao-announcement-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oao-announcement-arrow { width: 14px; height: 14px; flex: 0 0 auto; transition: transform 180ms ease; }
-.oao-announcement-link:hover .oao-announcement-arrow { transform: translate(2px, -2px); }
-.oao-announcement-close { display: inline-flex; width: 25px; height: 25px; flex: 0 0 auto; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: rgb(255 255 255 / 13%); color: inherit; cursor: pointer; transition: background 160ms ease, transform 160ms ease; }
-.oao-announcement-close svg { width: 14px; height: 14px; }
-.oao-announcement-close:hover { background: rgb(255 255 255 / 24%); transform: scale(1.05); }
-
-@media (max-width: 560px) {
-  .oao-announcement-inner { min-height: 40px; padding-inline: 12px; }
-  .oao-announcement-content { font-size: 11px; gap: 6px; }
-  .oao-announcement-icon { width: 13px; height: 13px; }
-  .oao-announcement-text { max-width: calc(100vw - 75px); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .oao-announcement-arrow, .oao-announcement-close { transition: none; }
+  .oao-announcement-action { transition: none; }
 }
 
 /* 首页模式选择器：独立于输入框，保持参考图中的「先选创作方式，再写描述」节奏。 */
@@ -424,7 +407,6 @@
 .dark .oao-canvas-index-card { border-color: rgb(255 255 255 / 14%); background: rgb(24 29 32 / 72%); box-shadow: 0 18px 46px rgb(0 0 0 / 26%), inset 0 1px 0 rgb(255 255 255 / 8%); }
 .dark .oao-canvas-index-card:hover { border-color: rgb(199 243 232 / 32%); }
 .dark .oao-canvas-index-icon { border-color: rgb(255 255 255 / 13%); background: rgb(255 255 255 / 7%); }
-.oao-announcement-bar[data-placement='workbench'] + .oao-canvas-route .studio-canvas-fullscreen { height: calc(100dvh - 42px); }
 .studio-home-mode-tab-active svg { color: var(--studio-accent); }
 
 /* 浅色主题：中性灰白工作区，黑色承担主要操作与选中态 */

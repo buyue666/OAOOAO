@@ -93,7 +93,7 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
     const publishing = !item.enabled
     confirm.confirm({
       title: publishing ? `发布公告「${item.title}」？` : `下线公告「${item.title}」？`,
-      description: publishing ? '发布后所有用户在公告生效区间内都能看到该内容。' : '下线后用户端不再展示该公告，内容仍会保留。',
+      description: publishing ? '公告会按所选展示位置和生效时间展示。已结束的公告需要先修改结束时间，重新发布不会自动延长有效期。' : '下线后用户端不再展示该公告，内容仍会保留。',
       confirmLabel: publishing ? '确认发布' : '确认下线',
       tone: publishing ? 'default' : 'danger',
       onConfirm: async () => {
@@ -107,14 +107,14 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
     })
   }, [confirm, load])
 
-  const togglePopup = useCallback(async (item: Announcement, field: 'popupHome' | 'popupAfterLogin') => {
+  const togglePlacement = useCallback(async (item: Announcement, field: 'popupHome' | 'popupAfterLogin') => {
     setBusy(item.id); setError('')
     try {
       await updateAnnouncement(item.id, { [field]: !item[field] })
-      setMessage(field === 'popupHome' ? '首页弹窗设置已更新' : '登录后弹窗设置已更新')
+      setMessage(field === 'popupHome' ? '首页横幅设置已更新' : '登录后弹窗设置已更新')
       load()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '弹窗设置保存失败')
+      setError(reason instanceof Error ? reason.message : '展示位置保存失败')
     } finally { setBusy(null) }
   }, [load])
 
@@ -140,7 +140,7 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
       <div className="grid gap-3 sm:grid-cols-3">
         <AdminStat label="公告总数" value={formatAdminNumber(data.total)} detail={`本页已发布 ${formatAdminNumber(enabled)}`} />
         <AdminStat label="未发布" value={formatAdminNumber(data.items.length - enabled)} detail="保存为草稿，用户不可见" tone="warning" />
-        <AdminStat label="当前生效" value={formatAdminNumber(activeAnnouncements(data.items).length)} detail="首页弹窗适用于官网首页和开始创作页" />
+        <AdminStat label="当前生效" value={formatAdminNumber(activeAnnouncements(data.items).length)} detail="首页横幅展示于官网首页和开始创作页顶部" />
       </div>
 
       {error && <AdminError message={error} retry={load} />}
@@ -149,7 +149,7 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
       <AdminWorkbench>
         <AdminDataPanel
           title="站点公告"
-          description="公告支持发布、下线、首页弹窗与登录后弹窗；生效区间由开始和结束时间控制。所有操作都会写入审计日志。"
+          description="公告可在官网首页和开始创作页顶部显示横幅，点击「查看详情」阅读正文。多条生效时展示最近更新的一条。登录后弹窗可单独开启；首页不自动弹窗。"
           actions={canManage ? (
             <>
               <ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
@@ -158,7 +158,7 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
           ) : undefined}
           footer={<AdminPagination page={page} pageSize={20} total={data.total} loading={loading} onChange={setPage} />}
         >
-          <AdminTable columns={['标题', '状态', '弹窗位置', '生效区间', '更新时间', '操作']} minWidth={1000} caption="公告列表">
+          <AdminTable columns={['标题', '状态', '展示位置', '生效区间', '更新时间', '操作']} minWidth={1000} caption="公告列表">
             {data.items.map((item) => (
               <AdminRow key={item.id} className={cn(editor !== null && editor !== 'new' && editor.id === item.id && 'bg-muted/60')}>
                 <AdminCell className="max-w-[360px]"><p className="truncate font-medium">{item.title}</p><p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{item.content?.slice(0, 120) || '无内容'}</p></AdminCell>
@@ -166,9 +166,9 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
                 <AdminCell>
                   <div className="flex flex-wrap gap-1.5">
                     {canManage ? <>
-                      <button type="button" disabled={busy === item.id} onClick={() => void togglePopup(item, 'popupHome')} aria-pressed={item.popupHome} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupHome ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>首页弹窗</button>
-                      <button type="button" disabled={busy === item.id} onClick={() => void togglePopup(item, 'popupAfterLogin')} aria-pressed={item.popupAfterLogin} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupAfterLogin ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>登录后弹窗</button>
-                    </> : (item.popupHome || item.popupAfterLogin) ? <span className="text-[11px] text-muted-foreground">{[item.popupHome && '首页', item.popupAfterLogin && '登录后'].filter(Boolean).join(' · ')}</span> : <span className="text-[11px] text-muted-foreground">仅公告列表</span>}
+                      <button type="button" disabled={busy === item.id} onClick={() => void togglePlacement(item, 'popupHome')} aria-pressed={item.popupHome} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupHome ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>首页横幅</button>
+                      <button type="button" disabled={busy === item.id} onClick={() => void togglePlacement(item, 'popupAfterLogin')} aria-pressed={item.popupAfterLogin} className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${item.popupAfterLogin ? 'border-studio-accent/40 text-studio-accent' : 'border-border text-muted-foreground hover:bg-muted'}`}>登录后弹窗</button>
+                    </> : (item.popupHome || item.popupAfterLogin) ? <span className="text-[11px] text-muted-foreground">{[item.popupHome && '首页横幅', item.popupAfterLogin && '登录后弹窗'].filter(Boolean).join(' · ')}</span> : <span className="text-[11px] text-muted-foreground">仅公告列表</span>}
                   </div>
                 </AdminCell>
                 <AdminCell className="text-xs text-muted-foreground">{item.startsAt || item.endsAt ? `${formatAdminDate(item.startsAt)} → ${formatAdminDate(item.endsAt)}` : '长期有效'}</AdminCell>
@@ -203,7 +203,7 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
     try {
       const startsAt = value('startsAt')
       const endsAt = value('endsAt')
-      if (startsAt && endsAt && new Date(startsAt).getTime() > new Date(endsAt).getTime()) throw new Error('结束时间必须晚于开始时间')
+      if (startsAt && endsAt && new Date(startsAt).getTime() >= new Date(endsAt).getTime()) throw new Error('结束时间必须晚于开始时间')
       const payload: AnnouncementInput = {
         title: value('title'),
         content: value('content'),
@@ -230,7 +230,7 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
       onClose={onClose}
       width="sm:max-w-xl"
       title={item ? '编辑公告' : '新增公告'}
-      description={item ? item.title : '未发布的公告不会对用户展示；发布后立即在生效区间内生效。'}
+      description={item ? item.title : '默认在首页顶部展示横幅；发布后按开始和结束时间生效。未发布的公告仅保存在后台。'}
       footer={
         <>
           <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
@@ -240,14 +240,15 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
     >
       <form id="announcement-editor-form" onSubmit={submit} className="flex flex-col gap-4">
         <fieldset disabled={busy} className="flex flex-col gap-4">
-          <AdminField label="公告标题"><AdminInput name="title" required maxLength={120} defaultValue={item?.title} /></AdminField>
-          <AdminField label="公告内容"><AdminTextarea name="content" rows={8} required defaultValue={item?.content} /></AdminField>
+          <AdminField label="公告标题" hint="直接展示在首页顶部横幅中，建议简短明确。"><AdminInput name="title" required maxLength={120} defaultValue={item?.title} /></AdminField>
+          <AdminField label="公告内容" hint="横幅显示正文摘要，用户点击「查看详情」后阅读完整内容。"><AdminTextarea name="content" rows={8} required defaultValue={item?.content} /></AdminField>
           <AdminField label="开始时间" hint="按当前设备的本地时间设置，留空表示立即生效。"><AdminInput name="startsAt" type="datetime-local" defaultValue={toLocalInput(item?.startsAt)} /></AdminField>
           <AdminField label="结束时间" hint="留空表示长期有效。"><AdminInput name="endsAt" type="datetime-local" defaultValue={toLocalInput(item?.endsAt)} /></AdminField>
           <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
             <label className="flex items-center gap-2 text-sm"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />发布公告</label>
-            <label className="flex items-center gap-2 text-sm"><input name="popupHome" type="checkbox" defaultChecked={item?.popupHome ?? false} />首页弹窗展示</label>
+            <label className="flex items-center gap-2 text-sm"><input name="popupHome" type="checkbox" defaultChecked={item?.popupHome ?? true} />首页顶部横幅</label>
             <label className="flex items-center gap-2 text-sm"><input name="popupAfterLogin" type="checkbox" defaultChecked={item?.popupAfterLogin ?? false} />登录后弹窗展示</label>
+            <p className="text-xs leading-5 text-muted-foreground">首页横幅适用于官网首页和开始创作页。两项同时开启时，首页优先展示横幅；登录后弹窗适用于其他创作页面。</p>
           </div>
         </fieldset>
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}

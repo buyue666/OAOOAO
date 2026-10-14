@@ -8,7 +8,7 @@ async function moduleAt(path) {
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } })
   return import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
 }
-const { activeAnnouncements, announcementKey, popupEligible } = await moduleAt('../lib/studio/announcements.ts')
+const { activeAnnouncements, announcementKey, popupEligible, homepageAnnouncement, safeAnnouncementHref } = await moduleAt('../lib/studio/announcements.ts')
 const { safeReturnPath } = await moduleAt('../lib/studio/return-path.ts')
 const notice = { id: 'test', title: 'Synthetic notice', content: 'Test only', enabled: true, popupHome: true, popupAfterLogin: false, updatedAt: '2026-10-14T03:00:00Z' }
 
@@ -20,16 +20,31 @@ test('announcement interval uses actual instants; starts inclusive, ends exclusi
   assert.equal(activeAnnouncements([{ ...notice, enabled: false }]).length, 0)
   assert.equal(activeAnnouncements([{ ...notice, startsAt: 'invalid' }]).length, 0)
 })
-test('home means public landing and creation home; legal/admin/payment pages never auto-popup', () => {
-  assert.equal(popupEligible(notice, '/', false), true)
-  assert.equal(popupEligible(notice, '/studio', true), true)
+test('home uses a banner; only opted-in non-home creative pages auto-popup', () => {
+  assert.equal(popupEligible(notice, '/', false), false)
+  assert.equal(popupEligible(notice, '/studio', true), false)
   assert.equal(popupEligible(notice, '/studio', false), false)
   assert.equal(popupEligible(notice, '/image', true), false)
   const afterLogin = { ...notice, popupHome: false, popupAfterLogin: true }
   assert.equal(popupEligible(afterLogin, '/image', true), true)
   assert.equal(popupEligible(afterLogin, '/drama/project', true), true)
   assert.equal(popupEligible(afterLogin, '/canvas/project', false), false)
-  for (const path of ['/terms', '/privacy', '/login', '/plans', '/admin/settings']) assert.equal(popupEligible(afterLogin, path, true), false)
+  for (const path of ['/', '/studio', '/terms', '/privacy', '/login', '/plans', '/admin/settings']) assert.equal(popupEligible(afterLogin, path, true), false)
+})
+
+test('homepage selects the latest revised active banner without reviving expired announcements', () => {
+  const now = Date.parse('2026-10-14T05:00:00Z')
+  const revised = { ...notice, id: 'revision', updatedAt: '2026-10-14T04:00:00Z' }
+  const expired = { ...notice, id: 'expired', updatedAt: '2026-10-14T05:00:00Z', endsAt: '2026-10-14T05:00:00Z' }
+  assert.equal(homepageAnnouncement([notice, expired, revised], now).id, 'revision')
+  assert.equal(homepageAnnouncement([{ ...revised, popupHome: false }, expired], now), undefined)
+  assert.equal(homepageAnnouncement([{ ...notice, startsAt: '2026-10-14T06:00:00Z' }], now), undefined)
+})
+
+test('banner links allow site paths and web URLs and reject executable or ambiguous destinations', () => {
+  assert.equal(safeAnnouncementHref('/plans?returnTo=%2Fstudio'), '/plans?returnTo=%2Fstudio')
+  assert.equal(safeAnnouncementHref('https://example.com/news'), 'https://example.com/news')
+  for (const href of ['javascript:alert(1)', 'data:text/html,abc', '//outside.test', '/\\outside.test', '/plans\nnext']) assert.equal(safeAnnouncementHref(href), '')
 })
 test('a revised announcement has a new dismissal identity', () => {
   assert.notEqual(announcementKey(notice), announcementKey({ ...notice, updatedAt: '2026-10-14T04:00:00Z' }))

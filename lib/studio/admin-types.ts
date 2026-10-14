@@ -344,8 +344,9 @@ export type SiteSocial = { enabled: boolean; label: string; url: string }
 /**
  * 站点顶部通知横幅。
  *
- * 这是站点设置的一部分，而不是一次性的前端常量：管理员保存后，公开会话
- * 会把它带给着陆页和工作台。`enabled` 关闭时前台完全不占位。
+ * 备用首页横幅：这是站点设置的一部分，管理员保存后由公开会话带给官网首页和开始创作页。
+ * 公告管理中的有效首页横幅优先展示；没有有效首页公告时才使用此配置。
+ * `enabled` 关闭时前台完全不占位。
  */
 export type SiteAnnouncementBar = {
   enabled?: boolean
@@ -698,8 +699,10 @@ export type ReferralOverview = {
 /* ------------------------------ 内容与公告 ------------------------------ */
 
 /**
- * 公告由后端定义为 enabled（是否展示）+ popupHome / popupAfterLogin（弹窗位置）+
- * startsAt / endsAt（生效区间）。没有独立的 draft 状态，草稿即 enabled=false。
+ * 公告由 enabled（发布开关）、展示位置和 startsAt / endsAt（生效区间）组成。
+ * popupHome 保留兼容字段名，展示含义为官网首页与开始创作页顶部横幅；
+ * popupAfterLogin 表示其他已登录创作页面的可选弹窗，首页优先展示横幅。
+ * 没有独立的 draft 状态，草稿即 enabled=false。
  */
 export type Announcement = {
   id: string
