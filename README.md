@@ -117,7 +117,7 @@ docs/                  设计记录与验收范围
 
 ## 开源许可
 
-OAOOAO 前端与独立后端采用 **GNU Affero General Public License v3.0**（`AGPL-3.0-only`），与 [VOZEB 社区版](https://github.com/csyqlz/VOZEB-PRO/blob/main/LICENSE)采用相同协议版本。完整条文见 [LICENSE](LICENSE)。
+OAOOAO 前端与独立后端采用 **GNU Affero General Public License v3.0**（`AGPL-3.0-only`）。完整条文见 [LICENSE](LICENSE)。
 
 可以按许可证使用、修改和分发，包括商业用途；对修改版本提供网络服务时，应按 AGPL 第 13 条向交互用户提供该版本的对应源码。保留许可证、版权与第三方声明；部署时应让页脚的源码入口能找到实际运行版本及其前后端源码。
 
