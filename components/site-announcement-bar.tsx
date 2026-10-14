@@ -57,8 +57,8 @@ export function SiteAnnouncementBar({ announcement, placement = 'workbench', des
           {description && <p className="oao-announcement-description">{description}</p>}
         </div>
         {preview ? (onOpen || href ? <button type="button" disabled className="oao-announcement-action">{onOpen ? '查看详情' : '了解更多'}<ArrowUpRight aria-hidden="true" /></button> : null)
-          : onOpen ? <button type="button" className="oao-announcement-action" onClick={onOpen}>查看详情<ArrowUpRight aria-hidden="true" /></button>
-          : href ? <a href={href} className="oao-announcement-action" target={/^https?:\/\//i.test(href) ? '_blank' : undefined} rel={/^https?:\/\//i.test(href) ? 'noopener noreferrer' : undefined}>了解更多<ArrowUpRight aria-hidden="true" /></a> : null}
+          : href ? <a href={href} className="oao-announcement-action" target={/^https?:\/\//i.test(href) ? '_blank' : undefined} rel={/^https?:\/\//i.test(href) ? 'noopener noreferrer' : undefined}>{onOpen ? '查看详情' : '了解更多'}<ArrowUpRight aria-hidden="true" /></a>
+          : onOpen ? <button type="button" className="oao-announcement-action" onClick={onOpen}>查看详情<ArrowUpRight aria-hidden="true" /></button> : null}
         {dismissible && <button type="button" disabled={preview} className="oao-announcement-close" onClick={close} aria-label="关闭首页公告"><X aria-hidden="true" /></button>}
       </div>
     </aside>

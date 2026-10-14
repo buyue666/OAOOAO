@@ -2,11 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Megaphone, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, Megaphone, RefreshCw } from 'lucide-react'
 import { request } from '@/lib/studio/api'
 import { useStudio } from '@/lib/studio/store'
 import type { Announcement } from '@/lib/studio/admin-types'
-import { activeAnnouncements, announcementKey, popupEligible } from '@/lib/studio/announcements'
+import { activeAnnouncements, announcementKey, popupEligible, safeAnnouncementHref } from '@/lib/studio/announcements'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const Context = createContext({ items: [] as Announcement[], unread: 0, loading: true, error: '', refresh: () => {}, open: (_item: Announcement) => {} })
@@ -80,8 +80,25 @@ export function SiteAnnouncements({ children }: { children: React.ReactNode }) {
   // A withdrawn or expired notice must disappear even if its dialog was open.
   useEffect(() => { if (selected && !visibleItems.some(item => announcementKey(item) === announcementKey(selected))) setSelected(null) }, [visibleItems, selected])
   const value = useMemo(() => ({ items: visibleItems, unread: visibleItems.filter(item => !read.includes(announcementKey(item))).length, loading, error, refresh, open }), [visibleItems, read, loading, error, refresh, open])
+  const selectedHref = safeAnnouncementHref(selected?.actionUrl)
 
-  return <Context.Provider value={value}>{children}<Dialog open={!!selected} onOpenChange={value => { if (!value) setSelected(null) }}><DialogContent className="max-h-[85dvh] overflow-y-auto p-6 sm:max-w-lg"><DialogHeader><div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-studio-accent/10 text-studio-accent"><Megaphone className="size-6" /></div><DialogTitle className="pr-5 text-xl leading-7">{selected?.title}</DialogTitle><DialogDescription>站点公告</DialogDescription></DialogHeader><div className="whitespace-pre-wrap break-words text-sm leading-7">{selected?.content}</div><button type="button" onClick={() => setSelected(null)} className="mt-2 rounded-xl bg-foreground px-4 py-2.5 font-medium text-background">知道了</button></DialogContent></Dialog></Context.Provider>
+  return <Context.Provider value={value}>
+    {children}
+    <Dialog open={!!selected} onOpenChange={value => { if (!value) setSelected(null) }}>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto p-6 sm:max-w-lg">
+        <DialogHeader>
+          <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-studio-accent/10 text-studio-accent"><Megaphone className="size-6" /></div>
+          <DialogTitle className="pr-5 text-xl leading-7">{selected?.title}</DialogTitle>
+          <DialogDescription>站点公告</DialogDescription>
+        </DialogHeader>
+        <div className="whitespace-pre-wrap break-words text-sm leading-7">{selected?.content}</div>
+        <div className="mt-2 flex flex-wrap justify-end gap-2">
+          {selectedHref && <a href={selectedHref} target={/^https?:\/\//i.test(selectedHref) ? '_blank' : undefined} rel={/^https?:\/\//i.test(selectedHref) ? 'noopener noreferrer' : undefined} onClick={() => setSelected(null)} className="inline-flex items-center gap-1.5 rounded-xl bg-foreground px-4 py-2.5 font-medium text-background">前往查看<ArrowUpRight className="size-4" aria-hidden="true" /></a>}
+          <button type="button" onClick={() => setSelected(null)} className={selectedHref ? 'rounded-xl border border-border px-4 py-2.5 font-medium hover:bg-muted' : 'w-full rounded-xl bg-foreground px-4 py-2.5 font-medium text-background'}>知道了</button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  </Context.Provider>
 }
 
 export function AnnouncementList() {

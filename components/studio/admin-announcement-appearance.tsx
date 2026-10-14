@@ -11,6 +11,7 @@ import {
   type AnnouncementTone,
 } from '@/lib/studio/announcement-appearance'
 import { cn } from '@/lib/utils'
+import { safeAnnouncementHref } from '@/lib/studio/announcements'
 import { AdminField, AdminSelect } from './admin-kit'
 
 const showDetailsPreview = () => {}
@@ -30,6 +31,7 @@ export function AdminAnnouncementAppearance({ tone, effect, onToneChange, onEffe
 }) {
   const colorGroup = useId()
   const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop')
+  const previewHref = safeAnnouncementHref(href)
 
   return (
     <section className="min-w-0 space-y-4" aria-label="横幅外观与预览">
@@ -65,12 +67,13 @@ export function AdminAnnouncementAppearance({ tone, effect, onToneChange, onEffe
           <div className={cn('mx-auto w-full overflow-hidden rounded-lg border border-border bg-card', viewport === 'mobile' && 'max-w-[390px]')} style={{ containerType: 'inline-size', containerName: 'announcement-preview' }}>
             <SiteAnnouncementBar
               preview
-              announcement={{ enabled: true, text: text.trim() || '公告标题会显示在这里', tone, effect, href, dismissible }}
+              announcement={{ enabled: true, text: text.trim() || '公告标题会显示在这里', tone, effect, href: previewHref, dismissible }}
               description={description?.replace(/\s+/g, ' ').trim()}
               endsAt={endsAt}
               onOpen={hasDetails ? showDetailsPreview : undefined}
             />
           </div>
+          {previewHref && <p className="mt-3 break-all text-[11px] leading-5 text-muted-foreground">点击后{previewHref.startsWith('/') ? '在当前页打开' : '在新窗口打开'}：<span className="text-foreground">{previewHref}</span></p>}
           <p className="mt-3 text-[11px] leading-5 text-muted-foreground">预览随编辑同步，并按屏幕宽度适配。保存前不会影响线上展示。</p>
         </div>
       </div>

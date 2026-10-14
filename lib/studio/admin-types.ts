@@ -709,6 +709,7 @@ export type Announcement = {
   id: string
   title: string
   content: string
+  actionUrl?: string
   enabled: boolean
   popupHome: boolean
   popupAfterLogin: boolean
@@ -723,6 +724,7 @@ export type Announcement = {
 export type AnnouncementInput = {
   title?: string
   content?: string
+  actionUrl?: string | null
   enabled?: boolean
   popupHome?: boolean
   popupAfterLogin?: boolean

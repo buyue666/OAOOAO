@@ -44,7 +44,7 @@ import {
   useConfirm,
 } from './admin-kit'
 import { useAdminReload, useAdminSession } from './admin-shell'
-import { activeAnnouncements } from '@/lib/studio/announcements'
+import { activeAnnouncements, safeAnnouncementHref } from '@/lib/studio/announcements'
 import { normalizeAnnouncementEffect, normalizeAnnouncementTone } from '@/lib/studio/announcement-appearance'
 import { AdminAnnouncementAppearance } from './admin-announcement-appearance'
 
@@ -151,7 +151,7 @@ function AnnouncementsPanel({ canManage, reloadKey }: { canManage: boolean; relo
       <AdminWorkbench>
         <AdminDataPanel
           title="站点公告"
-          description="公告可在官网首页和开始创作页顶部显示横幅，点击「查看详情」阅读正文。多条生效时展示最近更新的一条。登录后弹窗可单独开启；首页不自动弹窗。"
+          description="公告可在官网首页和开始创作页顶部显示横幅。按钮默认阅读正文，也可设置跳转地址。多条生效时展示最近更新的一条。登录后弹窗可单独开启；首页不自动弹窗。"
           actions={canManage ? (
             <>
               <ControlButton variant="secondary" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />刷新</ControlButton>
@@ -199,6 +199,7 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
   const [error, setError] = useState('')
   const [title, setTitle] = useState(item?.title ?? '')
   const [content, setContent] = useState(item?.content ?? '')
+  const [actionUrl, setActionUrl] = useState(item?.actionUrl ?? '')
   const [bannerTone, setBannerTone] = useState(() => normalizeAnnouncementTone(item?.bannerTone))
   const [bannerEffect, setBannerEffect] = useState(() => normalizeAnnouncementEffect(item?.bannerEffect))
   const [endTime, setEndTime] = useState(() => toLocalInput(item?.endsAt) ?? '')
@@ -212,10 +213,14 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
     try {
       const startsAt = value('startsAt')
       const endsAt = endTime.trim()
+      const nextActionUrl = actionUrl.trim()
       if (startsAt && endsAt && new Date(startsAt).getTime() >= new Date(endsAt).getTime()) throw new Error('结束时间必须晚于开始时间')
+      if (nextActionUrl.length > 2048) throw new Error('跳转地址不能超过 2048 个字符')
+      if (nextActionUrl && !safeAnnouncementHref(nextActionUrl)) throw new Error('跳转地址无效，请填写 /plans 等站内路径或完整的 HTTPS 网址')
       const payload: AnnouncementInput = {
         title: title.trim(),
         content: content.trim(),
+        actionUrl: nextActionUrl,
         bannerTone,
         bannerEffect,
         enabled: data.has('enabled'),
@@ -251,8 +256,9 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
       <form id="announcement-editor-form" onSubmit={submit} className="flex flex-col gap-4">
         <fieldset disabled={busy} className="flex flex-col gap-4">
           <AdminField label="公告标题" hint="直接展示在首页顶部横幅中，建议简短明确。"><AdminInput name="title" required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></AdminField>
-          <AdminField label="公告内容" hint="横幅显示正文摘要，用户点击「查看详情」后阅读完整内容。"><AdminTextarea name="content" rows={5} required value={content} onChange={(event) => setContent(event.target.value)} /></AdminField>
-          <AdminAnnouncementAppearance tone={bannerTone} effect={bannerEffect} onToneChange={setBannerTone} onEffectChange={setBannerEffect} text={title} description={content} endsAt={toIso(endTime) || undefined} hasDetails disabled={busy} />
+          <AdminField label="公告内容" hint="横幅显示正文摘要。未设置跳转地址时，按钮打开完整正文；设置后直接跳转，正文仍保留在公告详情中。"><AdminTextarea name="content" rows={5} required value={content} onChange={(event) => setContent(event.target.value)} /></AdminField>
+          <AdminField label="跳转地址（可选）" hint="支持 /plans 等站内路径或完整 https:// 网址。站内路径在当前页打开，完整网址在新窗口打开；留空时阅读公告正文。"><AdminInput name="actionUrl" maxLength={2048} value={actionUrl} onChange={(event) => setActionUrl(event.target.value)} placeholder="/plans 或 https://example.com/activity" autoCapitalize="none" autoCorrect="off" spellCheck={false} /></AdminField>
+          <AdminAnnouncementAppearance tone={bannerTone} effect={bannerEffect} onToneChange={setBannerTone} onEffectChange={setBannerEffect} text={title} description={content} href={actionUrl} endsAt={toIso(endTime) || undefined} hasDetails disabled={busy} />
           <AdminField label="开始时间" hint="按当前设备的本地时间设置，留空表示立即生效。"><AdminInput name="startsAt" type="datetime-local" defaultValue={toLocalInput(item?.startsAt)} /></AdminField>
           <AdminField label="结束时间" hint="按当前设备的本地时间设置。填写后横幅显示距结束的真实倒计时；留空表示长期有效，不显示倒计时。"><AdminInput name="endsAt" type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></AdminField>
           <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">

@@ -46,6 +46,23 @@ test('banner links allow site paths and web URLs and reject executable or ambigu
   assert.equal(safeAnnouncementHref('https://example.com/news'), 'https://example.com/news')
   for (const href of ['javascript:alert(1)', 'data:text/html,abc', '//outside.test', '/\\outside.test', '/plans\nnext']) assert.equal(safeAnnouncementHref(href), '')
 })
+test('announcement destinations normalize complete URLs and retain local query and hash', () => {
+  assert.equal(safeAnnouncementHref('  /plans?campaign=notice#credits  '), '/plans?campaign=notice#credits')
+  assert.equal(safeAnnouncementHref(' HTTPS://EXAMPLE.COM:443/news '), 'https://example.com/news')
+  assert.equal(safeAnnouncementHref('http://example.com/news'), 'http://example.com/news')
+  assert.equal(safeAnnouncementHref(''), '')
+  assert.equal(safeAnnouncementHref(undefined), '')
+})
+test('announcement destinations reject credentials, incomplete schemes and control characters', () => {
+  for (const href of ['https:example.com', 'https:/example.com', 'https:///example.com', 'https://user:pass@example.com', 'https://@example.com', 'https://user@example.com', '\t/plans', '/plans\n', '/plans\u0085next', 'https://example.com\r/news', 'mailto:hello@example.com', 'file:///tmp/test']) {
+    assert.equal(safeAnnouncementHref(href), '', href)
+  }
+})
+test('announcement destination length is bounded before and after URL normalization', () => {
+  assert.equal(safeAnnouncementHref('/' + 'a'.repeat(2047)).length, 2048)
+  assert.equal(safeAnnouncementHref('/' + 'a'.repeat(2048)), '')
+  assert.equal(safeAnnouncementHref('https://example.com/' + '创'.repeat(300)), '')
+})
 test('a revised announcement has a new dismissal identity', () => {
   assert.notEqual(announcementKey(notice), announcementKey({ ...notice, updatedAt: '2026-10-14T04:00:00Z' }))
 })

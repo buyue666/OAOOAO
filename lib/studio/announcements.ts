@@ -22,8 +22,13 @@ export function homepageAnnouncement(items: Announcement[], now = Date.now()) {
 }
 
 export function safeAnnouncementHref(value?: string) {
-  const href = String(value || '').trim()
-  if (!href || /[\\\u0000-\u001f\u007f]/.test(href)) return ''
+  const raw = String(value || '')
+  const href = raw.trim()
+  if (!href || href.length > 2048 || /[\\\u0000-\u001f\u007f-\u009f]/.test(raw)) return ''
   if (href.startsWith('/') && !href.startsWith('//')) return href
-  try { const url = new URL(href); return ['https:', 'http:'].includes(url.protocol) ? url.href : '' } catch { return '' }
+  if (!/^https?:\/\/[^/\s]/i.test(href) || /^https?:\/\/[^/?#]*@/i.test(href)) return ''
+  try {
+    const url = new URL(href)
+    return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && url.href.length <= 2048 ? url.href : ''
+  } catch { return '' }
 }
