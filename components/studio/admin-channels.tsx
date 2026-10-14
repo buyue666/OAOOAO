@@ -38,7 +38,7 @@ type ChannelTab = 'channels' | 'models' | 'defaults'
 
 const protocols = [
   ['auto', '自动识别'], ['openai', 'OpenAI 兼容'], ['anthropic', 'Anthropic'], ['gemini', 'Gemini'],
-  ['azure', 'Azure OpenAI'], ['responses', 'OpenAI Responses'], ['yumeng', '昱梦 V2'], ['globalaiopc', 'GlobalAiOpc'],
+  ['azure', 'Azure OpenAI'], ['responses', 'OpenAI Responses'],
 ] as const
 
 export function AdminChannelsPanel() {
