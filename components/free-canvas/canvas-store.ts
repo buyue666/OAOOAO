@@ -10,6 +10,7 @@ import {
   type XYPosition,
 } from '@xyflow/react'
 import { createGroupNode, NODE_GAP, newNodeId, sizeOf } from './node-factory'
+import { arrangeCanvasNodes } from './canvas-layout'
 import { DEFAULT_SETTINGS_PLACEMENT, HANDLE_IDS, type AgentNodeData, type FreeCanvasEdge, type FreeCanvasNode, type GenerationNodeData, type MediaNodeData, type NodeSide, type SettingsPlacement } from './types'
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
@@ -66,6 +67,9 @@ export type CanvasState = {
   assetPanelOpen: boolean
   assetTargetNodeId: string | null
   focusNodeId: string | null
+  miniMapOpen: boolean
+  snapToGrid: boolean
+  showEdges: boolean
 
   hydrate: (payload: HydratePayload) => void
   reset: () => void
@@ -93,6 +97,10 @@ export type CanvasState = {
   groupSelection: () => void
   ungroupSelection: () => void
   alignSelection: (axis: 'x' | 'y') => void
+  arrangeLayout: () => boolean
+  setMiniMapOpen: (open: boolean) => void
+  setSnapToGrid: (enabled: boolean) => void
+  setShowEdges: (visible: boolean) => void
   adoptRemoteBoard: (nodes: FreeCanvasNode[], edges: FreeCanvasEdge[], updatedAt: string) => void
   openSettings: (nodeId: string | null, placement?: SettingsPlacement) => void
   openTypeMenu: (menu: TypeMenuState) => void
@@ -243,6 +251,9 @@ const initialState = {
   assetPanelOpen: false,
   assetTargetNodeId: null,
   focusNodeId: null,
+  miniMapOpen: false,
+  snapToGrid: false,
+  showEdges: true,
 }
 
 export const useCanvasStore = create<CanvasState>()((set, get) => ({
@@ -263,7 +274,29 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   reset: () => set({ ...initialState }),
 
-  setTitle: (title) => set((state) => ({ title, ...dirtyPatch(state) })),
+  setTitle: (title) => set((state) => {
+    const next = title.trim().slice(0, 80)
+    return next && next !== state.title ? { title: next, ...dirtyPatch(state) } : {}
+  }),
+
+  // Navigation preferences belong to this editor session, never to saved project data.
+  setMiniMapOpen: (miniMapOpen) => set({ miniMapOpen }),
+  setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
+  setShowEdges: (showEdges) => set({ showEdges }),
+  arrangeLayout: () => {
+    const state = get()
+    if (state.saveStatus === 'conflict') {
+      set({ notice: '画布已在别处更新，请先导出本地内容并同步最新版本。' })
+      return false
+    }
+    const nodes = arrangeCanvasNodes(state.nodes, state.edges)
+    if (nodes === state.nodes) {
+      set({ notice: '当前画布无需调整。' })
+      return false
+    }
+    set({ nodes, ...historyPatch(state), ...dirtyPatch(state), settingsNodeId: null, contextMenu: null, typeMenu: null, notice: '已整理画布，分组与连线保持不变；可撤销。' })
+    return true
+  },
 
   markSaved: (updatedAt, revision) =>
     set((state) => ({

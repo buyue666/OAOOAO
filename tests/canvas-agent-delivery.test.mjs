@@ -14,6 +14,7 @@ function sourceModule(path, mocks = {}, globals = {}) {
 }
 const types = sourceModule('../components/free-canvas/types.ts')
 const factory = sourceModule('../components/free-canvas/node-factory.ts')
+const layout = sourceModule('../components/free-canvas/canvas-layout.ts', { './node-factory': factory })
 const references = sourceModule('../lib/studio/reference-assets.ts')
 const reference = sourceModule('../components/free-canvas/asset-reference.ts', { '@/lib/studio/reference-assets': references })
 const delivery = sourceModule('../components/free-canvas/agent-delivery.ts', { './asset-reference': reference, './node-factory': factory })
@@ -23,7 +24,7 @@ const deferred = () => { let resolve, reject; const promise = new Promise((yes, 
 const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve)) }
 
 function harness({ getAgent, library, save, initialStatus = 'running', runId = 'synthetic-run' } = {}) {
-  const actual = sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types }).useCanvasStore
+  const actual = sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types, './canvas-layout': layout }).useCanvasStore
   const useCanvasStore = selector => selector(actual.getState()); useCanvasStore.getState = actual.getState
   const agent = factory.createAgentNode({ x: 0, y: 0 }, 'synthetic-agent')
   agent.data = { ...agent.data, prompt: 'Synthetic plan', runId, runStatus: initialStatus }

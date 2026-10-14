@@ -2,9 +2,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { useReactFlow, useStore } from '@xyflow/react'
 import { useShallow } from 'zustand/react/shallow'
-import { ArrowLeft, Bot, Download, FolderOpen, Maximize2, Minus, Plus, Redo2, RefreshCw, Undo2 } from 'lucide-react'
+import { ArrowLeft, Bot, Check, CircleAlert, Download, FolderOpen, LoaderCircle, Redo2, RefreshCw, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCanvasActions } from './canvas-context'
 import { flushCanvasSave } from './canvas-persistence'
@@ -12,6 +11,8 @@ import { useCanvasStore, type SaveStatus } from './canvas-store'
 import { CREATABLE_KINDS, NODE_META, type CreatableKind } from './node-factory'
 import type { GenerationFlowNode } from './types'
 import { CanvasLeaveDialog } from './canvas-leave-dialog'
+import { CanvasNameEditor } from './canvas-name-editor'
+export { CanvasNavigationDock as CanvasZoomDock } from './canvas-navigation'
 
 const SAVE_LABEL: Record<SaveStatus, string> = {
   idle: '已加载',
@@ -31,6 +32,7 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
     else router.push(href)
   }
   const title = useCanvasStore((state) => state.title)
+  const projectId = useCanvasStore((state) => state.projectId)
   const saveStatus = useCanvasStore((state) => state.saveStatus)
   const saveError = useCanvasStore((state) => state.saveError)
   const canUndo = useCanvasStore((state) => state.past.length > 0)
@@ -44,22 +46,14 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
   return (
     <header className="pointer-events-none absolute inset-x-3 top-3 z-40 flex flex-wrap items-start justify-between gap-2">
       {leaveTo ? <CanvasLeaveDialog onClose={() => setLeaveTo(null)} onSaved={() => { const href = leaveTo; setLeaveTo(null); router.push(href) }} /> : null}
-      <div className="pointer-events-auto flex min-w-0 items-center gap-1 rounded-2xl border border-white/15 bg-black/85 p-1.5 backdrop-blur-md">
+      <div className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 rounded-2xl border border-white/15 bg-black/85 p-1.5 backdrop-blur-md">
         <button type="button" onClick={() => leave('/studio')} aria-label="返回工作台" title="返回工作台" className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">
           <ArrowLeft className="size-4" aria-hidden="true" />
           工作台
         </button>
         <button type="button" onClick={() => leave('/canvas')} aria-label="返回画布列表" title="返回画布列表" className="flex size-8 shrink-0 items-center justify-center rounded-xl text-neutral-400 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white"><FolderOpen className="size-4" aria-hidden="true" /></button>
-        <label className="min-w-0 flex-1">
-          <span className="sr-only">画布名称</span>
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value.slice(0, 80))}
-            placeholder="未命名画布"
-            className="h-8 w-full min-w-24 max-w-56 truncate bg-transparent px-1.5 text-sm font-medium text-white placeholder:text-neutral-600 focus:outline-none"
-          />
-        </label>
-        <SaveStatusLabel status={saveStatus} error={saveError} />
+        <CanvasNameEditor key={projectId} value={title} onCommit={setTitle} label="画布名称" className="w-40 flex-1 sm:w-56" />
+        <SaveStatusLabel status={saveStatus} error={saveError} onExport={onExport} />
       </div>
       <div className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border border-white/15 bg-black/85 p-1.5 backdrop-blur-md">
         <ToolbarButton label="撤销" disabled={!canUndo} onClick={() => undo()}>
@@ -83,26 +77,27 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
   )
 }
 
-function SaveStatusLabel({ status, error }: { status: SaveStatus; error: string | null }) {
+function SaveStatusLabel({ status, error, onExport }: { status: SaveStatus; error: string | null; onExport: () => void }) {
   if (status === 'conflict') {
     return (
-      <button type="button" title={error ?? undefined} onClick={() => window.location.reload()} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-white hover:bg-white/10">
-        <RefreshCw className="size-3.5" aria-hidden="true" />
-        刷新同步
+      <button type="button" aria-label="画布在别处更新，导出本地内容以免丢失" title={error ?? '画布已在别处更新，请先导出本地内容，再刷新同步。'} onClick={onExport} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+        <CircleAlert className="size-3.5" aria-hidden="true" />
+        <span className="hidden sm:inline">导出本地副本</span>
       </button>
     )
   }
   if (status === 'error') {
     return (
-      <button type="button" title={error ?? undefined} onClick={() => void flushCanvasSave().catch(() => undefined)} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-white hover:bg-white/10">
+      <button type="button" aria-label="保存失败，重试保存" title={error ?? undefined} onClick={() => void flushCanvasSave().catch(() => undefined)} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
         <RefreshCw className="size-3.5" aria-hidden="true" />
-        重试保存
+        <span className="hidden sm:inline">重试保存</span>
       </button>
     )
   }
   return (
-    <span role="status" aria-live="polite" className="hidden shrink-0 pr-1.5 text-[11px] text-neutral-500 sm:inline">
-      {SAVE_LABEL[status]}
+    <span role="status" aria-live="polite" title={SAVE_LABEL[status]} className="flex shrink-0 items-center gap-1.5 px-1.5 text-[11px] text-neutral-400">
+      {status === 'saving' ? <LoaderCircle className="size-3 motion-safe:animate-spin" aria-hidden="true" /> : status === 'dirty' ? <span className="size-1.5 rounded-full bg-amber-300" aria-hidden="true" /> : <Check className="size-3" aria-hidden="true" />}
+      <span className="sr-only sm:not-sr-only">{SAVE_LABEL[status]}</span>
     </span>
   )
 }
@@ -123,25 +118,6 @@ function ToolbarButton({ label, onClick, disabled, pressed, children }: { label:
     >
       {children}
     </button>
-  )
-}
-
-export function CanvasZoomDock() {
-  const { zoomIn, zoomOut, fitView } = useReactFlow()
-  const percent = useStore((state) => Math.round(state.transform[2] * 100))
-  return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 z-40 flex items-center gap-0.5 rounded-xl border border-white/15 bg-black/85 p-1 backdrop-blur-md">
-      <ToolbarButton label="缩小" onClick={() => void zoomOut({ duration: 150 })}>
-        <Minus className="size-4" aria-hidden="true" />
-      </ToolbarButton>
-      <span className="w-11 text-center text-xs tabular-nums text-neutral-300" aria-live="polite">{percent}%</span>
-      <ToolbarButton label="放大" onClick={() => void zoomIn({ duration: 150 })}>
-        <Plus className="size-4" aria-hidden="true" />
-      </ToolbarButton>
-      <ToolbarButton label="适应画面" onClick={() => void fitView({ padding: 0.25, duration: 200 })}>
-        <Maximize2 className="size-4" aria-hidden="true" />
-      </ToolbarButton>
-    </div>
   )
 }
 

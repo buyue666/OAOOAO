@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { Background, BackgroundVariant, ReactFlow, useReactFlow, type NodeMouseHandler, type Viewport } from '@xyflow/react'
+import { Background, BackgroundVariant, MiniMap, ReactFlow, useReactFlow, type NodeMouseHandler, type Viewport } from '@xyflow/react'
 import { readAssetDrag } from './asset-reference'
 import { useCanvasStore } from './canvas-store'
 import { createMediaNode } from './node-factory'
@@ -11,6 +11,7 @@ import { GroupNode } from './nodes/group-node'
 import { MediaNode } from './nodes/media-node'
 import { settingsPlacementFor } from './nodes/node-kit'
 import type { FreeCanvasNode } from './types'
+import { CANVAS_MAX_ZOOM, CANVAS_MIN_ZOOM } from './canvas-navigation'
 
 const nodeTypes = {
   generation: GenerationNode,
@@ -37,17 +38,26 @@ const FLOW_THEME = {
   '--xy-handle-background-color': '#fafafa',
   '--xy-controls-button-background-color': '#0a0a0a',
   '--xy-controls-button-color': '#fafafa',
+  '--xy-attribution-background-color': 'transparent',
 } as CSSProperties
 
 const INTERACTIVE_SELECTOR = 'textarea,input,select,button,a,label,video,audio'
+// Keep library BEM selectors literal: Tailwind arbitrary selectors turn unescaped
+// underscores into spaces, so `.react-flow__attribution` would target the wrong DOM.
+const ATTRIBUTION_STYLE = `
+[data-oao-free-canvas] .react-flow__panel.react-flow__attribution { bottom: 60px; background: transparent; }
+[data-oao-free-canvas] .react-flow__attribution a { color: #a3a3a3; }
+[data-oao-free-canvas] .react-flow__attribution a:hover { color: #ffffff; }
+[data-oao-free-canvas] .react-flow__attribution a:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+`
 
 function isEditableTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+  return target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest('input,textarea,select,dialog[open],[role="dialog"],[data-canvas-name-editor]')))
 }
 
 export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, setCenter, getZoom } = useReactFlow()
   const [initialZoom] = useState(initialViewport.zoom)
   const [shouldFit] = useState(() => {
     const state = useCanvasStore.getState()
@@ -57,6 +67,10 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
 
   const nodes = useCanvasStore((state) => state.nodes)
   const edges = useCanvasStore((state) => state.edges)
+  const miniMapOpen = useCanvasStore((state) => state.miniMapOpen)
+  const snapToGrid = useCanvasStore((state) => state.snapToGrid)
+  const showEdges = useCanvasStore((state) => state.showEdges)
+  const hasMultiSelection = useCanvasStore((state) => state.nodes.filter(node => node.selected).length >= 2)
   const settingsNodeId = useCanvasStore((state) => state.settingsNodeId)
   const onNodesChange = useCanvasStore((state) => state.onNodesChange)
   const onEdgesChange = useCanvasStore((state) => state.onEdgesChange)
@@ -84,6 +98,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
     () => nodes.map((node) => (node.id === settingsNodeId ? ({ ...node, zIndex: 1000 } as FreeCanvasNode) : node)),
     [nodes, settingsNodeId],
   )
+  const renderEdges = useMemo(() => showEdges ? edges : edges.map(edge => ({ ...edge, hidden: true })), [edges, showEdges])
 
   const handleNodeClick: NodeMouseHandler<FreeCanvasNode> = (event, node) => {
     if ((event.target as Element).closest(INTERACTIVE_SELECTOR)) return
@@ -126,7 +141,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target)) return
+      if (event.defaultPrevented || event.isComposing || isEditableTarget(event.target)) return
       const store = useCanvasStore.getState()
       if (event.key === 'Escape') {
         store.closeOverlays()
@@ -165,18 +180,21 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   }, [])
 
   return (
-    <div ref={rootRef} className="absolute inset-0 bg-black" style={FLOW_THEME} onDragOver={handleDragOver} onDrop={handleDrop}>
+    <div ref={rootRef} data-oao-free-canvas className="absolute inset-0 bg-black" style={FLOW_THEME} onDragOver={handleDragOver} onDrop={handleDrop}>
+      <style>{ATTRIBUTION_STYLE}</style>
       <ReactFlow
         aria-label="自由画布"
         nodes={renderNodes}
-        edges={edges}
+        edges={renderEdges}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         defaultViewport={initialViewport}
         fitView={shouldFit}
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
-        minZoom={0.2}
-        maxZoom={2}
+        minZoom={CANVAS_MIN_ZOOM}
+        maxZoom={CANVAS_MAX_ZOOM}
+        snapToGrid={snapToGrid}
+        snapGrid={[24, 24]}
         deleteKeyCode={null}
         selectionKeyCode="Shift"
         multiSelectionKeyCode={['Meta', 'Control']}
@@ -198,6 +216,22 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
         onPaneContextMenu={handlePaneContextMenu}
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="rgba(255,255,255,0.16)" />
+        {miniMapOpen && <MiniMap<FreeCanvasNode>
+          ariaLabel="画布小地图，可拖动定位或滚轮缩放"
+          pannable
+          zoomable
+          position="bottom-left"
+          className="overflow-hidden rounded-xl border border-white/20 shadow-xl"
+          style={{ left: 12, bottom: hasMultiSelection ? 216 : 72, margin: 0, width: 192, height: 120 }}
+          bgColor="#111113"
+          maskColor="rgba(0,0,0,0.52)"
+          maskStrokeColor="rgba(255,255,255,0.65)"
+          maskStrokeWidth={1.5}
+          nodeBorderRadius={6}
+          nodeColor={node => node.type === 'group' ? '#23252a' : node.selected ? '#dce4ef' : node.type === 'agent' ? '#91a2ba' : '#69717f'}
+          nodeStrokeColor={node => node.selected ? '#ffffff' : '#979faa'}
+          onClick={(_, position) => void setCenter(position.x, position.y, { zoom: getZoom() })}
+        />}
       </ReactFlow>
     </div>
   )

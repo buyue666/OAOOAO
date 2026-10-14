@@ -6,6 +6,7 @@ import { StudioProvider } from '@/lib/studio/store'
 import { LocaleProvider } from '@/lib/studio/i18n'
 import { SiteBrandMetadata } from '@/components/site-brand'
 import { SiteAnnouncements } from '@/components/site-announcements'
+import { SitePopups } from '@/components/site-popups'
 import '@xyflow/react/dist/style.css'
 import './globals.css'
 
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <LocaleProvider>
           <StudioProvider>
             <SiteBrandMetadata />
-            <GenerationProvider><SiteAnnouncements><StudioApp>{children}</StudioApp></SiteAnnouncements></GenerationProvider>
+            <GenerationProvider><SiteAnnouncements><StudioApp>{children}</StudioApp><SitePopups /></SiteAnnouncements></GenerationProvider>
           </StudioProvider>
         </LocaleProvider>
         {process.env.VERCEL === '1' && <Analytics />}

@@ -137,20 +137,24 @@ function CanvasCard({ project, onChanged }: { project: CanvasSummary; onChanged:
       <div className="flex flex-1 flex-col gap-2 p-4">
         {renaming ? (
           <form onSubmit={submitRename} className="flex items-center gap-1.5">
-            <label className="min-w-0 flex-1">
+            <label className="min-w-0 flex-1 rounded-lg border border-white/25 bg-black focus-within:border-white/60 focus-within:shadow-[0_0_0_3px_rgba(255,255,255,0.04)]">
               <span className="sr-only">画布名称</span>
               <input
                 autoFocus
                 value={draft}
                 maxLength={80}
+                data-focus-managed
+                disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
-                className="h-8 w-full rounded-lg border border-white/25 bg-black px-2 text-sm text-white focus:border-white focus:outline-none"
+                onKeyDown={(event) => { if (event.key === 'Escape' && !event.nativeEvent.isComposing && !busy) setRenaming(false) }}
+                className="h-8 w-full rounded-lg bg-transparent px-2 text-sm text-white"
+                style={{ border: 0, outline: 'none', boxShadow: 'none' }}
               />
             </label>
             <button type="submit" disabled={busy} aria-label="保存名称" className="flex size-8 items-center justify-center rounded-lg bg-white text-black disabled:opacity-40">
               <Check className="size-4" aria-hidden="true" />
             </button>
-            <button type="button" onClick={() => setRenaming(false)} aria-label="取消重命名" className="flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white">
+            <button type="button" disabled={busy} onClick={() => setRenaming(false)} aria-label="取消重命名" className="flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white disabled:opacity-40">
               <X className="size-4" aria-hidden="true" />
             </button>
           </form>

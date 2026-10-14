@@ -8,7 +8,7 @@ import ts from 'typescript'
 const require = createRequire(import.meta.url)
 function sourceModule(path, mocks = {}) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
-  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
   const module = { exports: {} }
   vm.runInNewContext(`(function(require,module,exports){${code}\n})`, { console, setTimeout, clearTimeout, URL })(name => name in mocks ? mocks[name] : require(name), module, module.exports)
   return module.exports
@@ -16,6 +16,119 @@ function sourceModule(path, mocks = {}) {
 const helper = sourceModule('../lib/studio/canvas-skills.ts')
 const plain = value => JSON.parse(JSON.stringify(value))
 const asset = (id, prompt = '保持连续镜头') => ({ id, title: `技能 ${id}`, kind: 'text', source: 'canvas-skill', tags: ['技能'], data: { skillVersion: 1, prompt } })
+const structuredDraft = () => ({ title: '连续镜头检查', summary: '保持产品一致', scenarios: '产品跨多个镜头时', usage: '先核对参考图，再逐镜检查', output: '输出问题与修改建议', instructions: '保留已确认的产品颜色，不虚构缺失信息。' })
+
+test('structured descriptions are persisted in the one executable prompt and recover without duplication', () => {
+  const draft = structuredDraft()
+  const input = helper.canvasSkillAssetInput(draft)
+  assert.equal(input.kind, 'text')
+  assert.equal(input.source, 'canvas-skill')
+  assert.equal(input.data.skillVersion, 2)
+  for (const key of ['summary', 'scenarios', 'usage', 'output', 'instructions']) assert.ok(input.data.prompt.includes(draft[key]))
+  const saved = { id: 'structured', ...input }
+  assert.deepEqual(plain(helper.canvasSkillDraftOf(saved)), draft)
+  assert.equal(helper.canvasSkillOf(saved).prompt, input.data.prompt)
+  assert.equal(helper.canvasSkillAssetInput(helper.canvasSkillDraftOf(saved)).data.prompt, input.data.prompt)
+})
+
+test('legacy and stale editor metadata never alter the saved executable prompt', () => {
+  const legacy = asset('legacy', '旧指令\n## 保持原样\n不能重复加栏目')
+  const recovered = helper.canvasSkillDraftOf(legacy)
+  assert.equal(helper.canvasSkillDraftPrompt(recovered), legacy.data.prompt)
+  const saved = { id: 'stale', ...helper.canvasSkillAssetInput(structuredDraft()) }
+  saved.data.skillDraft.instructions = '这段过期元数据不能取代实际指令'
+  assert.equal(helper.canvasSkillDraftPrompt(helper.canvasSkillDraftOf(saved)), saved.data.prompt)
+  const malformed = { ...saved, data: { ...saved.data, skillDraft: { instructions: 42 } } }
+  assert.equal(helper.canvasSkillDraftPrompt(helper.canvasSkillDraftOf(malformed)), saved.data.prompt)
+})
+
+test('all descriptions and section headings count toward the 4000-character execution limit', () => {
+  const exact = { ...helper.emptyCanvasSkillDraft(), title: '边界', instructions: '字'.repeat(4000) }
+  assert.equal(helper.canvasSkillAssetInput(exact).data.prompt.length, 4000)
+  const over = { ...exact, summary: '说明' }
+  assert.ok(helper.canvasSkillDraftPrompt(over).length > 4000)
+  assert.throws(() => helper.canvasSkillAssetInput(over), /超过 4000/)
+  assert.throws(() => helper.canvasSkillAssetInput({ ...exact, instructions: ' ' }), /技能指令/)
+  assert.throws(() => helper.canvasSkillAssetInput({ ...exact, title: '多行\n名称' }), /单行/)
+  assert.throws(() => helper.canvasSkillAssetInput({ ...exact, summary: 'x'.repeat(241) }), /240/)
+})
+
+test('SKILL.md roundtrip preserves multiline requirements, quotes and inert Markdown or code', () => {
+  const draft = { ...structuredDraft(), summary: '检查“产品”与 "镜头"', usage: '逐镜检查\n保留参考', instructions: '# 指令里的标题\n\n## 简介\n不要把此处误作元数据。\n```js\nalert("示例代码，不执行")\n```\n<script>alert(1)</script>' }
+  const markdown = helper.exportCanvasSkillMarkdown(draft)
+  assert.deepEqual(plain(helper.importCanvasSkillMarkdown(markdown)), draft)
+  assert.equal(helper.canvasSkillAssetInput(helper.importCanvasSkillMarkdown(markdown)).data.prompt, helper.canvasSkillDraftPrompt(draft))
+  assert.deepEqual(plain(helper.importCanvasSkillMarkdown('\uFEFF' + markdown.replaceAll('\n', '\r\n'), 'skill.MD')), draft)
+})
+
+test('plain Markdown and common scalar frontmatter import as text without package execution', () => {
+  assert.equal(helper.importCanvasSkillMarkdown('# 画面检查\n\n检查颜色。').title, '画面检查')
+  assert.equal(helper.importCanvasSkillMarkdown('检查颜色。').title, '导入的技能')
+  const imported = helper.importCanvasSkillMarkdown('---\nname: "场景校验"\ndescription: >\n  检查场景\n  与镜头\ntools: [shell]\nscripts:\n  - run.sh\n---\n请核对场景光线。')
+  assert.equal(imported.summary, '检查场景 与镜头')
+  assert.equal(imported.instructions, '请核对场景光线。')
+  assert.doesNotMatch(helper.canvasSkillDraftPrompt(imported), /run\.sh|shell/)
+})
+
+test('bad or oversized imports fail explicitly instead of silently truncating instructions', () => {
+  assert.throws(() => helper.importCanvasSkillMarkdown('x', 'skills.zip'), /SKILL.md/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('x'.repeat(65537)), /64 KB/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('x\u0000'), /非文本/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('---\nname: x'), /分隔线/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('---\nname: a\nname: b\n---\nx'), /重复/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('---\nname: {object: true}\n---\nx'), /对象或列表/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('---\nname: "bad\\u0000"\n---\nx'), /非文本/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('# 空技能\n\n'), /技能指令/)
+  assert.throws(() => helper.importCanvasSkillMarkdown('# 超长\n\n' + 'x'.repeat(4001)), /超过 4000/)
+})
+
+test('skill editor server rendering keeps imported HTML inert and labels the full execution limit', () => {
+  const React = require('react')
+  const { renderToStaticMarkup } = require('react-dom/server')
+  const { CanvasSkillEditor } = sourceModule('../components/free-canvas/canvas-skill-editor.tsx', { '@/lib/studio/canvas-skills': helper })
+  const html = renderToStaticMarkup(React.createElement(CanvasSkillEditor, { initialDraft: { ...structuredDraft(), instructions: '<script>alert(1)</script>' }, saving: false, onCancel() {}, onSave() {} }))
+  assert.doesNotMatch(html, /<script>alert/)
+  assert.match(html, /&lt;script&gt;/)
+  assert.match(html, /完整执行指令/)
+  assert.match(html, /4000 字符/)
+  assert.match(html, /SKILL.md 预览/)
+})
+
+test('library creation uses the existing text asset API, blocks duplicate saves and retains a failed draft', async () => {
+  const hooks = []; let cursor = 0; let fail = true; let reloads = 0
+  const calls = []
+  const Editor = () => null
+  const module = sourceModule('../components/free-canvas/canvas-skill-library.tsx', {
+    react: {
+      useState(initial) { const index = cursor++; if (!(index in hooks)) hooks[index] = typeof initial === 'function' ? initial() : initial; return [hooks[index], value => { hooks[index] = typeof value === 'function' ? value(hooks[index]) : value }] },
+      useRef(initial) { const index = cursor++; if (!(index in hooks)) hooks[index] = { current: initial }; return hooks[index] },
+    },
+    '@/lib/studio/canvas-skills': helper,
+    '@/lib/studio/account-api': { createLibraryAsset: async input => { calls.push(plain(input)); if (fail) throw new Error('Synthetic save failure') }, deleteLibraryAsset() {} },
+    '@/lib/studio/use-account-data': { useLibraryAssets: () => ({ assets: [], state: 'ready', reload: async () => { reloads++ } }) },
+    './canvas-skill-editor': { CanvasSkillEditor: Editor, downloadCanvasSkill() {} },
+  })
+  const render = () => { cursor = 0; return module.CanvasSkillLibrary({}) }
+  const elements = node => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(elements)]
+  const text = node => typeof node === 'string' ? node : !node || typeof node !== 'object' ? '' : [node.props?.children].flat(Infinity).map(text).join('')
+  elements(render()).find(node => node.type === 'button' && text(node).includes('新建技能')).props.onClick()
+  const editor = elements(render()).find(node => node.type === Editor)
+  const draft = structuredDraft()
+  editor.props.onSave(draft); editor.props.onSave(draft)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].source, 'canvas-skill')
+  assert.equal(calls[0].data.prompt, helper.canvasSkillDraftPrompt(draft))
+  assert.ok(elements(render()).some(node => node.type === Editor), 'editor survives a failed save')
+  assert.match(text(render()), /技能保存失败/)
+  assert.equal(reloads, 0)
+  fail = false
+  elements(render()).find(node => node.type === Editor).props.onSave(draft)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(calls.length, 2)
+  assert.equal(reloads, 1)
+  assert.equal(elements(render()).some(node => node.type === Editor), false)
+})
 
 test('only explicit instruction assets are selectable; invalid content is rejected', () => {
   assert.equal(helper.canvasSkillOf({ ...asset('a'), kind: 'image' }), null)
@@ -74,6 +187,15 @@ test('real generation hook passes resolved skill instructions to task API', asyn
   await harness.actions.submitNode('node')
   assert.equal(harness.calls.length, 1)
   assert.match(harness.calls[0].prompt, /新的指令：限制100字/)
+  assert.doesNotMatch(harness.calls[0].prompt, /旧指令/)
+})
+
+test('real generation hook receives every structured requirement from the saved skill', async () => {
+  const draft = structuredDraft()
+  const harness = generationHarness(async () => ({ assets: [{ id: 'skill', ...helper.canvasSkillAssetInput(draft) }], total: 1 }))
+  await harness.actions.submitNode('node')
+  assert.equal(harness.calls.length, 1)
+  for (const key of ['summary', 'scenarios', 'usage', 'output', 'instructions']) assert.ok(harness.calls[0].prompt.includes(draft[key]))
   assert.doesNotMatch(harness.calls[0].prompt, /旧指令/)
 })
 

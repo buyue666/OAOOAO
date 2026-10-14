@@ -13,6 +13,7 @@ function sourceModule(path, mocks = {}) {
 }
 const types = sourceModule('../components/free-canvas/types.ts')
 const factory = sourceModule('../components/free-canvas/node-factory.ts')
+const layout = sourceModule('../components/free-canvas/canvas-layout.ts', { './node-factory': factory })
 const codec = sourceModule('../components/free-canvas/board-codec.ts', { './types': types, './node-factory': factory })
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 const settle = () => new Promise(resolve => setImmediate(resolve))
@@ -20,7 +21,7 @@ const plain = value => JSON.parse(JSON.stringify(value))
 const defaults = { imageSize: '1:1', imageQuality: 'auto', imageCount: 4, videoQuality: '720', videoSeconds: 8, audioVoice: 'alloy', audioFormat: 'mp3' }
 
 function harness({ submit, loadSkills, save, restored, query, cancel, knownTasks = [], cancelInStore } = {}) {
-  const actual = sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types }).useCanvasStore
+  const actual = sourceModule('../components/free-canvas/canvas-store.ts', { './node-factory': factory, './types': types, './canvas-layout': layout }).useCanvasStore
   const useCanvasStore = selector => selector(actual.getState()); useCanvasStore.getState = actual.getState
   const node = restored || factory.createGenerationNode('image', { x: 0, y: 0 }, defaults, 'shared-node')
   if (!restored) node.data = { ...node.data, model: 'image-model', prompt: 'Original synthetic prompt' }

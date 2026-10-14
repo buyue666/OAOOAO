@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
+import { CanvasNameEditor } from '../canvas-name-editor'
 import { CREATABLE_KINDS, NODE_META, type CreatableKind } from '../node-factory'
 import { DEFAULT_SETTINGS_PLACEMENT, HANDLE_IDS, type NodeSide, type SettingsPlacement } from '../types'
 
@@ -140,48 +141,8 @@ function NodeTypeMenu({ side, onPick }: { side: NodeSide; onPick: (kind: Creatab
 }
 
 export function TitleEditor({ nodeId, title, className }: { nodeId: string; title: string; className?: string }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(title)
   const updateNodeData = useCanvasStore((state) => state.updateNodeData)
-
-  const commit = () => {
-    setEditing(false)
-    const next = draft.trim()
-    if (next && next !== title) updateNodeData(nodeId, { title: next }, { history: true })
-  }
-
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        title="双击重命名"
-        onDoubleClick={() => {
-          setDraft(title)
-          setEditing(true)
-        }}
-        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === 'F2') { event.preventDefault(); setDraft(title); setEditing(true) } }}
-        className={cn('min-w-0 truncate text-left text-sm font-medium text-white', className)}
-      >
-        {title}
-      </button>
-    )
-  }
-
-  return (
-    <input
-      autoFocus
-      aria-label="节点名称"
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={commit}
-      onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-        if (event.key === 'Enter') commit()
-        if (event.key === 'Escape') setEditing(false)
-      }}
-      className={cn('nodrag nowheel min-w-0 flex-1 bg-transparent text-sm font-medium text-white outline-none', className)}
-      maxLength={60}
-    />
-  )
+  return <CanvasNameEditor key={nodeId} value={title} label="节点名称" maxLength={60} compact className={className} onCommit={(next) => updateNodeData(nodeId, { title: next }, { history: true })} />
 }
 
 /** 节点靠近视口右侧时，配置浮层改为向左展开，避免被裁切。 */

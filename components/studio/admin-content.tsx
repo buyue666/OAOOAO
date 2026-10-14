@@ -47,6 +47,7 @@ import { useAdminReload, useAdminSession } from './admin-shell'
 import { activeAnnouncements, safeAnnouncementHref } from '@/lib/studio/announcements'
 import { normalizeAnnouncementEffect, normalizeAnnouncementTone } from '@/lib/studio/announcement-appearance'
 import { AdminAnnouncementAppearance } from './admin-announcement-appearance'
+import { AdminSitePopupsPanel } from './admin-site-popups'
 
 const moderationLabels: Record<string, string> = { pending: '待审核', approved: '已通过', rejected: '已驳回', taken_down: '已下架' }
 const lifecycleLabels: Record<string, string> = { active: '正常', revoked: '已撤回' }
@@ -55,17 +56,18 @@ export function AdminContentPanel() {
   const session = useAdminSession()
   const { reloadKey } = useAdminReload()
   const canManage = session.can('content.manage')
-  const [tab, setTab] = useState<'announcements' | 'works' | 'cases'>('announcements')
+  const [tab, setTab] = useState<'announcements' | 'popups' | 'works' | 'cases'>('announcements')
 
   return (
     <div className="flex flex-col gap-5">
       <AdminTabs
         label="内容治理分区"
-        items={[['announcements', '公告管理'], ['works', '作品审核'], ['cases', '举报与治理']] as const}
+        items={[['announcements', '公告管理'], ['popups', '推广弹窗'], ['works', '作品审核'], ['cases', '举报与治理']] as const}
         value={tab}
         onChange={setTab}
       />
       {tab === 'announcements' && <AnnouncementsPanel canManage={canManage} reloadKey={reloadKey} />}
+      {tab === 'popups' && <AdminSitePopupsPanel canManage={canManage} reloadKey={reloadKey} />}
       {tab === 'works' && <WorksPanel canManage={canManage} reloadKey={reloadKey} />}
       {tab === 'cases' && <CasesPanel canManage={canManage} reloadKey={reloadKey} />}
     </div>
