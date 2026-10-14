@@ -1,17 +1,19 @@
 'use client'
 
-import { ArrowUpRight, Megaphone, X } from 'lucide-react'
+import { ArrowUpRight, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { AnnouncementCountdown } from '@/components/announcement-countdown'
 import type { SiteAnnouncementBar as AnnouncementConfig } from '@/lib/studio/admin-types'
 import { safeAnnouncementHref } from '@/lib/studio/announcements'
 import { normalizeAnnouncementEffect, normalizeAnnouncementTone } from '@/lib/studio/announcement-appearance'
 import { cn } from '@/lib/utils'
 
 /** One homepage strip; dismissal belongs to this notice revision, independently of dialog read state. */
-export function SiteAnnouncementBar({ announcement, placement = 'workbench', description, identity, onOpen, preview = false }: {
+export function SiteAnnouncementBar({ announcement, placement = 'workbench', description, endsAt, identity, onOpen, preview = false }: {
   announcement?: AnnouncementConfig
   placement?: 'landing' | 'workbench'
   description?: string
+  endsAt?: string
   identity?: string
   onOpen?: () => void
   preview?: boolean
@@ -48,7 +50,8 @@ export function SiteAnnouncementBar({ announcement, placement = 'workbench', des
   return (
     <aside className={cn('oao-announcement-bar', `oao-announcement-${tone}`)} data-placement={placement} data-effect={effect} data-preview={preview ? 'true' : undefined} aria-label={preview ? '公告效果预览' : '首页公告'}>
       <div className="oao-announcement-inner">
-        <span className="oao-announcement-badge"><Megaphone aria-hidden="true" />公告</span>
+        <AnnouncementCountdown endsAt={endsAt} />
+        <span className="oao-announcement-badge"><span aria-hidden="true" />最新公告</span>
         <div className="oao-announcement-copy">
           <p className="oao-announcement-title">{text}</p>
           {description && <p className="oao-announcement-description">{description}</p>}

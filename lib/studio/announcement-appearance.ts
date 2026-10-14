@@ -9,8 +9,8 @@ export const announcementTones = [
 
 export const announcementEffects = [
   { value: 'none', label: '静态' },
-  { value: 'glow', label: '柔光流动' },
-  { value: 'shimmer', label: '微光掠过' },
+  { value: 'glow', label: '极光流动' },
+  { value: 'shimmer', label: '光带掠过' },
 ] as const
 
 export type AnnouncementTone = (typeof announcementTones)[number]['value']

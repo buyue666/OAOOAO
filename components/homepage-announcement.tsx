@@ -11,6 +11,6 @@ export function HomepageAnnouncement({ placement }: { placement: 'landing' | 'wo
   // Do not flash the old settings banner before the managed notices have loaded.
   if (loading || error) return null
   const item = homepageAnnouncement(items)
-  if (item) return <SiteAnnouncementBar key={announcementKey(item)} placement={placement} identity={announcementKey(item)} announcement={{ enabled: true, text: item.title, dismissible: true, tone: item.bannerTone, effect: item.bannerEffect }} description={item.content.replace(/\s+/g, ' ').trim()} onOpen={() => open(item)} />
+  if (item) return <SiteAnnouncementBar key={announcementKey(item)} placement={placement} identity={announcementKey(item)} announcement={{ enabled: true, text: item.title, dismissible: true, tone: item.bannerTone, effect: item.bannerEffect }} description={item.content.replace(/\s+/g, ' ').trim()} endsAt={item.endsAt} onOpen={() => open(item)} />
   return <SiteAnnouncementBar placement={placement} announcement={state.sessionSettings?.site?.announcementBar} />
 }

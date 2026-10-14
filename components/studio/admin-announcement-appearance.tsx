@@ -15,7 +15,7 @@ import { AdminField, AdminSelect } from './admin-kit'
 
 const showDetailsPreview = () => {}
 
-export function AdminAnnouncementAppearance({ tone, effect, onToneChange, onEffectChange, text, description, href, dismissible = true, hasDetails = false, disabled = false }: {
+export function AdminAnnouncementAppearance({ tone, effect, onToneChange, onEffectChange, text, description, href, endsAt, dismissible = true, hasDetails = false, disabled = false }: {
   tone: AnnouncementTone
   effect: AnnouncementEffect
   onToneChange: (tone: AnnouncementTone) => void
@@ -23,6 +23,7 @@ export function AdminAnnouncementAppearance({ tone, effect, onToneChange, onEffe
   text: string
   description?: string
   href?: string
+  endsAt?: string
   dismissible?: boolean
   hasDetails?: boolean
   disabled?: boolean
@@ -46,7 +47,7 @@ export function AdminAnnouncementAppearance({ tone, effect, onToneChange, onEffe
           ))}
         </div>
       </fieldset>
-      <AdminField label="动态效果" hint="动效只装饰横幅背景，保持文字清晰；访客开启减少动态效果时会自动静止。">
+      <AdminField label="动态效果" hint="选择极光色彩流动或光带掠过，正文保持静止；访客开启减少动态效果时使用静态展示。">
         <AdminSelect disabled={disabled} value={effect} onChange={(event) => onEffectChange(normalizeAnnouncementEffect(event.target.value))}>
           {announcementEffects.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </AdminSelect>
@@ -66,6 +67,7 @@ export function AdminAnnouncementAppearance({ tone, effect, onToneChange, onEffe
               preview
               announcement={{ enabled: true, text: text.trim() || '公告标题会显示在这里', tone, effect, href, dismissible }}
               description={description?.replace(/\s+/g, ' ').trim()}
+              endsAt={endsAt}
               onOpen={hasDetails ? showDetailsPreview : undefined}
             />
           </div>

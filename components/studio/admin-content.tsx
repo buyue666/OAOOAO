@@ -201,6 +201,7 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
   const [content, setContent] = useState(item?.content ?? '')
   const [bannerTone, setBannerTone] = useState(() => normalizeAnnouncementTone(item?.bannerTone))
   const [bannerEffect, setBannerEffect] = useState(() => normalizeAnnouncementEffect(item?.bannerEffect))
+  const [endTime, setEndTime] = useState(() => toLocalInput(item?.endsAt) ?? '')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -210,7 +211,7 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
     const value = (key: string) => String(data.get(key) ?? '').trim()
     try {
       const startsAt = value('startsAt')
-      const endsAt = value('endsAt')
+      const endsAt = endTime.trim()
       if (startsAt && endsAt && new Date(startsAt).getTime() >= new Date(endsAt).getTime()) throw new Error('结束时间必须晚于开始时间')
       const payload: AnnouncementInput = {
         title: title.trim(),
@@ -251,9 +252,9 @@ function AnnouncementEditor({ item, onClose, onSaved }: { item?: Announcement; o
         <fieldset disabled={busy} className="flex flex-col gap-4">
           <AdminField label="公告标题" hint="直接展示在首页顶部横幅中，建议简短明确。"><AdminInput name="title" required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></AdminField>
           <AdminField label="公告内容" hint="横幅显示正文摘要，用户点击「查看详情」后阅读完整内容。"><AdminTextarea name="content" rows={5} required value={content} onChange={(event) => setContent(event.target.value)} /></AdminField>
-          <AdminAnnouncementAppearance tone={bannerTone} effect={bannerEffect} onToneChange={setBannerTone} onEffectChange={setBannerEffect} text={title} description={content} hasDetails disabled={busy} />
+          <AdminAnnouncementAppearance tone={bannerTone} effect={bannerEffect} onToneChange={setBannerTone} onEffectChange={setBannerEffect} text={title} description={content} endsAt={toIso(endTime) || undefined} hasDetails disabled={busy} />
           <AdminField label="开始时间" hint="按当前设备的本地时间设置，留空表示立即生效。"><AdminInput name="startsAt" type="datetime-local" defaultValue={toLocalInput(item?.startsAt)} /></AdminField>
-          <AdminField label="结束时间" hint="留空表示长期有效。"><AdminInput name="endsAt" type="datetime-local" defaultValue={toLocalInput(item?.endsAt)} /></AdminField>
+          <AdminField label="结束时间" hint="按当前设备的本地时间设置。填写后横幅显示距结束的真实倒计时；留空表示长期有效，不显示倒计时。"><AdminInput name="endsAt" type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} /></AdminField>
           <div className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
             <label className="flex items-center gap-2 text-sm"><input name="enabled" type="checkbox" defaultChecked={item?.enabled ?? true} />发布公告</label>
             <label className="flex items-center gap-2 text-sm"><input name="popupHome" type="checkbox" defaultChecked={item?.popupHome ?? true} />首页顶部横幅</label>
