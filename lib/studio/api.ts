@@ -1,7 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { CanvasBoard, CanvasNodeData, Project } from './types'
 import type { DramaProject, DramaSourceAsset } from './drama-types'
-import type { SiteAnnouncementBar } from './admin-types'
+import type { SiteSettings } from './admin-types'
 import type { CommercePolicy, PurchaseReadiness } from './commerce-policy'
 
 export type BackendUser = {
@@ -42,7 +42,7 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionSettings = {
-  site?: { title?: string; logoUrl?: string; iconUrl?: string; announcementBar?: SiteAnnouncementBar; termsContent?: string; privacyContent?: string; [key: string]: unknown }
+  site?: SiteSettings
   operationMode?: 'self_use' | 'commercial'
   modelPointCosts?: Record<string, number>
   wechatLoginEnabled?: boolean

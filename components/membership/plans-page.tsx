@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { SiteBrand } from '@/components/site-brand'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MembershipPurchaseView } from './membership-purchase-view'
-import { billingOptions, toMembershipPlans } from '@/lib/studio/membership'
+import { billingOptions, storefrontProducts, toMembershipPlans } from '@/lib/studio/membership'
+import type { CommercePolicy } from '@/lib/studio/commerce-policy'
 import { listBillingProducts, type BillingProduct, type BillingAccess } from '@/lib/studio/api'
 import { useStudio } from '@/lib/studio/store'
 import type { MembershipSelection } from './types'
@@ -15,9 +16,12 @@ import QRCode from 'qrcode'
 import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
 import { useBillingCheckout } from '@/lib/studio/use-billing-checkout'
 
-export function PlansPage() {
+export function PlansPage({ productKind = 'plan' }: { productKind?: 'plan' | 'points' }) {
   const router = useRouter()
   const { state, refreshSession } = useStudio()
+  const pointsStore = productKind === 'points'
+  const pagePath = pointsStore ? '/credits' : '/plans'
+  const pageTitle = pointsStore ? '积分超市' : '会员套餐'
   const [returnPath, setReturnPath] = useState('/studio')
   useEffect(() => {
     let previous: string | null = null
@@ -25,6 +29,8 @@ export function PlansPage() {
     setReturnPath(safeReturnPath(new URLSearchParams(window.location.search).get('returnTo') || previous))
   }, [])
   const [products, setProducts] = useState<BillingProduct[]>([])
+  const [commercePolicy, setCommercePolicy] = useState<CommercePolicy | null>(null)
+  const loadRevision = useRef(0)
   const [providers, setProviders] = useState<string[]>([])
   const [provider, setProvider] = useState('')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -49,28 +55,33 @@ export function PlansPage() {
   // 默认按自用模式处理，避免计费接口异常时把充值入口误开放。
   const [billing, setBilling] = useState<BillingAccess>({ mode: 'self_use', rechargeEnabled: false })
   const load = useCallback(async () => {
+    const revision = ++loadRevision.current
     setStatus('loading'); setError('')
     try {
       const result = await listBillingProducts()
+      if (revision !== loadRevision.current) return
       setProducts(result.products)
+      setCommercePolicy(result.commercePolicy ?? null)
       setProviders(result.paymentProviders)
       setBilling(result.billing ?? { mode: 'self_use', rechargeEnabled: false })
       setProvider(current => result.paymentProviders.includes(current) ? current : result.paymentProviders[0] || '')
       setStatus('ready')
-    } catch (reason) { setBilling({ mode: 'self_use', rechargeEnabled: false }); setError(reason instanceof Error ? reason.message : '套餐加载失败'); setStatus('error') }
+    } catch (reason) { if (revision !== loadRevision.current) return; setBilling({ mode: 'self_use', rechargeEnabled: false }); setError(reason instanceof Error ? reason.message : '商品加载失败'); setStatus('error') }
   }, [])
-  useEffect(() => { void load() }, [load])
+  useEffect(() => { void load(); return () => { loadRevision.current++ } }, [load])
   useEffect(() => {
     let active = true
     setQrState(null)
     if (qrContent) void QRCode.toDataURL(qrContent, { width: 280, margin: 2 }).then(url => { if (active) setQrState({ key: qrKey, image: url }) }).catch(() => { if (active) setQrState({ key: qrKey, error: '二维码生成失败，请重新打开支付。' }) })
     return () => { active = false }
   }, [qrContent, qrKey])
-  const plans = useMemo(() => toMembershipPlans(products), [products])
+  const plans = useMemo(() => toMembershipPlans(storefrontProducts(products, productKind)), [products, productKind])
   const availableCycles = billingOptions.filter(option => plans.some(plan => plan.tiers.some(t => t.pricing[option.value])))
-  const options = availableCycles.length ? availableCycles : billingOptions
+  const options = availableCycles.length ? availableCycles : billingOptions.filter(option => pointsStore ? option.value === 'once' : option.value !== 'once')
 
   async function purchase(selection: MembershipSelection) {
+    if (!billing.rechargeEnabled) throw new Error('当前暂未开放购买。')
+    if (!storefrontProducts(products, productKind).some(product => product.enabled && product.id === selection.pricing.productId)) throw new Error('商品已变更，请重新加载后购买。')
     await billingCheckout.purchase(selection.pricing.productId || '', provider)
   }
   return <div className="min-h-dvh bg-black text-zinc-100">
@@ -78,12 +89,17 @@ export function PlansPage() {
       <Link href={returnPath} aria-label="返回创作" className="inline-flex items-center"><SiteBrand tone="dark" imageClassName="h-7" /></Link>
       <div className="flex flex-wrap items-center gap-4">
         {providers.length > 0 && <label>支付方式 <select aria-label="支付方式" value={provider} onChange={e => setProvider(e.target.value)} className="ml-2 rounded border border-zinc-700 bg-zinc-900 px-2 py-1">{providers.map(p => <option key={p} value={p}>{({manual:'人工支付', epay:'在线支付', stripe:'银行卡', ciyuan:'词元余额'} as Record<string,string>)[p] || p}</option>)}</select></label>}
-        <Link href={state.backendStatus === 'connected' ? '/account' : '/login?next=/plans'}>{state.backendStatus === 'connected' ? '账户与订单' : '登录'}</Link>
-        {state.backendStatus === 'connected' && state.user.role === 'admin' && <Link href="/admin/products">管理套餐</Link>}
+        <Link href={state.backendStatus === 'connected' ? '/account' : `/login?next=${encodeURIComponent(`${pagePath}?returnTo=${encodeURIComponent(returnPath)}`)}`}>{state.backendStatus === 'connected' ? '账户与订单' : '登录'}</Link>
+        {state.backendStatus === 'connected' && state.user.role === 'admin' && <Link href="/admin/products">管理商品</Link>}
       </div>
     </div>
+    <nav aria-label="购买类型" className="mx-auto flex w-fit flex-wrap justify-center gap-1 rounded-full border border-white/15 bg-white/5 p-1 text-sm">
+      <Link href={`/plans?returnTo=${encodeURIComponent(returnPath)}`} aria-current={!pointsStore ? 'page' : undefined} className={`rounded-full px-5 py-2 ${!pointsStore ? 'bg-white text-black' : 'text-zinc-300 hover:bg-white/10'}`}>会员套餐</Link>
+      <Link href={`/credits?returnTo=${encodeURIComponent(returnPath)}`} aria-current={pointsStore ? 'page' : undefined} className={`rounded-full px-5 py-2 ${pointsStore ? 'bg-white text-black' : 'text-zinc-300 hover:bg-white/10'}`}>积分超市</Link>
+    </nav>
+    {pointsStore && state.backendStatus === 'connected' && <p className="mt-5 text-center text-sm text-zinc-300">可用积分 <strong className="ml-2 tabular-nums text-emerald-200">{state.credits.toLocaleString('zh-CN')}</strong></p>}
     {status === 'loading' ? (
-      <div className="mx-auto flex min-h-[70dvh] w-full max-w-2xl items-center justify-center px-6 py-16"><p className="text-sm text-white/60">正在读取套餐与购买状态…</p></div>
+      <div className="mx-auto flex min-h-[70dvh] w-full max-w-2xl items-center justify-center px-6 py-16"><p className="text-sm text-white/60">正在读取{pageTitle}与购买状态…</p></div>
     ) : status === 'error' ? (
       <div className="mx-auto flex min-h-[70dvh] w-full max-w-2xl items-center justify-center px-6 py-16"><section className="w-full rounded-3xl border border-red-300/20 bg-red-300/[0.06] p-8 text-center"><p className="text-sm text-red-100">{error || '套餐加载失败'}</p><Button className="mt-6" onClick={() => void load()}>重新加载</Button></section></div>
     ) : !billing.rechargeEnabled ? (
@@ -100,7 +116,7 @@ export function PlansPage() {
         </section>
       </div>
     ) : (
-      <MembershipPurchaseView key={`${state.user.id}:${state.backendStatus}:${options.map(o => o.value).join(',')}`} products={plans} billingOptions={options} initialBillingCycle={options[0].value} generationColumns={[]} generationRows={[]} faqItems={[]} status={status} errorMessage={error} onRetry={load} onSelectPlan={purchase} onClose={() => router.push(returnPath)} />
+      <MembershipPurchaseView key={`${pagePath}:${state.user.id}:${state.backendStatus}:${options.map(o => o.value).join(',')}`} storefront={pointsStore ? 'credits' : 'plans'} commercePolicy={commercePolicy} products={plans} billingOptions={options} initialBillingCycle={options[0].value} generationColumns={[]} generationRows={[]} faqItems={[]} status={status} errorMessage={error} onRetry={load} onSelectPlan={purchase} onClose={() => router.push(returnPath)} />
     )}
     <Dialog open={!!checkout} onOpenChange={open => { if (!open) billingCheckout.close() }}>
       <DialogContent><DialogHeader><DialogTitle>支付订单</DialogTitle><DialogDescription>{checkout?.orderNo} · {orderStatus}</DialogDescription></DialogHeader>

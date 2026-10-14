@@ -35,6 +35,7 @@ export interface TierPricing {
  * 不允许来自同分组里的其它商品。
  */
 export interface TierDisplayPayload {
+  tone?: PlanTone
   dailyPoints?: number
   badge?: string
   promotionLabel?: string
@@ -136,6 +137,8 @@ export interface MembershipSelection {
 }
 
 export interface MembershipPurchaseViewProps {
+  storefront?: 'plans' | 'credits'
+  commercePolicy?: import('@/lib/studio/commerce-policy').CommercePolicy | null
   products: MembershipPlan[]
   campaign?: CampaignBannerConfig
   billingOptions: BillingOption[]

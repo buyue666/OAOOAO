@@ -32,7 +32,7 @@ export function useBillingCheckout({ accountId, connected, refreshSession, onRea
   const current = () => mounted.current && scope.current.epoch === epoch && scope.current.connected && scope.current.accountId === accountId
 
   async function purchase(productId: string, provider: string) {
-    if (!current() || !accountId) throw new Error('请先登录后再购买套餐。')
+    if (!current() || !accountId) throw new Error('请先登录后再购买商品。')
     if (!provider) throw new Error('当前没有可用的支付方式。')
     if (!productId) throw new Error('该周期没有可购买的商品。')
     if (purchaseLock.current !== null) throw new Error('正在处理当前订单，请稍候。')

@@ -28,7 +28,8 @@ import {
   type Paged,
 } from '@/lib/studio/admin-api'
 import type { BillingOrder, BillingProduct, CouponTemplate, FinanceSummary, PromotionCampaign, ReferralOverview, ReferralRelationship, ReferralReward } from '@/lib/studio/admin-types'
-import { discountLabelOf, objectValue, tones } from '@/lib/studio/membership'
+import { discountLabelOf, objectValue, tones, toneLabels } from '@/lib/studio/membership'
+import membershipStyles from '@/components/membership/membership.module.css'
 import { draftToPayload, emptyDraft, linesToList, productToDraft, resolvePreviewPricing, resolvePromotionForAmount, validateDraft, type ProductDraft } from '@/lib/studio/product-draft'
 import { buildPromotionPayload, buildPromotionRemoval, findPromotionForProduct, promotionAmountFor, validatePromotionAmount } from '@/lib/studio/promotion-draft'
 import { diffProductDraft, hasSensitiveDiff, type DraftDiffEntry } from '@/lib/studio/product-diff'
@@ -754,16 +755,18 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
             </fieldset>
 
             <fieldset disabled={busy} className="grid min-w-0 gap-4 border-t border-border pt-4 sm:grid-cols-2">
-              <legend className="text-sm font-semibold">订阅页展示</legend>
+              <legend className="text-sm font-semibold">{draft.productKind === 'points' ? '积分超市展示' : '套餐页展示'}</legend>
               <Field label="套餐显示名称" fieldId="displayName"><AdminInput aria-label="套餐显示名称" value={draft.display.name} onChange={(event) => patchDisplay({ name: event.target.value })} /></Field>
-              <Field label="会员类型" fieldId="audience"><AdminSelect aria-label="会员类型" value={draft.display.audience} onChange={(event) => patchDisplay({ audience: event.target.value === 'team' ? 'team' : 'creator' })}><option value="creator">创作会员</option><option value="team">团队版会员</option></AdminSelect></Field>
-              <Field label="套餐分组标识" fieldId="groupId" hint="同套餐的月付、季付、年付使用相同标识。"><AdminInput aria-label="套餐分组标识" value={draft.display.groupId} onChange={(event) => patchDisplay({ groupId: event.target.value })} /></Field>
+              {draft.productKind === 'plan' && <Field label="会员类型" fieldId="audience"><AdminSelect aria-label="会员类型" value={draft.display.audience} onChange={(event) => patchDisplay({ audience: event.target.value === 'team' ? 'team' : 'creator' })}><option value="creator">创作会员</option><option value="team">团队版会员</option></AdminSelect></Field>}
+              {draft.productKind === 'points' && <p className="text-xs leading-5 text-muted-foreground">积分包在独立积分超市出售，所有账户均可购买，无需开通会员。支付确认后一次发放积分。</p>}
+              <Field label="套餐分组标识" fieldId="groupId" hint={draft.productKind === 'points' ? '同一组积分包可配置不同积分档位；留空则单独展示。' : '同套餐的月付、季付、年付使用相同标识。'}><AdminInput aria-label="套餐分组标识" value={draft.display.groupId} onChange={(event) => patchDisplay({ groupId: event.target.value })} /></Field>
               <Field label="配色" fieldId="tone" hint="留空＝自动（按分组顺序分配，与用户页一致）">
                 <AdminSelect aria-label="配色" value={draft.display.tone} onChange={(event) => patchDisplay({ tone: event.target.value })}>
                   {/* 空值表示「未设置 → 自动配色」，不能被强制替换成 standard。 */}
                   <option value="">自动（按分组顺序）</option>
-                  {tones.map((tone, index) => <option key={tone} value={tone}>{['深灰', '石墨', '银灰', '青色', '橙色'][index] || tone}</option>)}
+                  {tones.map(tone => <option key={tone} value={tone}>{toneLabels[tone]}</option>)}
                 </AdminSelect>
+                <div className={membershipStyles.toneOptions} role="group" aria-label="商品配色快捷选择">{tones.map(tone => <button type="button" key={tone} className={membershipStyles.toneSwatch} data-tone={tone} title={toneLabels[tone]} aria-label={toneLabels[tone]} aria-pressed={draft.display.tone === tone} onClick={() => patchDisplay({ tone })} />)}</div>
               </Field>
               <Field label="积分档位标识" error={errorFor('tierId')} fieldId="tierId"><AdminInput aria-label="积分档位标识" value={draft.display.tierId} onChange={(event) => patchDisplay({ tierId: event.target.value })} /></Field>
               <Field label="档位名称" fieldId="tierLabel" hint="建议 2–12 个字；过长会在卡片上换行或省略显示">

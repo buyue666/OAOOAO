@@ -102,9 +102,14 @@ test('the actual topbar activation handler captures current query and hash, incl
   new Function('module', 'exports', 'window', 'router', 'sessionStorage', 'safeReturnPath', 'RETURN_PATH_KEY', compile(`export ${handler.getText(ast)}`))(module, module.exports, { location }, { push: value => pushes.push(value) }, { setItem: (...args) => storage.push(args) }, helpers.exports.safeReturnPath, helpers.exports.RETURN_PATH_KEY)
   const event = { currentTarget: { href: '/plans' }, button: 0, preventDefault() { this.prevented = true } }
   module.exports.capturePlansDestination(event)
+  assert.equal(new URL(pushes[0], 'https://local.invalid').pathname, '/credits')
   assert.equal(new URL(pushes[0], 'https://local.invalid').searchParams.get('returnTo'), '/projects/real?section=shots#selected-shot')
   location.search = '?section=assets'; const modified = { ...event, currentTarget: { href: '/plans' }, ctrlKey: true, prevented: false }
   module.exports.capturePlansDestination(modified)
   assert.equal(pushes.length, 1); assert.equal(modified.prevented, false)
   assert.equal(new URL(modified.currentTarget.href, 'https://local.invalid').searchParams.get('returnTo'), '/projects/real?section=assets#selected-shot')
+  const membership = { ...event, currentTarget: { href: '/plans', dataset: { storefront: 'plans' } } }
+  module.exports.capturePlansDestination(membership)
+  assert.equal(new URL(pushes[1], 'https://local.invalid').pathname, '/plans')
+  assert.equal(new URL(pushes[1], 'https://local.invalid').searchParams.get('returnTo'), '/projects/real?section=assets#selected-shot')
 })

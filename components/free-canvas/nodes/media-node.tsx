@@ -47,7 +47,7 @@ function MediaPreview({ media }: { media: NodeReference }) {
     return <img src={media.url} alt={media.title} loading="lazy" decoding="async" draggable={false} className="block aspect-[4/3] w-full rounded-xl bg-black object-cover" />
   }
   if (media.mediaKind === 'video') {
-    return <video src={media.url} controls playsInline preload="metadata" aria-label={media.title} className="nowheel nodrag block aspect-video w-full rounded-xl bg-black" />
+    return <video src={media.url} controls controlsList="nodownload" playsInline preload="metadata" aria-label={media.title} className="nowheel nodrag block aspect-video w-full rounded-xl bg-black" />
   }
   return <audio src={media.url} controls preload="none" aria-label={media.title} className="nowheel nodrag w-full" />
 }

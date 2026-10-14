@@ -1,0 +1,17 @@
+.footer { --footer-bg: var(--card); --footer-fg: var(--foreground); --footer-muted: var(--muted-foreground); --footer-line: var(--border); container-type: inline-size; background: var(--footer-bg); color: var(--footer-fg); border-top: 1px solid var(--footer-line); }
+.footer[data-tone='light'] { --footer-bg: #f7f8f6; --footer-fg: #181d22; --footer-muted: #59616a; --footer-line: #e0e4e1; color-scheme: light; }
+.grid { display: grid; grid-template-columns: minmax(220px, 1.7fr) repeat(3, minmax(0, 1fr)); gap: 40px; max-width: 1440px; margin: 0 auto; padding: 64px clamp(24px, 5vw, 80px); }
+.brand { display: flex; flex-direction: column; align-items: flex-start; gap: 17px; min-width: 0; }
+.brandName { font-size: 14px; font-weight: 650; }
+.brand p { max-width: 320px; margin: 0; font-size: 13px; line-height: 1.9; color: var(--footer-muted); white-space: pre-line; overflow-wrap: anywhere; }
+.brand .copyright, .brand .registration { font-size: 12px; }
+.column { display: flex; min-width: 0; flex-direction: column; gap: 22px; }
+.column h2 { margin: 0; font-size: 14px; font-weight: 650; line-height: 1.6; }
+.column ul { display: flex; flex-direction: column; gap: 15px; list-style: none; margin: 0; padding: 0; }
+.link { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.link svg { flex-shrink: 0; }
+.column .link { color: var(--footer-muted); font-size: 13px; line-height: 1.7; }
+a.link:hover { color: var(--footer-fg); text-decoration: underline; text-underline-offset: 4px; }
+a.link:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; border-radius: 3px; }
+@container (max-width: 900px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 24px; padding: 44px 28px; } .brand { grid-column: 1 / -1; } .brand p { max-width: 560px; } }
+@container (max-width: 540px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 34px 22px; padding: 32px 22px; } .column:last-child { grid-column: 1 / -1; } }

@@ -232,7 +232,10 @@ function BillingSection({
               ? <AdminNotice tone="warning">当前用户只能使用已有积分，前台不会显示充值入口；管理员仍可手动调整积分。</AdminNotice>
               : <AdminNotice tone="neutral">商用模式下，购买入口还需要已发布的客户政策和可用收款配置。当前支持人工收款，到账需由管理员核实后确认。</AdminNotice>}
           </div>
-          <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />保存运营模式</ControlButton></AdminSaveBar>
+          <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-5 text-muted-foreground">保存时会先确认变更。</p>
+            <ControlButton type="submit" variant="primary" disabled={saving} className="w-full shrink-0 sm:w-auto"><Save className="size-3.5" />{saving ? '保存中' : '保存运营模式'}</ControlButton>
+          </div>
         </AdminSectionCard>
       </form>}
 
@@ -315,8 +318,10 @@ function PaymentProviderEditor({
 /* ------------------------------ 注册与积分 ------------------------------ */
 
 function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { settings: AdminSettings; canSystem: boolean; canCommerce: boolean; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
+  const checkIn = settings.checkIn ?? { enabled: false, rewardPoints: 10 }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (saving) return
     const data = new FormData(event.currentTarget)
     const patch: AdminSettingsPatch = {}
     const summary: string[] = []
@@ -330,8 +335,11 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
       const amount = Number(data.get('freeDailyPoints')) || 0
       patch.freeDailyPointsEnabled = enabled
       patch.freeDailyPoints = amount
-      if (enabled !== settings.freeDailyPointsEnabled) summary.push('每日免费积分开关')
-      if (amount !== settings.freeDailyPoints) summary.push('每日免费积分数量')
+      if (enabled !== settings.freeDailyPointsEnabled) summary.push('每日自动额度开关')
+      if (amount !== settings.freeDailyPoints) summary.push('每日自动额度数量')
+      patch.checkIn = { enabled: data.has('checkInEnabled'), rewardPoints: Number(data.get('checkInRewardPoints')) }
+      if (patch.checkIn.enabled !== checkIn.enabled) summary.push('手动签到开关')
+      if (patch.checkIn.rewardPoints !== checkIn.rewardPoints) summary.push('签到奖励积分')
     }
     onSave(patch, summary)
   }
@@ -343,9 +351,16 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
           <div className="flex items-center justify-between gap-4 text-sm"><span><span className="font-medium">邮箱验证（注册必需）</span><span className="mt-1 block text-xs text-muted-foreground">普通账号注册必须通过邮箱验证码；配置并启用微信扫码登录后，微信新用户可走独立的微信身份验证。</span></span><span className="shrink-0 rounded-full border border-studio-accent/30 bg-studio-accent/10 px-2.5 py-1 text-xs font-medium text-studio-accent">固定开启</span></div>
         </fieldset>
       </AdminSectionCard>}
-      {canCommerce && <AdminSectionCard title="每日免费积分" description="新用户每天可自动领取的积分额度。">
+      {canCommerce && <AdminSectionCard title="每日签到" description="用户主动点击签到后获得永久积分，不会自动发放。按北京时间（Asia/Shanghai）每天 00:00 开始新一天，同一账号每天只能领取一次。">
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="freeDailyPointsEnabled" defaultChecked={settings.freeDailyPointsEnabled} />启用每日免费积分</label>
+          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="checkInEnabled" defaultChecked={checkIn.enabled} />开启手动签到</label>
+          <AdminField label="每次签到奖励（永久积分）"><AdminInput name="checkInRewardPoints" type="number" min="1" max="1000000" step="1" required defaultValue={checkIn.rewardPoints} /></AdminField>
+        </fieldset>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">修改奖励金额不会补发当天已领取的积分；关闭后停止新的领取，已到账积分保留。</p>
+      </AdminSectionCard>}
+      {canCommerce && <AdminSectionCard title="每日自动额度" description="系统在读取钱包时自动刷新当天额度，无需签到。按 UTC 00:00（北京时间 08:00）换日，未用额度到期清零；与签到获得的永久积分分别记录。">
+        <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
+          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="freeDailyPointsEnabled" defaultChecked={settings.freeDailyPointsEnabled} />启用每日自动额度</label>
           <AdminField label="每日积分额度"><AdminInput name="freeDailyPoints" type="number" min="0" step="1" defaultValue={settings.freeDailyPoints} /></AdminField>
         </fieldset>
       </AdminSectionCard>}

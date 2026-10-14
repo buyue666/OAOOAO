@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, Download, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
+import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
 import { ControlButton, KeyValue, MediaThumb, Modal, Notice, PageHeader, SectionHeading, SegmentedControl, StatusBadge } from './ui'
 import { useStudio } from '@/lib/studio/store'
 import { moneyLabel, StudioApiError } from '@/lib/studio/api'
@@ -24,7 +24,7 @@ import { useLedgerSummary, useReferralCenter, useServerOrders, useServerWorks } 
 import type { StudioWork } from '@/lib/studio/account-api'
 import { cn } from '@/lib/utils'
 import { addMediaToProject } from '@/lib/studio/project-media'
-import { downloadMedia } from '@/lib/studio/result-delivery'
+import { MediaDownloadButton } from './media-download-button'
 import { writeReuseParams } from '@/lib/studio/reuse-params'
 import { writeWorkHandoff } from '@/lib/studio/work-handoff'
 
@@ -107,18 +107,8 @@ function WorkCard({ work }: { work: StudioWork }) {
   const [preview, setPreview] = useState(false)
   const [notice, setNotice] = useState('')
   const [projectBusy, setProjectBusy] = useState(false)
-  const [downloading, setDownloading] = useState(false)
   const projectLock = useRef(false)
   const ratio = work.kind === 'video' ? '16:9' : '1:1'
-
-  async function download() {
-    if (!work.src || downloading) return
-    setDownloading(true)
-    try {
-      const result = await downloadMedia({ url: work.src, kind: work.kind }, work.title)
-      if (!result.ok) setNotice(result.message)
-    } finally { setDownloading(false) }
-  }
 
   /** 复用参数：把结果带回工作台，由工作台继续用同一组参数创作。 */
   function reuseParams(event: React.MouseEvent<HTMLAnchorElement>) {
@@ -179,7 +169,7 @@ function WorkCard({ work }: { work: StudioWork }) {
         <p className="mt-1 truncate text-xs text-muted-foreground">{work.model || '未记录模型'}{work.createdAt ? ` · ${new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <ControlButton variant="secondary" size="sm" onClick={() => setPreview(true)}><ExternalLink className="size-3.5" />预览</ControlButton>
-          <ControlButton variant="ghost" size="sm" onClick={() => void download()} disabled={downloading}><Download className="size-3.5" />{downloading ? '下载中…' : '下载'}</ControlButton>
+          <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
           {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link> : null}
           <ControlButton variant="ghost" size="sm" onClick={sendToCanvas}><WandSparkles className="size-3.5" />发到画布</ControlButton>
           <ControlButton variant="ghost" size="sm" onClick={() => void addToProject()} disabled={projectBusy}><FolderPlus className="size-3.5" />{projectBusy ? '保存中…' : '加入项目'}</ControlButton>
@@ -194,7 +184,7 @@ function WorkCard({ work }: { work: StudioWork }) {
         footer={(
           <>
             <ControlButton variant="ghost" onClick={() => setPreview(false)}>关闭</ControlButton>
-            <ControlButton variant="secondary" onClick={() => void download()} disabled={downloading}><Download className="size-3.5" />{downloading ? '下载中…' : '下载原文件'}</ControlButton>
+            <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} label="下载作品" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted disabled:opacity-50" />
             {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Copy className="size-4" />复用这组参数</Link> : null}
           </>
         )}
@@ -317,7 +307,7 @@ export function AccountPage() {
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   return (
     <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader eyebrow="账户" title="账户与套餐" description="管理个人信息、安全、积分和消费记录。" actions={rechargeEnabled ? <Link href="/plans" className="inline-flex h-9 items-center gap-2 rounded-lg border border-foreground bg-foreground px-3 text-sm font-medium text-background shadow-[var(--lg-shadow-2)] transition-opacity duration-150 hover:opacity-90"><CircleDollarSign className="size-4" />购买套餐</Link> : undefined} />
+      <PageHeader eyebrow="账户" title="账户与套餐" description="管理个人信息、安全、积分和消费记录。" actions={rechargeEnabled ? <div className="flex flex-wrap gap-2"><Link href="/credits?returnTo=%2Faccount" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted"><CircleDollarSign className="size-4" />购买积分</Link><Link href="/plans?returnTo=%2Faccount" className="inline-flex h-9 items-center gap-2 rounded-lg border border-foreground bg-foreground px-3 text-sm font-medium text-background shadow-[var(--lg-shadow-2)] transition-opacity duration-150 hover:opacity-90"><CircleDollarSign className="size-4" />购买套餐</Link></div> : undefined} />
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* 账户分区导航：桌面为纵向列表，移动端横向滚动；选中态与侧栏导航保持同一语言。 */}
         <nav className="flex gap-1 overflow-x-auto lg:flex-col" data-mobile-scroll aria-label="账户分区">
@@ -532,7 +522,7 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
     <div className="flex flex-col gap-4">
       {message && <Notice tone="warning"><span className="min-w-0 flex-1">积分统计暂时不可用：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice>}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">可用积分</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-studio-accent">{connected ? state.credits.toLocaleString() : '—'}</p>{rechargeEnabled ? <Link href="/plans" className="mt-3 inline-flex text-xs font-medium text-studio-accent hover:underline">购买套餐 <ArrowUpRight className="ml-1 size-3.5" /></Link> : <p className="mt-3 text-xs text-muted-foreground">自用模式暂不开放充值</p>}</div>
+        <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">可用积分</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-studio-accent">{connected ? state.credits.toLocaleString() : '—'}</p>{rechargeEnabled ? <Link href="/credits?returnTo=%2Faccount" className="mt-3 inline-flex text-xs font-medium text-studio-accent hover:underline">购买积分 <ArrowUpRight className="ml-1 size-3.5" /></Link> : <p className="mt-3 text-xs text-muted-foreground">自用模式暂不开放充值</p>}</div>
         <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已消费</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthConsume)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水统计' : '统计暂时不可用'}</p></div>
         <div className="studio-surface p-4"><p className="text-xs text-muted-foreground">{monthLabel}已退回</p><p className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">{display(monthRefund)}</p><p className="mt-3 text-xs text-muted-foreground">{loadState === 'ready' ? '按积分流水类型统计，不按金额正负推断' : '统计暂时不可用'}</p></div>
       </div>

@@ -6,8 +6,8 @@ import { ArrowDown, ArrowRight, Bot, Clapperboard, FileText, ImageIcon, Language
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import styles from './landing-page.module.css'
 import { HomepageAnnouncement } from './homepage-announcement'
-import { SiteBrand, useSiteBrand } from './site-brand'
-import { useStudio } from '@/lib/studio/store'
+import { SiteBrand } from './site-brand'
+import { SiteFooter } from './site-footer'
 import { useLocale } from '@/lib/studio/i18n'
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value))
@@ -182,20 +182,6 @@ function About() {
   return <section id="about" className={styles.about}><Image src="/media/generated/landing-editorial-v1.png" alt="OAO 创作平台中的视觉素材与故事流动" fill sizes="100vw" className={styles.cover} /><div className={styles.aboutShade} /><div className={styles.aboutText}><span className={styles.sectionEyebrow}>{t('enterStudio')}</span><h2>{t('platformTitle').split('\n')[0]}</h2><Link href="/studio" className={styles.aboutCta}>{t('enterStudio')} <ArrowRight size={18} /></Link></div></section>
 }
 
-function Footer() {
-  const { locale, t } = useLocale()
-  const { state } = useStudio()
-  const brand = useSiteBrand()
-  const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
-  const accountItems = locale === 'zh-CN'
-    ? [{ label: '工作台', href: '/studio' }, { label: '我的作品', href: '/works' }, ...(rechargeEnabled ? [{ label: '订阅套餐', href: '/plans' }] : []), { label: '登录账户', href: '/login' }]
-    : [{ label: 'Workspace', href: '/studio' }, { label: 'My works', href: '/works' }, ...(rechargeEnabled ? [{ label: 'Plans', href: '/plans' }] : []), { label: 'Sign in', href: '/login' }]
-  const columns = locale === 'zh-CN'
-    ? [{ title: '探索', items: [{ label: '创作能力', href: '#models' }, { label: '作品展示', href: '#gallery' }, { label: `关于 ${brand.title}`, href: '#about' }] }, { title: '开始创作', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: `我的 ${brand.title}`, items: accountItems }]
-    : [{ title: 'Explore', items: [{ label: 'Capabilities', href: '#models' }, { label: 'Works', href: '#gallery' }, { label: `About ${brand.title}`, href: '#about' }] }, { title: 'Create', items: [{ label: t('imageCreation'), href: '/image' }, { label: t('videoCreation'), href: '/video' }, { label: t('canvasCreation'), href: '/canvas' }, { label: t('dramaCreation'), href: '/drama' }] }, { title: `My ${brand.title}`, items: accountItems }]
-  return <footer className={styles.footer}><div className={styles.footerGrid}><div className={styles.footerBrand}><a href="#hero" aria-label="返回首页"><SiteBrand tone="light" imageClassName="h-7 max-w-[160px]" /></a><p>{t('footerDescription')}</p></div>{columns.map((column) => <div key={column.title}><h3>{column.title}</h3><ul>{column.items.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul></div>)}</div><div className={styles.footerBottom}><p>{locale === 'zh-CN' ? `© 2026 ${brand.title}。保留所有权利。` : `© 2026 ${brand.title}. All rights reserved.`}</p><a href="#hero">{locale === 'zh-CN' ? '返回顶部' : 'Back to top'} <ArrowDown size={14} className={styles.up} /></a></div></footer>
-}
-
 export function LandingPage() {
-  return <main className={styles.landing} data-landing-version="oao-zh-v9-ai-platform"><HomepageAnnouncement placement="landing" /><Header /><Hero /><PlatformIntro /><Capabilities /><Workflow /><Gallery /><CreationRoutes /><Editorial /><About /><Footer /></main>
+  return <main className={styles.landing} data-landing-version="oao-zh-v9-ai-platform"><HomepageAnnouncement placement="landing" /><Header /><Hero /><PlatformIntro /><Capabilities /><Workflow /><Gallery /><CreationRoutes /><Editorial /><About /><SiteFooter /></main>
 }

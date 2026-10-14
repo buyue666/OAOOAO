@@ -1,5 +1,7 @@
 'use client'
 
+import { MediaDownloadButton } from './media-download-button'
+
 import { useMemo, useRef, useState } from 'react'
 import {
   Archive,
@@ -592,17 +594,6 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
   const kindLabel = item.kind === 'video' ? '视频' : item.kind === 'audio' ? '音频' : item.kind === 'text' ? '文本' : '图片'
   const firstAsset = item.assets[0]
 
-  function download() {
-    if (!firstAsset?.url) return
-    const anchor = document.createElement('a')
-    anchor.href = firstAsset.url
-    anchor.download = `${item.title}.${item.kind === 'video' ? 'mp4' : item.kind === 'audio' ? 'mp3' : 'png'}`
-    anchor.rel = 'noopener'
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-  }
-
   /** 复用参数：把历史记录带回对应工作台。 */
   function reuse(event: React.MouseEvent<HTMLAnchorElement>) {
     try {
@@ -637,7 +628,7 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
       {item.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] leading-5 text-destructive" role="alert">失败原因：{item.error}</p>}
       {reuseError && <p role="alert" className="text-xs text-destructive">{reuseError}</p>}
       <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
-        {firstAsset?.url && <ControlButton variant="ghost" size="sm" onClick={download}><Download className="size-3.5" />下载结果</ControlButton>}
+        {firstAsset?.url && <MediaDownloadButton media={{ url: firstAsset.url, kind: item.kind === 'video' ? 'video' : item.kind === 'audio' ? 'audio' : 'image' }} title={item.title} label="下载结果" className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50" />}
         {(item.kind === 'image' || item.kind === 'video') && (item.prompt || item.model) && <Link href={item.kind === 'video' ? '/video' : '/image'} onClick={reuse} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link>}
         <ControlButton variant="ghost" size="sm" onClick={() => router.push('/works')}>在我的作品中查看</ControlButton>
         {state.backendStatus !== 'connected' && <span className="text-[11px] text-muted-foreground">登录后可继续操作</span>}

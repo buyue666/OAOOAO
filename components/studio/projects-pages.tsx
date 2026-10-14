@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MediaDownloadButton } from "./media-download-button";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   AlertTriangle,
@@ -2829,10 +2830,7 @@ function StoryboardPanel({
                         <Check className="size-3" />
                         {selectedCandidate === currentShot.storyboardImageUrl ? "已选用" : "选用"}
                       </ControlButton>
-                      <a href={currentShot.storyboardImageUrl} download className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-                        <Download className="size-3" />
-                        下载
-                      </a>
+                      <MediaDownloadButton media={{ url: currentShot.storyboardImageUrl, kind: 'image' }} title={`${currentShot.title} 分镜图`} className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50" />
                       <ControlButton type="button" variant="ghost" size="sm" className={favoriteCandidateIds.includes(currentShot.id) ? "h-7 px-2 text-[11px] text-studio-accent" : "h-7 px-2 text-[11px]"} onClick={() => toggleFavorite(currentShot.id)} aria-pressed={favoriteCandidateIds.includes(currentShot.id)}>
                         <Heart className="size-3" fill={favoriteCandidateIds.includes(currentShot.id) ? "currentColor" : "none"} />
                         {favoriteCandidateIds.includes(currentShot.id) ? "已收藏" : "收藏"}

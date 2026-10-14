@@ -285,54 +285,36 @@
   background: color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page));
 }
 
-/**
- * 配色（tone）。
- *
- * 五个档位必须有**可辨识的差异**：早先 standard/advanced/premium 分别是
- * ink 的 8% / 10% / 12%，换算后是 #141414 / #191919 / #1d1d1d，
- * 肉眼几乎无法分辨，运营改配色时以为「预览没反应」（实测确认）。
- * 现在按「中性 → 冷色 → 暖色」给出明确色相与边框差异。
- */
-.planCard[data-tone='standard'] {
-  border-color: color-mix(in srgb, var(--membership-ink) 22%, transparent);
-  background: color-mix(in srgb, var(--membership-ink) 14%, var(--membership-page));
+/* The same palette powers published cards and the admin's live swatches. */
+.planCard[data-tone='standard'], .toneSwatch[data-tone='standard'] { --plan-accent: #5ee3bc; --plan-deep: #143d36; }
+.planCard[data-tone='advanced'], .toneSwatch[data-tone='advanced'] { --plan-accent: #8dbaff; --plan-deep: #1c345e; }
+.planCard[data-tone='premium'], .toneSwatch[data-tone='premium'] { --plan-accent: #c0a0ff; --plan-deep: #392553; }
+.planCard[data-tone='luxury'], .toneSwatch[data-tone='luxury'] { --plan-accent: #ffadcc; --plan-deep: #532d43; }
+.planCard[data-tone='ultimate'], .toneSwatch[data-tone='ultimate'] { --plan-accent: #ffd17b; --plan-deep: #513c20; }
+.planCard[data-tone] {
+  border-color: color-mix(in srgb, var(--plan-accent) 48%, #1b2027);
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 92% 0%, color-mix(in srgb, var(--plan-accent) 17%, transparent), transparent 56%), linear-gradient(155deg, var(--plan-deep), #11171d 76%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--plan-accent) 20%, transparent);
 }
-
-.planCard[data-tone='advanced'] {
-  border-color: color-mix(in srgb, var(--membership-ink) 34%, transparent);
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--membership-ink) 20%, var(--membership-page)) 0%,
-    color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page)) 62%
-  );
-}
-
-.planCard[data-tone='premium'] {
-  border-color: color-mix(in srgb, var(--membership-cyan) 42%, transparent);
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--membership-cyan) 20%, var(--membership-page)) 0%,
-    color-mix(in srgb, var(--membership-ink) 8%, var(--membership-page)) 68%
-  );
-}
-
-.planCard[data-tone='luxury'] {
-  border-color: color-mix(in srgb, var(--membership-cyan) 75%, var(--membership-page));
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--membership-cyan) 26%, var(--membership-page)) 0%,
-    color-mix(in srgb, var(--membership-cyan) 8%, var(--membership-page)) 70%
-  );
-}
-
-.planCard[data-tone='ultimate'] {
-  border-color: color-mix(in srgb, var(--membership-orange) 72%, var(--membership-page));
-  background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--membership-orange) 24%, var(--membership-page)) 0%,
-    color-mix(in srgb, var(--membership-orange) 7%, var(--membership-page)) 70%
-  );
-}
+.planCard[data-tone] .purchaseButton:not(:disabled) { background: var(--plan-accent); color: #101820; }
+.planCard[data-tone] .creditValue strong { color: var(--plan-accent); }
+.planCard[data-tone] .promotionStrip { background: var(--plan-accent); color: #101820; }
+.planCard[data-tone] .renewalCopy, .planCard[data-tone] .equivalentCopy, .planCard[data-tone] .generationSummary { color: #b8c3ce; }
+.toneOptions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.toneSwatch { width: 30px; height: 30px; border: 2px solid transparent; border-radius: 50%; background: linear-gradient(135deg, var(--plan-accent), var(--plan-deep)); cursor: pointer; }
+.toneSwatch[aria-pressed='true'] { outline: 2px solid var(--foreground); outline-offset: 2px; }
+.toneSwatch:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.storefrontHeading { padding: 34px 0 30px; text-align: center; }
+.storefrontHeading > span { color: #99c4eb; letter-spacing: .18em; font-size: 11px; font-weight: 700; }
+.storefrontHeading h1 { margin: 12px 0; color: #f7faff; font-size: clamp(26px, 4vw, 40px); font-weight: 700; letter-spacing: -.04em; }
+.storefrontHeading p { color: #b8c3ce; font-size: 14px; line-height: 1.8; }
+.pointsRulesLink { margin-top: 16px; color: #9fe8d2; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+.purchasePolicy { display: grid; gap: 12px; max-height: 200px; overflow: auto; padding: 14px; border: 1px solid #39434e; border-radius: 12px; font-size: 12px; line-height: 1.7; }
+.purchasePolicy dt { font-weight: 700; color: #f1f5f9; }
+.purchasePolicy dd { margin: 2px 0 0; color: #cbd5e1; white-space: pre-wrap; overflow-wrap: anywhere; }
+.legalLinks { color: #bac4cf; font-size: 12px; line-height: 1.8; }
+.legalLinks a { color: #b5d8ff; text-decoration: underline; text-underline-offset: 3px; }
 
 .promotionStrip {
   display: flex;
@@ -345,9 +327,6 @@
   font-weight: 800;
 }
 
-.planCard[data-tone='ultimate'] .promotionStrip {
-  background: var(--membership-orange);
-}
 
 .planSummary {
   display: flex;
@@ -521,10 +500,6 @@
   font-weight: 800;
 }
 
-.planCard[data-tone='ultimate'] .purchaseButton {
-  background: var(--membership-orange);
-  color: var(--membership-ink);
-}
 
 .purchaseButton:disabled {
   background: color-mix(in srgb, var(--membership-ink) 12%, var(--membership-page));
@@ -820,6 +795,8 @@
 }
 
 .dialogContent {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   --membership-page: #000000;
   --membership-ink: #f5f5f5;
   --membership-muted: #8d8d8d;

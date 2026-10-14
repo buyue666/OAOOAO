@@ -8,7 +8,6 @@ import {
   Check,
   Columns2,
   Copy,
-  Download,
   Image as ImageIcon,
   Layers3,
   Maximize2,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { DirectorAgent } from './director-agent'
+import { MediaDownloadButton } from './media-download-button'
 import {
   ControlButton,
   IconAction,
@@ -79,7 +79,7 @@ import type { Asset, GenerationSettings, ModelConfig, Work } from '@/lib/studio/
 import { publishReferenceAsset } from '@/lib/studio/generation-api'
 import { buildVideoReferences } from '@/lib/studio/video-references'
 import type { GenerationReference } from '@/lib/studio/generation-types'
-import { downloadMedia, hasDeliverable, type DownloadResult } from '@/lib/studio/result-delivery'
+import { hasDeliverable } from '@/lib/studio/result-delivery'
 import { addMediaToProject, listProjectReferencedSourceIds, type ProjectMediaInput } from '@/lib/studio/project-media'
 import { consumeCreateIntent, dataUrlToFile, type IntentFile } from '@/lib/studio/create-intent'
 import { consumeReuseParams, type ReuseParams } from '@/lib/studio/reuse-params'
@@ -223,7 +223,6 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
   selected,
   onSelect,
   onOpen,
-  onDownload,
   label,
   className,
   fit = false,
@@ -233,7 +232,6 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
   selected: boolean
   onSelect: () => void
   onOpen: () => void
-  onDownload?: () => void
   label: string
   className?: string
   fit?: boolean
@@ -260,7 +258,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
           </span>
         )}
       </span>
-      <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-2 pb-2 pt-6 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+      <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-2 pb-2 pt-6 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:has-[[role=alert]]:opacity-100">
         <span className="truncate text-[10px] text-studio-ink-foreground">{work.model}</span>
         <span className="flex shrink-0 items-center gap-0.5">
           <Tooltip label="预览">
@@ -268,11 +266,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
               <Maximize2 className="size-3" aria-hidden="true" />
             </IconAction>
           </Tooltip>
-          <Tooltip label="下载">
-            <IconAction label={`下载 ${work.title}`} onClick={onDownload} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
-              <Download className="size-3" aria-hidden="true" />
-            </IconAction>
-          </Tooltip>
+          <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} iconOnly className="flex size-6 items-center justify-center rounded text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-50" />
           <Tooltip label="更多操作">
             <IconAction label={`${work.title} 的更多操作`} onClick={onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
               <MoreHorizontal className="size-3" aria-hidden="true" />
@@ -287,22 +281,6 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
 function getMediaRatio(ratio: string) {
   const [width, height] = ratio.split(':').map((value) => Number.parseFloat(value))
   return width > 0 && height > 0 ? width / height : 16 / 9
-}
-
-/**
- * 下载一个结果。
- *
- * 早先实现直接给 `<a href>` 加 `download` 属性并写死扩展名
- * （所有图片 `.png`、所有视频 `.mp4`），有两个真实问题：
- *  1. 后端媒体与前端**不同源**时 `download` 属性会被浏览器忽略，点击只会导航；
- *  2. 实际产物可能是 webp/jpeg/mov，写死的扩展名让下载文件无法被播放器识别。
- * 现在改为取回真实文件内容、按响应 MIME 决定扩展名（见 `result-delivery.ts`）。
- */
-function downloadWork(work: Work, onResult?: (result: DownloadResult) => void) {
-  void downloadMedia(
-    { url: work.src, kind: work.kind, mimeType: undefined, poster: work.poster },
-    work.title || 'oaooao-result',
-  ).then((result) => onResult?.(result))
 }
 
 function getRenderedMediaRatio(media: HTMLDivElement, fallbackRatio: string) {
@@ -483,10 +461,7 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
               <Plus className="size-3.5" aria-hidden="true" />
               加入项目
             </ControlButton>
-            <ControlButton variant="secondary" size="sm" onClick={() => downloadWork(work)}>
-              <Download className="size-3.5" aria-hidden="true" />
-              下载
-            </ControlButton>
+            <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} className="inline-flex h-8 items-center gap-2 rounded-lg border border-border px-3 text-xs hover:bg-muted disabled:opacity-50" />
           </>
         )
       }
@@ -1045,16 +1020,6 @@ export function ImageWorkspace() {
   /** 当前项目已引用的媒体，用于按钮文案如实反映状态。 */
   const currentReferenced = Boolean(selectedWork && referencedIds.includes(selectedWork.src))
 
-  /** 下载当前结果，并把失败原因显示出来（不静默失败）。 */
-  function enableDownloadFallbackForCurrent() {
-    if (!selectedWork) return
-    downloadWork(selectedWork, (result) => {
-      setNotice(result.ok
-        ? { tone: 'accent', text: `已开始下载 ${result.filename}` }
-        : { tone: 'warning', text: result.message })
-    })
-  }
-
   /** 切换项目时重新读取该项目已引用的媒体，保证「已加入」状态真实。 */
   useEffect(() => {
     let cancelled = false
@@ -1261,7 +1226,7 @@ export function ImageWorkspace() {
         emptyHint={serverWorksResult.state === 'loading' ? '正在读取已有结果…' : serverWorksResult.state === 'error' ? '暂时无法读取结果，请刷新页面重试。' : '写下画面描述，在创作参数中选择模型。完成的图片会自动出现在这里。'}
       >
         {view === 'single' && selectedWork && (
-          <ResultTile work={selectedWork} ratio={ratio} fit selected label="当前结果" onSelect={() => setDetailWork(selectedWork)} onOpen={() => setDetailWork(selectedWork)} onDownload={() => downloadWork(selectedWork)} className="size-full" />
+          <ResultTile work={selectedWork} ratio={ratio} fit selected label="当前结果" onSelect={() => setDetailWork(selectedWork)} onOpen={() => setDetailWork(selectedWork)} className="size-full" />
         )}
         {view === 'grid' && (
           <div className={cn('grid min-h-full content-start gap-2', visibleWorks.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
@@ -1274,7 +1239,6 @@ export function ImageWorkspace() {
                 label={work.id === selectedWork?.id ? '当前选择' : `结果 ${index + 1}`}
                 onSelect={() => setSelectedWorkId(work.id)}
                 onOpen={() => setDetailWork(work)}
-                onDownload={() => downloadWork(work)}
               />
             ))}
           </div>
@@ -1290,7 +1254,6 @@ export function ImageWorkspace() {
                 label={index === 0 ? 'A · 当前结果' : 'B · 对比结果'}
                 onSelect={() => setSelectedWorkId(work.id)}
                 onOpen={() => setDetailWork(work)}
-                onDownload={() => downloadWork(work)}
               />
             ))}
             {visibleWorks.length < 2 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center text-xs leading-6 text-muted-foreground"><Columns2 className="size-5" aria-hidden="true" />再生成一张图片，即可并排比较。</div>}
@@ -1320,10 +1283,7 @@ export function ImageWorkspace() {
           <Plus className="size-3.5" aria-hidden="true" />
           {projectBusy ? '处理中…' : '加入项目'}
         </ControlButton>
-        <ControlButton size="sm" variant="ghost" onClick={() => enableDownloadFallbackForCurrent()} disabled={!selectedWork}>
-          <Download className="size-3.5" aria-hidden="true" />
-          下载
-        </ControlButton>
+        <MediaDownloadButton media={{ url: selectedWork?.src ?? '', kind: 'image' }} title={selectedWork?.title ?? '作品'} disabled={!selectedWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
           导演 Agent
@@ -2026,6 +1986,7 @@ export function VideoWorkspace() {
                 src={currentWork.src}
                 poster={currentWork.poster}
                 controls
+                controlsList="nodownload"
                 playsInline
                 preload="metadata"
                 onError={() => setFailedVideoSrc(currentWork.src)}
@@ -2045,7 +2006,7 @@ export function VideoWorkspace() {
         {view === 'grid' && (
           <div className="grid min-h-full grid-cols-2 content-start gap-2">
             {stageSource.map((work, index) => (
-              <ResultTile key={work.id} work={work} ratio={ratio} selected={work.id === currentWork?.id} label={work.id === currentWork?.id ? '当前结果' : `结果 ${index + 1}`} onSelect={() => { setSelectedVideoId(work.id); setView('single') }} onOpen={() => setDetailWork(work)} onDownload={() => downloadWork(work)} />
+              <ResultTile key={work.id} work={work} ratio={ratio} selected={work.id === currentWork?.id} label={work.id === currentWork?.id ? '当前结果' : `结果 ${index + 1}`} onSelect={() => { setSelectedVideoId(work.id); setView('single') }} onOpen={() => setDetailWork(work)} />
             ))}
           </div>
         )}
@@ -2071,15 +2032,7 @@ export function VideoWorkspace() {
           <Send className="size-3.5" aria-hidden="true" />
           送入画布
         </ControlButton>
-        <ControlButton size="sm" variant="ghost" disabled={!currentWork} onClick={() => {
-          if (!currentWork) return
-          downloadWork(currentWork, (result) => {
-            setNotice(result.ok ? { tone: 'accent', text: `已开始下载 ${result.filename}` } : { tone: 'warning', text: result.message })
-          })
-        }}>
-          <Download className="size-3.5" aria-hidden="true" />
-          下载
-        </ControlButton>
+        <MediaDownloadButton media={{ url: currentWork?.src ?? '', kind: 'video' }} title={currentWork?.title ?? '作品'} disabled={!currentWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
           导演 Agent

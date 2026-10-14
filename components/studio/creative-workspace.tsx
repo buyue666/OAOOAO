@@ -1,5 +1,7 @@
 'use client'
 
+import { MediaDownloadButton } from './media-download-button'
+
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Bot, Check, ChevronDown, Download, Film, GitBranch, Image as ImageIcon, Plus, Save, Sparkles } from 'lucide-react'
@@ -457,13 +459,13 @@ function Delivery({ project, episode, disabled, renderAvailable, renderCheckErro
   const rendering = episode.renderTask && ['pending', 'running'].includes(episode.renderTask.status)
   const srt = buildProjectSrt(episode)
   return <section className="space-y-5" aria-label="作品交付"><div><h2 className="font-medium">这件作品的交付版本</h2><p className="mt-1 text-sm text-muted-foreground">使用每个镜头当前采用的视频、声音和字幕。</p></div>
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{episode.shots.map((shot, index) => <article key={shot.id} className="overflow-hidden rounded-xl border border-border bg-card">{shot.videoUrl ? <video controls playsInline preload="metadata" src={shot.videoUrl} poster={shot.storyboardImageUrl} className="aspect-video w-full bg-black" aria-label={`${shot.title} 已采用视频`} /> : <MediaThumb src={shot.storyboardImageUrl} alt={shot.title} fallback="尚未采用视频" className="aspect-video" />}<div className="space-y-1 p-3"><p className="text-sm">{index + 1}. {shot.title}</p><p className="text-xs text-muted-foreground">{shot.duration} 秒 · {shot.videoUrl ? '已采用视频' : '等待视频版本'}</p>{shot.subtitle && <p className="text-xs text-muted-foreground">{shot.subtitle}</p>}</div></article>)}</div>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{episode.shots.map((shot, index) => <article key={shot.id} className="overflow-hidden rounded-xl border border-border bg-card">{shot.videoUrl ? <video controls controlsList="nodownload" playsInline preload="metadata" src={shot.videoUrl} poster={shot.storyboardImageUrl} className="aspect-video w-full bg-black" aria-label={`${shot.title} 已采用视频`} /> : <MediaThumb src={shot.storyboardImageUrl} alt={shot.title} fallback="尚未采用视频" className="aspect-video" />}<div className="space-y-1 p-3"><p className="text-sm">{index + 1}. {shot.title}</p><p className="text-xs text-muted-foreground">{shot.duration} 秒 · {shot.videoUrl ? '已采用视频' : '等待视频版本'}</p>{shot.subtitle && <p className="text-xs text-muted-foreground">{shot.subtitle}</p>}</div></article>)}</div>
     <div className="flex flex-wrap gap-3"><ControlButton variant="primary" disabled={disabled || !ready || !renderAvailable || Boolean(rendering)} onClick={onRender}><Film className="size-4" />{rendering ? '成片处理中…' : '合成成片'}</ControlButton><ControlButton disabled={!srt || disabled} onClick={() => downloadBlob(new Blob([srt], { type: 'text/plain;charset=utf-8' }), `${project.title}.srt`)}><Download className="size-4" />导出字幕</ControlButton><ControlButton disabled={disabled} onClick={() => downloadJson(project)}><Download className="size-4" />保存项目文件</ControlButton></div>
     {!ready && <p className="text-sm text-muted-foreground">每个镜头采用视频版本后，即可合成成片。</p>}
     {renderAvailable === false && <p className="text-sm text-muted-foreground">当前服务器未启用成片合成。已选镜头和字幕可继续使用。</p>}
     {renderCheckError && <p role="alert" className="text-sm text-destructive">合成服务读取失败：{renderCheckError}</p>}
     {episode.renderTask?.error && <p role="alert" className="text-sm text-destructive">{episode.renderTask.error}</p>}
-    {episode.renderTask?.status === 'success' && episode.renderTask.result?.url && <div className="space-y-3"><video controls playsInline src={episode.renderTask.result.url} className="max-h-[560px] w-full rounded-xl bg-black" aria-label="已合成作品" /><a className="inline-flex items-center gap-2 text-sm underline" href={episode.renderTask.result.url} download><Download className="size-4" />下载成片</a></div>}
+    {episode.renderTask?.status === 'success' && episode.renderTask.result?.url && <div className="space-y-3"><video controls controlsList="nodownload" playsInline src={episode.renderTask.result.url} className="max-h-[560px] w-full rounded-xl bg-black" aria-label="已合成作品" /><MediaDownloadButton media={{ url: episode.renderTask.result.url, kind: 'video' }} title={project.title} label="下载成片" className="inline-flex items-center gap-2 text-sm underline disabled:opacity-50" /></div>}
   </section>
 }
 

@@ -15,6 +15,12 @@ export const billingOptions: BillingOption[] = [
   { value: 'once', label: '积分包', priceSuffix: '次' },
 ]
 export const tones: PlanTone[] = ['standard', 'advanced', 'premium', 'luxury', 'ultimate']
+export const toneLabels: Record<PlanTone, string> = { standard: '松石绿', advanced: '星空蓝', premium: '鸢尾紫', luxury: '玫瑰粉', ultimate: '琥珀金' }
+
+/** Both storefronts and the admin preview use the same product boundary. */
+export function storefrontProducts(products: BillingProduct[], kind: 'plan' | 'points'): BillingProduct[] {
+  return products.filter(product => product.productKind === kind)
+}
 export function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -69,7 +75,7 @@ function configuredBenefitsFor(product: BillingProduct): string[] {
  * 与分组无关：同一 `tierId` 的月付/季付/年付是不同商品，权益行各自独立。
  */
 function benefitRowsFor(product: BillingProduct): string[] {
-  const dailyRow = product.dailyPoints > 0 ? `每日 ${product.dailyPoints.toLocaleString('zh-CN')} 积分` : ''
+  const dailyRow = product.productKind === 'plan' && product.dailyPoints > 0 ? `每日 ${product.dailyPoints.toLocaleString('zh-CN')} 积分` : ''
   const benefits = [...configuredBenefitsFor(product)]
   if (dailyRow && !benefits.includes(dailyRow)) benefits.push(dailyRow)
   if (!benefits.length) benefits.push(...[product.description, dailyRow].filter(Boolean) as string[])
@@ -83,13 +89,14 @@ function benefitRowsFor(product: BillingProduct): string[] {
  * 都由这件商品自己的 metadata / 价格 / 每日积分推导，
  * 不存在任何来自同分组其它商品的兜底。
  */
-function displayPayloadFor(product: BillingProduct): TierDisplayPayload {
+function displayPayloadFor(product: BillingProduct, automaticTone: PlanTone): TierDisplayPayload {
   const metadata = objectValue(product.metadata)
   const display = objectValue(metadata.membership)
   const listCents = product.pricing?.listUnitAmountCents ?? product.amountCents
   const saleCents = product.pricing?.saleUnitAmountCents ?? product.amountCents
   return {
-    dailyPoints: product.dailyPoints,
+    tone: tones.includes(display.tone as PlanTone) ? display.tone as PlanTone : automaticTone,
+    dailyPoints: product.productKind === 'plan' ? product.dailyPoints : 0,
     badge: typeof display.badge === 'string' && display.badge.trim() ? display.badge.trim() : undefined,
     // 促销条文案：只取**本商品**的活动标签；没有活动就没有促销条，
     // 不回落「限时 X 折」以外的任何兄弟周期文案。折扣本身是可推导的事实。
@@ -171,7 +178,7 @@ export function toMembershipPlans(products: BillingProduct[]): MembershipPlan[] 
        * 每日积分那一行就整段消失——编辑「每日积分」看起来毫无反应。
        */
       const configuredBenefits = stringList(display.benefits).length ? stringList(display.benefits) : stringList(metadata.benefits)
-      const dailyRow = product.dailyPoints > 0 ? `每日 ${product.dailyPoints.toLocaleString('zh-CN')} 积分` : ''
+      const dailyRow = product.productKind === 'plan' && product.dailyPoints > 0 ? `每日 ${product.dailyPoints.toLocaleString('zh-CN')} 积分` : ''
       const baseBenefits = [...configuredBenefits]
       if (dailyRow && !baseBenefits.includes(dailyRow)) baseBenefits.push(dailyRow)
       if (!baseBenefits.length) {
@@ -224,7 +231,7 @@ export function toMembershipPlans(products: BillingProduct[]): MembershipPlan[] 
      * （实测：年付已选中、价格是年付的，每日积分却还是月付的 10）。
      * 现在按周期键写入，渲染端按当前周期取值，跨周期串数据在结构上不可能。
      */
-    const payload = displayPayloadFor(product)
+    const payload = displayPayloadFor(product, tones[([...plans.keys()].indexOf(groupId)) % tones.length])
     tier.displayByCycle = { ...tier.displayByCycle, [cycle]: payload }
     /**
      * 兼容快照：与最近写入的周期一致。

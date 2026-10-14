@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { CreativeProjectStarter } from './creative-project-starter'
 import { RecentWorks } from './home-recent-works'
 import { useSiteBrand } from '@/components/site-brand'
+import { SiteFooter } from '@/components/site-footer'
 
 type EntryMode = 'quick' | 'project'
 
@@ -80,6 +81,7 @@ export function HomePage() {
       </section>
 
       <RecentWorks />
+      <SiteFooter placement="studio" />
     </div>
   )
 }

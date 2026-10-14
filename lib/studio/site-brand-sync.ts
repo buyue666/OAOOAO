@@ -1,4 +1,18 @@
 import { brandSettingsFields, type SiteBrandInput } from './site-brand'
+import { normalizeSiteFooter, safeFooterHref, type SiteFooterSettings } from './site-footer'
+
+export type PublicSiteAppearance = ReturnType<typeof brandSettingsFields> & { footer?: SiteFooterSettings; termsUrl?: string; privacyUrl?: string }
+type AppearanceInput = SiteBrandInput & { footer?: unknown; termsUrl?: unknown; privacyUrl?: unknown }
+
+/** Only public display fields may cross tabs; account and system settings stay private. */
+function publicAppearanceFields(site?: AppearanceInput): PublicSiteAppearance {
+  return {
+    ...brandSettingsFields(site),
+    ...(site?.footer !== undefined ? { footer: normalizeSiteFooter(site.footer) } : {}),
+    ...(site?.termsUrl !== undefined ? { termsUrl: safeFooterHref(site.termsUrl) } : {}),
+    ...(site?.privacyUrl !== undefined ? { privacyUrl: safeFooterHref(site.privacyUrl) } : {}),
+  }
+}
 
 export const SITE_BRAND_SAVED_EVENT = 'oao:site-brand-saved'
 const SITE_BRAND_CHANNEL = 'oao:site-brand:v1'
@@ -6,21 +20,21 @@ const SITE_BRAND_CHANNEL = 'oao:site-brand:v1'
 /** One controller per StudioProvider, so server rendering never shares saved state. */
 export function createSiteBrandSync() {
   let revision = 0
-  let latest: ReturnType<typeof brandSettingsFields> | undefined
-  const listeners = new Set<(site: ReturnType<typeof brandSettingsFields>) => void>()
+  let latest: PublicSiteAppearance | undefined
+  const listeners = new Set<(site: PublicSiteAppearance) => void>()
   return {
     getRevision: () => revision,
-    publish(site: SiteBrandInput) {
-      latest = brandSettingsFields(site)
+    publish(site: AppearanceInput) {
+      latest = { ...latest, ...publicAppearanceFields(site) }
       revision += 1
       for (const listener of listeners) listener(latest)
     },
-    subscribe(listener: (site: ReturnType<typeof brandSettingsFields>) => void) {
+    subscribe(listener: (site: PublicSiteAppearance) => void) {
       listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
-    merge<T extends { site?: SiteBrandInput }>(settings: T | undefined, startedAtRevision: number): T | undefined {
-      // An older GET may finish after PATCH succeeds. Preserve just its new branding;
+    merge<T extends { site?: AppearanceInput }>(settings: T | undefined, startedAtRevision: number): T | undefined {
+      // An older GET may finish after PATCH succeeds. Preserve public display fields;
       // user/model/billing data must still come from the session response.
       if (!latest || revision === startedAtRevision) return settings
       return { ...settings, site: { ...settings?.site, ...latest } } as T
@@ -29,13 +43,13 @@ export function createSiteBrandSync() {
 }
 
 /** Called only after the existing admin API confirms a successful save. */
-export function publishSiteBrandSettings(site: SiteBrandInput) {
+export function publishSiteBrandSettings(site: AppearanceInput) {
   if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent(SITE_BRAND_SAVED_EVENT, { detail: brandSettingsFields(site) }))
+  window.dispatchEvent(new CustomEvent(SITE_BRAND_SAVED_EVENT, { detail: publicAppearanceFields(site) }))
 }
 
 /** Recheck the server when returning to a tab whose broadcast channel was suspended. */
-export function subscribeSiteBrandRefresh(sync: ReturnType<typeof createSiteBrandSync>, loadSite: () => Promise<SiteBrandInput | undefined>) {
+export function subscribeSiteBrandRefresh(sync: ReturnType<typeof createSiteBrandSync>, loadSite: () => Promise<AppearanceInput | undefined>) {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => {}
   let disposed = false
   let pending = false
@@ -61,7 +75,7 @@ export function subscribeSiteBrandRefresh(sync: ReturnType<typeof createSiteBran
 }
 
 /** Notify other open tabs without storing a second, permanently authoritative brand. */
-export function subscribeSiteBrandUpdates(listener: (site: ReturnType<typeof brandSettingsFields>) => void) {
+export function subscribeSiteBrandUpdates(listener: (site: PublicSiteAppearance) => void) {
   if (typeof window === 'undefined') return () => {}
   let channel: BroadcastChannel | undefined
   try {
@@ -87,9 +101,9 @@ export function subscribeSiteBrandUpdates(listener: (site: ReturnType<typeof bra
   }
 }
 
-function readBrandFields(value: unknown): ReturnType<typeof brandSettingsFields> | null {
+function readBrandFields(value: unknown): PublicSiteAppearance | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const input = value as Record<string, unknown>
   if (typeof input.title !== 'string' || input.title.length > 160 || typeof input.logoUrl !== 'string' || input.logoUrl.length > 4000 || typeof input.iconUrl !== 'string' || input.iconUrl.length > 4000) return null
-  return brandSettingsFields(input)
+  return publicAppearanceFields(input)
 }

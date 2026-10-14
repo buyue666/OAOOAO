@@ -301,7 +301,7 @@ export interface StudioState {
 }
 
 export type StudioAction =
-  | { type: 'SET_SITE_BRAND'; site: { title: string; logoUrl: string; iconUrl: string } }
+  | { type: 'SET_SITE_BRAND'; site: import('./site-brand-sync').PublicSiteAppearance }
   | { type: 'HYDRATE'; payload: Partial<StudioState> }
   | { type: 'SET_BACKEND_STATUS'; status: BackendStatus; error?: string }
   | { type: 'SET_THEME'; theme: Theme }

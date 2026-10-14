@@ -113,20 +113,34 @@ test('losing billing permission hides previously fetched payment data and does n
   assert.equal(f.billing().some(node => node.type === 'CommercePolicyEditor'), true)
 })
 
-test('registration and free points submit only the fields owned by the current role', async () => {
-  for (const [permissions, expected, title] of [
-    [['commerce.manage'], { freeDailyPointsEnabled: true, freeDailyPoints: 7 }, '每日免费积分'],
-    [['system.manage'], { registrationEnabled: true }, '注册开关'],
+test('registration, manual check-in and daily allowance submit only the fields owned by the current role', async () => {
+  for (const [permissions, expected, titles] of [
+    [['commerce.manage'], { freeDailyPointsEnabled: true, freeDailyPoints: 7, checkIn: { enabled: true, rewardPoints: 12 } }, ['每日签到', '每日自动额度']],
+    [['system.manage'], { registrationEnabled: true }, ['注册开关']],
   ]) {
     const f = await fixture(permissions)
     await f.select('account')
     const item = f.nodes().find(node => node.type === f.api.AccountSection)
     const nodes = all(f.api.AccountSection(item.props))
-    assert.deepEqual(nodes.filter(node => node.type === 'AdminSectionCard').map(node => node.props.title), [title])
-    nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: { registrationEnabled: 'on', freeDailyPointsEnabled: 'on', freeDailyPoints: '7' } })
+    assert.deepEqual(nodes.filter(node => node.type === 'AdminSectionCard').map(node => node.props.title), titles)
+    nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: { registrationEnabled: 'on', freeDailyPointsEnabled: 'on', freeDailyPoints: '7', checkInEnabled: 'on', checkInRewardPoints: '12' } })
     await f.confirmations[0].onConfirm()
     assert.deepEqual(f.writes, [expected])
   }
+})
+
+test('legacy settings default check-in to disabled, preserve a saved reward, and block resubmission while saving', async () => {
+  const f = await fixture(['commerce.manage'])
+  await f.select('account')
+  const item = f.nodes().find(node => node.type === f.api.AccountSection)
+  const defaults = all(f.api.AccountSection(item.props))
+  assert.equal(defaults.find(node => node.props?.name === 'checkInEnabled').props.defaultChecked, false)
+  assert.equal(defaults.find(node => node.props?.name === 'checkInRewardPoints').props.defaultValue, 10)
+  const edited = all(f.api.AccountSection({ ...item.props, settings: { ...fixtureSettings, checkIn: { enabled: true, rewardPoints: 25 } }, saving: true }))
+  assert.equal(edited.find(node => node.props?.name === 'checkInRewardPoints').props.defaultValue, 25)
+  assert.ok(edited.filter(node => node.type === 'fieldset').every(node => node.props.disabled))
+  edited.find(node => node.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: { checkInEnabled: 'on', checkInRewardPoints: '25' } })
+  assert.equal(f.confirmations.length, 0)
 })
 
 test('upstream-only settings do not reveal the operation and payment group', async () => {

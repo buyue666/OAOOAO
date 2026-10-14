@@ -26,7 +26,6 @@
 .headerRow { min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; gap: 24px; }
 .logo { display: inline-flex; flex-shrink: 0; align-items: center; }
 .brandLogo { display: block; width: 88px; height: auto; object-fit: contain; }
-.footerLogo { display: block; width: 104px; height: auto; object-fit: contain; }
 .desktopNav { display: flex; align-items: center; gap: clamp(20px, 3vw, 42px); }
 .desktopNav a { color: #5f6468; font-size: 14px; transition: color 180ms ease; }
 .desktopNav a:hover { color: var(--ink); }
@@ -138,16 +137,6 @@
 .aboutCta { display: inline-flex; align-items: center; gap: 9px; margin-top: 32px; padding: 14px 20px; border: 1px solid rgb(255 255 255 / 50%); border-radius: 8px; background: rgb(255 255 255 / 12%); backdrop-filter: blur(12px); transition: background-color 180ms ease, transform 180ms ease; }
 .aboutCta:hover { transform: translateY(-2px); background: rgb(255 255 255 / 22%); }
 
-.footer { background: #f7f8f6; }
-.footerGrid { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 48px; padding: 84px var(--page-gutter); border-top: 1px solid var(--line); }
-.footerBrand p { max-width: 280px; margin-top: 18px; color: var(--muted); font-size: 14px; line-height: 1.8; }
-.footerGrid h3 { font-size: 14px; font-weight: 600; margin-bottom: 17px; }
-.footerGrid ul { display: grid; gap: 12px; padding: 0; list-style: none; }
-.footerGrid li { color: var(--muted); font-size: 14px; }
-.footerGrid li a:hover { color: var(--ink); }
-.footerBottom { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 22px var(--page-gutter); color: #8a9091; font-size: 12px; }
-.footerBottom a { display: inline-flex; align-items: center; gap: 8px; }
-.up { transform: rotate(180deg); }
 
 @media (min-width: 768px) and (max-width: 1199px) {
   .heroMessage { width: min(380px, 40vw); }
@@ -202,9 +191,6 @@
   .specs > div:nth-child(2n) { border-right: 0; }
   .about { min-height: 500px; }
   .aboutText h2 { font-size: 50px; }
-  .footerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 24px; padding-block: 64px; }
-  .footerBrand { grid-column: span 2; }
-  .footerBottom { align-items: flex-start; gap: 16px; }
 }
 @media (max-width: 359px) {
   .heroMessage h1, .introCopy h2, .workflowIntro h2, .sectionHeading h2, .galleryIntro h2 { font-size: 35px; }

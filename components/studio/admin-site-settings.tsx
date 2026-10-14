@@ -5,22 +5,22 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ExternalLink, RotateCcw, Save } from 'lucide-react'
 import { SiteBrand } from '@/components/site-brand'
 import { safeBrandImageUrl } from '@/lib/studio/site-brand'
-import { normalizeAnnouncementEffect, normalizeAnnouncementTone } from '@/lib/studio/announcement-appearance'
+import { normalizeSiteFooter, validateSiteFooter } from '@/lib/studio/site-footer'
 import type { AdminSettingsPatch } from '@/lib/studio/admin-api'
 import type { SiteSettings } from '@/lib/studio/admin-types'
 import { ControlButton, StatusBadge } from './ui'
 import { AdminField, AdminInput, AdminNotice, AdminSaveBar, AdminSectionCard, AdminTabs, AdminTextarea } from './admin-kit'
-import { AdminAnnouncementAppearance } from './admin-announcement-appearance'
+import { AdminSiteFooter } from './admin-site-footer'
 
-const textFields = ['title', 'logoUrl', 'iconUrl', 'seoTitle', 'seoDescription', 'seoKeywords', 'footerCopyright', 'termsUrl', 'termsVersion', 'termsContent', 'privacyUrl', 'privacyVersion', 'privacyContent'] as const
-const labels: Record<(typeof textFields)[number], string> = { title: '站点名称', logoUrl: '品牌 Logo', iconUrl: '浏览器图标', seoTitle: '搜索标题', seoDescription: '搜索描述', seoKeywords: '搜索关键词', footerCopyright: '页脚版权', termsUrl: '服务条款地址', termsVersion: '服务条款版本', termsContent: '服务条款正文', privacyUrl: '隐私政策地址', privacyVersion: '隐私政策版本', privacyContent: '隐私政策正文' }
-const tabs = [['brand', '品牌标识'], ['search', '搜索与页脚'], ['policies', '条款与隐私'], ['announcement', '备用首页横幅']] as const
+const textFields = ['title', 'logoUrl', 'iconUrl', 'seoTitle', 'seoDescription', 'seoKeywords', 'termsUrl', 'termsVersion', 'termsContent', 'privacyUrl', 'privacyVersion', 'privacyContent'] as const
+const labels: Record<(typeof textFields)[number], string> = { title: '站点名称', logoUrl: '品牌 Logo', iconUrl: '浏览器图标', seoTitle: '搜索标题', seoDescription: '搜索描述', seoKeywords: '搜索关键词', termsUrl: '服务条款地址', termsVersion: '服务条款版本', termsContent: '服务条款正文', privacyUrl: '隐私政策地址', privacyVersion: '隐私政策版本', privacyContent: '隐私政策正文' }
+const tabs = [['brand', '品牌标识'], ['search', '搜索信息'], ['footer', '页脚'], ['policies', '条款与隐私']] as const
 type BrandTab = (typeof tabs)[number][0]
 
 function draftFromSite(site: SiteSettings) {
   return {
     ...Object.fromEntries(textFields.map((key) => [key, String(site[key] ?? '')])) as Record<(typeof textFields)[number], string>,
-    announcementBar: { enabled: site.announcementBar?.enabled === true, text: site.announcementBar?.text ?? '', href: site.announcementBar?.href ?? '', tone: normalizeAnnouncementTone(site.announcementBar?.tone), effect: normalizeAnnouncementEffect(site.announcementBar?.effect), dismissible: site.announcementBar?.dismissible !== false },
+    footer: normalizeSiteFooter(site.footer),
   }
 }
 
@@ -30,8 +30,8 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
   const [error, setError] = useState('')
   const original = draftFromSite(site)
   const changed = textFields.filter((key) => draft[key] !== original[key])
-  const bannerChanged = JSON.stringify(draft.announcementBar) !== JSON.stringify(original.announcementBar)
-  const dirty = changed.length > 0 || bannerChanged
+  const footerChanged = JSON.stringify(draft.footer) !== JSON.stringify(original.footer)
+  const dirty = changed.length > 0 || footerChanged
 
   useEffect(() => { setDraft(draftFromSite(site)); setError('') }, [site])
   useEffect(() => { onDirtyChange(dirty) }, [dirty, onDirtyChange])
@@ -51,16 +51,18 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
     for (const key of ['logoUrl', 'iconUrl'] as const) {
       if (draft[key].trim() && !safeBrandImageUrl(draft[key])) { setActive('brand'); setError(`${labels[key]}请使用站内路径或完整的 HTTP(S) 图片地址。`); return }
     }
+    const footerError = footerChanged ? validateSiteFooter(draft.footer) : null
+    if (footerError) { setActive('footer'); setError(footerError); return }
     setError('')
-    const next: SiteSettings = { ...Object.fromEntries(changed.map((key) => [key, draft[key].trim()])), ...(bannerChanged ? { announcementBar: { ...site.announcementBar, ...draft.announcementBar, text: draft.announcementBar.text.trim(), href: draft.announcementBar.href.trim() } } : {}) }
-    onSave({ site: next }, [...changed.map((key) => labels[key]), ...(bannerChanged ? ['备用首页横幅'] : [])])
+    const next: SiteSettings = { ...Object.fromEntries(changed.map((key) => [key, draft[key].trim()])), ...(footerChanged ? { footer: normalizeSiteFooter(draft.footer) } : {}) }
+    onSave({ site: next }, [...changed.map((key) => labels[key]), ...(footerChanged ? ['页脚'] : [])])
   }
 
   return (
     <form onSubmit={submit} className="flex min-w-0 flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <AdminTabs label="站点展示设置" items={tabs} value={active} onChange={setActive} />
-        <StatusBadge tone={dirty ? 'warning' : 'neutral'}>{dirty ? `${changed.length + Number(bannerChanged)} 项未保存` : '已保存配置'}</StatusBadge>
+        <StatusBadge tone={dirty ? 'warning' : 'neutral'}>{dirty ? `${changed.length + Number(footerChanged)} 项未保存` : '已保存配置'}</StatusBadge>
       </div>
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
@@ -89,12 +91,11 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
       </div>
 
       <div hidden={active !== 'search'}>
-        <AdminSectionCard title="搜索与页脚" description="维护站点对外展示的标题、介绍和版权信息。">
+        <AdminSectionCard title="搜索信息" description="维护站点对外展示的搜索标题与介绍。">
           <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
             <AdminField label="搜索标题"><AdminInput {...field('seoTitle')} /></AdminField>
             <AdminField label="搜索关键词"><AdminInput {...field('seoKeywords')} /></AdminField>
             <AdminField label="搜索描述" className="sm:col-span-2"><AdminTextarea {...field('seoDescription')} rows={3} /></AdminField>
-            <AdminField label="页脚版权" className="sm:col-span-2"><AdminInput {...field('footerCopyright')} /></AdminField>
           </fieldset>
         </AdminSectionCard>
       </div>
@@ -111,30 +112,9 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
         ))}
       </div>
 
-      <div hidden={active !== 'announcement'}>
-        <AdminSectionCard title="备用首页横幅" description="公告管理中当前生效的首页横幅优先展示；没有有效首页公告时，才在官网首页和开始创作页顶部显示这条备用通知。" action={<Link href="/admin/content" className="inline-flex items-center gap-1.5 text-xs text-studio-accent hover:underline">前往公告管理<ExternalLink className="size-3.5" /></Link>}>
-          <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
-            <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm sm:col-span-2"><input type="checkbox" checked={draft.announcementBar.enabled} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, enabled: event.target.checked } }))} />启用备用首页横幅</label>
-            <AdminField label="横幅文案" className="sm:col-span-2"><AdminInput maxLength={180} value={draft.announcementBar.text} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, text: event.target.value } }))} /></AdminField>
-            <AdminField label="点击跳转地址" hint="留空时只展示文案。" className="sm:col-span-2"><AdminInput value={draft.announcementBar.href} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, href: event.target.value } }))} /></AdminField>
-            <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={draft.announcementBar.dismissible} onChange={(event) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, dismissible: event.target.checked } }))} />允许用户关闭</label>
-            <div className="sm:col-span-2">
-              <AdminAnnouncementAppearance
-                tone={draft.announcementBar.tone}
-                effect={draft.announcementBar.effect}
-                onToneChange={(tone) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, tone } }))}
-                onEffectChange={(effect) => setDraft((current) => ({ ...current, announcementBar: { ...current.announcementBar, effect } }))}
-                text={draft.announcementBar.text}
-                href={draft.announcementBar.href}
-                dismissible={draft.announcementBar.dismissible}
-                disabled={saving}
-              />
-            </div>
-          </fieldset>
-        </AdminSectionCard>
-      </div>
+      <div hidden={active !== 'footer'}><AdminSiteFooter value={draft.footer} site={draft} disabled={saving} onChange={footer => setDraft(current => ({ ...current, footer }))} /></div>
 
-      <AdminSaveBar hint={dirty ? `待保存：${[...changed.map((key) => labels[key]), ...(bannerChanged ? ['备用首页横幅'] : [])].join('、')}` : '品牌预览和线上展示使用同一套配置。'}>
+      <AdminSaveBar hint={dirty ? `待保存：${[...changed.map((key) => labels[key]), ...(footerChanged ? ['页脚'] : [])].join('、')}` : '品牌与页脚预览使用同一套公开配置；首页横幅请在内容与公告中管理。'}>
         {dirty && <ControlButton type="button" disabled={saving} onClick={() => { setDraft(original); setError('') }}>撤销更改</ControlButton>}
         <ControlButton type="submit" variant="primary" disabled={saving || !dirty}><Save className="size-3.5" />{saving ? '保存中' : '保存站点设置'}</ControlButton>
       </AdminSaveBar>

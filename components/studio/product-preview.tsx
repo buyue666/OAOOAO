@@ -22,7 +22,7 @@ import { benefitGroupsOf, planNeedsFold } from '@/components/membership/benefits
 import { MembershipPurchaseView } from '@/components/membership/membership-purchase-view'
 import { PlanCard } from '@/components/membership/plan-card'
 import membershipStyles from '@/components/membership/membership.module.css'
-import { billingOptions, toMembershipPlans } from '@/lib/studio/membership'
+import { billingOptions, storefrontProducts, toMembershipPlans } from '@/lib/studio/membership'
 import { draftToProduct, mergeDraftIntoProducts, type ProductDraft } from '@/lib/studio/product-draft'
 import type { BillingCycle, MembershipAudience, MembershipSelection } from '@/components/membership/types'
 
@@ -193,7 +193,7 @@ export function ProductPreviewPanel({
     [draft, original],
   )
 
-  const asProducts = useMemo(() => products as unknown as MembershipProduct[], [products])
+  const asProducts = useMemo(() => storefrontProducts(products as unknown as MembershipProduct[], draft.productKind), [products, draft.productKind])
 
   /**
    * 「当前套餐」：把草稿放进真实集合（原位替换）后取它所在的分组。
@@ -278,7 +278,7 @@ export function ProductPreviewPanel({
         <div className="min-w-0">
           <p className="text-sm font-semibold">实时预览</p>
           <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-            使用用户套餐页的真实组件与样式渲染；预览不会保存、上架、创建订单或付款。
+            使用{draft.productKind === 'points' ? '积分超市' : '套餐页'}的真实组件与样式渲染；预览不会保存、上架、创建订单或付款。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -290,7 +290,7 @@ export function ProductPreviewPanel({
               data-testid={`preview-mode-${value}`}
               onClick={() => setMode(value)}
               className={`h-7 rounded-md px-2.5 text-[11px] font-medium transition-colors ${mode === value ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:bg-muted'}`}
-            >{label}</button>
+            >{draft.productKind === 'points' ? value === 'current' ? '当前积分商品' : '完整积分超市' : label}</button>
           ))}
           <span className="mx-1 hidden h-4 w-px bg-border sm:block" aria-hidden="true" />
           {([['desktop', '桌面'], ['mobile', '手机']] as const).map(([value, label]) => (
@@ -312,7 +312,7 @@ export function ProductPreviewPanel({
         <span className="text-[11px] text-muted-foreground" data-testid="preview-cycle-hint">
           {draft.productKind === 'plan' ? `订阅套餐 · 有效期 ${draft.periodDays} 天 → ${billingOptions.find((option) => option.value === draftCycle)?.label}` : '积分包 · 一次性'}
         </span>
-        <span className="text-[11px] text-muted-foreground">会员类型：{draft.display.audience === 'team' ? '团队版' : '创作会员'}</span>
+        <span className="text-[11px] text-muted-foreground">{draft.productKind === 'points' ? '独立积分超市 · 无需会员' : `会员类型：${draft.display.audience === 'team' ? '团队版' : '创作会员'}`}</span>
       </div>
 
       {/**
@@ -322,7 +322,7 @@ export function ProductPreviewPanel({
         * 与用户页行为不符）。切到草稿未售卖的周期时会如实显示没有可展示的价格。
         */}
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="预览周期">
-        {billingOptions.map((option) => (
+        {billingOptions.filter(option => draft.productKind === 'points' ? option.value === 'once' : option.value !== 'once').map((option) => (
           <button
             key={option.value}
             type="button"
@@ -442,6 +442,7 @@ export function ProductPreviewPanel({
              */
             <MembershipPurchaseView
               key={`preview-${viewport}`}
+              storefront={draft.productKind === 'points' ? 'credits' : 'plans'}
               products={fullPageProducts}
               billingOptions={billingOptions}
               initialBillingCycle={draftCycle}

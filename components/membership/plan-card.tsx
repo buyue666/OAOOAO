@@ -76,7 +76,7 @@ export function PlanCard({
       : undefined)
 
   return (
-    <article className={styles.planCard} data-tone={plan.tone} data-tier-id={tier.id}>
+    <article className={styles.planCard} data-tone={display.tone ?? plan.tone} data-tier-id={tier.id}>
       {promotionText ? (
         <div className={styles.promotionStrip} data-testid="plan-promotion-strip">{promotionText}</div>
       ) : null}
@@ -169,11 +169,12 @@ export function PlanCard({
         </p>
 
         <Button
+          type="button"
           className={styles.purchaseButton}
           disabled={disabled}
           onClick={() => pricing && onSelect({ plan, tier, billingCycle, pricing })}
         >
-          {isCurrent ? '当前套餐' : isUnavailable ? '价格待配置' : '立即开通'}
+          {isCurrent ? '当前套餐' : isUnavailable ? '价格待配置' : billingCycle === 'once' ? '购买积分' : '立即开通'}
         </Button>
 
         {plan.installmentLabel ? (

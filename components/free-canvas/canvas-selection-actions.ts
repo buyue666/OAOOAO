@@ -43,7 +43,10 @@ export function safeSelectionMediaUrl(value: string): boolean {
   if (!value || /[\\\u0000-\u0020\u007f-\u009f]/u.test(value)) return false
   try {
     const url = new URL(value, 'https://canvas.invalid')
-    if (value.startsWith('/')) return value.startsWith('/media/') && url.pathname.startsWith('/media/')
+    if (value.startsWith('/')) return url.origin === 'https://canvas.invalid' && (
+      (value.startsWith('/media/') && url.pathname.startsWith('/media/')) ||
+      /^\/api\/(?:media|reference-assets|generation-log-assets)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.pathname)
+    )
     return /^https?:\/\//i.test(value) && Boolean(url.hostname) && !url.username && !url.password
   } catch { return false }
 }

@@ -344,8 +344,7 @@ export type SiteSocial = { enabled: boolean; label: string; url: string }
 /**
  * 站点顶部通知横幅。
  *
- * 备用首页横幅：这是站点设置的一部分，管理员保存后由公开会话带给官网首页和开始创作页。
- * 公告管理中的有效首页横幅优先展示；没有有效首页公告时才使用此配置。
+ * 由公告管理中的已发布首页公告提供内容与外观。
  * `enabled` 关闭时前台完全不占位。
  */
 export type SiteAnnouncementBar = {
@@ -365,6 +364,7 @@ export type SiteSettings = {
   seoDescription?: string
   seoKeywords?: string
   footerCopyright?: string
+  footer?: Partial<import('./site-footer').SiteFooterSettings>
   termsUrl?: string
   termsVersion?: string
   termsContent?: string
@@ -425,6 +425,7 @@ export type AdminSettings = {
   emailRegistrationEnabled: boolean
   freeDailyPointsEnabled: boolean
   freeDailyPoints: number
+  checkIn?: { enabled: boolean; rewardPoints: number }
   mail: MailSettings
   allowUserApiConfig?: boolean
   modelPointCosts: Record<string, number>

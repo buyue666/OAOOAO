@@ -15,6 +15,11 @@ function moduleOf(path, mocks = {}) {
 const selection = moduleOf('../components/free-canvas/canvas-selection.ts')
 const helpers = moduleOf('../components/free-canvas/canvas-selection-actions.ts', { './canvas-selection': selection })
 const factory = moduleOf('../components/free-canvas/node-factory.ts')
+test('real owned generation media can be saved from a selection without admitting arbitrary API paths', () => {
+  const id = '12345678-1234-1234-1234-123456789abc'
+  for (const route of ['media', 'reference-assets', 'generation-log-assets']) assert.equal(helpers.safeSelectionMediaUrl(`/api/${route}/${id}`), true)
+  for (const route of ['/api/users/admin', '/api/media/../../settings', '//foreign.test/media/a.png']) assert.equal(helpers.safeSelectionMediaUrl(route), false)
+})
 const defaults = { imageSize: '1:1', imageQuality: 'auto', imageCount: 1, videoQuality: 'standard', videoSeconds: 8, audioVoice: 'alloy', audioFormat: 'mp3' }
 function generation(id, overrides = {}) { const node = factory.createGenerationNode('image', { x: 20, y: 30 }, defaults, id); node.selected = true; node.data = { ...node.data, prompt: '创作提示词', ...overrides }; return node }
 const deferred = () => { let resolve; const promise = new Promise(yes => resolve = yes); return { promise, resolve } }

@@ -38,6 +38,8 @@ function LoadingPlans() {
 }
 
 export function MembershipPurchaseView({
+  storefront = 'plans',
+  commercePolicy,
   products,
   campaign,
   billingOptions,
@@ -81,11 +83,11 @@ export function MembershipPurchaseView({
    * 受控值时以外部为准。
    */
   const effectiveAudience = controlledAudience ?? audience
-  const effectiveCycle = controlledBillingCycle ?? billingCycle
+  const effectiveCycle = storefront === 'credits' ? 'once' : controlledBillingCycle ?? billingCycle
 
   const visibleProducts = useMemo(
-    () => products.filter((product) => product.audience === effectiveAudience && product.tiers.some(t => t.pricing[effectiveCycle])),
-    [effectiveAudience, products, effectiveCycle],
+    () => products.filter((product) => (storefront === 'credits' || product.audience === effectiveAudience) && product.tiers.some(t => t.pricing[effectiveCycle])),
+    [storefront, effectiveAudience, products, effectiveCycle],
   )
   const billingOption = billingOptions.find((option) => option.value === effectiveCycle)
     ?? billingOptions[0]
@@ -119,13 +121,19 @@ export function MembershipPurchaseView({
   return (
     // themeScope 提供与真实套餐页完全一致的主题变量；viewportScope 提供容器查询上下文。
     <div className={[membershipStyles.themeScope, membershipStyles.root, membershipStyles.viewportScope, preview ? membershipStyles.previewRoot : ''].filter(Boolean).join(' ')} data-membership-preview={preview ? 'true' : undefined}>
-      <button className={membershipStyles.closeButton} type="button" onClick={onClose} aria-label="关闭会员页面" tabIndex={interactive ? undefined : -1}>
+      <button className={membershipStyles.closeButton} type="button" onClick={onClose} aria-label={storefront === 'credits' ? '关闭积分超市' : '关闭会员页面'} tabIndex={interactive ? undefined : -1}>
         <X aria-hidden="true" />
       </button>
 
       <main className={membershipStyles.main}>
+        <header className={membershipStyles.storefrontHeading}>
+          <span>{storefront === 'credits' ? 'CREDITS STORE' : 'CREATOR MEMBERSHIP'}</span>
+          <h1>{storefront === 'credits' ? '给灵感，多一点可能' : '为下一部作品，选好创作空间'}</h1>
+          <p>{storefront === 'credits' ? '积分超市 · 无需开通会员，按需购买，支付确认后计入账户。' : '选择适合你的套餐，积分与权益清晰可见。'}</p>
+          {storefront === 'credits' && <button type="button" className={membershipStyles.pointsRulesLink} onClick={() => setPointsRulesOpen(true)}>查看积分与购买规则</button>}
+        </header>
         {campaign ? <CampaignBanner campaign={campaign} /> : null}
-        <BillingSelector
+        {storefront === 'plans' && <BillingSelector
           audience={effectiveAudience}
           billingCycle={effectiveCycle}
           options={billingOptions}
@@ -133,10 +141,10 @@ export function MembershipPurchaseView({
           onBillingCycleChange={changeBillingCycle}
           onOpenPointsRules={() => setPointsRulesOpen(true)}
           disabled={!interactive}
-        />
+        />}
 
-        <section className={membershipStyles.plansSection} aria-label="会员套餐">
-          <div className={membershipStyles.planScroller} tabIndex={0} aria-label="会员套餐，可横向滚动">
+        <section className={membershipStyles.plansSection} aria-label={storefront === 'credits' ? '积分商品' : '会员套餐'}>
+          <div className={membershipStyles.planScroller} tabIndex={0} aria-label={storefront === 'credits' ? '积分商品，可横向滚动' : '会员套餐，可横向滚动'}>
             {status === 'loading' ? <LoadingPlans /> : null}
 
             {status === 'error' ? (
@@ -153,8 +161,8 @@ export function MembershipPurchaseView({
 
             {status === 'ready' && visibleProducts.length === 0 ? (
               <div className={membershipStyles.statePanel}>
-                <strong>{effectiveAudience === 'team' ? '团队版会员方案待配置' : '暂无可用套餐'}</strong>
-                <p>未提供的方案不会使用推测价格或虚构权益。</p>
+                <strong>{storefront === 'credits' ? '积分商品即将上架' : effectiveAudience === 'team' ? '团队版会员方案待配置' : '暂无可用套餐'}</strong>
+                <p>{storefront === 'credits' ? '目前还没有上架的积分包。管理员可在「商品与套餐」中配置积分商品，保存并上架后会显示在这里。' : '暂未上架该类型的会员套餐，请稍后再来。'}</p>
               </div>
             ) : null}
 
@@ -203,8 +211,8 @@ export function MembershipPurchaseView({
             */}
           {/* 折叠状态按「当前档位 + 当前周期」的行数判定，与卡片展示同一份来源。 */}
           {status === 'ready' && visibleProducts.some((plan) => {
-            const active = plan.tiers.find((tier) => tier.pricing[billingCycle]) ?? plan.tiers[0]
-            return planNeedsFold(benefitGroupsOf(plan, active, billingCycle))
+            const active = plan.tiers.find((tier) => tier.id === tierByPlan[plan.id] && tier.pricing[effectiveCycle]) ?? plan.tiers.find((tier) => tier.pricing[effectiveCycle]) ?? plan.tiers[0]
+            return planNeedsFold(benefitGroupsOf(plan, active, effectiveCycle))
           }) ? (
             <button
               className={membershipStyles.moreBenefitsButton}
@@ -228,6 +236,7 @@ export function MembershipPurchaseView({
       </main>
 
       <MembershipDialogs
+        commercePolicy={commercePolicy}
         selection={selection}
         billingOption={billingOption}
         pointsRulesOpen={pointsRulesOpen}

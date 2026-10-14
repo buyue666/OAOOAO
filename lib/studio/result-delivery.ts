@@ -89,6 +89,18 @@ export function safeDownloadName(title: string, extension: string): string {
 }
 
 export type DownloadResult = { ok: true; filename: string } | { ok: false; message: string }
+export type DownloadOptions = { accountId?: string; signal?: AbortSignal }
+
+/** Only canonical, same-origin owned media may be submitted to the export service. */
+export function mediaExportPath(value: string, origin: string): string | null {
+  try {
+    if (!value || /[\\\u0000-\u0020]/u.test(value)) return null
+    const url = new URL(value, origin)
+    if (url.origin !== origin || url.username || url.password) return null
+    const match = url.pathname.match(/^\/api\/(?:media|reference-assets|generation-log-assets)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i)
+    return match ? `/api/media/${match[1]}/export` : null
+  } catch { return null }
+}
 
 /**
  * 真实下载一个结果文件。
@@ -99,14 +111,39 @@ export type DownloadResult = { ok: true; filename: string } | { ok: false; messa
  *
  * 失败时返回结构化原因，由调用方提示，不静默失败。
  */
-export async function downloadMedia(media: DeliverableMedia, title: string): Promise<DownloadResult> {
+export async function downloadMedia(media: DeliverableMedia, title: string, options: DownloadOptions = {}): Promise<DownloadResult> {
   if (!media?.url) return { ok: false, message: '该结果没有可下载的文件地址' }
   const filename = safeDownloadName(title, resolveDownloadExtension(media))
   try {
-    const response = await fetch(media.url, { credentials: 'include', cache: 'no-store' })
-    if (!response.ok) return { ok: false, message: `下载失败（HTTP ${response.status}）` }
+    const exportPath = mediaExportPath(media.url, window.location.origin)
+    if (!exportPath && media.kind !== 'audio') return { ok: false, message: '此历史文件尚无可验证的导出来源，请联系站点客服核对媒体迁移。' }
+    const assertActive = () => { if (options.signal?.aborted) throw new Error('导出已取消') }
+    const currentAccount = async () => {
+      assertActive()
+      const session = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store', signal: options.signal })
+      if (!session.ok) throw new Error('无法确认当前账户，请稍后重试')
+      const payload = await session.json()
+      assertActive()
+      if (typeof payload?.user?.id !== 'string' || !payload.user.id) throw new Error('登录状态已失效，请重新登录后导出')
+      return payload.user.id as string
+    }
+    // Cookies can change in another tab without this component knowing. Check both sides
+    // of a potentially long export and never hand an old account's bytes to the browser.
+    const accountId = await currentAccount()
+    if (options.accountId !== undefined && options.accountId !== accountId) return { ok: false, message: '账户已切换，请刷新当前页面后重新下载。' }
+    const response = await fetch(exportPath || media.url, { method: exportPath ? 'POST' : 'GET', credentials: exportPath ? 'include' : 'same-origin', cache: 'no-store', signal: options.signal })
+    assertActive()
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      return { ok: false, message: typeof payload?.error === 'string' ? payload.error : typeof payload?.message === 'string' ? payload.message : `下载失败（HTTP ${response.status}）` }
+    }
     const blob = await response.blob()
+    assertActive()
     if (!blob.size) return { ok: false, message: '下载到的文件为空' }
+    const actualMime = blob.type.split(';')[0].trim().toLowerCase()
+    if (!/^(?:image|video|audio)\//.test(actualMime)) return { ok: false, message: '导出服务未返回有效的媒体文件，请稍后重试。' }
+    if (await currentAccount() !== accountId) return { ok: false, message: '账户已切换，本次导出已取消，请重新下载。' }
+    assertActive()
     /**
      * 服务端返回的 MIME 是权威值：URL 后缀可能缺失或错误
      * （后端结果路径常常没有扩展名），这里以响应头为准重新算一次扩展名。

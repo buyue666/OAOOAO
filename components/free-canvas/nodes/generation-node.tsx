@@ -1,5 +1,7 @@
 'use client'
 
+import { MediaDownloadButton } from '@/components/studio/media-download-button'
+
 import { memo, useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { AudioLines, Clapperboard, Copy, Download, FileText, Image as ImageIcon, Loader2, RotateCcw, SlidersHorizontal, Sparkles, Square, Star, AlertTriangle, RefreshCw } from 'lucide-react'
@@ -221,7 +223,7 @@ function ResultItem({ title, result, index, onFavorite }: { nodeId: string; titl
       {result.mediaKind === 'image' ? (
         <img src={result.url} alt={label} loading="lazy" decoding="async" draggable={false} className="block w-full object-cover" />
       ) : result.mediaKind === 'video' ? (
-        <video src={result.url} poster={result.poster} controls playsInline preload="metadata" aria-label={label} className="nowheel block w-full bg-black" />
+        <video src={result.url} poster={result.poster} controls controlsList="nodownload" playsInline preload="metadata" aria-label={label} className="nowheel block w-full bg-black" />
       ) : (
         <div className="flex items-center gap-3 p-3">
           <AudioLines className="size-5 shrink-0 text-neutral-400" aria-hidden="true" />
@@ -232,9 +234,7 @@ function ResultItem({ title, result, index, onFavorite }: { nodeId: string; titl
         <button type="button" aria-label={`收藏${label}`} title="收藏到资产库" onClick={onFavorite} className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black">
           <Star className="size-3.5" aria-hidden="true" />
         </button>
-        <a href={result.url} download aria-label={`下载${label}`} title="下载" className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black">
-          <Download className="size-3.5" aria-hidden="true" />
-        </a>
+        <MediaDownloadButton media={{ url: result.url, kind: result.mediaKind }} title={label} iconOnly className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black disabled:opacity-50" />
       </figcaption>
     </figure>
   )

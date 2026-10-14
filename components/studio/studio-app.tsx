@@ -39,7 +39,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   const isLanding = pathname === '/'
-  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/plans'
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/plans' || pathname === '/credits'
   const isPolicyPage = pathname === '/terms' || pathname === '/privacy'
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isWorkspace = pathname === '/image' || pathname === '/video'
