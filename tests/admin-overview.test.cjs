@@ -147,6 +147,12 @@ function renderOverview(data, helpers) {
   vm.runInNewContext(compiled, { module, exports: module.exports, Date,
     require: (name) => {
       if (name === '@/lib/studio/admin-overview') return helpers
+      if (name === '@/lib/studio/admin-labels') {
+        const labels = { exports: {} }
+        const source = fs.readFileSync(path.resolve(__dirname, '../lib/studio/admin-labels.ts'), 'utf8')
+        vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module: labels, exports: labels.exports })
+        return labels.exports
+      }
       if (name === './admin-kit') return kit
       if (name === './ui') return { StatusBadge: element('span') }
       if (name === './admin-shell' || name === '@/lib/studio/admin-api') return {}

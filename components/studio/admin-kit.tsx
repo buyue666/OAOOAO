@@ -480,17 +480,27 @@ export function statusTone(status?: string): Tone {
 export const taskStatusLabels: Record<string, string> = { pending: '排队中', running: '执行中', success: '成功', error: '失败', paused: '已暂停', cancelled: '已取消' }
 export const executionPhaseLabels: Record<string, string> = {
   created: '已创建',
+  queued: '排队中',
+  submitting: '正在提交',
   submitted: '已提交上游',
   polling: '轮询上游',
   result_ready: '结果待落库',
   persisting: '正在保存结果',
   completed: '已完成',
+  complete: '已完成',
+  review: '待人工确认',
   needs_review: '待人工确认',
+  planning: '正在规划',
+  awaiting_approval: '等待确认方案',
+  running: '执行中',
+  paused: '已暂停',
+  failed: '执行失败',
+  cancelled: '已取消',
 }
 export const orderStatusLabels: Record<string, string> = { pending: '待支付', paid: '已支付', closed: '已关闭', canceled: '已取消', refunding: '退款中', refunded: '已退款' }
 export const capabilityLabels: Record<string, string> = { text: '文本', image: '图片', video: '视频', audio: '音频' }
-export const taskTypeLabels: Record<string, string> = { agent: '导演 Agent', image: '图片', video: '视频', audio: '音频', text: '文本' }
-export const surfaceLabels: Record<string, string> = { chat: '对话', canvas: '画布', drama: '短剧' }
+export const taskTypeLabels: Record<string, string> = { agent: '创作助手', image: '图片', video: '视频', audio: '音频', text: '文本', render: '成片合成' }
+export const surfaceLabels: Record<string, string> = { chat: '对话', canvas: '画布', drama: '短剧', workbench: '创作工作台' }
 
 export function labelOf(map: Record<string, string>, value?: string) {
   if (!value) return '-'

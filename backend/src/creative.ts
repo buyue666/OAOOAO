@@ -5,6 +5,7 @@ import type { PoolClient } from 'pg';
 import { httpError, object, string, pagination, transaction, hasPermission, type Context } from './core.js';
 import { adjustWallet, getWallet, getPlanSummary, creditUnits } from './wallet.js';
 import { getSettings } from './settings.js';
+import { assertPlanGenerationAllowed } from './entitlements.js';
 import { resolveProvider, type GenerationKind, type Json } from './providers.js';
 import { registerMedia, validateLibraryMedia, encoderAvailable, ownedMedia } from './media.js';
 import { cancelJob, finishJob, jobEvent, startWorker } from './worker.js';
@@ -39,14 +40,25 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`generation:${userId}`]);
     const hash=inputHash(input);const existing=(await client.query('SELECT * FROM oaooao_generation_jobs WHERE user_id=$1 AND kind=$2 AND client_request_id=$3 AND attempt_no=$4',[userId,kind,requestId,attemptNo])).rows[0];
     if(existing){if(existing.input_hash!==hash)throw httpError(409,'Submission identity was already used for different input');return existing;}
+    // Serialize entitlement changes with new submissions, including free jobs.
+    // Read the current plan only after this lock: a transaction that waited for
+    // an assignment/revocation must not authorize against the former plan.
+    const account=(await client.query('SELECT id,enabled FROM oaooao_users WHERE id=$1 FOR NO KEY UPDATE',[userId])).rows[0];
+    if(!account?.enabled)throw httpError(403,'账号不存在或已停用，无法创建生成任务');
     await verifyContext(ctx,client,userId,input);
-    const provider=await resolveProvider(ctx,kind,input,client);const settings=await getSettings(ctx,client);
+    const settings=await getSettings(ctx,client);
+    let plan:Json|undefined;
+    if(settings.entitlements?.enabled){
+      const summary=await getPlanSummary(ctx,userId,client);const planId=summary.hasActivePlan?summary.planId:settings.entitlements.defaultPlanId;
+      plan=settings.entitlements.plans?.find((p:Json)=>p.id===planId&&p.enabled);
+      if(!plan)throw httpError(403,'没有可用的创作权益方案，请联系管理员');
+      assertPlanGenerationAllowed(plan,kind);
+    }
+    const provider=await resolveProvider(ctx,kind,input,client);
     if(input.context?.approvedCost!==undefined&&creditUnits(provider.cost)>creditUnits(input.context.approvedCost))throw httpError(409,'Model pricing increased after plan approval; create a new plan before continuing');
     const totalLimit=settings.generationCostControl?.dailyTotalPointSpend;
     if(Number(totalLimit)>0){await client.query("SELECT pg_advisory_xact_lock(hashtextextended('generation:global-budget',0))");const total=(await client.query("SELECT coalesce(sum(cost),0)::text amount FROM oaooao_generation_jobs WHERE created_at>=date_trunc('day',now()) AND status NOT IN ('error','cancelled')")).rows[0].amount;if(creditUnits(total)+creditUnits(provider.cost)>creditUnits(totalLimit))throw httpError(429,'Global daily generation spending limit reached');}
-    if(settings.entitlements?.enabled){
-      const summary=await getPlanSummary(ctx,userId,client);const planId=summary.hasActivePlan?summary.planId:settings.entitlements.defaultPlanId;
-      const plan=settings.entitlements.plans?.find((p:Json)=>p.id===planId&&p.enabled);if(!plan)throw httpError(403,'No enabled generation entitlement plan is available');
+    if(plan){
       const counts=(await client.query("SELECT count(*) calls,count(*) FILTER(WHERE kind=$2) count,coalesce(sum(cost) FILTER(WHERE status NOT IN ('error','cancelled')),0)::text spend FROM oaooao_generation_jobs WHERE user_id=$1 AND created_at>=date_trunc('day',now())",[userId,kind])).rows[0];
       const key:Record<string,string>={text:'dailyText',image:'dailyImages',video:'dailyVideos',audio:'dailyAudio'};const limits=plan.limits||{};
       if((Number(limits.dailyApiCalls)>0&&Number(counts.calls)>=Number(limits.dailyApiCalls))||(Number(limits[key[kind]])>0&&Number(counts.count)>=Number(limits[key[kind]])))throw httpError(429,'Daily plan generation limit reached');

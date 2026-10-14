@@ -5,7 +5,8 @@ import { SiteBrand, useSiteBrand } from '@/components/site-brand'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, LockKeyhole, Mail, QrCode, Send, UserRound } from 'lucide-react'
-import { consumeWechatLoginSession, createWechatLoginSession, getWechatLoginStatus, login, StudioApiError, type WechatLoginSession, type WechatLoginStatus } from '@/lib/studio/api'
+import { login, StudioApiError } from '@/lib/studio/api'
+import { useWechatLogin } from '@/lib/studio/use-wechat-login'
 import { registerAccount, requestEmailCode, resetPasswordByEmail } from '@/lib/studio/account-api'
 import { useStudio } from '@/lib/studio/store'
 import { useLocale } from '@/lib/studio/i18n'
@@ -89,13 +90,13 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
   const [sendingCode, setSendingCode] = useState(false)
   const [cooldown, setCooldown] = useState(0)
   const wechatLoginEnabled = state.sessionSettings?.wechatLoginEnabled === true
+  const wechatRegistrationEnabled = state.sessionSettings?.wechatRegistrationEnabled === true
+  const [wechatPolicyAccepted, setWechatPolicyAccepted] = useState(false)
   const termsHref = policyHref(state.sessionSettings?.site?.termsUrl)
   const privacyHref = policyHref(state.sessionSettings?.site?.privacyUrl)
-  const [wechatSession, setWechatSession] = useState<WechatLoginSession | null>(null)
-  const [wechatStatus, setWechatStatus] = useState<WechatLoginStatus['status']>('pending')
-  const [wechatLoading, setWechatLoading] = useState(false)
-  const [wechatError, setWechatError] = useState('')
-  const busy = status !== 'idle'
+  const wechat = useWechatLogin({ active: mode === 'login' && wechatLoginEnabled && status === 'idle', refreshSession, navigate: path => router.replace(path) })
+  const { session: wechatSession, status: wechatStatus, loading: wechatLoading, error: wechatError } = wechat
+  const busy = status !== 'idle' || wechatLoading
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -103,40 +104,8 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
     return () => window.clearTimeout(timer)
   }, [cooldown])
 
-  useEffect(() => {
-    if (mode !== 'login' || !wechatSession || wechatStatus !== 'pending') return
-    let active = true
-    const poll = async () => {
-      try {
-        const result = await getWechatLoginStatus(wechatSession.sessionId)
-        if (active) setWechatStatus(result.status)
-      } catch (reason) {
-        if (active) setWechatError(reason instanceof Error ? reason.message : '微信登录状态读取失败')
-      }
-    }
-    void poll()
-    const timer = window.setInterval(() => void poll(), 2000)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [mode, wechatSession, wechatStatus])
-
-  useEffect(() => {
-    if (mode !== 'login' || !wechatSession || wechatStatus !== 'authorized' || wechatLoading) return
-    let active = true
-    setWechatLoading(true)
-    void consumeWechatLoginSession(wechatSession.sessionId)
-      .then(async (result) => {
-        if (!active) return
-        setWechatStatus('consumed')
-        await refreshSession()
-        const target = result.returnTo?.startsWith('/') && !result.returnTo.startsWith('//') && !result.returnTo.includes('\\') ? result.returnTo : '/'
-        router.replace(target)
-      })
-      .catch((reason) => { if (active) setWechatError(reason instanceof Error ? reason.message : '微信登录失败') })
-      .finally(() => { if (active) setWechatLoading(false) })
-    return () => { active = false }
-  }, [mode, refreshSession, router, wechatLoading, wechatSession, wechatStatus])
-
   function switchMode(next: AuthMode) {
+    wechat.close()
     setMode(next)
     setFieldErrors({})
     setFormError('')
@@ -154,24 +123,11 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
   }
 
   function closeWechatLogin() {
-    if (wechatLoading) return
-    setWechatSession(null)
-    setWechatStatus('pending')
-    setWechatError('')
+    wechat.close()
   }
 
   async function beginWechatLogin() {
-    setWechatError('')
-    setWechatLoading(true)
-    try {
-      const result = await createWechatLoginSession(safeNextPath(searchParams.get('next')))
-      setWechatSession(result)
-      setWechatStatus('pending')
-    } catch (reason) {
-      setWechatError(reason instanceof StudioApiError && reason.status === 501 ? '微信扫码登录尚未开启，请使用账号密码登录。' : reason instanceof Error ? reason.message : '微信二维码生成失败')
-    } finally {
-      setWechatLoading(false)
-    }
+    await wechat.begin(safeNextPath(searchParams.get('next')), wechatRegistrationEnabled && wechatPolicyAccepted)
   }
 
   async function sendCode(purpose: 'register' | 'password-reset') {
@@ -219,6 +175,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (status !== 'idle' || wechatLoading) return
     setFormError('')
     setNotice('')
     const errors = validate()
@@ -229,6 +186,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
       return
     }
 
+    wechat.close()
     setStatus('submitting')
     try {
       if (mode === 'login') {
@@ -316,6 +274,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
                     key={item}
                     type="button"
                     role="tab"
+                    disabled={busy}
                     aria-selected={mode === item}
                     onClick={() => switchMode(item)}
                     className={cn(
@@ -427,6 +386,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
 
             {mode === 'login' && wechatLoginEnabled && (
               <section aria-label="微信扫码登录" className="flex flex-col gap-4">
+                {wechatRegistrationEnabled && <div className="text-xs leading-5 text-muted-foreground"><label className="flex items-start gap-2"><input type="checkbox" checked={wechatPolicyAccepted} onChange={event => setWechatPolicyAccepted(event.target.checked)} disabled={wechatLoading || !!wechatSession} className="mt-1" /><span>首次使用微信创建账号，我同意 <a href={termsHref || '/terms'} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">服务条款</a> 和 <a href={privacyHref || '/privacy'} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">隐私政策</a>。</span></label><p className="mt-1 pl-5">未勾选仍可登录已绑定账号。修改同意选项前，请先关闭当前二维码。</p></div>}
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="h-px flex-1 bg-border" aria-hidden="true" />
                   <span>或使用微信登录</span>
@@ -448,12 +408,13 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
                       {wechatSession.qrCodeUrl && <img src={wechatSession.qrCodeUrl} alt="微信登录二维码" className="size-full object-contain" referrerPolicy="no-referrer" />}
                     </div>
                     {wechatStatus === 'unlinked' && <p className="text-center text-xs leading-5 text-muted-foreground">{t('authWechatUnlinked')}</p>}
-                    {wechatStatus === 'expired' && (
+                    {(wechatStatus === 'expired' || wechatStatus === 'unlinked') && (
                       <ControlButton type="button" variant="secondary" className="h-9 w-full text-sm" onClick={() => { closeWechatLogin(); void beginWechatLogin() }}>重新获取二维码</ControlButton>
                     )}
                   </div>
                 )}
                 {wechatError && <p role="alert" className="text-xs leading-5 text-destructive">{wechatError}</p>}
+                {wechat.retryable && <ControlButton type="button" variant="secondary" disabled={wechatLoading} onClick={() => void wechat.retry()}>重试微信登录</ControlButton>}
               </section>
             )}
 

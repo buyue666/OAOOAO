@@ -30,8 +30,8 @@ const declarations = ['BillingSection', 'PaymentProviderEditor'].map(name => {
   assert.ok(declaration, `Missing actual component ${name}`)
   return `export ${declaration.getText(full)}`
 }).join('\n')
-const controls = Object.fromEntries(['AdminSectionCard', 'AdminNotice', 'AdminField', 'AdminSelect', 'AdminSaveBar', 'ControlButton', 'StatusBadge', 'AdminTextarea', 'Wallet', 'Save', 'CommercePolicyEditor'].map(name => [name, name]))
-const imports = `import { useState, useEffect, useRef } from 'react'; import { assertManualPaymentSaved, canConfigureManualPayment, MANUAL_INSTRUCTIONS_LIMIT, manualPaymentInput, manualPaymentInstructions } from './helpers'; import { updatePaymentProviderConfig } from './api'; import { ${Object.keys(controls).join(',')} } from './ui';`
+const controls = Object.fromEntries(['AdminSectionCard', 'AdminNotice', 'AdminField', 'AdminSelect', 'AdminSaveBar', 'ControlButton', 'StatusBadge', 'AdminTextarea', 'Wallet', 'Save', 'CommercePolicyEditor', 'OnlinePaymentProviderEditor'].map(name => [name, name]))
+const imports = `import { useState, useEffect, useRef } from 'react'; import { assertManualPaymentSaved, canConfigureManualPayment, MANUAL_INSTRUCTIONS_LIMIT, manualPaymentInput, manualPaymentInstructions } from './helpers'; import { updatePaymentProviderConfig } from './api'; import { canConfigureOnlinePayment, paymentProviderName } from './online'; import { ${Object.keys(controls).join(',')} } from './ui';`
 function all(node) { return node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(all)] : [] }
 
 function fixture(initial = manual(), options = {}) {
@@ -45,7 +45,7 @@ function fixture(initial = manual(), options = {}) {
     useEffect: (effect, deps) => { const index = effectCursor++; if (!effects[index] || deps.some((dep, i) => !Object.is(dep, effects[index][i]))) { effects[index] = deps; pending.push(effect) } },
   }
   const api = compile(imports + declarations, {
-    react, './helpers': helpers, './ui': controls,
+    react, './helpers': helpers, './ui': controls, './online': compile(read('../lib/studio/payment-provider-config.ts')),
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     './api': { updatePaymentProviderConfig: async (id, enabled, values) => {
       writes.push(plain({ id, enabled, values }))
@@ -173,4 +173,11 @@ test('failed persistence retains the administrator draft and permits a genuine r
   options.error = ''
   await f.submit()
   assert.equal(f.writes.length, 2); assert.equal(f.saved.length, 1)
+})
+
+test('saving a different payment channel does not overwrite an unchanged manual provider draft', () => {
+  const f = fixture()
+  f.instructions('未保存的人工收款草稿')
+  f.setProvider(manual())
+  assert.equal(f.find('AdminTextarea').props.value, '未保存的人工收款草稿')
 })

@@ -6,6 +6,7 @@ import { Activity, ArrowUpRight, CircleDollarSign, Layers3, RefreshCw, Settings2
 import { getLaunchReadiness, type LaunchReadinessReport } from '@/lib/studio/admin-api'
 import { adminOverviewAccess, channelNeedsAttention, generationOverviewMetrics, loadAdminOverview, overviewAttention, type AdminOverviewSnapshot, type OverviewResource } from '@/lib/studio/admin-overview'
 import type { AdminGenerationChannel, AdminGenerationOverview, AdminPermission } from '@/lib/studio/admin-types'
+import { adminValueLabel } from '@/lib/studio/admin-labels'
 import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import {
@@ -201,7 +202,7 @@ function AnalyticsPanels({ overview }: { overview: AdminGenerationOverview }) {
         <div className="mt-5 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
           {[{ title: '调用类型', items: overview.kindDistribution }, { title: '调用来源', items: overview.sourceDistribution }].map((group) => <div key={group.title}>
             <h3 className="mb-2 text-xs font-medium text-muted-foreground">{group.title}</h3>
-            <div className="flex flex-wrap gap-2">{group.items.length ? group.items.map((item, index) => <span key={`${item.label}-${index}`} className="rounded-md border border-border bg-muted/30 px-2 py-1 text-xs">{item.label}<span className="ml-2 tabular-nums text-muted-foreground">{formatAdminNumber(item.value)}</span></span>) : <span className="text-xs text-muted-foreground">暂无记录</span>}</div>
+            <div className="flex flex-wrap gap-2">{group.items.length ? group.items.map((item, index) => <span key={`${item.label}-${index}`} className="rounded-md border border-border bg-muted/30 px-2 py-1 text-xs">{adminValueLabel(item.label)}<span className="ml-2 tabular-nums text-muted-foreground">{formatAdminNumber(item.value)}</span></span>) : <span className="text-xs text-muted-foreground">暂无记录</span>}</div>
           </div>)}
         </div>
       </AdminSectionCard>

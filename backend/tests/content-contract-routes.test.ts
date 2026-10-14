@@ -15,7 +15,8 @@ test('assembled backend registers every reviewed frontend HTTP call contract',as
   t.after(()=>app.close());await app.ready();
   const expected:[HTTPMethods,string][]=[];
   const add=(method:HTTPMethods,...paths:string[])=>paths.forEach(path=>expected.push([method,path]));
-  add('GET','/api/auth/session','/api/auth/wechat-official/sessions/example',
+  add('GET','/api/auth/session','/api/auth/wechat-official/sessions/example','/api/account/wechat-official',
+    '/api/integrations/wechat-official/callback','/api/billing/webhooks/epay','/api/billing/epay/return',
     '/api/billing/products','/api/billing/orders','/api/billing/orders/example','/api/points','/api/referrals',
     '/api/library-assets','/api/generation-logs','/api/agent/runs','/api/agent/runs/example','/api/agent/runs/example/events',
     '/api/drama/render-capability','/api/drama/render/example','/api/drama/projects/example/versions',
@@ -27,6 +28,7 @@ test('assembled backend registers every reviewed frontend HTTP call contract',as
     '/api/admin/works','/api/admin/work-cases','/api/admin/audit-logs');
   add('POST','/api/auth/login','/api/auth/logout','/api/auth/register','/api/auth/email-code','/api/auth/password/reset',
     '/api/auth/wechat-official/sessions','/api/auth/wechat-official/sessions/example/consume',
+    '/api/account/wechat-official/bind-sessions','/api/integrations/wechat-official/callback','/api/billing/webhooks/epay',
     '/api/billing/orders','/api/billing/orders/example/checkout','/api/billing/orders/example/cancel',
     '/api/reference-assets','/api/library-assets','/api/agent/runs',
     '/api/agent/runs/example/approve','/api/agent/runs/example/cancel','/api/agent/runs/example/pause','/api/agent/runs/example/resume','/api/agent/runs/example/retry',

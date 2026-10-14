@@ -7,6 +7,8 @@ import { type AppUser, type Context, ADMIN_PERMISSIONS, codeHash, hashToken, has
 import { getSettings, publicSettings, sendMail } from './settings.js';
 import { getWallet, setPermanentBalance, assignAdminPlan, getPlanSummary } from './wallet.js';
 import { recordReferral } from './commerce.js';
+import { registerWechatOfficial } from './wechat.js';
+import type {WechatQrProvider} from './wechat-protocol.js';
 
 export function normalizeEmail(value:unknown, optional=false): string | null {
   if(optional&&(value===undefined||value===''))return null;
@@ -48,7 +50,7 @@ async function consumeCode(ctx:Context,client:PoolClient,email:string,purpose:st
 }
 async function codeAttempt(ctx:Context,email:string,purpose:string,ip:string){await rateLimit(ctx,`code:${email}:${purpose}`,10,600);await rateLimit(ctx,`code-ip:${ip}`,60,600);}
 
-export async function registerAuth(app:FastifyInstance,ctx:Context){
+export async function registerAuth(app:FastifyInstance,ctx:Context,options:{wechatProvider?:WechatQrProvider}={}){
   const dummyHash=await bcrypt.hash(randomBytes(24).toString('base64'),12);
   app.get('/api/auth/session',async request=>{
     const settings=publicSettings(await getSettings(ctx));let user:AppUser|null=null;
@@ -116,8 +118,7 @@ export async function registerAuth(app:FastifyInstance,ctx:Context){
     const body=object(request.body),email=normalizeEmail(body.email)!,password=validatePassword(body.newPassword);await codeAttempt(ctx,email,'password-reset',request.ip);const hash=await bcrypt.hash(password,12);
     await transaction(ctx.db,async client=>{await consumeCode(ctx,client,email,'password-reset',body.code);const {rows}=await client.query('UPDATE oaooao_users SET password_hash=$2,updated_at=now() WHERE lower(email)=$1 AND email_verified=true AND enabled=true RETURNING id',[email,hash]);if(!rows[0])throw httpError(400,'Verification code is invalid or expired');await client.query('DELETE FROM oaooao_sessions WHERE user_id=$1',[rows[0].id]);await ctx.audit({actorId:rows[0].id,action:'auth.password.reset',targetType:'user',targetId:rows[0].id},client);});reply.clearCookie(ctx.config.sessionCookieName,{path:'/'});return {ok:true};
   });
-  for(const route of ['/api/auth/wechat-official/sessions','/api/auth/wechat-official/sessions/:id/consume'])app.post(route,async()=>{throw httpError(503,'WeChat login is not configured');});
-  app.get('/api/auth/wechat-official/sessions/:id',async()=>{throw httpError(503,'WeChat login is not configured');});
+  await registerWechatOfficial(app,ctx,verifyPassword,options.wechatProvider);
 
   app.get('/api/admin/users',async request=>{
     await ctx.requireUser(request,'users.read');const q=(request.query||{})as any,{page,pageSize,offset}=pagination(q),params:any[]=[],filters:string[]=[];

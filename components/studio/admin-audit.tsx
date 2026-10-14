@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, ShieldCheck } from 'lucide-react'
 import { listAuditLogs } from '@/lib/studio/admin-api'
 import type { AuditFilters, AuditLog } from '@/lib/studio/admin-types'
+import { adminValueLabel, currentAuditActionLabels } from '@/lib/studio/admin-labels'
 import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import {
@@ -50,19 +51,21 @@ const actionLabels: Record<string, string> = {
   'admin.work-governance.resolve': '处理治理案件',
   'admin.object-storage.update': '修改对象存储',
   'admin.referrals.program.update': '修改邀请奖励',
+  ...currentAuditActionLabels,
 }
 
 const targetTypeLabels: Record<string, string> = {
   user: '用户', settings: '系统设置', 'system-model-channel': '上游渠道', billing_product: '商品', billing_order: '订单',
   promotion_campaign: '促销活动', published_work: '公开作品', published_work_case: '治理案件', object_storage: '对象存储', referral_program: '邀请奖励',
+  order: '订单', product: '商品', promotion: '促销活动', payment_provider: '支付方式', coupon_template: '优惠券模板',
+  work: '公开作品', work_case: '治理案件', announcement: '公告', site_popup: '推广弹窗', mail: '邮件服务',
+  wallet: '积分钱包', agent: '创作助手',
+  text: '文本生成', image: '图片生成', video: '视频生成', audio: '音频生成', render: '成片合成',
 }
 
 const sensitiveKeys = ['password', 'token', 'cookie', 'apikey', 'api_key', 'secret', 'authorization', 'webhooksecret', 'accesskeyid', 'secretaccesskey']
 
-const presetActions = [
-  '', 'auth.login', 'admin.user.create', 'admin.user.update', 'admin.user.delete', 'admin.settings.update', 'admin.billing.order.refund',
-  'admin.billing.product.upsert', 'admin.work.approve', 'admin.work.reject', 'admin.work.take-down', 'admin.object-storage.update',
-]
+const presetActions = ['', ...Object.keys(currentAuditActionLabels)]
 
 export function AdminAuditPanel() {
   const session = useAdminSession()
@@ -109,7 +112,7 @@ export function AdminAuditPanel() {
       <div className="grid gap-3 sm:grid-cols-3">
         <AdminStat label="日志总数" value={formatAdminNumber(data.total)} detail="当前筛选范围" />
         <AdminStat label="本页失败操作" value={formatAdminNumber(failures)} detail="被系统拒绝或执行出错" tone={failures ? 'danger' : 'neutral'} />
-        <AdminStat label="本页登录记录" value={formatAdminNumber(logins)} detail="管理员登录事件" />
+        <AdminStat label="本页登录记录" value={formatAdminNumber(logins)} detail="账号登录事件" />
       </div>
 
       {error && <AdminError message={error} retry={load} />}
@@ -154,7 +157,7 @@ export function AdminAuditPanel() {
                   </AdminCell>
                   <AdminCell className="text-xs">
                     {log.actor?.username || '-'}
-                    {log.actor?.role && <span className="mt-1 block text-[11px] text-muted-foreground">{log.actor.role === 'admin' ? '管理员' : log.actor.role}</span>}
+                    {log.actor?.role && <span className="mt-1 block text-[11px] text-muted-foreground">{adminValueLabel(log.actor.role)}</span>}
                   </AdminCell>
                   <AdminCell className="font-mono text-[11px]">{log.actor?.ip || '-'}</AdminCell>
                   <AdminCell className="max-w-[220px]">
@@ -180,7 +183,7 @@ export function AdminAuditPanel() {
                 <AdminDefinition label="操作标识" value={detail.action} mono />
                 <AdminDefinition label="结果" value={<StatusBadge tone={statusTone(detail.status || 'success')}>{detail.status === 'failure' ? '失败' : '成功'}</StatusBadge>} />
                 <AdminDefinition label="操作者" value={detail.actor?.username} />
-                <AdminDefinition label="操作者角色" value={detail.actor?.role} />
+                <AdminDefinition label="操作者角色" value={adminValueLabel(detail.actor?.role)} />
                 <AdminDefinition label="来源 IP" value={detail.actor?.ip} mono />
                 <AdminDefinition label="客户端" value={detail.actor?.userAgent} />
                 <AdminDefinition label="目标类型" value={detail.target?.type ? (targetTypeLabels[detail.target.type] || detail.target.type) : undefined} />

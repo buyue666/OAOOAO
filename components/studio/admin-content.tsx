@@ -17,6 +17,7 @@ import {
   type Paged,
 } from '@/lib/studio/admin-api'
 import type { Announcement, AnnouncementInput, PublishedWork, WorkGovernanceCase } from '@/lib/studio/admin-types'
+import { adminValueLabel } from '@/lib/studio/admin-labels'
 import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import {
@@ -448,13 +449,13 @@ function CasesPanel({ canManage, reloadKey }: { canManage: boolean; reloadKey: n
 
   const resolve = useCallback((item: WorkGovernanceCase, decision: string) => {
     confirm.confirm({
-      title: decision === 'uphold' ? '维持举报并处理作品？' : '驳回该举报？',
-      description: '处理结果会写入审计日志，并通知相关作者或举报人。',
+      title: decision === 'uphold' ? '确认该举报成立？' : '驳回该举报？',
+      description: '本操作登记案件结论并写入审计日志。需要下架作品时，请继续到「作品审核」执行下架；当前不会自动通知作者或举报人。',
       confirmLabel: '确认处理',
       tone: decision === 'uphold' ? 'danger' : 'default',
       onConfirm: async () => {
         setBusy(item.id)
-        try { await resolveWorkCase(item.id, decision, decision === 'uphold' ? '管理员确认违规' : '管理员判定无违规'); setMessage('治理案件已处理'); load() }
+        try { await resolveWorkCase(item.id, decision, decision === 'uphold' ? '管理员确认违规' : '管理员判定无违规'); setTarget(null); setMessage(decision === 'uphold' ? '案件结论已登记；如需下架作品，请到「作品审核」继续处理。' : '案件结论已登记'); load() }
         finally { setBusy(null) }
       },
     })
@@ -486,8 +487,8 @@ function CasesPanel({ canManage, reloadKey }: { canManage: boolean; reloadKey: n
               <AdminRow key={item.id} className={cn(target?.id === item.id && 'bg-muted/60')}>
                 <AdminCell className="font-mono text-[11px]">{item.id.slice(0, 12)}</AdminCell>
                 <AdminCell className="font-mono text-[11px]">{item.workId?.slice(0, 12) || '-'}</AdminCell>
-                <AdminCell className="text-xs">{item.kind || '-'}</AdminCell>
-                <AdminCell><StatusBadge tone={statusTone(item.status)}>{item.status || '-'}</StatusBadge></AdminCell>
+                <AdminCell className="text-xs">{adminValueLabel(item.kind)}</AdminCell>
+                <AdminCell><StatusBadge tone={statusTone(item.status)}>{adminValueLabel(item.status)}</StatusBadge></AdminCell>
                 <AdminCell className="max-w-[240px] truncate text-xs">{item.reason || '-'}</AdminCell>
                 <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(item.createdAt)}</AdminCell>
                 <AdminCell>
@@ -511,8 +512,8 @@ function CasesPanel({ canManage, reloadKey }: { canManage: boolean; reloadKey: n
               <AdminDefinition label="案件 ID" value={target.id} mono />
               <AdminDefinition label="作品 ID" value={target.workId} mono />
               <AdminDefinition label="版本 ID" value={target.versionId} mono />
-              <AdminDefinition label="类型" value={target.kind} />
-              <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(target.status)}>{target.status || '-'}</StatusBadge>} />
+              <AdminDefinition label="类型" value={adminValueLabel(target.kind)} />
+              <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(target.status)}>{adminValueLabel(target.status)}</StatusBadge>} />
               <AdminDefinition label="举报原因" value={target.reason} />
               <AdminDefinition label="处理结果" value={target.resolution} />
               <AdminDefinition label="创建时间" value={formatAdminDate(target.createdAt)} />

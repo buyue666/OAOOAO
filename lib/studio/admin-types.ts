@@ -391,6 +391,8 @@ export type MailSettings = {
   username?: string
   /** 后端脱敏返回空串；只能写入新值。 */
   password?: string
+  /** 后端返回的只读凭证状态，不能作为保存配置提交。 */
+  hasPassword?: boolean
   fromEmail?: string
   fromName?: string
 }
@@ -417,9 +419,29 @@ export type DataLifecycleSettings = {
   maintenanceBatchSize: number
 }
 export type EntitlementPlanLimits = Record<'dailyPointSpend' | 'dailyApiCalls' | 'dailyImages' | 'dailyVideos' | 'dailyAudio' | 'dailyText', number>
-export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[] }
+export type EntitlementGenerationKind = 'text' | 'image' | 'video' | 'audio' | 'render'
+export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[]; allowedGenerationKinds?: EntitlementGenerationKind[] }
 export type EntitlementSettings = { enabled: boolean; defaultPlanId: string; plans: EntitlementPlan[] }
 export type GenerationPointMultipliers = { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
+
+export type WechatOfficialSettings = {
+  enabled: boolean
+  appId: string
+  hasAppSecret: boolean
+  hasToken: boolean
+  hasEncodingAESKey: boolean
+  autoRegister: boolean
+  configured: boolean
+  callbackUrl: string
+}
+export type WechatOfficialInput = Pick<WechatOfficialSettings, 'enabled' | 'appId' | 'autoRegister'> & {
+  appSecret?: string
+  token?: string
+  encodingAESKey?: string
+  clearAppSecret?: boolean
+  clearToken?: boolean
+  clearEncodingAESKey?: boolean
+}
 
 export type AdminSettings = {
   site: SiteSettings
@@ -430,6 +452,7 @@ export type AdminSettings = {
   freeDailyPointsEnabled: boolean
   freeDailyPoints: number
   checkIn?: CheckInSettings
+  wechatOfficial?: WechatOfficialSettings
   mail: MailSettings
   allowUserApiConfig?: boolean
   modelPointCosts: Record<string, number>

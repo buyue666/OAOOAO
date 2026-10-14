@@ -25,6 +25,7 @@ import type { StudioWork } from '@/lib/studio/account-api'
 import { cn } from '@/lib/utils'
 import { addMediaToProject } from '@/lib/studio/project-media'
 import { MediaDownloadButton } from './media-download-button'
+import { AccountWechat } from './account-wechat'
 import { writeReuseParams } from '@/lib/studio/reuse-params'
 import { writeWorkHandoff } from '@/lib/studio/work-handoff'
 import { formatPointsExpiry } from '@/lib/studio/check-in-rules'
@@ -466,6 +467,7 @@ function ProfilePanel({ state, onNotice }: { state: ReturnType<typeof useStudio>
         <div className="mt-3 border-t border-border">
           <KeyValue label="修改密码" value={connected ? <ControlButton variant="ghost" size="sm" onClick={() => setPasswordOpen((value) => !value)}><LockKeyhole className="size-3.5" />{passwordOpen ? '收起' : '修改密码'}</ControlButton> : <span className="text-xs text-muted-foreground">需要登录</span>} />
           <KeyValue label="找回密码" value={<Link href="/login?mode=reset" className="text-xs text-studio-accent underline">通过邮箱重置</Link>} />
+          {connected && state.sessionSettings?.wechatLoginEnabled === true && <KeyValue label="微信登录" value={<Link href="/settings#wechat-binding" className="text-xs text-studio-accent underline">管理微信绑定</Link>} />}
         </div>
         {passwordOpen && (
           <div className="mt-3 flex flex-col gap-3 border-t border-border pt-4">
@@ -807,6 +809,7 @@ export function SettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
       <PageHeader eyebrow="偏好设置" title="设置" description="管理主题、界面质感与账户同步。" />
+      <AccountWechat key={state.user.id} />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="studio-surface p-5">
           <SectionHeading title="外观" description="浅色与深色主题共用同一套层级、间距与强调色，切换主题不会改变布局。" />

@@ -10,6 +10,7 @@ import type {
   AdminGenerationTask,
   AdminPaymentConfigSummary,
   AdminSettings,
+  WechatOfficialInput,
   AdminUser,
   AdminUserListPayload,
   AdminUserUpdateInput,
@@ -190,7 +191,7 @@ export async function getAdminSettings(): Promise<AdminSettings> {
 }
 
 /** 后端按字段合并补丁；这里允许提交部分设置。 */
-export type AdminSettingsPatch = Partial<Omit<AdminSettings, 'defaultModels'>> & { defaultModels?: Partial<SystemDefaultModels> }
+export type AdminSettingsPatch = Partial<Omit<AdminSettings, 'defaultModels' | 'wechatOfficial'>> & { defaultModels?: Partial<SystemDefaultModels>; wechatOfficial?: WechatOfficialInput }
 
 export async function updateAdminSettings(patch: AdminSettingsPatch) {
   const payload = await request<{ settings: AdminSettings }>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(patch) })

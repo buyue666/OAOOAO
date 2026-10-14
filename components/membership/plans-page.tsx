@@ -111,7 +111,7 @@ export function PlansPage({ productKind = 'plan' }: { productKind?: 'plan' | 'po
           {billing.mode === 'commercial' && billing.purchaseReadiness?.missing?.length ? <ul className="mx-auto mt-5 max-w-md space-y-1 text-left text-xs leading-5 text-amber-100/80">{billing.purchaseReadiness.missing.map((item) => <li key={item}>• {item}</li>)}</ul> : null}
           <div className="mt-7 flex flex-wrap justify-center gap-2">
             <Link href={returnPath} className="inline-flex h-10 items-center rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-85">返回工作台</Link>
-            {billing.mode === 'commercial' && state.backendStatus === 'connected' && state.user?.role === 'admin' ? <Link href="/admin/settings" className="inline-flex h-10 items-center rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">{billing.purchaseReadiness?.ready ? '打开支付设置' : '打开购买政策设置'}</Link> : null}
+            {billing.mode === 'commercial' && state.backendStatus === 'connected' && state.user?.role === 'admin' ? <Link href="/admin/settings?section=billing" className="inline-flex h-10 items-center rounded-full border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">{billing.purchaseReadiness?.ready ? '打开支付设置' : '打开购买政策设置'}</Link> : null}
           </div>
         </section>
       </div>

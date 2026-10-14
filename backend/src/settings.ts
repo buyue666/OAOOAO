@@ -8,6 +8,8 @@ import {creditUnits} from './wallet.js';
 import {hasSiteCommercePolicy,resolveCommercePolicy} from './commerce-policy.js';
 import {publicSite,validateSiteFooter} from './site-footer.js';
 import {DEFAULT_CHECK_IN_SETTINGS,normalizeCheckInSettings,validateCheckInSettings} from './check-in.js';
+import {DEFAULT_WECHAT,wechatConfig,wechatConfigured,publicWechatConfig,validateWechatConfig} from './wechat-config.js';
+import {validatePlanGenerationKinds} from './entitlements.js';
 
 export type Settings = Record<string, any>;
 const bannerTones=new Set(['promo','info','warning','violet','rose','slate']);
@@ -30,6 +32,7 @@ function announcementActionUrl(value:unknown):string|null {
 export const DEFAULT_SETTINGS: Settings = {
   site: { title: 'OAOOAO' }, operationMode:'self_use', registrationEnabled:false, emailRegistrationEnabled:false,
   checkIn:DEFAULT_CHECK_IN_SETTINGS,
+  wechatOfficial:DEFAULT_WECHAT,
   freeDailyPointsEnabled:false, freeDailyPoints:0, allowUserApiConfig:false,
   mail:{provider:'smtp',port:587,secure:false}, modelPointCosts:{}, generationPointMultipliers:{imageQuality:{},videoQuality:{},videoSeconds:{}},
   generationCostControl:{maxPointsPerTask:10000,dailyUserPointSpend:0,dailyTotalPointSpend:0},
@@ -51,8 +54,8 @@ export async function getSettings(ctx: Context, client?: PoolClient): Promise<Se
   const {rows}=await (client || ctx.db).query('SELECT value FROM oaooao_settings WHERE id=$1',['global']);
   const settings=merge(structuredClone(DEFAULT_SETTINGS),rows[0]?.value || {});settings.site=publicSite(settings.site);settings.checkIn=normalizeCheckInSettings(settings.checkIn);return settings;
 }
-export function sanitizedSettings(settings: Settings): Settings {
-  return {...settings,site:publicSite(settings.site),checkIn:normalizeCheckInSettings(settings.checkIn),commercePolicy:resolveCommercePolicy(settings),mail:{...settings.mail,password:'',hasPassword:Boolean(settings.mail?.password)},
+export function sanitizedSettings(settings: Settings,origin=''): Settings {
+  return {...settings,wechatOfficial:publicWechatConfig(settings.wechatOfficial,origin),site:publicSite(settings.site),checkIn:normalizeCheckInSettings(settings.checkIn),commercePolicy:resolveCommercePolicy(settings),mail:{...settings.mail,password:'',hasPassword:Boolean(settings.mail?.password)},
     systemChannels:(settings.systemChannels || []).map((channel: any) => ({...channel,apiKey:'',webhookSecret:'',hasApiKey:Boolean(channel.apiKey),hasWebhookSecret:Boolean(channel.webhookSecret)}))};
 }
 export function publicSettings(settings: Settings): Settings {
@@ -60,14 +63,15 @@ export function publicSettings(settings: Settings): Settings {
   const result=Object.fromEntries(allowed.map(key=>[key,settings[key]]));
   result.site=publicSite(settings.site);
   result.checkIn=normalizeCheckInSettings(settings.checkIn);
-  result.wechatLoginEnabled=false;
+  result.wechatLoginEnabled=wechatConfig(settings.wechatOfficial).enabled&&wechatConfigured(settings.wechatOfficial);
+  result.wechatRegistrationEnabled=result.wechatLoginEnabled&&wechatConfig(settings.wechatOfficial).autoRegister&&settings.registrationEnabled===true&&!settings.emailRegistrationEnabled;
   result.logicalModels=(settings.logicalModels || []).filter((m:any)=>m.enabled).map((m:any)=>({id:m.id,name:m.name,capability:m.capability,enabled:m.enabled,iconUrl:m.iconUrl,aliases:m.aliases,bindings:(m.bindings || []).filter((b:any)=>b.enabled).map((b:any)=>({id:b.id,channelId:b.channelId,upstreamModel:b.upstreamModel,enabled:b.enabled,priority:b.priority,capabilityProfile:b.capabilityProfile,requestAlias:b.requestAlias,iconUrl:b.iconUrl}))}));
   result.systemChannels=(settings.systemChannels || []).filter((c:any)=>c.enabled).map((c:any)=>{let baseUrl='';try{const url=new URL(c.baseUrl);baseUrl=`${url.origin}${url.pathname}`;}catch{}return {id:c.id,name:c.name,baseUrl,apiFormat:c.apiFormat,models:c.models,enabled:c.enabled,hasApiKey:Boolean(c.apiKey)};});
   return result;
 }
 const upstreamKeys=new Set(['systemChannels','logicalModels','defaultModels','modelPointCosts','generationPointMultipliers','generationConcurrency','generationDefaults','generationCostControl','allowUserApiConfig']);
 const commerceKeys=new Set(['entitlements','freeDailyPointsEnabled','freeDailyPoints','commercePolicy','checkIn']);
-const systemKeys=new Set(['site','operationMode','registrationEnabled','emailRegistrationEnabled','mail','dataLifecycle']);
+const systemKeys=new Set(['site','operationMode','registrationEnabled','emailRegistrationEnabled','mail','dataLifecycle','wechatOfficial']);
 export function settingsPermission(key:string) {
   if(upstreamKeys.has(key))return 'upstream.manage';if(commerceKeys.has(key))return 'commerce.manage';if(systemKeys.has(key))return 'system.manage';
   throw httpError(400,`Unknown setting: ${key}`);
@@ -82,6 +86,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
   const flatPolicy=Object.hasOwn(patch,'commercePolicy'),sitePolicy=hasSiteCommercePolicy(patch);
   if(flatPolicy&&sitePolicy)throw httpError(400,'Send commercePolicy in only one location');
   const next=merge(current,patch);
+  if(patch.wechatOfficial!==undefined)next.wechatOfficial=validateWechatConfig(ctx,current.wechatOfficial,patch.wechatOfficial);
   if(flatPolicy||sitePolicy){
     const policy=flatPolicy?patch.commercePolicy:patch.site.commercePolicy;
     next.site={...object(next.site),commercePolicy:policy===null?null:merge(resolveCommercePolicy(current)||{},object(policy))};
@@ -132,7 +137,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
   for(const capability of ['text','image','video','audio']){const id=next.defaultModels[`${capability}Model`];if(id&&!next.logicalModels.some((m:any)=>m.id===id&&m.capability===capability&&m.enabled))throw httpError(400,'Default model must be an enabled model of matching capability');}
   if(typeof next.entitlements.enabled!=='boolean'||!Array.isArray(next.entitlements.plans))throw httpError(400,'Invalid entitlement plans');
   const planIds=new Set<string>();
-  for(const plan of next.entitlements.plans){string(plan.id,'plan ID');string(plan.name,'plan name');if(planIds.has(plan.id)||typeof plan.enabled!=='boolean')throw httpError(400,'Plan IDs must be unique and enabled must be boolean');planIds.add(plan.id);validNumber(plan.dailyPoints,'plan daily points');creditUnits(plan.dailyPoints);for(const [key,value]of Object.entries(object(plan.limits))){validNumber(value,'plan limit');if(key==='dailyPointSpend')creditUnits(value as number);else if(!Number.isInteger(value))throw httpError(400,'Daily plan count limits must be integers');}}
+  for(const plan of next.entitlements.plans){validatePlanGenerationKinds(plan);string(plan.id,'plan ID');string(plan.name,'plan name');if(planIds.has(plan.id)||typeof plan.enabled!=='boolean')throw httpError(400,'Plan IDs must be unique and enabled must be boolean');planIds.add(plan.id);validNumber(plan.dailyPoints,'plan daily points');creditUnits(plan.dailyPoints);for(const [key,value]of Object.entries(object(plan.limits))){validNumber(value,'plan limit');if(key==='dailyPointSpend')creditUnits(value as number);else if(!Number.isInteger(value))throw httpError(400,'Daily plan count limits must be integers');}}
   if(next.entitlements.enabled&&!next.entitlements.plans.some((plan:any)=>plan.id===next.entitlements.defaultPlanId&&plan.enabled))throw httpError(400,'An enabled default entitlement plan is required');
   if(Object.hasOwn(patch,'checkIn')||Object.hasOwn(patch,'entitlements'))next.checkIn=validateCheckInSettings(next.checkIn,planIds);
   return next;
@@ -157,13 +162,15 @@ export async function getObjectStorageSettings(ctx:Context) {
 function storagePublic(value:Settings) {const {accessKeyId,secretAccessKey,...rest}=value;return {...rest,hasAccessKeyId:Boolean(accessKeyId),hasSecretAccessKey:Boolean(secretAccessKey)};}
 
 export async function registerSettings(app:FastifyInstance,ctx:Context) {
-  app.get('/api/admin/settings',async request=>{const user=await ctx.requireUser(request);if(!['system.manage','upstream.manage','commerce.manage','billing.manage'].some(p=>hasPermission(user,p)))throw httpError(403,'Permission denied');return {settings:sanitizedSettings(await getSettings(ctx))};});
+  app.get('/api/admin/settings',async request=>{const user=await ctx.requireUser(request);if(!['system.manage','upstream.manage','commerce.manage','billing.manage'].some(p=>hasPermission(user,p)))throw httpError(403,'Permission denied');return {settings:sanitizedSettings(await getSettings(ctx),ctx.config.origin)};});
   app.patch('/api/admin/settings',async request=>{
     const user=await ctx.requireUser(request);const patch=object(request.body);
     for(const key of Object.keys(patch))if(!hasPermission(user,settingsPermission(key)))throw httpError(403,`Permission required: ${settingsPermission(key)}`);
     if(hasSiteCommercePolicy(patch)&&!hasPermission(user,'commerce.manage'))throw httpError(403,'Permission required: commerce.manage');
-    const settings=await transaction(ctx.db,async client=>{await client.query('SELECT id FROM oaooao_settings WHERE id=$1 FOR UPDATE',['global']);const next=validateSettingsPatch(ctx,await getSettings(ctx,client),patch);await client.query('UPDATE oaooao_settings SET value=$2::jsonb,updated_at=now() WHERE id=$1',['global',JSON.stringify(next)]);await ctx.audit({actorId:user.id,action:'settings.update',targetType:'settings',targetId:'global',metadata:{fields:Object.keys(patch)}},client);return next;});
-    return {settings:sanitizedSettings(settings)};
+    const settings=await transaction(ctx.db,async client=>{await client.query('SELECT id FROM oaooao_settings WHERE id=$1 FOR UPDATE',['global']);const current=await getSettings(ctx,client),next=validateSettingsPatch(ctx,current,patch);
+      if(patch.wechatOfficial&&wechatConfig(current.wechatOfficial).appId!==wechatConfig(next.wechatOfficial).appId&&(await client.query('SELECT 1 FROM oaooao_wechat_identities LIMIT 1')).rowCount)throw httpError(409,'已有微信绑定，不能直接更换AppID；请先完成受控身份迁移');
+      await client.query('UPDATE oaooao_settings SET value=$2::jsonb,updated_at=now() WHERE id=$1',['global',JSON.stringify(next)]);await ctx.audit({actorId:user.id,action:'settings.update',targetType:'settings',targetId:'global',metadata:{fields:Object.keys(patch)}},client);return next;});
+    return {settings:sanitizedSettings(settings,ctx.config.origin)};
   });
   app.post('/api/admin/mail/test',async request=>{const user=await ctx.requireUser(request,'system.manage');const body=object(request.body);const saved=await getSettings(ctx);const mail=body.mail?validateSettingsPatch(ctx,saved,{mail:object(body.mail)}).mail:saved.mail;await sendMail(ctx,mail,string(body.to,'recipient',320),'OAOOAO mail delivery test','This is a requested OAOOAO mail configuration test.');await ctx.audit({actorId:user.id,action:'mail.test',targetType:'mail'});return {ok:true};});
   app.get('/api/admin/object-storage',async request=>{await ctx.requireUser(request,'system.manage');return {code:0,data:storagePublic(await getObjectStorageSettings(ctx))};});
@@ -207,15 +214,19 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
     if(!['self_use','paid_beta','production'].includes(profile))throw httpError(400,'Invalid launch profile');
     const transfer=(await ctx.db.query('SELECT imported_at FROM oaooao_transfer_runs ORDER BY imported_at DESC LIMIT 1')).rows[0];
     const configured=settings.logicalModels.some((m:any)=>m.enabled&&m.bindings.some((b:any)=>b.enabled&&settings.systemChannels.some((c:any)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none'))));
-    const items=[{id:'database',title:'Database',level:'ok',detail:'PostgreSQL settings query succeeded.'},
-      {id:'origin',title:'Secure session origin',level:ctx.config.origin.startsWith('https:')?'ok':profile==='self_use'?'warning':'error',detail:ctx.config.origin.startsWith('https:')?'HTTPS origin is configured.':'An HTTPS origin is required for public use.'},
-      {id:'models',title:'Generation providers',level:configured?'warning':'error',detail:configured?'Provider routing is configured. Real provider acceptance has not been verified.':'No enabled model with a configured channel is available.'},
-      {id:'mail',title:'Email delivery',level:settings.mail.host&&settings.mail.fromEmail?'warning':settings.emailRegistrationEnabled?'error':'warning',detail:settings.mail.host?'SMTP is configured; send a test to verify delivery.':'Email delivery is not configured.'},
-      {id:'migration',title:'Migration reconciliation',level:transfer?'ok':profile==='self_use'?'warning':'error',detail:transfer?`The initial transfer was reconciled in its import transaction at ${iso(transfer.imported_at)}.`:'No reconciled initial transfer is recorded. Account, balance, project and history reconciliation is required before production cutover.'},
-      {id:'payments',title:'Payment acceptance',level:profile==='self_use'?'warning':'error',detail:'External payment acceptance and refund verification are required before paid launch.'}];
+    const items=[{id:'database',title:'数据库连接',level:'ok',detail:'已成功读取 PostgreSQL 中的系统设置。'},
+      {id:'origin',title:'登录安全域名',level:ctx.config.origin.startsWith('https:')?'ok':profile==='self_use'?'warning':'error',detail:ctx.config.origin.startsWith('https:')?'已配置 HTTPS 访问域名。':'对外开放前需配置 HTTPS 访问域名。'},
+      {id:'models',title:'生成服务',level:configured?'warning':'error',detail:configured?'已配置模型与渠道，仍需实际生成验证可用性。':'没有已启用且具备渠道凭证的模型。'},
+      {id:'mail',title:'邮件服务',level:settings.mail.host&&settings.mail.fromEmail?'warning':settings.emailRegistrationEnabled?'error':'warning',detail:settings.mail.host?'已配置邮件服务器，请发送测试邮件核对投递结果。':'尚未配置邮件发送服务。'},
+      {id:'migration',title:'数据迁移核对',level:transfer?'ok':profile==='self_use'?'warning':'error',detail:transfer?`初次数据迁移已在导入事务中核对，时间：${iso(transfer.imported_at)}。`:'未发现已核对的初次导入记录。切换前需核对账户、积分、项目和历史记录。'},
+      {id:'payments',title:'收款与退款验收',level:profile==='self_use'?'warning':'error',detail:'保存配置不代表收款已验证。正式收费前需完成支付平台到账、通知和退款对账的实际验收。'}];
     const planProducts=(await ctx.db.query("SELECT plan_id FROM oaooao_products WHERE enabled=true AND product_kind='plan'")).rows;
     const invalidPlans=planProducts.filter(product=>!settings.entitlements.enabled||!settings.entitlements.plans.some((plan:any)=>plan.id===product.plan_id&&plan.enabled));
-    items.push({id:'plan-products',title:'Plan product configuration',level:invalidPlans.length?'error':'ok',detail:invalidPlans.length?`${invalidPlans.length} enabled plan product(s) lack an enabled entitlement configuration; their sale is blocked.`:'Enabled plan products have matching entitlement definitions.'});
+    items.push({id:'plan-products',title:'套餐与权益关联',level:invalidPlans.length?'error':'ok',detail:invalidPlans.length?`${invalidPlans.length} 个已上架套餐缺少已启用的权益方案，系统已阻止购买。`:'已上架套餐均有关联的权益方案。'});
+    const storage=await getObjectStorageSettings(ctx);
+    items.push({id:'creative-storage',title:'生成素材存储',level:storage.enabled?'error':'warning',detail:storage.enabled?'外部存储已设为启用，但生成素材的对象存储写入尚未接通，当前会阻止相关生成。请在对象存储设置中检查。':'当前生成素材使用服务器持久化目录；对象存储连接检测不等于已支持外部存储写入。'});
+    items.push({id:'wechat-login',title:'微信扫码登录',level:'warning',detail:settings.wechatOfficial?.enabled&&wechatConfigured(settings.wechatOfficial)?'凭证已配置。请在微信公众平台设置回调与服务器白名单，并用真实微信完成扫码、绑定和登录验收。':'微信扫码登录尚未开启或凭证不完整，可在系统设置的“微信登录”中配置。'});
+    items.push({id:'remaining-capabilities',title:'尚未接通的能力',level:'warning',detail:'当前不支持剪映官方草稿格式导出、自动邀请风控、可执行代码型技能及多因素认证。支付宝、微信支付和 Stripe 的直接支付协议也尚未接通；可配置易支付聚合收款。'});
     const errors=items.filter(i=>i.level==='error').length,warnings=items.filter(i=>i.level==='warning').length;return {code:0,data:{passed:errors===0,errors,warnings,checkedAt:new Date().toISOString(),items}};
   });
   app.get('/api/admin/audit-logs',async request=>{

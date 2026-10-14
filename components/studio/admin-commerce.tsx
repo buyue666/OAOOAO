@@ -29,6 +29,7 @@ import {
 } from '@/lib/studio/admin-api'
 import type { BillingOrder, BillingProduct, CouponTemplate, FinanceSummary, PromotionCampaign, ReferralOverview, ReferralRelationship, ReferralReward } from '@/lib/studio/admin-types'
 import { discountLabelOf, objectValue, tones, toneLabels } from '@/lib/studio/membership'
+import { adminValueLabel } from '@/lib/studio/admin-labels'
 import membershipStyles from '@/components/membership/membership.module.css'
 import { draftToPayload, emptyDraft, linesToList, productToDraft, resolvePreviewPricing, resolvePromotionForAmount, validateDraft, type ProductDraft } from '@/lib/studio/product-draft'
 import { buildPromotionPayload, buildPromotionRemoval, findPromotionForProduct, promotionAmountFor, validatePromotionAmount } from '@/lib/studio/promotion-draft'
@@ -1171,18 +1172,18 @@ export function AdminOrdersPanel() {
   }, [])
 
   const prepareRefund = useCallback((order: BillingOrder) => {
-    if (order.provider !== 'manual') { setError('该支付渠道尚未接入退款协议，请先核对支付记录。'); return }
+    if (!['manual', 'epay'].includes(order.provider || '')) { setError('该支付渠道尚未支持退款登记，请先核对支付记录。'); return }
     confirm.confirm({
       title: `先为订单 ${order.orderNo} 预留退款积分？`,
-      description: `本步骤先从可用余额中预留本单积分和已发放的邀请奖励，退款金额为 ${formatAdminMoney(order.amountCents, order.currency)}。预留失败时请勿线下汇款；预留成功后，再通过原收款方式退款并核实到账。本步骤不会转出现金，预留不会自动释放。`,
+      description: `本步骤先从可用余额中预留本单积分和已发放的邀请奖励，退款金额为 ${formatAdminMoney(order.amountCents, order.currency)}。预留失败时请勿退款；预留成功后，再通过原收款渠道退款并核实到账。易支付订单需要在支付平台办理退款。本步骤不会转出现金，预留不会自动释放。`,
       confirmLabel: '先预留积分，尚未汇款',
       tone: 'danger',
       onConfirm: async () => {
         setActing(order.id)
         try {
-          const result = await prepareBillingOrderRefund(order.id, '管理员准备线下退款，尚未汇款')
+          const result = await prepareBillingOrderRefund(order.id, '管理员准备通过原收款渠道退款，尚未转账')
           applyRefundOrder(result.order)
-          setMessage(`订单 ${order.orderNo} 已预留积分，尚未退款。请线下退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账，再点击「确认已退款」。若未汇款，可取消预留。`)
+          setMessage(`订单 ${order.orderNo} 已预留积分，尚未退款。请通过原收款渠道退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账，再点击「确认已退款」。若未发起退款，可取消预留。`)
           load()
         }
         finally { setActing(null) }
@@ -1194,15 +1195,15 @@ export function AdminOrdersPanel() {
     const reservationId = refundReservationId(order)
     if (!reservationId) { setError('这笔订单缺少有效退款预留，请刷新并核对记录，暂勿汇款。'); return }
     confirm.confirm({
-      title: `确认订单 ${order.orderNo} 的线下退款已到账？`,
-      description: `积分已预留。请仅在线下退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账后确认。本操作登记退款完成并撤销本单套餐权益，不会再次转出现金，也不会重复扣减预留积分。若汇款结果不确定，请保留当前状态并先查询原收款渠道。`,
+      title: `确认订单 ${order.orderNo} 的退款已到账？`,
+      description: `积分已预留。请仅在原收款渠道退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账后确认。本操作登记退款完成并撤销本单套餐权益，不会再次转出现金，也不会重复扣减预留积分。若退款结果不确定，请保留当前状态并先查询原收款渠道。`,
       confirmLabel: '已核实退款到账，完成登记',
       tone: 'danger',
       onConfirm: async () => {
         setActing(order.id)
         try {
-          const result = await refundBillingOrder(order.id, '管理员已核实线下退款到账', reservationId)
-          applyRefundOrder(result.order); setMessage(`订单 ${order.orderNo} 的线下退款已登记`); load()
+          const result = await refundBillingOrder(order.id, '管理员已核实原收款渠道退款到账', reservationId)
+          applyRefundOrder(result.order); setMessage(`订单 ${order.orderNo} 的退款已登记`); load()
         } finally { setActing(null) }
       },
     })
@@ -1213,13 +1214,13 @@ export function AdminOrdersPanel() {
     if (!reservationId) { setError('退款预留记录缺失，请刷新并核对记录。'); return }
     confirm.confirm({
       title: `取消订单 ${order.orderNo} 的退款预留？`,
-      description: '请先核实没有发起或完成任何线下退款。取消后会归还全部预留积分，订单恢复已支付。此操作无法撤回已发出的现金；汇款处理中或结果不确定时，请勿取消。',
+      description: '请先核实没有通过任何渠道发起或完成退款。取消后会归还全部预留积分，订单恢复已支付。此操作无法撤回已发出的现金；退款处理中或结果不确定时，请勿取消。',
       confirmLabel: '已核实未汇款，归还预留积分',
       tone: 'danger',
       onConfirm: async () => {
         setActing(order.id)
         try {
-          const result = await cancelBillingOrderRefund(order.id, '管理员核实未发起线下退款，取消预留', reservationId)
+          const result = await cancelBillingOrderRefund(order.id, '管理员核实未发起退款，取消预留', reservationId)
           applyRefundOrder(result.order); setMessage(`订单 ${order.orderNo} 已取消退款预留，积分已归还`); load()
         } finally { setActing(null) }
       },
@@ -1312,16 +1313,16 @@ export function AdminOrdersPanel() {
                   {(order.promotionDiscountCents || order.couponDiscountCents) ? <p className="mt-1 text-[11px] text-muted-foreground">优惠 {formatAdminMoney((order.promotionDiscountCents || 0) + (order.couponDiscountCents || 0), order.currency)}</p> : null}
                 </AdminCell>
                 <AdminCell><StatusBadge tone={statusTone(order.status)}>{labelOf(orderStatusLabels, order.status)}</StatusBadge></AdminCell>
-                <AdminCell className="text-xs">{order.provider || '-'}</AdminCell>
+                <AdminCell className="text-xs">{adminValueLabel(order.provider)}</AdminCell>
                 <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(order.createdAt)}</AdminCell>
                 <AdminCell>
                   <div className="flex flex-wrap gap-1.5">
                     <ControlButton variant="secondary" size="sm" onClick={() => setDetail(order)}>详情</ControlButton>
-                    {canManage && order.status === 'pending' && <ControlButton variant="secondary" size="sm" disabled={acting === order.id} onClick={() => complete(order)}>标记已支付</ControlButton>}
+                    {canManage && order.status === 'pending' && order.provider === 'manual' && <ControlButton variant="secondary" size="sm" disabled={acting === order.id} onClick={() => complete(order)}>标记已支付</ControlButton>}
                     {canManage && order.status === 'pending' && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => close(order)}>关闭</ControlButton>}
-                    {canManage && order.status === 'paid' && order.provider === 'manual' && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => prepareRefund(order)}><CircleDollarSign className="size-3.5" />预留退款积分</ControlButton>}
-                    {canManage && order.status === 'refunding' && order.provider === 'manual' && <><ControlButton variant="danger" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => refund(order)}>确认已退款</ControlButton><ControlButton variant="secondary" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => cancelRefund(order)}>未汇款，取消预留</ControlButton></>}
-                    {canManage && order.status === 'paid' && order.provider !== 'manual' && <span className="text-[11px] text-muted-foreground">该渠道退款暂不可用</span>}
+                    {canManage && order.status === 'paid' && ['manual', 'epay'].includes(order.provider || '') && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => prepareRefund(order)}><CircleDollarSign className="size-3.5" />预留退款积分</ControlButton>}
+                    {canManage && order.status === 'refunding' && ['manual', 'epay'].includes(order.provider || '') && <><ControlButton variant="danger" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => refund(order)}>确认已退款</ControlButton><ControlButton variant="secondary" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => cancelRefund(order)}>未退款，取消预留</ControlButton></>}
+                    {canManage && order.status === 'paid' && !['manual', 'epay'].includes(order.provider || '') && <span className="text-[11px] text-muted-foreground">该渠道退款登记暂不可用</span>}
                   </div>
                 </AdminCell>
               </AdminRow>
@@ -1337,10 +1338,10 @@ export function AdminOrdersPanel() {
       {detail && (
         <AdminDrawer open dock onClose={() => setDetail(null)} title={`订单 ${detail.orderNo}`} description={detail.subject}>
           <div className="flex flex-col gap-4">
-            {detail.status === 'refunding' && <AdminNotice tone="warning">{refundReservationId(detail) ? '退款积分已预留，尚未登记退款完成。请先线下退款并核实到账，再点击「确认已退款」。未汇款可取消预留；汇款结果不确定时请保留预留并核对。' : '退款预留记录缺失，需要核对记录；请勿继续汇款。'}</AdminNotice>}
+            {detail.status === 'refunding' && <AdminNotice tone="warning">{refundReservationId(detail) ? '退款积分已预留，尚未登记退款完成。请先通过原收款渠道退款并核实到账，再点击「确认已退款」。未发起退款可取消预留；退款结果不确定时请保留预留并核对。' : '退款预留记录缺失，需要核对记录；请勿继续退款。'}</AdminNotice>}
             <AdminSectionCard title="支付信息" className="p-4">
               <AdminDefinition label="状态" value={<StatusBadge tone={statusTone(detail.status)}>{labelOf(orderStatusLabels, detail.status)}</StatusBadge>} />
-              <AdminDefinition label="支付渠道" value={detail.provider} />
+              <AdminDefinition label="支付渠道" value={adminValueLabel(detail.provider)} />
               <AdminDefinition label="渠道订单号" value={detail.providerOrderId} mono />
               <AdminDefinition label="应付金额" value={formatAdminMoney(detail.amountCents, detail.currency)} />
               <AdminDefinition label="订单原价" value={formatAdminMoney(detail.listAmountCents, detail.currency)} />
@@ -1577,7 +1578,7 @@ function ReferralsPanel() {
         coolingOffDays: Number(data.get('coolingOffDays')) || 0,
         inviterMonthlyLimit: Number(data.get('inviterMonthlyLimit')) || 0,
         campaignTotalLimit: Number(data.get('campaignTotalLimit')) || 0,
-        autoFreezeRisk: data.has('autoFreezeRisk'),
+        autoFreezeRisk: false,
       })
       setMessage('邀请奖励设置已保存')
       load()
@@ -1604,18 +1605,18 @@ function ReferralsPanel() {
         <AdminStat label="风控标记" value={formatAdminNumber(overview?.stats.risky)} tone={overview?.stats.risky ? 'danger' : 'neutral'} />
       </div>
 
-      <AdminSectionCard title="邀请奖励规则" description="设置邀请人积分、被邀请奖励类型、结算门槛与风控策略。">
+      <AdminSectionCard title="邀请奖励规则" description="设置邀请双方积分、付费门槛和奖励上限。自动风险评分及套餐体验奖励尚未接通。">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <fieldset disabled={busy || !canManage} className="grid gap-4 sm:grid-cols-3">
             <Field label="邀请人积分"><AdminInput name="inviterPoints" type="number" min="0" defaultValue={program?.inviterPoints ?? 0} /></Field>
-            <Field label="被邀请人奖励类型"><AdminSelect name="inviteeRewardType" defaultValue={program?.inviteeRewardType || 'points'}><option value="points">积分</option><option value="plan">套餐体验</option></AdminSelect></Field>
+            <Field label="被邀请人奖励类型"><AdminSelect name="inviteeRewardType" defaultValue={program?.inviteeRewardType === 'none' ? 'none' : 'points'}><option value="points">积分</option><option value="none">不奖励</option></AdminSelect></Field>
             <Field label="被邀请人积分"><AdminInput name="inviteePoints" type="number" min="0" defaultValue={program?.inviteePoints ?? 0} /></Field>
             <Field label="最低付费金额（元）"><AdminInput name="minimumPaid" type="number" min="0" step="0.01" defaultValue={(program?.minimumPaidCents ?? 0) / 100} /></Field>
             <Field label="冷静期（天）"><AdminInput name="coolingOffDays" type="number" min="0" defaultValue={program?.coolingOffDays ?? 0} /></Field>
             <Field label="邀请人每月上限" hint="0 表示不限。"><AdminInput name="inviterMonthlyLimit" type="number" min="0" defaultValue={program?.inviterMonthlyLimit ?? 0} /></Field>
             <Field label="活动总上限" hint="0 表示不限。"><AdminInput name="campaignTotalLimit" type="number" min="0" defaultValue={program?.campaignTotalLimit ?? 0} /></Field>
             <label className="flex items-center gap-2 self-end text-sm"><input name="enabled" type="checkbox" defaultChecked={program?.enabled ?? false} />启用邀请返利</label>
-            <label className="flex items-center gap-2 self-end text-sm"><input name="autoFreezeRisk" type="checkbox" defaultChecked={program?.autoFreezeRisk ?? false} />自动冻结风险奖励</label>
+            <p className="self-end text-xs leading-5 text-muted-foreground">自动冻结风险奖励：暂未接通，请通过最低付费门槛、冷静期与奖励上限控制发放。</p>
           </fieldset>
           {canManage && <ControlButton type="submit" variant="primary" className="self-start" disabled={busy}>{busy ? '保存中' : '保存设置'}</ControlButton>}
         </form>
@@ -1628,7 +1629,7 @@ function ReferralsPanel() {
               <AdminRow key={String(item.id || index)}>
                 <AdminCell className="text-xs">{item.inviterUsername || item.inviterUserId || '-'}</AdminCell>
                 <AdminCell className="text-xs">{item.inviteeUsername || item.inviteeUserId || '-'}</AdminCell>
-                <AdminCell><StatusBadge tone={statusTone(item.status)}>{item.status || '-'}</StatusBadge></AdminCell>
+                <AdminCell><StatusBadge tone={statusTone(item.status)}>{adminValueLabel(item.status)}</StatusBadge></AdminCell>
                 <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(item.createdAt)}</AdminCell>
               </AdminRow>
             ))}
@@ -1642,7 +1643,7 @@ function ReferralsPanel() {
               <AdminRow key={String(item.id || index)}>
                 <AdminCell className="font-mono text-[11px]">{String(item.id || '-').slice(0, 12)}</AdminCell>
                 <AdminCell className="text-xs">{formatAdminNumber(item.points)}</AdminCell>
-                <AdminCell><StatusBadge tone={statusTone(item.status)}>{item.status || '-'}</StatusBadge></AdminCell>
+                <AdminCell><StatusBadge tone={statusTone(item.status)}>{adminValueLabel(item.status)}</StatusBadge></AdminCell>
                 <AdminCell className="text-xs text-muted-foreground">{formatAdminDate(item.settledAt)}</AdminCell>
               </AdminRow>
             ))}
@@ -1665,7 +1666,7 @@ function ProviderTable({ summary }: { summary: FinanceSummary | null }) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-[520px] text-left text-xs">
         <thead className="text-muted-foreground"><tr>{['渠道', '订单', '已支付', '已退款', '支付金额', '退款金额'].map((h) => <th key={h} className="py-2 pr-3 font-medium">{h}</th>)}</tr></thead>
-        <tbody>{summary.providers.map((provider) => <tr key={provider.provider} className="border-t border-border"><td className="py-2 pr-3">{provider.provider}</td><td className="py-2 pr-3">{provider.totalOrders}</td><td className="py-2 pr-3">{provider.paidOrders}</td><td className="py-2 pr-3">{provider.refundedOrders}</td><td className="py-2 pr-3">{formatAdminMoney(provider.paidAmountCents)}</td><td className="py-2 pr-3">{formatAdminMoney(provider.refundedAmountCents)}</td></tr>)}</tbody>
+        <tbody>{summary.providers.map((provider) => <tr key={provider.provider} className="border-t border-border"><td className="py-2 pr-3">{adminValueLabel(provider.provider)}</td><td className="py-2 pr-3">{provider.totalOrders}</td><td className="py-2 pr-3">{provider.paidOrders}</td><td className="py-2 pr-3">{provider.refundedOrders}</td><td className="py-2 pr-3">{formatAdminMoney(provider.paidAmountCents)}</td><td className="py-2 pr-3">{formatAdminMoney(provider.refundedAmountCents)}</td></tr>)}</tbody>
       </table>
     </div>
   )

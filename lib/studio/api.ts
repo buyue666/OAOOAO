@@ -49,6 +49,7 @@ export type SessionSettings = {
   operationMode?: 'self_use' | 'commercial'
   modelPointCosts?: Record<string, number>
   wechatLoginEnabled?: boolean
+  wechatRegistrationEnabled?: boolean
   generationPointMultipliers?: { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
   generationConcurrency?: Record<string, number>
   generationDefaults?: SessionGenerationDefaults
@@ -237,10 +238,10 @@ export type WechatLoginSession = {
   expiresAt: string
 }
 
-export function createWechatLoginSession(returnTo?: string) {
+export function createWechatLoginSession(returnTo?: string, policyAccepted = false) {
   return request<WechatLoginSession>('/api/auth/wechat-official/sessions', {
     method: 'POST',
-    body: JSON.stringify({ returnTo }),
+    body: JSON.stringify({ returnTo, policyAccepted }),
   })
 }
 

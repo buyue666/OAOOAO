@@ -35,11 +35,15 @@ import { useAdminNavigation, useAdminReload, useAdminSession } from './admin-she
 import { CommercePolicyEditor } from './commerce-policy-editor'
 import { AdminSiteSettings } from './admin-site-settings'
 import { AdminCheckInSettings } from './admin-check-in-settings'
+import { AdminWechatSettings } from './admin-wechat-settings'
+import { OnlinePaymentProviderEditor } from './admin-payment-provider'
+import { canConfigureOnlinePayment, paymentProviderName } from '@/lib/studio/payment-provider-config'
 import { checkInRuleChanges, readCheckInForm } from '@/lib/studio/check-in-rules'
+import { allowedGenerationKinds, ENTITLEMENT_GENERATION_KINDS } from '@/lib/studio/entitlement-features'
 import { assertStorageSaved, CREATIVE_STORAGE_NOTICE, storageTestMessage, storageUpdateInput } from '@/lib/studio/object-storage-status'
 import { assertManualPaymentSaved, canConfigureManualPayment, MANUAL_INSTRUCTIONS_LIMIT, manualPaymentInput, manualPaymentInstructions } from '@/lib/studio/manual-payment-config'
 
-type SectionId = 'site' | 'account' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
+type SectionId = 'site' | 'account' | 'wechat' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
 
 export function AdminSettingsPanel() {
   const session = useAdminSession()
@@ -95,7 +99,7 @@ export function AdminSettingsPanel() {
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('section')
-    if (requested && ['site', 'account', 'billing', 'points', 'generation', 'mail', 'storage', 'lifecycle'].includes(requested)) setSection(requested as SectionId)
+    if (requested && ['site', 'account', 'wechat', 'billing', 'points', 'generation', 'mail', 'storage', 'lifecycle'].includes(requested)) setSection(requested as SectionId)
   }, [])
 
   function changeSection(next: SectionId) {
@@ -138,6 +142,7 @@ export function AdminSettingsPanel() {
   const sections: Array<{ id: SectionId; label: string; visible: boolean }> = [
     { id: 'site', label: '站点与品牌', visible: canSystem },
     { id: 'account', label: '注册与积分', visible: canSystem || canCommerce },
+    { id: 'wechat', label: '微信登录', visible: canSystem },
     { id: 'billing', label: '运营与支付', visible: canSystem || canCommerce || canBilling },
     { id: 'points', label: '计费与权益', visible: canCommerce },
     { id: 'generation', label: '生成限制与默认参数', visible: canUpstream },
@@ -171,6 +176,7 @@ export function AdminSettingsPanel() {
         <div key={active === 'site' ? 'site' : `${active}:${formRevision}`} role="tabpanel" aria-label={visibleSections.find((item) => item.id === active)?.label} className="flex min-w-0 flex-col gap-5">
           {active === 'site' && <AdminSiteSettings site={settings.site || {}} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} onDirtyChange={setSiteDirty} />}
           {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canCommerce={canCommerce} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
+          {active === 'wechat' && <AdminWechatSettings settings={settings.wechatOfficial} registrationEnabled={settings.registrationEnabled} saving={saving} onSave={(patch, summary) => save('微信登录设置', patch, summary)} />}
           {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} canSystem={canSystem} canCommerce={canCommerce} canBilling={canBilling} saving={saving} onModeSave={(patch, summary) => save('commercePolicy' in patch ? '购买政策' : '运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
           {active === 'points' && <PointsSection settings={settings} canUpstream={canUpstream} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
           {active === 'generation' && <GenerationSection settings={settings} onSave={(patch, summary) => save('生成设置', patch, summary)} saving={saving} />}
@@ -232,7 +238,7 @@ function BillingSection({
             </AdminField>
             {mode === 'self_use'
               ? <AdminNotice tone="warning">当前用户只能使用已有积分，前台不会显示充值入口；管理员仍可手动调整积分。</AdminNotice>
-              : <AdminNotice tone="neutral">商用模式下，购买入口还需要已发布的客户政策和可用收款配置。当前支持人工收款，到账需由管理员核实后确认。</AdminNotice>}
+              : <AdminNotice tone="neutral">商用模式下，购买入口还需要已发布的客户政策和可用收款配置。人工收款由管理员核实到账；在线渠道以服务端验证的支付通知为准。</AdminNotice>}
           </div>
           <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-5 text-muted-foreground">保存时会先确认变更。</p>
@@ -244,13 +250,14 @@ function BillingSection({
       {canCommerce && <CommercePolicyEditor settings={settings} onSave={onModeSave} saving={saving} />}
 
       {canBilling && <PaymentProviderEditor provider={manual} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />}
+      {canBilling && paymentConfig?.providers.filter(canConfigureOnlinePayment).map(provider => <OnlinePaymentProviderEditor key={provider.id} provider={provider} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />)}
 
-      {canBilling && paymentConfig && <AdminSectionCard title="支付渠道概览" description="配置就绪只表示可提供人工收款说明，不代表已经收到款项。自动支付渠道尚未接入，已有配置保持不变。">
+      {canBilling && paymentConfig && <AdminSectionCard title="支付渠道概览" description="状态表示当前配置是否完整。未接入的渠道不提供启用或编辑操作；已保存配置保持不变。">
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {paymentConfig.providers.map((provider) => (
             <div key={provider.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs">
-              <div className="min-w-0"><p className="truncate font-medium text-foreground">{provider.id === 'manual' ? '人工收款' : provider.name}</p><p className="mt-1 text-[11px] text-muted-foreground">{canConfigureManualPayment(provider) ? '由管理员核实到账后确认订单' : '暂不支持在线收款或自动回调；已有配置保留'}</p></div>
-              <StatusBadge tone={canConfigureManualPayment(provider) ? provider.ready ? 'success' : provider.enabled ? 'warning' : 'neutral' : 'neutral'}>{!canConfigureManualPayment(provider) ? '未接入' : provider.ready ? '配置就绪' : provider.enabled ? '待配置' : '已关闭'}</StatusBadge>
+              <div className="min-w-0"><p className="truncate font-medium text-foreground">{paymentProviderName(provider)}</p><p className="mt-1 text-[11px] text-muted-foreground">{canConfigureManualPayment(provider) ? '由管理员核实到账后确认订单' : canConfigureOnlinePayment(provider) ? '由服务端验证支付通知后确认订单' : '暂不支持在线收款或自动回调；已有配置保留'}</p></div>
+              <StatusBadge tone={provider.ready ? 'success' : provider.enabled && (canConfigureManualPayment(provider) || canConfigureOnlinePayment(provider)) ? 'warning' : 'neutral'}>{!canConfigureManualPayment(provider) && !canConfigureOnlinePayment(provider) ? '未接入' : provider.ready ? '配置就绪' : provider.enabled ? '待配置' : '已关闭'}</StatusBadge>
             </div>
           ))}
         </div>
@@ -272,13 +279,14 @@ function PaymentProviderEditor({
 }) {
   const [enabled, setEnabled] = useState(provider?.enabled === true)
   const [instructions, setInstructions] = useState(() => manualPaymentInstructions(provider))
+  const savedInstructions = manualPaymentInstructions(provider)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
 
   useEffect(() => {
     setEnabled(provider?.enabled === true)
-    setInstructions(manualPaymentInstructions(provider))
-  }, [provider])
+    setInstructions(savedInstructions)
+  }, [provider?.id, provider?.enabled, savedInstructions])
 
   if (!canConfigureManualPayment(provider)) return <AdminSectionCard title="人工收款" description="当前无法编辑收款配置。"><AdminNotice tone="warning">系统未返回可用的人工收款配置。请检查读取权限并重新读取设置；现有配置不会改变。</AdminNotice></AdminSectionCard>
   const currentProvider = provider
@@ -374,7 +382,7 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
 /* ------------------------------ 计费与权益 ------------------------------ */
 
 function PointsSection({ settings, onSave, saving, canUpstream }: { settings: AdminSettings; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean; canUpstream: boolean }) {
-  const [plans, setPlans] = useState(settings.entitlements.plans.map((plan) => ({ ...plan, limits: { ...plan.limits }, features: [...plan.features] })))
+  const [plans, setPlans] = useState(settings.entitlements.plans.map((plan) => ({ ...plan, limits: { ...plan.limits }, features: [...(plan.features ?? [])], allowedGenerationKinds: allowedGenerationKinds(plan) })))
   const [entitlementsEnabled, setEntitlementsEnabled] = useState(settings.entitlements.enabled)
   const [defaultPlanId, setDefaultPlanId] = useState(settings.entitlements.defaultPlanId)
   const [limits, setLimits] = useState(settings.generationCostControl)
@@ -395,13 +403,13 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
     <form onSubmit={submit} className="flex flex-col gap-4">
       {canUpstream && <AdminSectionCard title="成本控制上限" description="限制单次任务与每日积分消耗，0 表示不限制。">
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-3">
-          <AdminField label="单任务积分上限"><AdminInput type="number" min="0" value={limits.maxPointsPerTask} onChange={(event) => setLimits({ ...limits, maxPointsPerTask: Number(event.target.value) || 0 })} /></AdminField>
-          <AdminField label="单用户每日上限"><AdminInput type="number" min="0" value={limits.dailyUserPointSpend} onChange={(event) => setLimits({ ...limits, dailyUserPointSpend: Number(event.target.value) || 0 })} /></AdminField>
-          <AdminField label="全站每日上限"><AdminInput type="number" min="0" value={limits.dailyTotalPointSpend} onChange={(event) => setLimits({ ...limits, dailyTotalPointSpend: Number(event.target.value) || 0 })} /></AdminField>
+          <AdminField label="单任务积分上限"><AdminInput type="number" min="0" value={limits.maxPointsPerTask ?? 0} onChange={(event) => setLimits({ ...limits, maxPointsPerTask: Number(event.target.value) || 0 })} /></AdminField>
+          <AdminField label="单用户每日上限"><AdminInput type="number" min="0" value={limits.dailyUserPointSpend ?? 0} onChange={(event) => setLimits({ ...limits, dailyUserPointSpend: Number(event.target.value) || 0 })} /></AdminField>
+          <AdminField label="全站每日上限"><AdminInput type="number" min="0" value={limits.dailyTotalPointSpend ?? 0} onChange={(event) => setLimits({ ...limits, dailyTotalPointSpend: Number(event.target.value) || 0 })} /></AdminField>
         </fieldset>
       </AdminSectionCard>}
 
-      <AdminSectionCard title="权益方案" description="用户所属套餐决定每日积分与各类调用上限。">
+      <AdminSectionCard title="权益方案" description="用户所属套餐决定每日积分与各类调用上限。未开通或已到期用户使用默认方案；调用上限为 0 表示不限，每日赠送为 0 表示不赠送。">
         <fieldset disabled={saving} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={entitlementsEnabled} onChange={(event) => setEntitlementsEnabled(event.target.checked)} />启用套餐权益限制</label>
@@ -415,20 +423,23 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
             {plans.map((plan, index) => (
               <div key={plan.id} className="rounded-md border border-border p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge tone="muted">{plan.id}</StatusBadge>
+                  <StatusBadge tone="muted">方案标识：{plan.id}</StatusBadge>
                   <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={plan.enabled} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, enabled: event.target.checked } : item))} />启用</label>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <AdminField label="方案名称"><AdminInput value={plan.name} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, name: event.target.value } : item))} /></AdminField>
-                  <AdminField label="每日赠送积分"><AdminInput type="number" min="0" value={plan.dailyPoints} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, dailyPoints: Number(event.target.value) || 0 } : item))} /></AdminField>
-                  <AdminField label="每日积分消耗上限"><AdminInput type="number" min="0" value={plan.limits.dailyPointSpend} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyPointSpend: Number(event.target.value) || 0 } } : item))} /></AdminField>
-                  <AdminField label="每日图片上限"><AdminInput type="number" min="0" value={plan.limits.dailyImages} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyImages: Number(event.target.value) || 0 } } : item))} /></AdminField>
-                  <AdminField label="每日视频上限"><AdminInput type="number" min="0" value={plan.limits.dailyVideos} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyVideos: Number(event.target.value) || 0 } } : item))} /></AdminField>
-                  <AdminField label="每日文本上限"><AdminInput type="number" min="0" value={plan.limits.dailyText} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyText: Number(event.target.value) || 0 } } : item))} /></AdminField>
+                  <AdminField label="每日赠送积分"><AdminInput type="number" min="0" value={plan.dailyPoints ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, dailyPoints: Number(event.target.value) || 0 } : item))} /></AdminField>
+                  <AdminField label="每日积分消耗上限"><AdminInput type="number" min="0" value={plan.limits.dailyPointSpend ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyPointSpend: Number(event.target.value) || 0 } } : item))} /></AdminField>
+                  <AdminField label="每日图片上限"><AdminInput type="number" min="0" value={plan.limits.dailyImages ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyImages: Number(event.target.value) || 0 } } : item))} /></AdminField>
+                  <AdminField label="每日视频上限"><AdminInput type="number" min="0" value={plan.limits.dailyVideos ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyVideos: Number(event.target.value) || 0 } } : item))} /></AdminField>
+                  <AdminField label="每日文本上限"><AdminInput type="number" min="0" value={plan.limits.dailyText ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyText: Number(event.target.value) || 0 } } : item))} /></AdminField>
                 </div>
-                <AdminField label="功能标识（每行一项）" className="mt-3">
-                  <AdminTextarea rows={3} value={plan.features.join('\n')} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, features: event.target.value.split('\n').map((line) => line.trim()).filter(Boolean) } : item))} />
-                </AdminField>
+                <fieldset className="mt-4 rounded-lg border border-border p-3">
+                  <legend className="px-1 text-xs font-medium">允许的创作功能</legend>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{ENTITLEMENT_GENERATION_KINDS.map(kind => <label key={kind.value} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={plan.allowedGenerationKinds.includes(kind.value)} onChange={event => setPlans(current => current.map((item, position) => position === index ? { ...item, allowedGenerationKinds: event.target.checked ? [...item.allowedGenerationKinds, kind.value] : item.allowedGenerationKinds.filter(value => value !== kind.value) } : item))} />{kind.label}</label>)}</div>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">启用套餐权益限制后生效。只限制新任务，不影响查看已有项目和资产；创作助手调用生成工具时同样受对应限制。不选择任何项表示禁止新建以上任务。历史方案未设置时默认全部允许。</p>
+                </fieldset>
+                {plan.features.length > 0 && <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">历史功能标签（兼容保留）</summary><p className="mt-2 leading-5">以下旧标签仅作记录，不控制功能访问。保存方案时会保留。</p><ul className="mt-2 flex flex-wrap gap-2">{plan.features.map((feature, at) => <li key={`${at}:${feature}`} className="max-w-full break-all rounded bg-muted px-2 py-1">{feature}</li>)}</ul></details>}
               </div>
             ))}
             {!plans.length && <AdminEmpty title="暂无权益方案" description="系统尚未返回任何套餐方案定义。" />}
@@ -518,12 +529,18 @@ function MailSection({ settings, onSave, saving }: { settings: AdminSettings; on
   const [testTo, setTestTo] = useState('')
   const [testError, setTestError] = useState('')
   const [testMessage, setTestMessage] = useState('')
-  const [draft, setDraft] = useState<MailSettings>({ ...mail, password: '' })
+  const [draft, setDraft] = useState<MailSettings>({ ...mail, provider: 'smtp', password: '' })
+
+  function mailInput(): Omit<MailSettings, 'hasPassword'> {
+    const { hasPassword: _hasPassword, ...patch } = draft
+    if (!patch.password) delete patch.password
+    return { ...patch, provider: 'smtp' }
+  }
 
   async function testSend() {
     setTesting(true); setTestError(''); setTestMessage('')
     try {
-      await sendTestMail(testTo, draft)
+      await sendTestMail(testTo, mailInput())
       setTestMessage('测试邮件已发送，请检查收件箱。')
     } catch (reason) {
       setTestError(reason instanceof Error ? reason.message : '测试邮件发送失败')
@@ -532,9 +549,8 @@ function MailSection({ settings, onSave, saving }: { settings: AdminSettings; on
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const patch: MailSettings = { ...draft }
-    if (!patch.password) delete patch.password
-    onSave({ mail: patch }, ['邮件服务配置'])
+    if (saving) return
+    onSave({ mail: mailInput() }, ['邮件服务配置'])
   }
 
   return (
@@ -542,17 +558,17 @@ function MailSection({ settings, onSave, saving }: { settings: AdminSettings; on
       <AdminSectionCard title="邮件服务" description="用于邮箱验证码、通知和测试邮件。密码字段不会回显，留空表示沿用已保存的密码。">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <StatusBadge tone={mail.host ? 'success' : 'muted'}>{mail.host ? `已配置：${mail.host}` : '未配置 SMTP'}</StatusBadge>
-          <StatusBadge tone={mail.password ? 'success' : 'muted'}>{mail.password ? 'SMTP 密码已保存' : 'SMTP 密码未保存'}</StatusBadge>
+          <StatusBadge tone={mail.hasPassword ? 'success' : 'muted'}>{mail.hasPassword ? 'SMTP 密码已保存' : 'SMTP 密码未保存'}</StatusBadge>
         </div>
         <form onSubmit={submit} className="flex flex-col gap-4">
           <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
-            <AdminField label="服务商说明"><AdminInput value={draft.provider || ''} onChange={(event) => setDraft({ ...draft, provider: event.target.value })} /></AdminField>
+            <AdminField label="邮件协议" hint="当前支持 SMTP。请填写邮箱服务提供的主机、端口和凭证。"><AdminInput value="SMTP" readOnly /></AdminField>
             <AdminField label="SMTP 主机"><AdminInput value={draft.host || ''} onChange={(event) => setDraft({ ...draft, host: event.target.value })} /></AdminField>
             <AdminField label="端口"><AdminInput type="number" min="1" max="65535" value={draft.port ?? 465} onChange={(event) => setDraft({ ...draft, port: Number(event.target.value) || 465 })} /></AdminField>
             <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.secure ?? true} onChange={(event) => setDraft({ ...draft, secure: event.target.checked })} />使用 SSL/TLS</label>
             <AdminField label="SMTP 用户名"><AdminInput value={draft.username || ''} onChange={(event) => setDraft({ ...draft, username: event.target.value })} autoComplete="off" /></AdminField>
-            <AdminField label="SMTP 密码" hint={mail.password ? '已保存密码，留空表示不修改。' : '尚未保存密码。'}>
-              <AdminInput type="password" value={draft.password || ''} onChange={(event) => setDraft({ ...draft, password: event.target.value })} autoComplete="new-password" placeholder={mail.password ? '留空表示不修改' : ''} />
+            <AdminField label="SMTP 密码" hint={mail.hasPassword ? '已保存密码，留空表示不修改。' : '尚未保存密码。'}>
+              <AdminInput type="password" value={draft.password || ''} onChange={(event) => setDraft({ ...draft, password: event.target.value })} autoComplete="new-password" placeholder={mail.hasPassword ? '留空表示不修改' : ''} />
             </AdminField>
             <AdminField label="发件邮箱"><AdminInput value={draft.fromEmail || ''} onChange={(event) => setDraft({ ...draft, fromEmail: event.target.value })} /></AdminField>
             <AdminField label="发件人名称"><AdminInput value={draft.fromName || ''} onChange={(event) => setDraft({ ...draft, fromName: event.target.value })} /></AdminField>
@@ -620,19 +636,19 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
       {storage.enabled && <AdminNotice tone="danger">已保存的配置仍标记为启用，当前版本会因此拒绝上传与媒体生成。页面不会自动更改它；如需恢复服务器存储，请取消下方勾选并明确保存。</AdminNotice>}
       <AdminSectionCard title="对象存储（OSS / S3）" description="连接检测使用已保存配置，只核对服务端返回的桶访问与写入验证状态，不会保存当前表单。" action={<div className="flex gap-2"><StatusBadge tone={storage.enabled ? 'warning' : 'muted'}>{storage.enabled ? '已配置启用 · 当前不支持' : '未启用'}</StatusBadge></div>}>
         <div className="mb-4 flex flex-wrap gap-2">
-          <StatusBadge tone={storage.hasAccessKeyId ? 'success' : 'muted'}>Access Key {storage.hasAccessKeyId ? '已配置' : '未配置'}</StatusBadge>
-          <StatusBadge tone={storage.hasSecretAccessKey ? 'success' : 'muted'}>Secret Key {storage.hasSecretAccessKey ? '已配置' : '未配置'}</StatusBadge>
+          <StatusBadge tone={storage.hasAccessKeyId ? 'success' : 'muted'}>访问密钥标识 {storage.hasAccessKeyId ? '已配置' : '未配置'}</StatusBadge>
+          <StatusBadge tone={storage.hasSecretAccessKey ? 'success' : 'muted'}>访问密钥 {storage.hasSecretAccessKey ? '已配置' : '未配置'}</StatusBadge>
           <span className="text-xs text-muted-foreground">最近更新：{storage.updatedAt ? new Date(storage.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '-'}</span>
         </div>
         <fieldset disabled={busy || checking} className="grid gap-4 sm:grid-cols-2">
           <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.enabled} disabled={!storage.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />启用外部存储（暂不支持，可取消已有启用状态）</label>
-          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.forcePathStyle} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} />使用 Path Style 访问</label>
-          <AdminField label="Endpoint"><AdminInput value={draft.endpoint} onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} placeholder="https://s3.example.com" /></AdminField>
-          <AdminField label="Region"><AdminInput value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></AdminField>
-          <AdminField label="Bucket"><AdminInput value={draft.bucket} onChange={(event) => setDraft({ ...draft, bucket: event.target.value })} /></AdminField>
+          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.forcePathStyle} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} />使用路径式访问（Path Style）</label>
+          <AdminField label="服务地址（Endpoint）"><AdminInput value={draft.endpoint} onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} placeholder="https://s3.example.com" /></AdminField>
+          <AdminField label="地域（Region）"><AdminInput value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></AdminField>
+          <AdminField label="存储桶（Bucket）"><AdminInput value={draft.bucket} onChange={(event) => setDraft({ ...draft, bucket: event.target.value })} /></AdminField>
           <AdminField label="对象前缀"><AdminInput value={draft.prefix} onChange={(event) => setDraft({ ...draft, prefix: event.target.value })} /></AdminField>
-          <AdminField label="Access Key ID" hint={storage.hasAccessKeyId ? '已保存，留空表示不修改。' : '尚未保存。'}><AdminInput type="password" value={accessKeyId} onChange={(event) => setAccessKeyId(event.target.value)} autoComplete="new-password" placeholder={storage.hasAccessKeyId ? '留空表示不修改' : ''} /></AdminField>
-          <AdminField label="Secret Access Key" hint={storage.hasSecretAccessKey ? '已保存，留空表示不修改。' : '尚未保存。'}><AdminInput type="password" value={secretAccessKey} onChange={(event) => setSecretAccessKey(event.target.value)} autoComplete="new-password" placeholder={storage.hasSecretAccessKey ? '留空表示不修改' : ''} /></AdminField>
+          <AdminField label="访问密钥标识（Access Key ID）" hint={storage.hasAccessKeyId ? '已保存，留空表示不修改。' : '尚未保存。'}><AdminInput type="password" value={accessKeyId} onChange={(event) => setAccessKeyId(event.target.value)} autoComplete="new-password" placeholder={storage.hasAccessKeyId ? '留空表示不修改' : ''} /></AdminField>
+          <AdminField label="访问密钥（Secret Access Key）" hint={storage.hasSecretAccessKey ? '已保存，留空表示不修改。' : '尚未保存。'}><AdminInput type="password" value={secretAccessKey} onChange={(event) => setSecretAccessKey(event.target.value)} autoComplete="new-password" placeholder={storage.hasSecretAccessKey ? '留空表示不修改' : ''} /></AdminField>
         </fieldset>
       </AdminSectionCard>
       {!storage.enabled && <p className="text-xs text-muted-foreground">当前仅能检测已保存且标记启用的既有配置。无需为了检测而启用存储；连接参数可先保存。</p>}

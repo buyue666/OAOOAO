@@ -22,8 +22,8 @@ const declarations = ['AdminSettingsPanel', 'BillingSection', 'AccountSection'].
   assert.ok(node)
   return `export ${node.getText(settingsSource).replace(/^export /, '')}`
 }).join('\n')
-const ui = Object.fromEntries(['AdminError', 'AdminLoading', 'AdminNotice', 'AdminSectionCard', 'AdminSelect', 'AdminTabs', 'StatusBadge', 'AdminField', 'AdminInput', 'AdminSaveBar', 'ControlButton', 'Save', 'PaymentProviderEditor', 'CommercePolicyEditor', 'AdminSiteSettings', 'AdminCheckInSettings', 'PointsSection', 'GenerationSection', 'MailSection', 'StorageSection', 'LifecycleSection'].map(name => [name, name]))
-const imports = `import { useState, useRef, useEffect, useCallback } from 'react'; import { useAdminSession, useAdminReload, useAdminNavigation, useConfirm } from './context'; import { getAdminSettings, getObjectStorage, getPaymentConfig, updateAdminSettings } from './api'; import { canConfigureManualPayment } from './helpers'; import { checkInRuleChanges, readCheckInForm } from './check-in-rules'; import { ${Object.keys(ui).join(',')} } from './ui';`
+const ui = Object.fromEntries(['AdminError', 'AdminLoading', 'AdminNotice', 'AdminSectionCard', 'AdminSelect', 'AdminTabs', 'StatusBadge', 'AdminField', 'AdminInput', 'AdminSaveBar', 'ControlButton', 'Save', 'PaymentProviderEditor', 'OnlinePaymentProviderEditor', 'AdminWechatSettings', 'CommercePolicyEditor', 'AdminSiteSettings', 'AdminCheckInSettings', 'PointsSection', 'GenerationSection', 'MailSection', 'StorageSection', 'LifecycleSection'].map(name => [name, name]))
+const imports = `import { useState, useRef, useEffect, useCallback } from 'react'; import { useAdminSession, useAdminReload, useAdminNavigation, useConfirm } from './context'; import { getAdminSettings, getObjectStorage, getPaymentConfig, updateAdminSettings } from './api'; import { canConfigureManualPayment } from './helpers'; import { canConfigureOnlinePayment, paymentProviderName } from './online'; import { checkInRuleChanges, readCheckInForm } from './check-in-rules'; import { ${Object.keys(ui).join(',')} } from './ui';`
 function all(node) { return node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(all)] : [] }
 const fixtureSettings = { operationMode: 'self_use', registrationEnabled: false, freeDailyPointsEnabled: false, freeDailyPoints: 0, entitlements: { plans: [] }, commercePolicy: { status: 'draft' }, site: {} }
 const paymentConfig = { providers: [{ id: 'manual', checkoutKind: 'manual', ready: false, enabled: false, fields: [{ key: 'instructions', kind: 'textarea', value: '', configured: false }] }] }
@@ -42,7 +42,7 @@ async function fixture(initialPermissions) {
   const confirm = { dialog: null, confirm: data => confirmations.push(data) }
   const navigation = { registerGuard() {} }
   const api = compile(imports + declarations, {
-    react, './ui': ui, './helpers': compile(read('../lib/studio/manual-payment-config.ts')), './check-in-rules': compile(read('../lib/studio/check-in-rules.ts')),
+    react, './ui': ui, './online': compile(read('../lib/studio/payment-provider-config.ts')), './helpers': compile(read('../lib/studio/manual-payment-config.ts')), './check-in-rules': compile(read('../lib/studio/check-in-rules.ts')),
     './context': { useAdminSession: () => ({ can: permission => permissions.includes(permission) }), useAdminReload: () => ({ reloadKey: 0 }), useAdminNavigation: () => navigation, useConfirm: () => confirm },
     './api': { getAdminSettings: async () => { reads.settings++; return fixtureSettings }, getObjectStorage: async () => { reads.storage++; return {} }, getPaymentConfig: async () => { reads.payment++; return paymentConfig }, updateAdminSettings: async patch => { writes.push(plain(patch)); return { settings: { ...fixtureSettings, ...patch } } } },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
@@ -148,6 +148,18 @@ test('upstream-only settings do not reveal the operation and payment group', asy
   assert.deepEqual(f.sections(), ['generation'])
   assert.deepEqual(f.reads, { settings: 1, payment: 0, storage: 0 })
   assert.equal(f.billing().length, 0)
+})
+
+test('WeChat credentials are editable only by system managers and use a separate settings section', async () => {
+  const system = await fixture(['system.manage'])
+  assert.equal(system.sections().includes('wechat'), true)
+  await system.select('wechat')
+  assert.equal(system.nodes().some(node => node.type === 'AdminWechatSettings'), true)
+  for (const permissions of [['commerce.manage'], ['billing.manage'], ['upstream.manage']]) {
+    const f = await fixture(permissions)
+    assert.equal(f.sections().includes('wechat'), false)
+    assert.equal(f.nodes().some(node => node.type === 'AdminWechatSettings'), false)
+  }
 })
 
 test('invalid expiry prevents a confirmation and a custom plan can be cleared with a full replacement', async () => {
