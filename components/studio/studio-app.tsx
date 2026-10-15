@@ -61,7 +61,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   }, [pathname, isProtectedRoute, authChecking, authRedirecting])
 
   if (authChecking || authRedirecting) {
-    return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{authRedirecting ? '����ǰ����¼ҳ��' : '���ڼ���¼״̬��'}</main>
+    return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{authRedirecting ? '正在前往登录页…' : '正在检查登录状态…'}</main>
   }
 
   /**
