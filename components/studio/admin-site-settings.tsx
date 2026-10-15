@@ -13,7 +13,7 @@ import { AdminField, AdminInput, AdminNotice, AdminSaveBar, AdminSectionCard, Ad
 import { AdminSiteFooter } from './admin-site-footer'
 
 const textFields = ['title', 'logoUrl', 'iconUrl', 'seoTitle', 'seoDescription', 'seoKeywords', 'termsUrl', 'termsVersion', 'termsContent', 'privacyUrl', 'privacyVersion', 'privacyContent'] as const
-const labels: Record<(typeof textFields)[number], string> = { title: '站点名称', logoUrl: '品牌 Logo', iconUrl: '浏览器图标', seoTitle: '搜索标题', seoDescription: '搜索描述', seoKeywords: '搜索关键词', termsUrl: '服务条款地址', termsVersion: '服务条款版本', termsContent: '服务条款正文', privacyUrl: '隐私政策地址', privacyVersion: '隐私政策版本', privacyContent: '隐私政策正文' }
+const labels: Record<(typeof textFields)[number], string> = { title: '网站名称', logoUrl: '品牌 Logo', iconUrl: '浏览器图标', seoTitle: '搜索标题', seoDescription: '搜索描述', seoKeywords: '搜索关键词', termsUrl: '服务条款地址', termsVersion: '服务条款版本', termsContent: '服务条款正文', privacyUrl: '隐私政策地址', privacyVersion: '隐私政策版本', privacyContent: '隐私政策正文' }
 const tabs = [['brand', '品牌标识'], ['search', '搜索信息'], ['footer', '页脚'], ['policies', '条款与隐私']] as const
 type BrandTab = (typeof tabs)[number][0]
 
@@ -67,10 +67,10 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
       <div hidden={active !== 'brand'}>
-        <AdminSectionCard title="一处设置，统一展示" description="站点名称与 Logo 同步到登录页、创作工作台和管理后台；浏览器图标用于标签页。">
+        <AdminSectionCard title="一处设置，统一展示" description="网站名称与 Logo 同步到登录页、创作工作台和管理后台，也会更新浏览器标题；浏览器图标用于标签页。">
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(240px,0.8fr)]">
             <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4">
-              <AdminField label="站点名称" hint="留空时使用 OAO。"><AdminInput {...field('title')} maxLength={40} placeholder="OAO" /></AdminField>
+              <AdminField label="网站名称" hint="控制登录页、工作台、管理后台和浏览器标题；留空时使用 OAO。"><AdminInput {...field('title')} maxLength={40} placeholder="OAO" /></AdminField>
               <AdminField label="品牌 Logo 地址" hint="建议使用透明背景的横版图片；留空使用内置 OAO 标志。"><AdminInput {...field('logoUrl')} placeholder="/media/brand/oao-logo-transparent.png" /></AdminField>
               <AdminField label="浏览器图标地址" hint="建议使用正方形图片，用于浏览器标签页。"><AdminInput {...field('iconUrl')} placeholder="/media/brand/oao-mark.png" /></AdminField>
               <ControlButton type="button" size="sm" className="self-start" onClick={() => setDraft((current) => ({ ...current, logoUrl: '', iconUrl: '' }))}><RotateCcw className="size-3.5" />使用内置品牌图片</ControlButton>

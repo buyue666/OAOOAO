@@ -17,7 +17,7 @@ export function AdminSiteFooter({ value, site, disabled, onChange }: { value: Si
       <fieldset disabled={disabled} className="grid min-w-0 gap-4 sm:grid-cols-2">
         <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm sm:col-span-2"><input type="checkbox" checked={value.showOnStudio} onChange={event => onChange({ ...value, showOnStudio: event.target.checked })} />也在开始创作主页（/studio）显示</label>
         <AdminField label="品牌介绍" hint="留空隐藏介绍。" className="sm:col-span-2"><AdminTextarea {...field('description')} rows={3} maxLength={500} /></AdminField>
-        <AdminField label="版权主体" hint="留空跟随站点名称，年份会自动更新。"><AdminInput {...field('copyrightHolder')} maxLength={160} placeholder="跟随站点名称" /></AdminField>
+        <AdminField label="版权主体" hint="留空跟随网站名称，年份会自动更新。"><AdminInput {...field('copyrightHolder')} maxLength={160} placeholder="跟随网站名称" /></AdminField>
         <AdminField label="联系邮箱" hint="留空隐藏邮箱。"><AdminInput {...field('contactEmail')} maxLength={254} inputMode="email" placeholder="siyuesy@gmail.com" /></AdminField>
         <AdminField label="备案号" hint="仅填写本站实际备案信息；未备案请留空。"><AdminInput {...field('registrationLabel')} maxLength={160} placeholder="留空不显示" /></AdminField>
         <AdminField label="备案查询链接" hint="请填写实际备案查询地址。"><AdminInput {...field('registrationUrl')} maxLength={2048} placeholder="https://…" /></AdminField>
