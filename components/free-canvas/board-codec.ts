@@ -69,15 +69,40 @@ function readDirectorScene(value: unknown): DirectorSceneData {
   const actors = Array.isArray(raw.actors) ? raw.actors.flatMap((item, index) => {
     const actor = asRecord(item)
     const id = textOf(actor.id, `actor-${index + 1}`)
-    return [{ id, name: textOf(actor.name, `角色 ${index + 1}`), x: numberOf(actor.x), y: numberOf(actor.y), z: numberOf(actor.z), color: textOf(actor.color, '#74b9ff'), scale: Math.max(0.25, numberOf(actor.scale, 1)), pose: (actor.pose === 'hero' || actor.pose === 'walk' ? actor.pose : 'idle') as 'idle' | 'hero' | 'walk' }]
+    return [{
+      id,
+      name: textOf(actor.name, `角色 ${index + 1}`),
+      x: numberOf(actor.x), y: numberOf(actor.y), z: numberOf(actor.z),
+      color: textOf(actor.color, '#74b9ff'),
+      scale: Math.max(0.25, numberOf(actor.scale, 1)),
+      // Rotation was added in scene schema v2. Missing values intentionally
+      // fall back to zero so existing saved boards keep their original pose.
+      rotationX: numberOf(actor.rotationX),
+      rotationY: numberOf(actor.rotationY),
+      rotationZ: numberOf(actor.rotationZ),
+      pose: (actor.pose === 'hero' || actor.pose === 'walk' ? actor.pose : 'idle') as 'idle' | 'hero' | 'walk',
+      // Keep board hydration same-origin for bundled assets. Remote model URLs
+      // can later be introduced through a signed asset registry, but arbitrary
+      // URLs must not become implicit fetches when a board is opened.
+      ...(typeof actor.modelUrl === 'string' && (actor.modelUrl.trim() === 'builtin:whitebox' || /^\/assets\/[A-Za-z0-9_./-]+\.glb(?:\?[^\s]*)?$/i.test(actor.modelUrl.trim())) ? { modelUrl: actor.modelUrl.trim() } : {}),
+    }]
   }) : DEFAULT_DIRECTOR_SCENE.actors
   const cameras = Array.isArray(raw.cameras) ? raw.cameras.flatMap((item, index) => {
     const camera = asRecord(item)
-    return [{ id: textOf(camera.id, `camera-${index + 1}`), name: textOf(camera.name, `机位 ${index + 1}`), x: numberOf(camera.x), y: numberOf(camera.y, 2.2), z: numberOf(camera.z, 6.5), targetX: numberOf(camera.targetX), targetY: numberOf(camera.targetY, 1), targetZ: numberOf(camera.targetZ), fov: Math.min(100, Math.max(20, numberOf(camera.fov, 42))) }]
+    return [{
+      id: textOf(camera.id, `camera-${index + 1}`),
+      name: textOf(camera.name, `机位 ${index + 1}`),
+      x: numberOf(camera.x), y: numberOf(camera.y, 2.2), z: numberOf(camera.z, 6.5),
+      targetX: numberOf(camera.targetX), targetY: numberOf(camera.targetY, 1), targetZ: numberOf(camera.targetZ),
+      fov: Math.min(100, Math.max(20, numberOf(camera.fov, 42))),
+      rotationX: numberOf(camera.rotationX),
+      rotationY: numberOf(camera.rotationY),
+      rotationZ: numberOf(camera.rotationZ),
+    }]
   }) : DEFAULT_DIRECTOR_SCENE.cameras
   const activeCameraId = textOf(raw.activeCameraId, cameras[0]?.id ?? DEFAULT_DIRECTOR_SCENE.activeCameraId)
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     aspect: raw.aspect === '9:16' || raw.aspect === '1:1' ? raw.aspect : '16:9',
     grid: raw.grid !== false,
     actors: actors.length ? actors : DEFAULT_DIRECTOR_SCENE.actors,

@@ -50,6 +50,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## Package dependencies
 
+## Quaternius Universal Base Characters（CC0 1.0）
+
+导演台默认角色模型 `public/assets/director/quaternius-superhero.glb` 来自 Quaternius 的 Universal Base Characters Standard 免费包，原作者按 CC0 1.0 Universal 发布。随模型保留原始许可文本：[`public/assets/director/QUATERNIUS-LICENSE.txt`](public/assets/director/QUATERNIUS-LICENSE.txt)。来源：[官方资源页](https://quaternius.com/packs/universalbasecharacters.html)、[官方免费下载页](https://quaternius.itch.io/universal-base-characters)。
+
 前端依赖可取得的许可及版权文本见 [THIRD_PARTY_DEPENDENCY_NOTICES.txt](THIRD_PARTY_DEPENDENCY_NOTICES.txt)，包版本、来源和未提供原始正文或署名的例外见 [docs/frontend-dependency-inventory.json](docs/frontend-dependency-inventory.json)。浏览器发行包随附相同文本 `public/legal/third-party-dependencies.txt`，部署后可从 `/legal/third-party-dependencies.txt` 访问。后端依赖单独列于 [backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt](backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt)。源码组件的许可通知与 npm 包的许可通知分别保留，不能用包名清单代替原始声明。
 
 ## Scope

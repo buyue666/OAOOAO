@@ -103,14 +103,14 @@ export function createAgentNode(position: XYPosition, id = newNodeId('agent')): 
 }
 
 export const DEFAULT_DIRECTOR_SCENE: DirectorSceneData = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   aspect: '16:9',
   grid: true,
   actors: [
-    { id: 'actor-1', name: '角色 1', x: -1.1, y: 0, z: 0, color: '#74b9ff', scale: 1, pose: 'idle' },
-    { id: 'actor-2', name: '角色 2', x: 1.1, y: 0, z: 0, color: '#ff9f8a', scale: 1, pose: 'hero' },
+    { id: 'actor-1', name: '角色 1', x: -1.1, y: 0, z: 0, color: '#74b9ff', scale: 1, rotationX: 0, rotationY: 0, rotationZ: 0, pose: 'idle' },
+    { id: 'actor-2', name: '角色 2', x: 1.1, y: 0, z: 0, color: '#ff9f8a', scale: 1, rotationX: 0, rotationY: 0, rotationZ: 0, pose: 'hero' },
   ],
-  cameras: [{ id: 'camera-1', name: '主机位', x: 0, y: 2.2, z: 6.5, targetX: 0, targetY: 1, targetZ: 0, fov: 42 }],
+  cameras: [{ id: 'camera-1', name: '主机位', x: 0, y: 2.2, z: 6.5, targetX: 0, targetY: 1, targetZ: 0, fov: 42, rotationX: 0, rotationY: 0, rotationZ: 0 }],
   activeCameraId: 'camera-1',
   notes: '',
 }

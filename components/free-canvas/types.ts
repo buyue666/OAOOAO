@@ -114,7 +114,13 @@ export type DirectorActor = {
   z: number
   color: string
   scale: number
+  /** Euler rotation in degrees. Kept in scene data so saved boards are portable. */
+  rotationX: number
+  rotationY: number
+  rotationZ: number
   pose: 'idle' | 'hero' | 'walk'
+  /** Optional same-origin GLB model. Missing values use the bundled CC0 model. */
+  modelUrl?: string
 }
 
 export type DirectorCamera = {
@@ -127,10 +133,15 @@ export type DirectorCamera = {
   targetY: number
   targetZ: number
   fov: number
+  /** Rotation of the camera marker / optional explicit camera orientation, in degrees. */
+  rotationX: number
+  rotationY: number
+  rotationZ: number
 }
 
 export type DirectorSceneData = {
-  schemaVersion: 1
+  /** Version 2 adds persisted Euler rotations for actors and cameras. */
+  schemaVersion: 2
   aspect: '16:9' | '9:16' | '1:1'
   grid: boolean
   actors: DirectorActor[]
