@@ -24,12 +24,20 @@ const POSE_PRESETS: Array<{ id: string; label: string; pose: DirectorActor['pose
   { id: 'run', label: '跑步', pose: 'walk', controls: { torsoPitch: -12, leftShoulderPitch: 50, rightShoulderPitch: -50, leftElbow: -55, rightElbow: -55, leftHip: -38, rightHip: 38, leftKnee: 32, rightKnee: 32 } },
   { id: 'sit', label: '坐姿', pose: 'idle', controls: { torsoPitch: -8, leftHip: -82, rightHip: -82, leftKnee: 84, rightKnee: 84 } },
   { id: 'squat', label: '蹲下', pose: 'idle', controls: { torsoPitch: -15, leftHip: -55, rightHip: -55, leftKnee: 105, rightKnee: 105 } },
-  { id: 'kneel', label: '单膝跪', pose: 'idle', controls: { torsoPitch: -5, leftHip: -75, leftKnee: 112, rightHip: 15, rightKnee: 18 } },
-  { id: 'kneel-both', label: '双腿跪', pose: 'idle', controls: { torsoPitch: -5, leftHip: -82, rightHip: -82, leftKnee: 118, rightKnee: 118 } },
+  { id: 'single-jump', label: '单腿跳', pose: 'walk', controls: { torsoPitch: -4, leftHip: -24, rightHip: 18, leftKnee: 28, rightKnee: 92 } },
+  { id: 'double-jump', label: '双腿跳', pose: 'walk', controls: { torsoPitch: -10, leftHip: -24, rightHip: 24, leftKnee: 28, rightKnee: 28 } },
   { id: 'akimbo', label: '叉腰', pose: 'hero', controls: { leftShoulderPitch: 25, rightShoulderPitch: 25, leftShoulderRoll: -38, rightShoulderRoll: 38, leftElbow: -72, rightElbow: -72 } },
+  { id: 'lean', label: '俯靠', pose: 'idle', controls: { torsoPitch: -22, torsoRoll: -10, leftShoulderPitch: 18, rightShoulderPitch: 18 } },
+  { id: 'turn', label: '翻身', pose: 'idle', controls: { torsoYaw: 55, headYaw: 35, leftShoulderYaw: -25, rightShoulderYaw: 25 } },
   { id: 'think', label: '思考', pose: 'idle', controls: { torsoYaw: -12, headPitch: -12, headYaw: 18, leftShoulderPitch: 30, leftElbow: -82, leftWrist: 22 } },
+  { id: 'fight', label: '格斗', pose: 'hero', controls: { torsoPitch: -8, leftShoulderPitch: 34, rightShoulderPitch: -34, leftElbow: -70, rightElbow: -70, leftHip: -15, rightHip: 15 } },
+  { id: 'dodge', label: '躲球', pose: 'idle', controls: { torsoRoll: -24, headRoll: -12, leftHip: -22, rightHip: 12 } },
+  { id: 'throw', label: '投球', pose: 'hero', controls: { torsoYaw: -18, rightShoulderPitch: -65, rightShoulderRoll: 35, rightElbow: -18, leftShoulderPitch: 18 } },
+  { id: 'push', label: '推进', pose: 'hero', controls: { torsoPitch: 12, leftShoulderPitch: -35, rightShoulderPitch: -35, leftElbow: -12, rightElbow: -12 } },
   { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -30, rightShoulderRoll: 70, rightElbow: -28, rightWrist: 20 } },
-  { id: 'point', label: '指向', pose: 'hero', controls: { rightShoulderPitch: -25, rightShoulderRoll: 38, rightElbow: 4, rightWrist: 0 } },
+  { id: 'reach', label: '伸手', pose: 'hero', controls: { rightShoulderPitch: -24, rightShoulderRoll: 10, rightElbow: 0, rightWrist: 0 } },
+  { id: 'raise', label: '抬臂', pose: 'hero', controls: { leftShoulderRoll: -78, rightShoulderRoll: 78, leftElbow: -12, rightElbow: -12 } },
+  { id: 'phone', label: '看手机', pose: 'idle', controls: { headPitch: -18, torsoPitch: -8, rightShoulderPitch: 25, rightShoulderRoll: 18, rightElbow: -82, rightWrist: -12 } },
 ]
 
 const POSE_CONTROL_SECTIONS: Array<{ title: string; items: Array<{ key: keyof DirectorPoseControls; label: string }> }> = [
