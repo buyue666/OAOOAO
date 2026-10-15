@@ -300,7 +300,20 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     const appendActor = (actor: DirectorActor, model: THREE.Object3D | null) => {
       if (!active) return
       const group = new THREE.Group(); group.userData.directorObject = true; group.userData.directorActorId = actor.id; group.userData.poseOffset = { x: 0, y: actor.pose === 'walk' ? .2 : 0, z: actor.pose === 'hero' ? -.08 : 0 }; group.position.set(actor.x, actor.y, actor.z); group.rotation.set(THREE.MathUtils.degToRad(actor.rotationX || 0) + group.userData.poseOffset.x, THREE.MathUtils.degToRad(actor.rotationY || 0) + group.userData.poseOffset.y, THREE.MathUtils.degToRad(actor.rotationZ || 0) + group.userData.poseOffset.z); group.scale.setScalar(actor.scale); objectRefs.current.set(`actor:${actor.id}`, group)
-      if (model) { const instance = cloneSkinnedModel(model); tintModel(instance, actor.color); instance.scale.setScalar(1.05); applyActorPose(instance, actor.pose); instance.userData.directorObject = true; group.add(instance) } else addWhiteBoxActor(group, actor)
+      if (model) {
+        try {
+          const instance = cloneSkinnedModel(model)
+          tintModel(instance, actor.color)
+          instance.scale.setScalar(1.05)
+          applyActorPose(instance, actor.pose)
+          instance.userData.directorObject = true
+          group.add(instance)
+        } catch {
+          // A malformed or incompatible GLB must never remove the actor from
+          // the scene. Keep the procedural mannequin visible as a safe fallback.
+          addWhiteBoxActor(group, actor)
+        }
+      } else addWhiteBoxActor(group, actor)
       world.add(group)
       // A model may load after the selection effect has already run.
       if (selectedActorId === actor.id && viewMode === 'director') transformRef.current?.attach(group)
