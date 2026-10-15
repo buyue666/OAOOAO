@@ -63,6 +63,18 @@ function multipart(fields:Record<string,string>,files:Array<{name:string;data:Bu
 function imageSize(value:unknown){const v=String(value||'auto');return ({'1:1':'1024x1024','16:9':'1536x1024','9:16':'1024x1536'} as Record<string,string>)[v]||v;}
 function videoSize(value:unknown){const v=String(value||'720x1280');return ({'1:1':'720x1280','16:9':'1280x720','9:16':'720x1280'} as Record<string,string>)[v]||v;}
 export type ProviderResult={type:'complete';result:Json}|{type:'pending';upstreamId:string};
+async function providerTextMessages(ctx:Context,userId:string,input:Json){
+  const messages=Array.isArray(input.messages)?input.messages:[{role:'user',content:input.prompt}];
+  return Promise.all(messages.map(async (message:Json)=>{
+    if(typeof message.content==='string')return message;
+    const content=await Promise.all(message.content.map(async (part:Json)=>{
+      if(part.type!=='image_url')return part;
+      const ref=await readReference(ctx,userId,{url:part.image_url?.url});
+      return {type:'image_url',image_url:{url:`data:${ref.mimeType};base64,${ref.bytes.toString('base64')}`}};
+    }));
+    return {...message,content};
+  }));
+}
 export async function invokeProvider(ctx:Context,job:Json,poll=false,transport:typeof safeFetch=safeFetch):Promise<ProviderResult>{
   let submitted=false;
   try{return await invokeProviderInternal(ctx,job,poll,transport,()=>{submitted=true;});}
@@ -85,7 +97,7 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   };
   const model=job.upstream_model,input=job.input,config=input.config||{};
   if(job.kind==='text'){
-    const response=await request('/chat/completions',JSON.stringify({model,messages:input.messages||[{role:'user',content:input.prompt}],stream:false}));
+    const response=await request('/chat/completions',JSON.stringify({model,messages:await providerTextMessages(ctx,job.user_id,input),stream:false}));
     const data=await response.json() as Json;const content=data.choices?.[0]?.message?.content;
     if(typeof content!=='string')throw new ProviderFailure('Provider returned no usable text output');
     return{type:'complete',result:{content}};
@@ -134,3 +146,4 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   }
   throw new ProviderFailure('Unsupported generation type',true);
 }
+

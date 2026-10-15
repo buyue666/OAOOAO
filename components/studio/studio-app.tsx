@@ -28,6 +28,7 @@ function isProtectedStudioRoute(pathname: string) {
     || pathname === '/tasks'
     || pathname === '/works'
     || pathname === '/skills'
+    || pathname === '/tools'
     || pathname === '/account'
     || pathname === '/settings'
 }
@@ -60,16 +61,16 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   }, [pathname, isProtectedRoute, authChecking, authRedirecting])
 
   if (authChecking || authRedirecting) {
-    return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{authRedirecting ? '正在前往登录页…' : '正在检查登录状态…'}</main>
+    return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{authRedirecting ? '����ǰ����¼ҳ��' : '���ڼ���¼״̬��'}</main>
   }
 
   /**
-   * 着陆页、登录、套餐与后台都自带独立版式，不套工作台外壳：
-   *  - 着陆页主视觉与滚动编排是专门调整过的，外壳会干扰它；
-   *  - 套餐页有指定的布局与商品展示规则；
-   *  - 后台是独立控制台（自己的侧栏与顶栏）。
+   * ��½ҳ����¼���ײ����̨���Դ�������ʽ�����׹���̨��ǣ�
+   *  - ��½ҳ���Ӿ������������ר�ŵ������ģ���ǻ��������
+   *  - �ײ�ҳ��ָ���Ĳ�������Ʒչʾ����
+   *  - ��̨�Ƕ�������̨���Լ��Ĳ����붥������
    *
-   * 因此这里只负责工作台页面（含画布、Agent、项目、素材等）。
+   * �������ֻ������̨ҳ�棨��������Agent����Ŀ���زĵȣ���
    */
   if (isLanding || isAuthPage || isPolicyPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isAdmin) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
@@ -84,14 +85,14 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
       {pathname === '/studio' && <HomepageAnnouncement placement="workbench" />}
       <Sidebar />
       {/*
-        内容列只做左侧内边距过渡。这里**不能**加 filter / backdrop-filter /
-        transform / contain：那会给内部的 fixed 侧栏、sticky 顶栏与 portal 浮层
-        创建新的包含块，导致菜单、弹窗与工具提示错位。
+        ������ֻ������ڱ߾���ɡ�����**����**�� filter / backdrop-filter /
+        transform / contain���ǻ���ڲ��� fixed ������sticky ������ portal ����
+        �����µİ����飬���²˵��������빤����ʾ��λ��
       */}
       <div className={cn('relative z-10 min-h-dvh transition-[padding] duration-200 ease-out', state.sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-56')}>
         <Topbar onMenuClick={() => setMobileNavOpen(true)} />
         <main className="min-h-[calc(100dvh-60px)]">
-          {/* 路由切换时内容轻微淡入并上移，不产生累计布局偏移 */}
+          {/* ·���л�ʱ������΢���벢���ƣ��������ۼƲ���ƫ�� */}
           <div key={pathname} className={isWorkspace ? undefined : 'motion-page'}>{children}</div>
         </main>
       </div>
@@ -100,3 +101,4 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
       </div>
   )
 }
+

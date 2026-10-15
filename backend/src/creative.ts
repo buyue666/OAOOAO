@@ -17,10 +17,24 @@ export const inputHash=(value:unknown)=>createHash('sha256').update(stable(value
 export function taskView(row:Json){return{id:row.id,kind:row.kind,status:row.status,model:row.model,result:row.result||undefined,error:row.error||undefined,pointsCost:Number(row.cost),pointsRefunded:['error','cancelled'].includes(row.status)&&Number(row.cost)>0,needsReview:row.needs_review,reviewReason:row.needs_review?row.error:undefined,executionPhase:row.phase,upstreamId:row.upstream_id||undefined,canRetry:row.status==='error',createdAt:new Date(row.created_at).getTime(),updatedAt:new Date(row.updated_at).getTime(),prompt:row.input.prompt,clientRequestId:row.client_request_id,cancelRequested:row.cancel_requested};}
 function projectView(row:Json){return{...row.document,id:row.id,title:row.title,sourceHandoffId:row.source_handoff_id||undefined,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
 function assetView(row:Json){return{...row.document,id:row.id,kind:row.kind,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
+function textMessageContent(value:unknown){
+  if(typeof value==='string')return value.slice(0,32000);
+  if(!Array.isArray(value)||value.length<1||value.length>12)throw httpError(400,'Invalid multimodal message content');
+  return value.map((part:unknown)=>{
+    const item=object(part);const type=String(item.type||'');
+    if(type==='text')return {type:'text',text:string(item.text,'message text',32000)};
+    if(type==='image_url'){
+      const image=object(item.image_url);const url=string(image.url,'image URL',2000);
+      if(!/^\/api\/(?:media|reference-assets|generation-log-assets)\/[a-f0-9-]{36}$/i.test(url))throw httpError(400,'Image analysis only accepts an owned media URL');
+      return {type:'image_url',image_url:{url}};
+    }
+    throw httpError(400,'Unsupported multimodal message part');
+  });
+}
 function generationInput(kind:GenerationKind,raw:unknown):Json{
   const body=object(raw);const config=body.config?object(body.config):{};let prompt=body.prompt;
   let messages;
-  if(kind==='text'&&Array.isArray(body.messages)){messages=body.messages.map((m:unknown)=>{const v=object(m);if(!['user','assistant','system','developer'].includes(v.role))throw httpError(400,'Invalid text message role');return{role:v.role,content:string(v.content,'message',32000)};});if(!messages.length||messages.length>100)throw httpError(400,'Invalid messages');prompt=messages.map((m:any)=>m.content).join('\n');}
+  if(kind==='text'&&Array.isArray(body.messages)){messages=body.messages.map((m:unknown)=>{const v=object(m);if(!['user','assistant','system','developer'].includes(v.role))throw httpError(400,'Invalid text message role');return{role:v.role,content:textMessageContent(v.content)};});if(!messages.length||messages.length>100)throw httpError(400,'Invalid messages');prompt=messages.map((m:any)=>typeof m.content==='string'?m.content:m.content.filter((part:any)=>part.type==='text').map((part:any)=>part.text).join(' ')).join('\n');}
   const input:Json={prompt:kind==='render'?'Render clips':string(prompt,'prompt',64000),config:{...config},context:body.context?object(body.context):{},source:typeof body.source==='string'?body.source:'workbench'};
   if(messages)input.messages=messages;
   if(body.kind)input.kind=body.kind;
@@ -33,6 +47,7 @@ async function verifyContext(ctx:Context,client:PoolClient,userId:string,input:J
   if(input.context?.projectId){const row=await client.query('SELECT id FROM oaooao_projects WHERE id=$1 AND user_id=$2',[input.context.projectId,userId]);if(!row.rowCount)throw httpError(404,'Project not found');}
   if(input.context?.parentTaskId){const row=await client.query('SELECT id FROM oaooao_generation_jobs WHERE id=$1 AND user_id=$2',[input.context.parentTaskId,userId]);if(!row.rowCount)throw httpError(404,'Parent task not found');}
   for(const ref of input.references||[]){if(typeof ref.url!=='string')continue;let url:URL;try{url=new URL(ref.url,ctx.config.origin);}catch{throw httpError(400,'Invalid reference URL');}if(url.origin===new URL(ctx.config.origin).origin){const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);if(!match)throw httpError(400,'Unsupported local reference');await ownedMedia(ctx,userId,match[1],client);}}
+  for(const message of input.messages||[]){if(typeof message.content==='string')continue;for(const part of message.content){if(part.type!=='image_url')continue;const parsed=new URL(part.image_url.url,ctx.config.origin);if(parsed.origin!==new URL(ctx.config.origin).origin)throw httpError(400,'Image analysis only accepts an owned media URL');const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(parsed.pathname);if(!match||parsed.search)throw httpError(400,'Unsupported image analysis asset');await ownedMedia(ctx,userId,match[1],client);}}
 }
 export async function createJob(ctx:Context,userId:string,kind:GenerationKind,input:Json,requestId:string,attemptNo=1,providedClient?:PoolClient):Promise<Json>{
   if(!requestId||requestId.length>200||!Number.isSafeInteger(attemptNo)||attemptNo<1||attemptNo>1000)throw httpError(400,'Invalid submission identity');
@@ -44,14 +59,14 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
     // Read the current plan only after this lock: a transaction that waited for
     // an assignment/revocation must not authorize against the former plan.
     const account=(await client.query('SELECT id,enabled FROM oaooao_users WHERE id=$1 FOR NO KEY UPDATE',[userId])).rows[0];
-    if(!account?.enabled)throw httpError(403,'账号不存在或已停用，无法创建生成任务');
+    if(!account?.enabled)throw httpError(403,'�˺Ų����ڻ���ͣ�ã��޷�������������');
     await verifyContext(ctx,client,userId,input);
     const settings=await getSettings(ctx,client);
     let plan:Json|undefined;
     if(settings.entitlements?.enabled){
       const summary=await getPlanSummary(ctx,userId,client);const planId=summary.hasActivePlan?summary.planId:settings.entitlements.defaultPlanId;
       plan=settings.entitlements.plans?.find((p:Json)=>p.id===planId&&p.enabled);
-      if(!plan)throw httpError(403,'没有可用的创作权益方案，请联系管理员');
+      if(!plan)throw httpError(403,'û�п��õĴ���Ȩ�淽��������ϵ����Ա');
       assertPlanGenerationAllowed(plan,kind);
     }
     const provider=await resolveProvider(ctx,kind,input,client);
@@ -93,7 +108,7 @@ async function registerProjects(app:FastifyInstance,ctx:Context){
     app.post(root,{bodyLimit:3*1024*1024},async request=>{const user=await ctx.requireUser(request);const body=object(request.body);const title=string(body.title,'title',250);const handoff=body.sourceHandoffId?string(body.sourceHandoffId,'sourceHandoffId',200):null;
       let document:Json;
       if(kind==='canvas')document=normalizeProject(kind,body.project?object(body.project):{},true);
-      else{const episodeId=randomUUID();document=normalizeProject(kind,{summary:body.summary||'',style:body.style||'',ratio:body.ratio||'9:16',status:'active',characters:[],scenes:[],props:[],clues:[],defaultVideoMode:'storyboard',activeEpisodeId:episodeId,sourceAssets:body.sourceAssets||[],episodes:[{id:episodeId,title:'第 1 集',script:body.initialScript||'',outline:'',hook:'',nextPreview:'',sourceRange:'',reviewStatus:'draft',shots:[]}]});}
+      else{const episodeId=randomUUID();document=normalizeProject(kind,{summary:body.summary||'',style:body.style||'',ratio:body.ratio||'9:16',status:'active',characters:[],scenes:[],props:[],clues:[],defaultVideoMode:'storyboard',activeEpisodeId:episodeId,sourceAssets:body.sourceAssets||[],episodes:[{id:episodeId,title:'�� 1 ��',script:body.initialScript||'',outline:'',hook:'',nextPreview:'',sourceRange:'',reviewStatus:'draft',shots:[]}]});}
       const project=await transaction(ctx.db,async client=>{if(handoff){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`handoff:${user.id}:${kind}:${handoff}`]);const found=(await client.query('SELECT * FROM oaooao_projects WHERE user_id=$1 AND kind=$2 AND source_handoff_id=$3',[user.id,kind,handoff])).rows[0];if(found)return found;}const id=kind==='drama'?`drama-${randomUUID()}`:randomUUID();return(await client.query('INSERT INTO oaooao_projects(id,user_id,kind,title,source_handoff_id,document) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[id,user.id,kind,title,handoff,document])).rows[0];});return ok({project:projectView(project)});
     });
     app.get(root+'/:id',async request=>{const user=await ctx.requireUser(request);const row=(await ctx.db.query('SELECT * FROM oaooao_projects WHERE id=$1 AND user_id=$2 AND kind=$3',[(request.params as any).id,user.id,kind])).rows[0];if(!row)throw httpError(404,'Project not found');return ok({project:projectView(row)});});
@@ -196,3 +211,4 @@ export async function registerCreative(app:FastifyInstance,ctx:Context){
   });
   if(ctx.config.workerEnabled){let stop:(()=>Promise<void>)|undefined;app.addHook('onReady',async()=>{stop=startWorker(ctx);});app.addHook('onClose',async()=>{await stop?.();});}
 }
+

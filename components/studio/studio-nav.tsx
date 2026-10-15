@@ -6,6 +6,7 @@ import {
   Library,
   ListChecks,
   Puzzle,
+  WandSparkles,
   Settings,
   ShieldCheck,
   type LucideIcon,
@@ -17,67 +18,69 @@ export interface StudioNavItem {
   label: string
   href: string
   icon: LucideIcon
-  /** 命中这些路径前缀时高亮，让子页面归入同一个一级入口。 */
+  /** ������Щ·��ǰ׺ʱ����������ҳ�����ͬһ��һ����ڡ� */
   matches: readonly string[]
 }
 
 export const studioPrimaryNav: readonly StudioNavItem[] = [
-  { label: '开始创作', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent', '/image', '/video'] },
-  { label: '我的项目', href: '/projects', icon: FolderOpen, matches: ['/projects', '/drama', '/canvas'] },
-  { label: '创作资产', href: '/assets', icon: Library, matches: ['/assets'] },
+  { label: '��ʼ����', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent', '/image', '/video'] },
+  { label: '�ҵ���Ŀ', href: '/projects', icon: FolderOpen, matches: ['/projects', '/drama', '/canvas'] },
+  { label: '�����ʲ�', href: '/assets', icon: Library, matches: ['/assets'] },
 ]
 
 export const studioSecondaryNav: readonly StudioNavItem[] = [
-  { label: '生成记录', href: '/works', icon: History, matches: ['/works', '/gallery'] },
-  { label: '任务', href: '/tasks', icon: ListChecks, matches: ['/tasks'] },
-  { label: '技能库', href: '/skills', icon: Puzzle, matches: ['/skills'] },
+  { label: '���ɼ�¼', href: '/works', icon: History, matches: ['/works', '/gallery'] },
+  { label: '����', href: '/tasks', icon: ListChecks, matches: ['/tasks'] },
+  { label: '���ܿ�', href: '/skills', icon: Puzzle, matches: ['/skills'] },
+  { label: '������', href: '/tools', icon: WandSparkles, matches: ['/tools'] },
 ]
 
-export const studioAdminNav: StudioNavItem = { label: '管理员后台', href: '/admin', icon: ShieldCheck, matches: ['/admin'] }
-export const studioSettingsNav: StudioNavItem = { label: '设置', href: '/settings', icon: Settings, matches: ['/settings'] }
+export const studioAdminNav: StudioNavItem = { label: '����Ա��̨', href: '/admin', icon: ShieldCheck, matches: ['/admin'] }
+export const studioSettingsNav: StudioNavItem = { label: '����', href: '/settings', icon: Settings, matches: ['/settings'] }
 
 export function isNavItemActive(pathname: string, item: StudioNavItem) {
   return item.matches.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
 const rootTitles: Record<string, string> = {
-  studio: '开始创作',
-  agent: '导演 Agent',
-  image: '图片生成',
-  video: '视频生成',
-  drama: '短剧制作',
-  canvas: '自由画布',
-  tasks: '任务',
-  works: '生成记录',
-  gallery: '广场',
-  projects: '我的项目',
-  assets: '创作资产',
-  skills: '技能库',
-  account: '账户',
-  settings: '设置',
-  plans: '套餐',
+  studio: '��ʼ����',
+  agent: '���� Agent',
+  image: 'ͼƬ����',
+  video: '��Ƶ����',
+  drama: '�̾�����',
+  canvas: '���ɻ���',
+  tasks: '����',
+  works: '���ɼ�¼',
+  gallery: '�㳡',
+  projects: '�ҵ���Ŀ',
+  assets: '�����ʲ�',
+  skills: '���ܿ�',
+  account: '�˻�',
+  settings: '����',
+  plans: '�ײ�',
+  tools: '������',
 }
 
 const sectionTitles: Record<string, string> = {
-  script: '剧本',
-  storyboard: '分镜',
-  shots: '镜头',
-  characters: '角色与场景',
-  cut: '成片',
-  overview: '概览',
-  assets: '素材',
-  canvas: '画布',
-  settings: '设置',
+  script: '�籾',
+  storyboard: '�־�',
+  shots: '��ͷ',
+  characters: '��ɫ�볡��',
+  cut: '��Ƭ',
+  overview: '����',
+  assets: '�ز�',
+  canvas: '����',
+  settings: '����',
 }
 
-/** 顶栏只显示当前页面名称；项目内页面附带项目名，避免只剩一个泛化的分区名。 */
+/** ����ֻ��ʾ��ǰҳ�����ƣ���Ŀ��ҳ�渽����Ŀ��������ֻʣһ�������ķ������� */
 export function studioPageTitle(pathname: string, projectTitle?: string) {
   const [root, id, section] = pathname.split('/').filter(Boolean)
-  if (!root) return '开始创作'
+  if (!root) return '��ʼ����'
   if (id && (root === 'projects' || root === 'drama')) {
-    const name = projectTitle ?? (root === 'drama' ? '短剧项目' : '项目')
+    const name = projectTitle ?? (root === 'drama' ? '�̾���Ŀ' : '��Ŀ')
     if (!section) return name
-    return `${name} · ${sectionTitles[section] ?? section}`
+    return `${name} �� ${sectionTitles[section] ?? section}`
   }
   return rootTitles[root] ?? 'OAO'
 }
@@ -115,3 +118,4 @@ export function StudioNavLink({
 
   return collapsed ? <Tooltip label={item.label} side="right" className="flex w-full justify-center">{link}</Tooltip> : link
 }
+

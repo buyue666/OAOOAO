@@ -1,10 +1,10 @@
 /**
- * OAOOAO 真实生成接口客户端。
+ * OAOOAO ��ʵ���ɽӿڿͻ��ˡ�
  *
- * 覆盖 image-tasks / video-generation-tasks / audio-tasks / text-tasks / agent/runs 与 generation-logs。
- * 后端任务接口会把积分余额放在 `x-vozeb-pro-points-*` 响应头里，这里统一解析为 PointsSnapshot，
- * 页面因此不需要自己读取响应头。配置密钥不在前端出现：任务请求只提交逻辑模型 ID，
- * 真正的渠道与密钥由后端按管理员配置解析。
+ * ���� image-tasks / video-generation-tasks / audio-tasks / text-tasks / agent/runs �� generation-logs��
+ * �������ӿڻ�ѻ��������� `x-vozeb-pro-points-*` ��Ӧͷ�����ͳһ����Ϊ PointsSnapshot��
+ * ҳ����˲���Ҫ�Լ���ȡ��Ӧͷ��������Կ����ǰ�˳��֣���������ֻ�ύ�߼�ģ�� ID��
+ * ��������������Կ�ɺ�˰�����Ա���ý�����
  */
 import { StudioApiError } from './api'
 import type {
@@ -54,36 +54,36 @@ function errorMessage(payload: unknown, status: number) {
       if (typeof value === 'string' && value.trim()) return value.trim()
     }
   }
-  return `请求失败（${status}）`
+  return `����ʧ�ܣ�${status}��`
 }
 
 /**
- * 请求结果的性质。
+ * �����������ʡ�
  *
- * 关键区分：`unavailable` 表示「这次没问到」，`failed` 才表示「任务真的失败」。
- * 早先把查询失败直接当成任务失败，会在上游仍在生成时误判并停止轮询。
+ * �ؼ����֣�`unavailable` ��ʾ�����û�ʵ�����`failed` �ű�ʾ���������ʧ�ܡ���
+ * ���ȰѲ�ѯʧ��ֱ�ӵ�������ʧ�ܣ�����������������ʱ���в�ֹͣ��ѯ��
  */
 export type RequestOutcome = 'ok' | 'rejected' | 'expired' | 'unavailable' | 'not-found' | 'pending-confirmation' | 'failed'
 
-const CONFIRMATION_PATTERN = /待确认|需要人工|人工接管|无法确认/
+const CONFIRMATION_PATTERN = /��ȷ��|��Ҫ�˹�|�˹��ӹ�|�޷�ȷ��/
 
 /**
- * 把一次 HTTP 结果归类。
- * - 5xx / 429 / 网络异常 → unavailable：结果未知，可重试，不能当作终态。
- * - **402（或文案表明积分/余额不足）→ failed**：这是**确定性拒绝**，
- *   余额不够时重试多少次都不会成功，必须提示用户去充值，
- *   而不是像 429 那样提示「稍后重试」并自动重试。
- * - 401/403 → expired：会话或权限失效，需要重新登录。
- * - 404 → not-found：任务在后端不存在（例如已过期清理）。
- * - 409 → rejected：状态已变化或参数冲突，需要刷新后重试。
- * - 其他 4xx → failed：后端明确拒绝，是真实失败。
- * - 200/202 带待确认标记 → pending-confirmation：上游创建结果未知，必须人工/重新检查。
+ * ��һ�� HTTP ������ࡣ
+ * - 5xx / 429 / �����쳣 �� unavailable�����δ֪�������ԣ����ܵ�����̬��
+ * - **402�����İ���������/���㣩�� failed**������**ȷ���Ծܾ�**��
+ *   ����ʱ���Զ��ٴζ�����ɹ���������ʾ�û�ȥ��ֵ��
+ *   �������� 429 ������ʾ���Ժ����ԡ����Զ����ԡ�
+ * - 401/403 �� expired���Ự��Ȩ��ʧЧ����Ҫ���µ�¼��
+ * - 404 �� not-found�������ں�˲����ڣ������ѹ�����������
+ * - 409 �� rejected��״̬�ѱ仯�������ͻ����Ҫˢ�º����ԡ�
+ * - ���� 4xx �� failed�������ȷ�ܾ�������ʵʧ�ܡ�
+ * - 200/202 ����ȷ�ϱ�� �� pending-confirmation�����δ������δ֪�������˹�/���¼�顣
  */
 export function classifyOutcome(status: number | undefined, message = '', payload?: unknown): RequestOutcome {
   const text = `${message} ${payload && typeof payload === 'object' ? JSON.stringify(payload) : ''}`
   if (status === undefined) return 'unavailable'
-  // 必须先于 429 分支判断：余额不足是确定性拒绝，不是「稍后重试」。
-  if (status === 402 || /积分不足|余额不足|配额不足|insufficient\s+(points|balance)/i.test(text)) return 'failed'
+  // �������� 429 ��֧�жϣ�������ȷ���Ծܾ������ǡ��Ժ����ԡ���
+  if (status === 402 || /���ֲ���|����|����|insufficient\s+(points|balance)/i.test(text)) return 'failed'
   if (status >= 500 || status === 429 || status === 408) return 'unavailable'
   if (status === 401 || status === 403) return 'expired'
   if (status === 404) return 'not-found'
@@ -94,7 +94,7 @@ export function classifyOutcome(status: number | undefined, message = '', payloa
   return CONFIRMATION_PATTERN.test(text) ? 'pending-confirmation' : 'ok'
 }
 
-/** 任务状态到结果性质的映射，供轮询判断能否继续等待。 */
+/** ����״̬��������ʵ�ӳ�䣬����ѯ�ж��ܷ�����ȴ��� */
 export function outcomeOfTask(task: { status?: string; needsReview?: boolean } | undefined): RequestOutcome {
   if (!task) return 'unavailable'
   if (task.needsReview) return 'pending-confirmation'
@@ -105,9 +105,9 @@ export function outcomeOfTask(task: { status?: string; needsReview?: boolean } |
 }
 
 /**
- * 生成接口可能返回 200 或 202（上游创建结果待确认）。
- * 两者都携带可用任务，因此这里只把 4xx/5xx 视为失败。
- * 网络层异常统一转成 `unavailable`，让调用方区分「没问到」和「任务失败」。
+ * ���ɽӿڿ��ܷ��� 200 �� 202�����δ��������ȷ�ϣ���
+ * ���߶�Я�����������������ֻ�� 4xx/5xx ��Ϊʧ�ܡ�
+ * ������쳣ͳһת�� `unavailable`���õ��÷����֡�û�ʵ����͡�����ʧ�ܡ���
  */
 async function generate<T>(path: string, init: RequestInit): Promise<GenerationResponse<T>> {
   const headers = new Headers(init.headers)
@@ -116,8 +116,8 @@ async function generate<T>(path: string, init: RequestInit): Promise<GenerationR
   try {
     response = await fetch(path, { ...init, headers, credentials: 'include', cache: 'no-store' })
   } catch (reason) {
-    // 浏览器网络中断、DNS 失败、连接被重置：请求可能已经到达后端，结果未知。
-    throw new StudioApiError(reason instanceof Error ? reason.message : '网络请求失败，无法确认服务端状态', 0, { outcome: 'unavailable' })
+    // ����������жϡ�DNS ʧ�ܡ����ӱ����ã���������Ѿ������ˣ����δ֪��
+    throw new StudioApiError(reason instanceof Error ? reason.message : '��������ʧ�ܣ��޷�ȷ�Ϸ����״̬', 0, { outcome: 'unavailable' })
   }
   const text = await response.text()
   let payload: unknown = null
@@ -136,18 +136,18 @@ async function generate<T>(path: string, init: RequestInit): Promise<GenerationR
 }
 
 /**
- * 生成一个提交标识。
+ * ����һ���ύ��ʶ��
  *
- * 后端以 `(user, task_type, clientRequestId, attemptNo)` 做幂等去重：
- * 同一个 ID 重复提交只会返回第一次创建的任务，不会重复扣费。
- * 因此这个 ID 必须由调用方持有并复用（网络重试），只有「明确的新一次创作」才换新 ID。
+ * ����� `(user, task_type, clientRequestId, attemptNo)` ���ݵ�ȥ�أ�
+ * ͬһ�� ID �ظ��ύֻ�᷵�ص�һ�δ��������񣬲����ظ��۷ѡ�
+ * ������ ID �����ɵ��÷����в����ã��������ԣ���ֻ�С���ȷ����һ�δ������Ż��� ID��
  */
 export function newClientRequestId(prefix: string) {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return `${prefix}-${crypto.randomUUID()}`
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-/* ---------------------------------- 创建 ---------------------------------- */
+/* ---------------------------------- ���� ---------------------------------- */
 
 export function createImageTask(input: ImageGenerationInput) {
   const references: GenerationReference[] = input.references?.filter((reference) => reference.url || reference.dataUrl) ?? (input.referenceUrls ?? []).filter(Boolean).map((url) => (
@@ -173,8 +173,8 @@ export function createImageTask(input: ImageGenerationInput) {
 }
 
 /**
- * 后端优先读取 `x-vozeb-pro-client-request-id` 头并在限流之前完成去重，
- * 因此重试同一个 ID 既不会新建任务，也不会被重复计入限流。
+ * ������ȶ�ȡ `x-vozeb-pro-client-request-id` ͷ��������֮ǰ���ȥ�أ�
+ * �������ͬһ�� ID �Ȳ����½�����Ҳ���ᱻ�ظ�����������
  */
 function requestIdHeaders(clientRequestId?: string, attemptNo?: number) {
   const headers: Record<string, string> = {}
@@ -216,16 +216,16 @@ export function createVideoTask(input: VideoGenerationInput) {
   })
 }
 
-/** 将浏览器内的参考素材交给后端做权限校验和临时发布，避免把 blob: URL 直接传给上游。 */
+/** ��������ڵĲο��زĽ��������Ȩ��У�����ʱ����������� blob: URL ֱ�Ӵ������Ρ� */
 export async function publishReferenceAsset(type: 'image' | 'video', dataUrl: string) {
-  if (!dataUrl) throw new StudioApiError('参考素材读取失败，请重新上传', 400)
-  if (dataUrl.length > 24 * 1024 * 1024) throw new StudioApiError('参考素材超过当前直传限制，请压缩后重试', 413)
+  if (!dataUrl) throw new StudioApiError('�ο��زĶ�ȡʧ�ܣ��������ϴ�', 400)
+  if (dataUrl.length > 24 * 1024 * 1024) throw new StudioApiError('�ο��زĳ�����ǰֱ�����ƣ���ѹ��������', 413)
   const result = await generate<{ upstreamUrl?: string; error?: string; data?: { upstreamUrl?: string; error?: string } }>('/api/reference-assets', {
     method: 'POST',
     body: JSON.stringify({ type, dataUrl, persistent: false }),
   })
   const upstreamUrl = result.data?.upstreamUrl ?? result.data?.data?.upstreamUrl
-  if (!upstreamUrl) throw new StudioApiError(result.data?.error || result.data?.data?.error || '参考素材发布失败', 502, result.data)
+  if (!upstreamUrl) throw new StudioApiError(result.data?.error || result.data?.data?.error || '�ο��زķ���ʧ��', 502, result.data)
   return upstreamUrl
 }
 
@@ -247,18 +247,18 @@ export function createAudioTask(input: AudioGenerationInput) {
 }
 
 /**
- * 文本任务创建。
+ * �ı����񴴽���
  *
- * 后端已支持 `context.clientRequestId` 与 `x-vozeb-pro-client-request-id` 幂等头
- * （本轮补齐），因此文本任务现在与图片/视频一样：网络重试复用同一标识时
- * 后端返回第一次创建的任务，不会重复创建也不会重复扣费。
+ * �����֧�� `context.clientRequestId` �� `x-vozeb-pro-client-request-id` �ݵ�ͷ
+ * �����ֲ��룩������ı�����������ͼƬ/��Ƶһ�����������Ը���ͬһ��ʶʱ
+ * ��˷��ص�һ�δ��������񣬲����ظ�����Ҳ�����ظ��۷ѡ�
  */
 export function createTextTask(input: TextGenerationInput) {
   return generate<{ task: GenerationTask }>('/api/text-tasks', {
     method: 'POST',
     body: JSON.stringify({
       config: input.model ? { model: input.model } : {},
-      messages: [{ role: 'user', content: input.prompt }],
+      messages: input.messages?.length ? input.messages : [{ role: 'user', content: input.prompt }],
       context: {
         ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
         ...(input.attemptNo ? { attemptNo: input.attemptNo } : {}),
@@ -268,30 +268,30 @@ export function createTextTask(input: TextGenerationInput) {
   })
 }
 
-/* ---------------------------------- 查询 ---------------------------------- */
+/* ---------------------------------- ��ѯ ---------------------------------- */
 
 const taskPaths: Record<string, string> = { image: 'image-tasks', video: 'video-tasks', audio: 'audio-tasks', text: 'text-tasks' }
 
 export function getGenerationTask(kind: 'image' | 'video' | 'audio' | 'text', id: string) {
   const path = taskPaths[kind]
-  if (!path) throw new StudioApiError('不支持的任务类型', 400)
+  if (!path) throw new StudioApiError('��֧�ֵ���������', 400)
   return generate<{ task: GenerationTask }>(`/api/${path}/${encodeURIComponent(id)}`, { method: 'GET' })
 }
 
-/** 取消任务。后端只允许 pending/running 状态取消，其余返回 409。 */
+/** ȡ�����񡣺��ֻ���� pending/running ״̬ȡ�������෵�� 409�� */
 export function cancelGenerationTask(kind: 'image' | 'video' | 'audio' | 'text', id: string) {
   const path = taskPaths[kind]
-  if (!path) throw new StudioApiError('不支持的任务类型', 400)
+  if (!path) throw new StudioApiError('��֧�ֵ���������', 400)
   return generate<{ task: GenerationTask }>(`/api/${path}/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify({ status: 'cancelled' }),
   })
 }
 
-/** 重新检查上游状态，用于失败或卡死任务的回收。 */
+/** ���¼������״̬������ʧ�ܻ�������Ļ��ա� */
 export function recoverGenerationTask(kind: 'image' | 'video' | 'audio' | 'text', id: string) {
   const path = taskPaths[kind]
-  if (!path) throw new StudioApiError('不支持的任务类型', 400)
+  if (!path) throw new StudioApiError('��֧�ֵ���������', 400)
   return generate<{ task: GenerationTask }>(`/api/${path}/${encodeURIComponent(id)}`, {
     method: 'POST',
     body: JSON.stringify({ action: 'recover' }),
@@ -326,7 +326,7 @@ export type CreateAgentRunInput = {
   publicPrompt?: string
   snapshot?: unknown
   preferences?: { mode: 'image' | 'video'; image?: { size?: string; quality?: string; count?: number }; video?: { size?: string; quality?: string; seconds?: number } }
-  /** 幂等标识：网络失败后重试必须复用，后端据此返回原运行而不是新建。 */
+  /** �ݵȱ�ʶ������ʧ�ܺ����Ա��븴�ã���˾ݴ˷���ԭ���ж������½��� */
   clientRequestId?: string
 }
 
@@ -349,12 +349,12 @@ export function createAgentRun(input: CreateAgentRunInput) {
   })
 }
 
-/** Agent 支持暂停、恢复、重试、取消及计划确认。 */
+/** Agent ֧����ͣ���ָ������ԡ�ȡ�����ƻ�ȷ�ϡ� */
 export function controlAgentRun(id: string, action: 'pause' | 'resume' | 'retry' | 'cancel' | 'approve') {
   return generate<{ run: AgentRun }>(`/api/agent/runs/${encodeURIComponent(id)}/${action}`, { method: 'POST', body: JSON.stringify({}) })
 }
 
-/** 重试 Agent 运行中失败的子任务。 */
+/** ���� Agent ������ʧ�ܵ������� */
 export function retryAgentRunTask(runId: string, taskId: string) {
   return generate<unknown>(`/api/agent/runs/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' })
 }
@@ -370,7 +370,7 @@ export async function listAgentRunEvents(id: string, lastEventId?: string) {
   return parseSseEvents(text)
 }
 
-/** 解析事件流响应；只保留 data 负载，忽略心跳与注释行。 */
+/** �����¼�����Ӧ��ֻ���� data ���أ�����������ע���С� */
 export function parseSseEvents(text: string): AgentRunEvent[] {
   const events: AgentRunEvent[] = []
   let current: { type?: string; id?: string; data: string[] } | null = null
@@ -401,7 +401,7 @@ export function parseSseEvents(text: string): AgentRunEvent[] {
   return events
 }
 
-/* -------------------------------- 生成记录 -------------------------------- */
+/* -------------------------------- ���ɼ�¼ -------------------------------- */
 
 export async function listGenerationLogs(params: { page?: number; pageSize?: number; kind?: string; status?: string } = {}) {
   const search = new URLSearchParams({ page: String(params.page ?? 1), pageSize: String(params.pageSize ?? 20) })
@@ -411,7 +411,7 @@ export async function listGenerationLogs(params: { page?: number; pageSize?: num
   return { items: data?.items ?? data?.logs ?? [], total: Number(data?.total) || 0 }
 }
 
-/* -------------------------------- 结果归一化 -------------------------------- */
+/* -------------------------------- �����һ�� -------------------------------- */
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -422,8 +422,8 @@ function textOf(value: unknown) {
 }
 
 /**
- * 后端各类型任务的 result 结构不同（图片为 dataUrl/remoteUrl，视频为 url/poster，音频为 url，文本为 content）。
- * 这里统一收敛成 MediaResult[] 与可选文本，页面因此只需处理一种形态。
+ * ��˸���������� result �ṹ��ͬ��ͼƬΪ dataUrl/remoteUrl����ƵΪ url/poster����ƵΪ url���ı�Ϊ content����
+ * ����ͳһ������ MediaResult[] ���ѡ�ı���ҳ�����ֻ�账��һ����̬��
  */
 export function normalizeTaskResult(kind: string, result: unknown): { media: MediaResult[]; text?: string } {
   if (!result) return { media: [] }
@@ -464,7 +464,7 @@ export function normalizeTaskResult(kind: string, result: unknown): { media: Med
     push(item.remoteUrl || item.url || item.serverUrl || item.dataUrl, item.posterUrl || item.poster, { width: numberOr(item.width), height: numberOr(item.height) })
   }
 
-  // 去重，保留首次出现的顺序
+  // ȥ�أ������״γ��ֵ�˳��
   const seen = new Set<string>()
   const unique = media.filter((item) => item.url && !seen.has(item.url) && seen.add(item.url))
   return { media: unique, text: textOf(result.content) || undefined }
@@ -486,3 +486,4 @@ export function isTerminalStatus(status?: string): status is 'success' | 'error'
 export function isActiveStatus(status?: GenerationStatus) {
   return status === 'pending' || status === 'running' || status === 'paused'
 }
+
