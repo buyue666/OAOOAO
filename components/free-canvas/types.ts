@@ -119,8 +119,64 @@ export type DirectorActor = {
   rotationY: number
   rotationZ: number
   pose: 'idle' | 'hero' | 'walk'
+  /**
+   * Optional per-joint pose offsets in degrees. Older director boards omit
+   * this object and continue to use the built-in pose presets.
+   */
+  poseControls?: DirectorPoseControls
   /** Optional same-origin GLB model. Missing values use the bundled CC0 model. */
   modelUrl?: string
+}
+
+/** Fine-grained, human-readable joint controls used by the director pose tab. */
+export type DirectorPoseControls = {
+  torsoPitch: number
+  torsoRoll: number
+  torsoYaw: number
+  headPitch: number
+  headRoll: number
+  headYaw: number
+  leftShoulderPitch: number
+  leftShoulderRoll: number
+  leftShoulderYaw: number
+  leftElbow: number
+  leftWrist: number
+  rightShoulderPitch: number
+  rightShoulderRoll: number
+  rightShoulderYaw: number
+  rightElbow: number
+  rightWrist: number
+  leftHip: number
+  leftKnee: number
+  leftAnkle: number
+  rightHip: number
+  rightKnee: number
+  rightAnkle: number
+}
+
+export const DEFAULT_DIRECTOR_POSE_CONTROLS: DirectorPoseControls = {
+  torsoPitch: 0,
+  torsoRoll: 0,
+  torsoYaw: 0,
+  headPitch: 0,
+  headRoll: 0,
+  headYaw: 0,
+  leftShoulderPitch: 0,
+  leftShoulderRoll: 0,
+  leftShoulderYaw: 0,
+  leftElbow: 0,
+  leftWrist: 0,
+  rightShoulderPitch: 0,
+  rightShoulderRoll: 0,
+  rightShoulderYaw: 0,
+  rightElbow: 0,
+  rightWrist: 0,
+  leftHip: 0,
+  leftKnee: 0,
+  leftAnkle: 0,
+  rightHip: 0,
+  rightKnee: 0,
+  rightAnkle: 0,
 }
 
 export type DirectorCamera = {

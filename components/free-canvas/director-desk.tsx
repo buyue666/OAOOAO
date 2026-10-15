@@ -10,12 +10,46 @@ import { Camera, Check, Clapperboard, Crosshair, Grid3X3, Maximize2, Move3d, Plu
 import { cn } from '@/lib/utils'
 import { useCanvasStore } from './canvas-store'
 import { DEFAULT_DIRECTOR_SCENE } from './node-factory'
-import type { DirectorActor, DirectorCamera, DirectorSceneData } from './types'
+import { DEFAULT_DIRECTOR_POSE_CONTROLS, type DirectorActor, type DirectorCamera, type DirectorPoseControls, type DirectorSceneData } from './types'
 
 type Props = { nodeId: string; onClose: () => void }
 
 const ASPECT_LABEL: Record<DirectorSceneData['aspect'], string> = { '16:9': '横屏 16:9', '9:16': '竖屏 9:16', '1:1': '方形 1:1' }
 const DEFAULT_MODEL_URL = '/assets/director/quaternius-superhero.glb'
+
+const POSE_PRESETS: Array<{ id: string; label: string; pose: DirectorActor['pose']; controls: Partial<DirectorPoseControls> }> = [
+  { id: 'stand', label: '站立', pose: 'idle', controls: {} },
+  { id: 't-pose', label: 'T 型', pose: 'hero', controls: { leftShoulderRoll: -82, rightShoulderRoll: 82 } },
+  { id: 'walk', label: '行走', pose: 'walk', controls: { leftShoulderPitch: 24, rightShoulderPitch: -24, leftHip: -18, rightHip: 18, leftKnee: 8, rightKnee: -8 } },
+  { id: 'run', label: '跑步', pose: 'walk', controls: { torsoPitch: -12, leftShoulderPitch: 50, rightShoulderPitch: -50, leftElbow: -55, rightElbow: -55, leftHip: -38, rightHip: 38, leftKnee: 32, rightKnee: 32 } },
+  { id: 'sit', label: '坐姿', pose: 'idle', controls: { torsoPitch: -8, leftHip: -82, rightHip: -82, leftKnee: 84, rightKnee: 84 } },
+  { id: 'squat', label: '蹲下', pose: 'idle', controls: { torsoPitch: -15, leftHip: -55, rightHip: -55, leftKnee: 105, rightKnee: 105 } },
+  { id: 'kneel', label: '单膝跪', pose: 'idle', controls: { torsoPitch: -5, leftHip: -75, leftKnee: 112, rightHip: 15, rightKnee: 18 } },
+  { id: 'kneel-both', label: '双腿跪', pose: 'idle', controls: { torsoPitch: -5, leftHip: -82, rightHip: -82, leftKnee: 118, rightKnee: 118 } },
+  { id: 'akimbo', label: '叉腰', pose: 'hero', controls: { leftShoulderPitch: 25, rightShoulderPitch: 25, leftShoulderRoll: -38, rightShoulderRoll: 38, leftElbow: -72, rightElbow: -72 } },
+  { id: 'think', label: '思考', pose: 'idle', controls: { torsoYaw: -12, headPitch: -12, headYaw: 18, leftShoulderPitch: 30, leftElbow: -82, leftWrist: 22 } },
+  { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -30, rightShoulderRoll: 70, rightElbow: -28, rightWrist: 20 } },
+  { id: 'point', label: '指向', pose: 'hero', controls: { rightShoulderPitch: -25, rightShoulderRoll: 38, rightElbow: 4, rightWrist: 0 } },
+]
+
+const POSE_CONTROL_SECTIONS: Array<{ title: string; items: Array<{ key: keyof DirectorPoseControls; label: string }> }> = [
+  { title: '躯干与头部', items: [
+    { key: 'torsoPitch', label: '身体 · 前倾' }, { key: 'torsoRoll', label: '身体 · 侧倾' }, { key: 'torsoYaw', label: '躯干 · 扭转' },
+    { key: 'headPitch', label: '头部 · 前倾' }, { key: 'headYaw', label: '头部 · 左右' }, { key: 'headRoll', label: '头部 · 侧倾' },
+  ] },
+  { title: '左臂', items: [
+    { key: 'leftShoulderPitch', label: '肩部 · 前抬' }, { key: 'leftShoulderRoll', label: '肩部 · 外展' }, { key: 'leftShoulderYaw', label: '肩部 · 扭转' },
+    { key: 'leftElbow', label: '手臂 · 弯曲' }, { key: 'leftWrist', label: '手腕 · 扭转' },
+  ] },
+  { title: '右臂', items: [
+    { key: 'rightShoulderPitch', label: '肩部 · 前抬' }, { key: 'rightShoulderRoll', label: '肩部 · 外展' }, { key: 'rightShoulderYaw', label: '肩部 · 扭转' },
+    { key: 'rightElbow', label: '手臂 · 弯曲' }, { key: 'rightWrist', label: '手腕 · 扭转' },
+  ] },
+  { title: '双腿', items: [
+    { key: 'leftHip', label: '左腿 · 髋部' }, { key: 'leftKnee', label: '左腿 · 膝盖' }, { key: 'leftAnkle', label: '左脚 · 脚踝' },
+    { key: 'rightHip', label: '右腿 · 髋部' }, { key: 'rightKnee', label: '右腿 · 膝盖' }, { key: 'rightAnkle', label: '右脚 · 脚踝' },
+  ] },
+]
 
 function copyScene(scene: DirectorSceneData): DirectorSceneData {
   return JSON.parse(JSON.stringify(scene)) as DirectorSceneData
@@ -134,7 +168,7 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
           <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#0b0e12] px-3 py-2 text-xs"><span className="text-neutral-400">画幅</span>{(Object.keys(ASPECT_LABEL) as DirectorSceneData['aspect'][]).map(aspect => <button key={aspect} type="button" className={cn('rounded-md px-2.5 py-1.5', scene.aspect === aspect ? 'bg-white text-black' : 'text-neutral-400 hover:bg-white/10 hover:text-white')} onClick={() => commit({ ...scene, aspect })}>{ASPECT_LABEL[aspect]}</button>)}<label className="ml-auto flex cursor-pointer items-center gap-1.5 text-neutral-400"><input type="checkbox" checked={scene.grid} onChange={event => commit({ ...scene, grid: event.target.checked }, false)} /><Grid3X3 className="size-3.5" />网格</label></div>
           <div className="relative min-h-0 flex-1"><DirectorViewport scene={scene} viewMode={viewMode} focusTarget={selectedObject} focusRequest={focusRequest} selectedActorId={selectedActor} selectedCameraId={selectedCamera} transformMode={transformMode} onActorTransform={(id, patch) => setActor(id, patch)} onCameraTransform={(id, patch) => setCamera(id, patch)} /><div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[10px] text-neutral-400">拖动旋转 · 滚轮缩放 · 右键平移 · 选中对象可变换</div><div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-xl border border-white/10 bg-[#10151c]/90 p-1.5 shadow-2xl backdrop-blur"><button type="button" aria-label="选择工具" className="flex size-8 items-center justify-center rounded-lg bg-white/10 text-white"><Crosshair className="size-4" /></button><button type="button" aria-label="移动工具" className={cn('flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white', transformMode === 'translate' && 'bg-cyan-200/15 text-cyan-100')} onClick={() => setTransformMode('translate')}><Move3d className="size-4" /></button><button type="button" aria-label="旋转工具" className={cn('flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white', transformMode === 'rotate' && 'bg-cyan-200/15 text-cyan-100')} onClick={() => setTransformMode('rotate')}><Rotate3d className="size-4" /></button><button type="button" aria-label="缩放工具" className={cn('flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white', transformMode === 'scale' && 'bg-cyan-200/15 text-cyan-100')} onClick={() => setTransformMode('scale')}><Maximize2 className="size-4" /></button><button type="button" aria-label="聚焦当前对象" className="flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white" onClick={focusSelected}><ScanLine className="size-4" /></button><button type="button" aria-label="切换网格" className={cn('flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white', scene.grid && 'bg-cyan-200/15 text-cyan-100')} onClick={() => commit({ ...scene, grid: !scene.grid }, false)}><Grid3X3 className="size-4" /></button><button type="button" aria-label="切换姿态面板" className="flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white" onClick={() => setInspectorTab('pose')}><Rotate3d className="size-4" /></button></div></div>
         </section>
-        <aside className="order-3 w-full shrink-0 border-t border-white/10 bg-[#0d1014] p-3 lg:w-72 lg:border-l lg:border-t-0">
+        <aside className="order-3 max-h-[42vh] w-full shrink-0 overflow-y-auto border-t border-white/10 bg-[#0d1014] p-3 lg:max-h-none lg:w-72 lg:border-l lg:border-t-0">
           {selectedObject && <div className="mb-3 flex items-center gap-1 rounded-lg bg-black/20 p-1 text-[11px]" role="tablist" aria-label="对象属性"><button type="button" role="tab" aria-selected={inspectorTab === 'properties'} className={cn('flex-1 rounded-md px-2 py-1.5', inspectorTab === 'properties' ? 'bg-white/10 text-white' : 'text-neutral-500')} onClick={() => setInspectorTab('properties')}><SlidersHorizontal className="mr-1 inline size-3.5" />属性</button><button type="button" role="tab" aria-selected={inspectorTab === 'pose'} className={cn('flex-1 rounded-md px-2 py-1.5', inspectorTab === 'pose' ? 'bg-white/10 text-white' : 'text-neutral-500')} onClick={() => setInspectorTab('pose')}><Rotate3d className="mr-1 inline size-3.5" />姿态</button></div>}
           {selectedActor && scene.actors.find(actor => actor.id === selectedActor) ? <ActorInspector actor={scene.actors.find(actor => actor.id === selectedActor)!} tab={inspectorTab} onChange={patch => setActor(selectedActor, patch)} /> : selectedCamera && scene.cameras.find(camera => camera.id === selectedCamera) ? <CameraInspector camera={scene.cameras.find(camera => camera.id === selectedCamera)!} onChange={patch => setCamera(selectedCamera, patch)} /> : <div className="flex h-full min-h-24 flex-col items-center justify-center text-center text-xs text-neutral-500"><Clapperboard className="mb-2 size-5 text-neutral-600" /><p>选择角色或机位<br />编辑位置、姿态与镜头参数</p></div>}
           <label className="mt-4 block text-[11px] text-neutral-500">导演备注<textarea value={scene.notes} onChange={event => commit({ ...scene, notes: event.target.value }, false)} rows={3} placeholder="记录调度、镜头意图或对白提示" className="mt-1.5 w-full resize-none rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-neutral-200 outline-none focus:border-cyan-200/50" /></label>
@@ -147,7 +181,24 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
 function CameraIcon() { return <Camera className="mr-1.5 inline size-3.5 text-cyan-100" aria-hidden="true" /> }
 
 function ActorInspector({ actor, tab = 'properties', onChange }: { actor: DirectorActor; tab?: 'properties' | 'pose'; onChange: (patch: Partial<DirectorActor>) => void }) {
+  const controls = { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...(actor.poseControls ?? {}) }
+  const setPoseControls = (patch: Partial<DirectorPoseControls>) => onChange({ poseControls: { ...controls, ...patch } })
+  const applyPreset = (preset: typeof POSE_PRESETS[number]) => onChange({ pose: preset.pose, poseControls: { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...preset.controls } })
+  if (tab === 'pose') return <PoseInspector actor={actor} controls={controls} setPoseControls={setPoseControls} applyPreset={applyPreset} />
   return <Inspector title={actor.name} subtitle="角色"><Field label="名称"><input value={actor.name} onChange={event => onChange({ name: event.target.value })} /></Field>{tab === 'properties' ? <><Field label="模型"><select value={actor.modelUrl === 'builtin:whitebox' ? 'builtin:whitebox' : (actor.modelUrl || DEFAULT_MODEL_URL)} onChange={event => onChange({ modelUrl: event.target.value })}><option value={DEFAULT_MODEL_URL}>Quaternius 人形（CC0）</option><option value="builtin:whitebox">白盒预览</option></select></Field><Field label="颜色"><input type="color" value={actor.color} onChange={event => onChange({ color: event.target.value })} /></Field><Field label="位置"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={actor.x} onChange={(value) => onChange({ x: value })} /><NumberField label="Y" value={actor.y} onChange={(value) => onChange({ y: value })} /><NumberField label="Z" value={actor.z} onChange={(value) => onChange({ z: value })} /></div></Field><Field label="旋转（度）"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={actor.rotationX} onChange={(value) => onChange({ rotationX: value })} /><NumberField label="Y" value={actor.rotationY} onChange={(value) => onChange({ rotationY: value })} /><NumberField label="Z" value={actor.rotationZ} onChange={(value) => onChange({ rotationZ: value })} /></div></Field><Field label="统一缩放"><input type="range" min="0.5" max="2" step="0.05" value={actor.scale} onChange={event => onChange({ scale: Number(event.target.value) })} /><span className="min-w-7 text-right text-[10px] text-neutral-500">{actor.scale.toFixed(2)}</span></Field></> : <><Field label="姿态"><select value={actor.pose} onChange={event => onChange({ pose: event.target.value as DirectorActor['pose'] })}><option value="idle">待机</option><option value="hero">英雄站姿</option><option value="walk">行走</option></select></Field><div className="grid grid-cols-3 gap-2"><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'idle' ? 'border-cyan-200/60 bg-cyan-200/10 text-cyan-100' : 'border-white/10 text-neutral-500')} onClick={() => onChange({ pose: 'idle' })}>待机</button><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'hero' ? 'border-cyan-200/60 bg-cyan-200/10 text-cyan-100' : 'border-white/10 text-neutral-500')} onClick={() => onChange({ pose: 'hero' })}>英雄</button><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'walk' ? 'border-cyan-200/60 bg-cyan-200/10 text-cyan-100' : 'border-white/10 text-neutral-500')} onClick={() => onChange({ pose: 'walk' })}>行走</button></div><p className="text-[11px] leading-5 text-neutral-500">姿态会同步影响角色的骨骼关节，方便预演动作与构图。</p></>}</Inspector>
+}
+
+function PoseInspector({ actor, controls, setPoseControls, applyPreset }: { actor: DirectorActor; controls: DirectorPoseControls; setPoseControls: (patch: Partial<DirectorPoseControls>) => void; applyPreset: (preset: typeof POSE_PRESETS[number]) => void }) {
+  return <Inspector title={actor.name} subtitle="姿态">
+    <div className="flex items-center justify-between"><span className="text-[11px] text-neutral-400">姿势预设</span><button type="button" className="text-[10px] text-cyan-200 hover:text-cyan-100" onClick={() => setPoseControls(DEFAULT_DIRECTOR_POSE_CONTROLS)}>重置关节</button></div>
+    <div className="grid grid-cols-3 gap-1.5">{POSE_PRESETS.map(preset => <button key={preset.id} type="button" className={cn('rounded-md border px-1.5 py-2 text-[10px] text-neutral-400 hover:border-white/25 hover:bg-white/5 hover:text-white', actor.pose === preset.pose && preset.id === 'stand' && 'border-cyan-200/60 bg-cyan-200/10 text-cyan-100')} onClick={() => applyPreset(preset)}>{preset.label}</button>)}</div>
+    <p className="text-[10px] leading-5 text-neutral-600">先选姿势，再用下方滑杆微调关节；角度会保存到当前角色。</p>
+    <div className="flex flex-col gap-4">{POSE_CONTROL_SECTIONS.map(section => <section key={section.title}><h4 className="mb-2 border-b border-white/10 pb-1.5 text-[10px] font-medium tracking-wide text-neutral-400">{section.title}</h4><div className="flex flex-col gap-2.5">{section.items.map(item => <PoseSlider key={item.key} label={item.label} value={controls[item.key]} onChange={value => setPoseControls({ [item.key]: value })} />)}</div></section>)}</div>
+  </Inspector>
+}
+
+function PoseSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
+  return <label className="block text-[10px] text-neutral-500"><span className="mb-1 flex items-center justify-between gap-2"><span>{label}</span><output className="rounded bg-black/25 px-1.5 py-0.5 tabular-nums text-[9px] text-neutral-400">{Math.round(value)}°</output></span><input aria-label={label} type="range" min="-120" max="120" step="1" value={value} onChange={event => onChange(Number(event.target.value))} className="h-1.5 w-full accent-cyan-200" /></label>
 }
 
 function CameraInspector({ camera, onChange }: { camera: DirectorCamera; onChange: (patch: Partial<DirectorCamera>) => void }) {
@@ -185,7 +236,7 @@ function setBoneRotation(root: THREE.Object3D, name: string, axis: 'x' | 'y' | '
   bone.rotation[axis] += value
 }
 
-function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose']) {
+function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose'], poseControls?: DirectorPoseControls) {
   // The bundled Quaternius model has a humanoid skeleton but no animation clips.
   // These restrained procedural offsets keep the director desk useful without
   // pulling in a separate animation pack or a non-redistributable runtime.
@@ -202,9 +253,36 @@ function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose']) {
     setBoneRotation(root, 'calf_l', 'z', -0.08)
     setBoneRotation(root, 'calf_r', 'z', 0.08)
   }
+  const controls = { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...(poseControls ?? {}) }
+  const radians = (value: number) => THREE.MathUtils.degToRad(value)
+  const rotate = (name: string, axis: 'x' | 'y' | 'z', value: number) => setBoneRotation(root, name, axis, radians(value))
+  rotate('spine_01', 'x', controls.torsoPitch)
+  rotate('spine_01', 'y', controls.torsoYaw)
+  rotate('spine_01', 'z', controls.torsoRoll)
+  rotate('head', 'x', controls.headPitch)
+  rotate('head', 'y', controls.headYaw)
+  rotate('head', 'z', controls.headRoll)
+  rotate('upperarm_l', 'x', controls.leftShoulderPitch)
+  rotate('upperarm_l', 'y', controls.leftShoulderYaw)
+  rotate('upperarm_l', 'z', controls.leftShoulderRoll)
+  rotate('lowerarm_l', 'x', controls.leftElbow)
+  rotate('hand_l', 'z', controls.leftWrist)
+  rotate('upperarm_r', 'x', controls.rightShoulderPitch)
+  rotate('upperarm_r', 'y', controls.rightShoulderYaw)
+  rotate('upperarm_r', 'z', controls.rightShoulderRoll)
+  rotate('lowerarm_r', 'x', controls.rightElbow)
+  rotate('hand_r', 'z', controls.rightWrist)
+  rotate('thigh_l', 'x', controls.leftHip)
+  rotate('calf_l', 'x', controls.leftKnee)
+  rotate('foot_l', 'x', controls.leftAnkle)
+  rotate('thigh_r', 'x', controls.rightHip)
+  rotate('calf_r', 'x', controls.rightKnee)
+  rotate('foot_r', 'x', controls.rightAnkle)
 }
 
 function addWhiteBoxActor(group: THREE.Group, actor: DirectorActor) {
+  const controls = { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...(actor.poseControls ?? {}) }
+  const radians = (value: number) => THREE.MathUtils.degToRad(value)
   const material = new THREE.MeshStandardMaterial({ color: actor.color, roughness: .72 })
   const add = (geometry: THREE.BufferGeometry, position: [number, number, number], rotation?: [number, number, number]) => {
     const mesh = new THREE.Mesh(geometry, material)
@@ -217,13 +295,13 @@ function addWhiteBoxActor(group: THREE.Group, actor: DirectorActor) {
   add(new THREE.SphereGeometry(.28, 16, 12), [0, 2.1, 0])
   add(new THREE.CylinderGeometry(.12, .14, .16, 10), [0, 1.84, 0])
   const armAngle = actor.pose === 'hero' ? .18 : actor.pose === 'walk' ? .24 : .06
-  add(new THREE.CapsuleGeometry(.095, .62, 5, 8), [-.42, 1.25, 0], [0, 0, -armAngle])
-  add(new THREE.CapsuleGeometry(.095, .62, 5, 8), [.42, 1.25, 0], [0, 0, armAngle])
+  add(new THREE.CapsuleGeometry(.095, .62, 5, 8), [-.42, 1.25, 0], [radians(controls.leftShoulderPitch), 0, -armAngle + radians(controls.leftShoulderRoll)])
+  add(new THREE.CapsuleGeometry(.095, .62, 5, 8), [.42, 1.25, 0], [radians(controls.rightShoulderPitch), 0, armAngle + radians(controls.rightShoulderRoll)])
   add(new THREE.SphereGeometry(.12, 10, 8), [-.49, .88, 0])
   add(new THREE.SphereGeometry(.12, 10, 8), [.49, .88, 0])
   const legAngle = actor.pose === 'walk' ? .2 : actor.pose === 'hero' ? .06 : 0
-  add(new THREE.CapsuleGeometry(.12, .62, 5, 8), [-.16, .43, 0], [0, 0, -legAngle])
-  add(new THREE.CapsuleGeometry(.12, .62, 5, 8), [.16, .43, 0], [0, 0, legAngle])
+  add(new THREE.CapsuleGeometry(.12, .62, 5, 8), [-.16, .43, 0], [radians(controls.leftHip + controls.leftKnee), 0, -legAngle])
+  add(new THREE.CapsuleGeometry(.12, .62, 5, 8), [.16, .43, 0], [radians(controls.rightHip + controls.rightKnee), 0, legAngle])
   add(new THREE.CapsuleGeometry(.12, .25, 5, 8), [-.16, .08, -.08], [0, Math.PI / 2, 0])
   add(new THREE.CapsuleGeometry(.12, .25, 5, 8), [.16, .08, -.08], [0, Math.PI / 2, 0])
 }
@@ -303,7 +381,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
         const instance = cloneSkinnedModel(model)
         tintModel(instance, actor.color)
         instance.scale.setScalar(1.05)
-        applyActorPose(instance, actor.pose)
+        applyActorPose(instance, actor.pose, actor.poseControls)
         instance.traverse((child) => {
           child.visible = true
           if (!(child instanceof THREE.Mesh)) return

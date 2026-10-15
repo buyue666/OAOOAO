@@ -21,6 +21,8 @@ import {
   type TaskPhase,
   type DirectorNodeData,
   type DirectorSceneData,
+  type DirectorPoseControls,
+  DEFAULT_DIRECTOR_POSE_CONTROLS,
 } from './types'
 
 type Raw = Record<string, unknown>
@@ -54,6 +56,16 @@ function numberOf(value: unknown, fallback = 0): number {
   return value !== null && value !== undefined && value !== '' && Number.isFinite(parsed) ? parsed : fallback
 }
 
+function readPoseControls(value: unknown): DirectorPoseControls | undefined {
+  const raw = asRecord(value)
+  const keys = Object.keys(DEFAULT_DIRECTOR_POSE_CONTROLS) as (keyof DirectorPoseControls)[]
+  if (!keys.some((key) => raw[key] !== undefined)) return undefined
+  return keys.reduce((result, key) => {
+    result[key] = numberOf(raw[key], DEFAULT_DIRECTOR_POSE_CONTROLS[key])
+    return result
+  }, { ...DEFAULT_DIRECTOR_POSE_CONTROLS } as DirectorPoseControls)
+}
+
 function resolveKind(raw: Raw, type: unknown): CanvasNodeKindValue {
   const candidate = textOf(raw.kind, textOf(type))
   if (candidate === 'task' || candidate === 'agent') return 'agent'
@@ -81,6 +93,7 @@ function readDirectorScene(value: unknown): DirectorSceneData {
       rotationY: numberOf(actor.rotationY),
       rotationZ: numberOf(actor.rotationZ),
       pose: (actor.pose === 'hero' || actor.pose === 'walk' ? actor.pose : 'idle') as 'idle' | 'hero' | 'walk',
+      ...(readPoseControls(actor.poseControls) ? { poseControls: readPoseControls(actor.poseControls) } : {}),
       // Keep board hydration same-origin for bundled assets. Remote model URLs
       // can later be introduced through a signed asset registry, but arbitrary
       // URLs must not become implicit fetches when a board is opened.
