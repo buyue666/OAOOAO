@@ -326,8 +326,12 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       if (!active) return
       const group = new THREE.Group(); group.userData.directorObject = true; group.userData.directorActorId = actor.id; group.userData.poseOffset = { x: 0, y: actor.pose === 'walk' ? .2 : 0, z: actor.pose === 'hero' ? -.08 : 0 }; group.position.set(actor.x, actor.y, actor.z); group.rotation.set(THREE.MathUtils.degToRad(actor.rotationX || 0) + group.userData.poseOffset.x, THREE.MathUtils.degToRad(actor.rotationY || 0) + group.userData.poseOffset.y, THREE.MathUtils.degToRad(actor.rotationZ || 0) + group.userData.poseOffset.z); group.scale.setScalar(actor.scale); objectRefs.current.set(`actor:${actor.id}`, group)
       const instance = modelInstance(actor, model)
+      // Keep a procedural mannequin underneath every actor. Some valid GLB
+      // files can instantiate without producing visible pixels in a user's
+      // browser (for example after a context restore); the mannequin keeps
+      // the scene usable instead of leaving an empty transform gizmo.
+      addWhiteBoxActor(group, actor)
       if (instance) group.add(instance)
-      else addWhiteBoxActor(group, actor)
       world.add(group)
       // A model may load after the selection effect has already run.
       if (selectedActorId === actor.id && viewMode === 'director') transformRef.current?.attach(group)
@@ -343,7 +347,8 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
         const group = objectRefs.current.get(`actor:${actor.id}`)
         const instance = group && modelInstance(actor, model)
         if (!(group instanceof THREE.Group) || !instance) return
-        for (const child of [...group.children]) { group.remove(child); disposeObject(child) }
+        // Do not remove the procedural fallback: it is an intentional
+        // compatibility layer for models that fail to render on a device.
         group.add(instance)
       })
     })
