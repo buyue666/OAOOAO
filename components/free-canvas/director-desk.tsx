@@ -70,7 +70,13 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
   }
   const setActor = (id: string, patch: Partial<DirectorActor>) => commit({ ...scene, actors: scene.actors.map(actor => actor.id === id ? { ...actor, ...patch } : actor) }, false)
   const setCamera = (id: string, patch: Partial<DirectorCamera>) => commit({ ...scene, cameras: scene.cameras.map(camera => camera.id === id ? { ...camera, ...patch } : camera) }, false)
-  const removeActor = (id: string) => commit({ ...scene, actors: scene.actors.filter(actor => actor.id !== id) })
+  const removeActor = (id: string) => {
+    // Removing the currently inspected actor must also clear its selection.
+    // Otherwise the inspector keeps the stale id, `find()` returns undefined,
+    // and the director desk crashes while rendering the deleted actor.
+    if (selectedActor === id) setSelectedActor(null)
+    commit({ ...scene, actors: scene.actors.filter(actor => actor.id !== id) })
+  }
   const removeCamera = (id: string) => {
     if (scene.cameras.length <= 1) return
     const cameras = scene.cameras.filter(camera => camera.id !== id)
@@ -100,7 +106,7 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
           <div className="relative min-h-0 flex-1"><DirectorViewport scene={scene} /><div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[10px] text-neutral-400">拖动旋转 · 滚轮缩放 · 右键平移</div></div>
         </section>
         <aside className="order-3 w-full shrink-0 border-t border-white/10 bg-[#0d1014] p-3 lg:w-64 lg:border-l lg:border-t-0">
-          {selectedActor ? <ActorInspector actor={scene.actors.find(actor => actor.id === selectedActor)!} onChange={patch => setActor(selectedActor, patch)} /> : selectedCamera ? <CameraInspector camera={scene.cameras.find(camera => camera.id === selectedCamera)!} onChange={patch => setCamera(selectedCamera, patch)} /> : <div className="flex h-full min-h-24 flex-col items-center justify-center text-center text-xs text-neutral-500"><Clapperboard className="mb-2 size-5 text-neutral-600" /><p>选择角色或机位<br />编辑位置、姿态与镜头参数</p></div>}
+          {selectedActor && scene.actors.find(actor => actor.id === selectedActor) ? <ActorInspector actor={scene.actors.find(actor => actor.id === selectedActor)!} onChange={patch => setActor(selectedActor, patch)} /> : selectedCamera && scene.cameras.find(camera => camera.id === selectedCamera) ? <CameraInspector camera={scene.cameras.find(camera => camera.id === selectedCamera)!} onChange={patch => setCamera(selectedCamera, patch)} /> : <div className="flex h-full min-h-24 flex-col items-center justify-center text-center text-xs text-neutral-500"><Clapperboard className="mb-2 size-5 text-neutral-600" /><p>选择角色或机位<br />编辑位置、姿态与镜头参数</p></div>}
           <label className="mt-4 block text-[11px] text-neutral-500">导演备注<textarea value={scene.notes} onChange={event => commit({ ...scene, notes: event.target.value }, false)} rows={3} placeholder="记录调度、镜头意图或对白提示" className="mt-1.5 w-full resize-none rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 text-xs text-neutral-200 outline-none focus:border-cyan-200/50" /></label>
         </aside>
       </div>
@@ -145,7 +151,48 @@ function DirectorViewport({ scene }: { scene: DirectorSceneData }) {
     const world = sceneRef.current; if (!world) return
     for (const object of [...world.children]) if (object.userData.directorObject) world.remove(object)
     if (scene.grid) { const grid = new THREE.GridHelper(14, 28, 0x2a5160, 0x1a2830); grid.position.y = 0.01; grid.userData.directorObject = true; world.add(grid) }
-    scene.actors.forEach(actor => { const group = new THREE.Group(); group.userData.directorObject = true; group.position.set(actor.x, 0, actor.z); group.scale.setScalar(actor.scale); const material = new THREE.MeshStandardMaterial({ color: actor.color, roughness: .72 }); const body = new THREE.Mesh(new THREE.CapsuleGeometry(.34, 1.05, 6, 12), material); body.position.y = .9; group.add(body); const head = new THREE.Mesh(new THREE.SphereGeometry(.28, 16, 12), material); head.position.y = 1.75; group.add(head); if (actor.pose === 'hero') group.rotation.z = -.08; if (actor.pose === 'walk') group.rotation.y = .2; world.add(group) })
+    scene.actors.forEach(actor => {
+      const group = new THREE.Group()
+      group.userData.directorObject = true
+      group.position.set(actor.x, 0, actor.z)
+      group.scale.setScalar(actor.scale)
+      const material = new THREE.MeshStandardMaterial({ color: actor.color, roughness: .72 })
+
+      // Keep the white-box style, but make the mannequin readable as a person.
+      // The previous capsule + head looked like a floating bean, which made
+      // character blocking and camera composition hard to judge.
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(.3, .86, 6, 12), material)
+      body.position.y = 1.2
+      group.add(body)
+      const head = new THREE.Mesh(new THREE.SphereGeometry(.28, 16, 12), material)
+      head.position.y = 2.1
+      group.add(head)
+
+      const limbMaterial = material
+      const armAngle = actor.pose === 'hero' ? .18 : actor.pose === 'walk' ? .24 : .06
+      const leftArm = new THREE.Mesh(new THREE.CapsuleGeometry(.095, .62, 5, 8), limbMaterial)
+      leftArm.position.set(-.42, 1.25, 0)
+      leftArm.rotation.z = -armAngle
+      group.add(leftArm)
+      const rightArm = new THREE.Mesh(new THREE.CapsuleGeometry(.095, .62, 5, 8), limbMaterial)
+      rightArm.position.set(.42, 1.25, 0)
+      rightArm.rotation.z = armAngle
+      group.add(rightArm)
+
+      const legAngle = actor.pose === 'walk' ? .2 : actor.pose === 'hero' ? .06 : 0
+      const leftLeg = new THREE.Mesh(new THREE.CapsuleGeometry(.12, .62, 5, 8), limbMaterial)
+      leftLeg.position.set(-.16, .43, 0)
+      leftLeg.rotation.z = -legAngle
+      group.add(leftLeg)
+      const rightLeg = new THREE.Mesh(new THREE.CapsuleGeometry(.12, .62, 5, 8), limbMaterial)
+      rightLeg.position.set(.16, .43, 0)
+      rightLeg.rotation.z = legAngle
+      group.add(rightLeg)
+
+      if (actor.pose === 'hero') group.rotation.z = -.08
+      if (actor.pose === 'walk') group.rotation.y = .2
+      world.add(group)
+    })
     scene.cameras.forEach(camera => { const marker = new THREE.Mesh(new THREE.BoxGeometry(.32, .18, .55), new THREE.MeshStandardMaterial({ color: camera.id === scene.activeCameraId ? 0x67e8f9 : 0x738091 })); marker.userData.directorObject = true; marker.position.set(camera.x, camera.y, camera.z); marker.lookAt(camera.targetX, camera.targetY, camera.targetZ); world.add(marker) })
   }, [scene])
   return <div ref={mountRef} data-director-viewport className="absolute inset-0 overflow-hidden" />
