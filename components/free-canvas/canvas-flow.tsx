@@ -9,14 +9,17 @@ import { AgentNode } from './nodes/agent-node'
 import { GenerationNode } from './nodes/generation-node'
 import { GroupNode } from './nodes/group-node'
 import { MediaNode } from './nodes/media-node'
+import { DirectorNode } from './nodes/director-node'
 import { settingsPlacementFor } from './nodes/node-kit'
 import type { FreeCanvasNode } from './types'
 import { CANVAS_MAX_ZOOM, CANVAS_MIN_ZOOM } from './canvas-navigation'
+import { DirectorDesk } from './director-desk'
 
 const nodeTypes = {
   generation: GenerationNode,
   media: MediaNode,
   agent: AgentNode,
+  director: DirectorNode,
   group: GroupNode,
 }
 
@@ -70,6 +73,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   const miniMapOpen = useCanvasStore((state) => state.miniMapOpen)
   const snapToGrid = useCanvasStore((state) => state.snapToGrid)
   const showEdges = useCanvasStore((state) => state.showEdges)
+  const directorNodeId = useCanvasStore((state) => state.directorNodeId)
   const hasSelection = useCanvasStore((state) => state.nodes.some(node => node.selected))
   const settingsNodeId = useCanvasStore((state) => state.settingsNodeId)
   const onNodesChange = useCanvasStore((state) => state.onNodesChange)
@@ -228,11 +232,12 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
           maskStrokeColor="rgba(255,255,255,0.65)"
           maskStrokeWidth={1.5}
           nodeBorderRadius={6}
-          nodeColor={node => node.type === 'group' ? '#23252a' : node.selected ? '#dce4ef' : node.type === 'agent' ? '#91a2ba' : '#69717f'}
+          nodeColor={node => node.type === 'group' ? '#23252a' : node.selected ? '#dce4ef' : node.type === 'agent' ? '#91a2ba' : node.type === 'director' ? '#62c9d6' : '#69717f'}
           nodeStrokeColor={node => node.selected ? '#ffffff' : '#979faa'}
           onClick={(_, position) => void setCenter(position.x, position.y, { zoom: getZoom() })}
         />}
       </ReactFlow>
+      {directorNodeId ? <DirectorDesk nodeId={directorNodeId} onClose={() => useCanvasStore.getState().setDirectorNodeId(null)} /> : null}
     </div>
   )
 }

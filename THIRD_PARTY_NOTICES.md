@@ -36,6 +36,18 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## storyai-3d-director-desk（MIT；交互参考）
+
+来源：[jiguang132/storyai-3d-director-desk](https://github.com/jiguang132/storyai-3d-director-desk)，核对版本 `8c8bd361790be4d37158a7430365e65546e358fe`。OAOOAO 的“3D 导演台”是独立实现，仅参考公开项目对导演、机位、场景对象和预演工作流的交互模型；没有复制其源代码、模型、贴图、全景图或其他素材。MIT 文本在此保留，便于审计来源；项目内的素材仍需分别确认授权。
+
+Copyright (c) 2026 YZ
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 ## Package dependencies
 
 前端依赖可取得的许可及版权文本见 [THIRD_PARTY_DEPENDENCY_NOTICES.txt](THIRD_PARTY_DEPENDENCY_NOTICES.txt)，包版本、来源和未提供原始正文或署名的例外见 [docs/frontend-dependency-inventory.json](docs/frontend-dependency-inventory.json)。浏览器发行包随附相同文本 `public/legal/third-party-dependencies.txt`，部署后可从 `/legal/third-party-dependencies.txt` 访问。后端依赖单独列于 [backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt](backend/THIRD_PARTY_DEPENDENCY_NOTICES.txt)。源码组件的许可通知与 npm 包的许可通知分别保留，不能用包名清单代替原始声明。

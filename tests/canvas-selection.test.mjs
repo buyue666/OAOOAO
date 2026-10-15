@@ -290,7 +290,7 @@ test('the permanent add menu centers new nodes in flow coordinates after viewpor
     for (const item of walk(tree).filter(node => node.props?.role === 'menuitem')) item.props.onClick()
     assert.equal(calls.length, factory.CREATABLE_KINDS.length)
     for (const { kind, origin } of calls) {
-      const size = kind === 'agent' ? factory.NODE_SIZE.agent : ['reference', 'asset'].includes(kind) ? factory.NODE_SIZE.media : factory.NODE_SIZE.generation
+      const size = kind === 'agent' ? factory.NODE_SIZE.agent : kind === 'director' ? factory.NODE_SIZE.director : ['reference', 'asset'].includes(kind) ? factory.NODE_SIZE.media : factory.NODE_SIZE.generation
       assert.deepEqual({ x: origin.x + size.width / 2, y: origin.y + size.height / 2 }, { x: 1080, y: 620 })
     }
   } finally { globalThis.window = previousWindow }

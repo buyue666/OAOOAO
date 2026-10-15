@@ -125,7 +125,7 @@ export function selectionDocument(nodes: readonly FreeCanvasNode[], edges: reado
 
 export function selectionAgentPrompt(nodes: readonly FreeCanvasNode[], edges: readonly FreeCanvasEdge[], ids?: readonly string[]) {
   const document = selectionDocument(nodes, edges, ids)
-  const kinds = { image: '图片生成', video: '视频生成', text: '文本生成', audio: '音频生成', reference: '参考素材', asset: '素材', agent: 'Agent 任务', group: '分组' }
+  const kinds = { image: '图片生成', video: '视频生成', text: '文本生成', audio: '音频生成', reference: '参考素材', asset: '素材', agent: 'Agent 任务', director: '3D 导演台', group: '分组' }
   const mediaKinds = { image: '图片', video: '视频', audio: '音频' }
   const names = new Map(document.nodes.map((node, index) => [node.id, `节点 ${index + 1}（${node.data.title.trim().replace(/\s+/gu, ' ') || '未命名'}）`]))
   const descriptions = document.nodes.map(node => {

@@ -4,7 +4,7 @@ import type { AudioGenerationInput, ImageGenerationInput, TextGenerationInput, V
 export type GenerationKind = 'image' | 'video' | 'text' | 'audio'
 export type MediaKind = 'image' | 'video' | 'audio'
 export type MediaNodeKind = 'reference' | 'asset'
-export type CanvasNodeKind = GenerationKind | MediaNodeKind | 'agent' | 'group'
+export type CanvasNodeKind = GenerationKind | MediaNodeKind | 'agent' | 'director' | 'group'
 export type NodeSide = 'top' | 'right' | 'bottom' | 'left'
 
 /** 节点配置浮层的锚定侧，以及相对默认位置的平移量（已换算为节点本地坐标）。 */
@@ -106,11 +106,52 @@ export type GroupNodeData = {
   title: string
 }
 
+export type DirectorActor = {
+  id: string
+  name: string
+  x: number
+  y: number
+  z: number
+  color: string
+  scale: number
+  pose: 'idle' | 'hero' | 'walk'
+}
+
+export type DirectorCamera = {
+  id: string
+  name: string
+  x: number
+  y: number
+  z: number
+  targetX: number
+  targetY: number
+  targetZ: number
+  fov: number
+}
+
+export type DirectorSceneData = {
+  schemaVersion: 1
+  aspect: '16:9' | '9:16' | '1:1'
+  grid: boolean
+  actors: DirectorActor[]
+  cameras: DirectorCamera[]
+  activeCameraId: string
+  notes: string
+}
+
+export type DirectorNodeData = {
+  kind: 'director'
+  title: string
+  scene: DirectorSceneData
+  lastCaptureAt?: number
+}
+
 export type GenerationFlowNode = Node<GenerationNodeData, 'generation'>
 export type MediaFlowNode = Node<MediaNodeData, 'media'>
 export type AgentFlowNode = Node<AgentNodeData, 'agent'>
+export type DirectorFlowNode = Node<DirectorNodeData, 'director'>
 export type GroupFlowNode = Node<GroupNodeData, 'group'>
-export type FreeCanvasNode = GenerationFlowNode | MediaFlowNode | AgentFlowNode | GroupFlowNode
+export type FreeCanvasNode = GenerationFlowNode | MediaFlowNode | AgentFlowNode | DirectorFlowNode | GroupFlowNode
 export type FreeCanvasEdge = Edge
 
 export const HANDLE_IDS = {

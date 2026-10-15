@@ -1,6 +1,6 @@
 import type { Viewport } from '@xyflow/react'
 import type { CanvasBackendConnection, CanvasBackendNode, CanvasBackendProject } from '@/lib/studio/api'
-import { GENERATION_TITLES } from './node-factory'
+import { DEFAULT_DIRECTOR_SCENE, GENERATION_TITLES } from './node-factory'
 import {
   HANDLE_IDS,
   isGenerationKind,
@@ -19,6 +19,8 @@ import {
   type NodeTask,
   type NodeSubmission,
   type TaskPhase,
+  type DirectorNodeData,
+  type DirectorSceneData,
 } from './types'
 
 type Raw = Record<string, unknown>
@@ -55,12 +57,39 @@ function numberOf(value: unknown, fallback = 0): number {
 function resolveKind(raw: Raw, type: unknown): CanvasNodeKindValue {
   const candidate = textOf(raw.kind, textOf(type))
   if (candidate === 'task' || candidate === 'agent') return 'agent'
-  if (candidate === 'reference' || candidate === 'asset' || candidate === 'group') return candidate
+  if (candidate === 'reference' || candidate === 'asset' || candidate === 'group' || candidate === 'director') return candidate
   if (isGenerationKind(candidate)) return candidate
   return 'text'
 }
 
-type CanvasNodeKindValue = GenerationKind | MediaNodeKind | 'agent' | 'group'
+type CanvasNodeKindValue = GenerationKind | MediaNodeKind | 'agent' | 'director' | 'group'
+
+function readDirectorScene(value: unknown): DirectorSceneData {
+  const raw = asRecord(value)
+  const actors = Array.isArray(raw.actors) ? raw.actors.flatMap((item, index) => {
+    const actor = asRecord(item)
+    const id = textOf(actor.id, `actor-${index + 1}`)
+    return [{ id, name: textOf(actor.name, `角色 ${index + 1}`), x: numberOf(actor.x), y: numberOf(actor.y), z: numberOf(actor.z), color: textOf(actor.color, '#74b9ff'), scale: Math.max(0.25, numberOf(actor.scale, 1)), pose: (actor.pose === 'hero' || actor.pose === 'walk' ? actor.pose : 'idle') as 'idle' | 'hero' | 'walk' }]
+  }) : DEFAULT_DIRECTOR_SCENE.actors
+  const cameras = Array.isArray(raw.cameras) ? raw.cameras.flatMap((item, index) => {
+    const camera = asRecord(item)
+    return [{ id: textOf(camera.id, `camera-${index + 1}`), name: textOf(camera.name, `机位 ${index + 1}`), x: numberOf(camera.x), y: numberOf(camera.y, 2.2), z: numberOf(camera.z, 6.5), targetX: numberOf(camera.targetX), targetY: numberOf(camera.targetY, 1), targetZ: numberOf(camera.targetZ), fov: Math.min(100, Math.max(20, numberOf(camera.fov, 42))) }]
+  }) : DEFAULT_DIRECTOR_SCENE.cameras
+  const activeCameraId = textOf(raw.activeCameraId, cameras[0]?.id ?? DEFAULT_DIRECTOR_SCENE.activeCameraId)
+  return {
+    schemaVersion: 1,
+    aspect: raw.aspect === '9:16' || raw.aspect === '1:1' ? raw.aspect : '16:9',
+    grid: raw.grid !== false,
+    actors: actors.length ? actors : DEFAULT_DIRECTOR_SCENE.actors,
+    cameras: cameras.length ? cameras : DEFAULT_DIRECTOR_SCENE.cameras,
+    activeCameraId: cameras.some(camera => camera.id === activeCameraId) ? activeCameraId : cameras[0]?.id ?? DEFAULT_DIRECTOR_SCENE.activeCameraId,
+    notes: textOf(raw.notes),
+  }
+}
+
+function readDirector(raw: Raw): DirectorNodeData {
+  return { kind: 'director', title: textOf(raw.title, '3D 导演台'), scene: readDirectorScene(raw.scene), ...(numberOf(raw.lastCaptureAt) ? { lastCaptureAt: numberOf(raw.lastCaptureAt) } : {}) }
+}
 
 function readReference(value: unknown): NodeReference | null {
   const raw = asRecord(value)
@@ -221,6 +250,7 @@ function readNode(node: CanvasBackendNode): FreeCanvasNode {
     return { ...common, type: 'group', width: numberOf(node.width, 420), height: numberOf(node.height, 300), data: { kind: 'group', title: textOf(raw.title, '分组') } }
   }
   if (kind === 'agent') return { ...common, type: 'agent', data: readAgent(raw) }
+  if (kind === 'director') return { ...common, type: 'director', width: numberOf(node.width, 360), height: numberOf(node.height, 280), data: readDirector(raw) }
   if (kind === 'reference' || kind === 'asset') return { ...common, type: 'media', data: readMedia(kind, raw) }
   return { ...common, type: 'generation', data: readGeneration(kind, raw, meta) }
 }
@@ -290,7 +320,7 @@ function writeNode(node: FreeCanvasNode): CanvasBackendNode {
       ...(primary?.poster ? { posterUrl: primary.poster } : {}),
     },
     ...(node.parentId ? { parentId: node.parentId } : {}),
-    ...(node.type === 'group' ? { width: node.width, height: node.height } : {}),
+    ...(node.type === 'group' || node.type === 'director' ? { width: node.width, height: node.height } : {}),
   }
 }
 

@@ -10,6 +10,7 @@ import type { GenerationActions } from './use-generation-actions'
 export type CanvasActions = GenerationActions & AgentActions & {
   createNodeNear: (sourceId: string, side: NodeSide, kind: CreatableKind) => void
   createNodeAt: (kind: CreatableKind, position: XYPosition) => void
+  openDirector: (nodeId: string) => void
   focusAgent: () => void
   exportCanvas: () => void
   selectSkills: (nodeId: string) => void

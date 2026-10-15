@@ -132,6 +132,8 @@ function CanvasWorkspace() {
     if (kind === 'reference' || kind === 'asset') store.setAssetPanel(true, node.id)
   }, [defaults])
 
+  const openDirector = useCallback((nodeId: string) => useCanvasStore.getState().setDirectorNodeId(nodeId), [])
+
   const createNodeNear = useCallback((sourceId: string, side: NodeSide, kind: CreatableKind) => {
     const store = useCanvasStore.getState()
     const id = store.insertNodeNear(sourceId, side, createNodeOfKind(kind, { x: 0, y: 0 }, defaults))
@@ -196,6 +198,7 @@ function CanvasWorkspace() {
     ...agent,
     createNodeNear,
     createNodeAt,
+    openDirector,
     focusAgent,
     exportCanvas,
     selectSkills: setSkillNodeId,
@@ -204,7 +207,7 @@ function CanvasWorkspace() {
     saveSelectionResults: selectionActions.saveSelectionResults,
     draftAgentFromSelection: selectionActions.draftAgentFromSelection,
     exportSelection: selectionActions.exportSelection,
-  }), [generation, agent, createNodeNear, createNodeAt, focusAgent, exportCanvas, createSkillFromSelection, saveSkillFromNode, selectionActions.saveSelectionResults, selectionActions.draftAgentFromSelection, selectionActions.exportSelection])
+  }), [generation, agent, createNodeNear, createNodeAt, openDirector, focusAgent, exportCanvas, createSkillFromSelection, saveSkillFromNode, selectionActions.saveSelectionResults, selectionActions.draftAgentFromSelection, selectionActions.exportSelection])
 
   return (
     <CanvasActionsProvider value={actions}>

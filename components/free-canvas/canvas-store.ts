@@ -68,6 +68,7 @@ export type CanvasState = {
   assetPanelOpen: boolean
   assetTargetNodeId: string | null
   focusNodeId: string | null
+  directorNodeId: string | null
   miniMapOpen: boolean
   snapToGrid: boolean
   showEdges: boolean
@@ -109,6 +110,7 @@ export type CanvasState = {
   closeOverlays: () => void
   setAssetPanel: (open: boolean, targetNodeId?: string | null) => void
   clearFocus: () => void
+  setDirectorNodeId: (nodeId: string | null) => void
   selectNodeOnly: (nodeId: string) => void
 }
 
@@ -163,6 +165,7 @@ function removalPatch(state: CanvasState, ids: string[], label: string): Partial
     settingsNodeId: state.settingsNodeId && removeIds.has(state.settingsNodeId) ? null : state.settingsNodeId,
     typeMenu: state.typeMenu && removeIds.has(state.typeMenu.nodeId) ? null : state.typeMenu,
     contextMenu: null,
+    directorNodeId: state.directorNodeId && removeIds.has(state.directorNodeId) ? null : state.directorNodeId,
     ...(removedGroupIds.size ? { notice: `已删除 ${removedGroupIds.size} 个分组及其中内容（共 ${removed.length} 个节点），可撤销。` } : {}),
   }
 }
@@ -244,6 +247,7 @@ const initialState = {
   assetPanelOpen: false,
   assetTargetNodeId: null,
   focusNodeId: null,
+  directorNodeId: null,
   miniMapOpen: false,
   snapToGrid: false,
   showEdges: true,
@@ -276,6 +280,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   setMiniMapOpen: (miniMapOpen) => set({ miniMapOpen }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   setShowEdges: (showEdges) => set({ showEdges }),
+  setDirectorNodeId: (directorNodeId) => set({ directorNodeId }),
   arrangeLayout: () => {
     const state = get()
     if (state.saveStatus === 'conflict') {
@@ -625,7 +630,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   openContextMenu: (menu) => set({ contextMenu: menu, typeMenu: null }),
 
-  closeOverlays: () => set({ settingsNodeId: null, typeMenu: null, contextMenu: null, assetPanelOpen: false, assetTargetNodeId: null }),
+  closeOverlays: () => set({ settingsNodeId: null, typeMenu: null, contextMenu: null, assetPanelOpen: false, assetTargetNodeId: null, directorNodeId: null }),
 
   setAssetPanel: (open, targetNodeId = null) => set({ assetPanelOpen: open, assetTargetNodeId: open ? targetNodeId : null, contextMenu: null }),
 

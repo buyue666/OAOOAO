@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "sourceLockfile": "pnpm-lock.yaml",
-  "sourceLockfileSha256": "9a784ef2b25978dfba8b7a8fd8c226449d64dd1972a34e27103e2056705c467a",
+  "sourceLockfileSha256": "93f39e55cfb92beb4510092a412fae917837497c50f2ef58b01ae27a3205c841",
   "sourceLockfileHashBasis": "Committed Git blob bytes",
   "observedInstallLockfileSha256": "2d93f8cba94f6c8acc1fd83b6d936e1fd0b6d1ad52c55a63739bb319ea9f5f8b",
   "observedInstallLockfileDiffersOnlyInLineEndings": true,
   "scope": "Installed frontend dependency and build-tool graphs, including verified win32-x64 and linux-x64 optional dependencies; not a claim that every package is shipped to the browser or that every native linked component is covered.",
-  "packageCount": 921,
-  "noticeTextCount": 1057,
+  "packageCount": 923,
+  "noticeTextCount": 1059,
   "unresolvedPackages": [
     "client-only@0.0.1",
     "react-remove-scroll-bar@2.3.8",
@@ -18072,6 +18072,44 @@
         {
           "source": "license",
           "sha256": "ca4662cb5d1b738fbe5350c0d5485ba11773b4b7208974082ae6e129a52d631d"
+        }
+      ]
+    },
+    {
+      "name": "three",
+      "version": "0.184.0",
+      "declaredLicense": "MIT",
+      "packageMetadataUrl": "https://registry.npmjs.org/three/0.184.0",
+      "upstream": "mrdoob/three.js",
+      "observedPlatforms": [
+        "win32-x64",
+        "linux-x64"
+      ],
+      "noticeStatus": "text-preserved",
+      "noticeLimitation": null,
+      "notices": [
+        {
+          "source": "LICENSE",
+          "sha256": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc"
+        }
+      ]
+    },
+    {
+      "name": "@types/three",
+      "version": "0.184.0",
+      "declaredLicense": "MIT",
+      "packageMetadataUrl": "https://registry.npmjs.org/@types%2Fthree/0.184.0",
+      "upstream": "DefinitelyTyped/DefinitelyTyped",
+      "observedPlatforms": [
+        "win32-x64",
+        "linux-x64"
+      ],
+      "noticeStatus": "text-preserved",
+      "noticeLimitation": null,
+      "notices": [
+        {
+          "source": "LICENSE",
+          "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
         }
       ]
     }
