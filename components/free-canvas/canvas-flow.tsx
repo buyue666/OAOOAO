@@ -45,15 +45,6 @@ const FLOW_THEME = {
 } as CSSProperties
 
 const INTERACTIVE_SELECTOR = 'textarea,input,select,button,a,label,video,audio'
-// Keep library BEM selectors literal: Tailwind arbitrary selectors turn unescaped
-// underscores into spaces, so `.react-flow__attribution` would target the wrong DOM.
-const ATTRIBUTION_STYLE = `
-[data-oao-free-canvas] .react-flow__panel.react-flow__attribution { bottom: 60px; background: transparent; }
-[data-oao-free-canvas] .react-flow__attribution a { color: #a3a3a3; }
-[data-oao-free-canvas] .react-flow__attribution a:hover { color: #ffffff; }
-[data-oao-free-canvas] .react-flow__attribution a:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
-`
-
 function isEditableTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest('input,textarea,select,dialog[open],[role="dialog"],[data-canvas-name-editor]')))
 }
@@ -185,13 +176,16 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
 
   return (
     <div ref={rootRef} data-oao-free-canvas className="absolute inset-0 bg-black" style={FLOW_THEME} onDragOver={handleDragOver} onDrop={handleDrop}>
-      <style>{ATTRIBUTION_STYLE}</style>
       <ReactFlow
         aria-label="自由画布"
         nodes={renderNodes}
         edges={renderEdges}
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
+        // The canvas shell is branded and the attribution is not part of the
+        // product chrome. React Flow is retained as a dependency and its MIT
+        // license remains documented in THIRD_PARTY_DEPENDENCY_NOTICES.txt.
+        proOptions={{ hideAttribution: true }}
         defaultViewport={initialViewport}
         fitView={shouldFit}
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
