@@ -304,6 +304,18 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
         tintModel(instance, actor.color)
         instance.scale.setScalar(1.05)
         applyActorPose(instance, actor.pose)
+        instance.traverse((child) => {
+          child.visible = true
+          if (!(child instanceof THREE.Mesh)) return
+          child.frustumCulled = false
+          const materials = Array.isArray(child.material) ? child.material : [child.material]
+          materials.forEach((material) => {
+            material.transparent = false
+            material.opacity = 1
+            material.depthWrite = true
+          })
+        })
+        instance.updateMatrixWorld(true)
         instance.userData.directorObject = true
         return instance
       } catch {
