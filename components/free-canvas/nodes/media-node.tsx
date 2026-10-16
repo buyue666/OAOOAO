@@ -27,7 +27,7 @@ export const MediaNode = memo(function MediaNode({ id, data, selected }: NodePro
         <header className="flex items-center gap-2 px-0.5">
           <span className="text-[11px] tracking-[0.14em] text-neutral-500 uppercase">{kindLabel}</span>
         </header>
-        {media ? <MediaPreview media={media} /> : <EmptyMedia onPick={() => setAssetPanel(true, id)} />}
+        {media ? <MediaPreview media={media} onOpenEditor={media.mediaKind === 'image' ? () => useCanvasStore.getState().openImageEditor({ nodeId: id, source: 'media', url: media.url, title: media.title }) : undefined} /> : <EmptyMedia onPick={() => setAssetPanel(true, id)} />}
         <div className="flex items-center gap-2 px-0.5">
           <TitleEditor nodeId={id} title={data.title || media?.title || kindLabel} className="text-xs text-neutral-200" />
         </div>
@@ -42,9 +42,9 @@ export const MediaNode = memo(function MediaNode({ id, data, selected }: NodePro
   )
 })
 
-function MediaPreview({ media }: { media: NodeReference }) {
+function MediaPreview({ media, onOpenEditor }: { media: NodeReference; onOpenEditor?: () => void }) {
   if (media.mediaKind === 'image') {
-    return <img src={media.url} alt={media.title} loading="lazy" decoding="async" draggable={false} className="block aspect-[4/3] w-full rounded-xl bg-black object-cover" />
+    return <button type="button" onClick={onOpenEditor} aria-label={`编辑${media.title}`} title="打开图片编辑" className="nodrag block w-full cursor-zoom-in rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><img src={media.url} alt={media.title} loading="lazy" decoding="async" draggable={false} className="block aspect-[4/3] w-full rounded-xl bg-black object-cover" /></button>
   }
   if (media.mediaKind === 'video') {
     return <video src={media.url} controls controlsList="nodownload" playsInline preload="metadata" aria-label={media.title} className="nowheel nodrag block aspect-video w-full rounded-xl bg-black" />

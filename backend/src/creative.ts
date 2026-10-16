@@ -7,7 +7,7 @@ import { adjustWallet, getWallet, getPlanSummary, creditUnits } from './wallet.j
 import { getSettings } from './settings.js';
 import { assertPlanGenerationAllowed } from './entitlements.js';
 import { resolveProvider, type GenerationKind, type Json } from './providers.js';
-import { registerMedia, validateLibraryMedia, encoderAvailable, ownedMedia } from './media.js';
+import { registerMedia, validateLibraryMedia, encoderAvailable, ownedMedia, decodeDataUrl } from './media.js';
 import { cancelJob, finishJob, jobEvent, startWorker } from './worker.js';
 
 const ok=(data:unknown)=>({code:0,data});
@@ -39,6 +39,20 @@ function generationInput(kind:GenerationKind,raw:unknown):Json{
   if(messages)input.messages=messages;
   if(body.kind)input.kind=body.kind;
   if(body.references){if(!Array.isArray(body.references)||body.references.length>16)throw httpError(400,'Invalid references');input.references=body.references.map((r:unknown)=>{const ref=object(r);if(typeof ref.url!=='string'&&typeof ref.dataUrl!=='string')throw httpError(400,'Invalid reference');return{...ref};});}
+  if(kind==='image'&&body.edit!==undefined){
+    const edit=object(body.edit);
+    const allowed=['inpaint','remove-background','erase','outpaint','enhance','layers'];
+    const operation=edit.operation===undefined?undefined:string(edit.operation,'edit operation',40);
+    if(operation!==undefined&&!allowed.includes(operation))throw httpError(400,'Unsupported image edit operation');
+    let mask:Json|undefined;
+    if(edit.mask!==undefined){
+      const candidate=object(edit.mask);
+      if(typeof candidate.url!=='string'&&typeof candidate.dataUrl!=='string')throw httpError(400,'Invalid edit mask');
+      mask={...candidate};
+    }
+    if(operation!==undefined||mask)input.edit={...(operation?{operation}:{}),...(mask?{mask}: {})};
+    if(input.edit&&!input.kind)input.kind='edit';
+  }
   if(kind==='render'){input.shots=body.shots;input.ratio=body.ratio;}
   if(Buffer.byteLength(JSON.stringify(input))>32*1024*1024)throw httpError(413,'Generation request is too large');
   return input;
@@ -47,6 +61,24 @@ async function verifyContext(ctx:Context,client:PoolClient,userId:string,input:J
   if(input.context?.projectId){const row=await client.query('SELECT id FROM oaooao_projects WHERE id=$1 AND user_id=$2',[input.context.projectId,userId]);if(!row.rowCount)throw httpError(404,'Project not found');}
   if(input.context?.parentTaskId){const row=await client.query('SELECT id FROM oaooao_generation_jobs WHERE id=$1 AND user_id=$2',[input.context.parentTaskId,userId]);if(!row.rowCount)throw httpError(404,'Parent task not found');}
   for(const ref of input.references||[]){if(typeof ref.url!=='string')continue;let url:URL;try{url=new URL(ref.url,ctx.config.origin);}catch{throw httpError(400,'Invalid reference URL');}if(url.origin===new URL(ctx.config.origin).origin){const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);if(!match)throw httpError(400,'Unsupported local reference');await ownedMedia(ctx,userId,match[1],client);}}
+  const mask=input.edit?.mask;
+  if(mask&&typeof mask.url==='string'){
+    let url:URL;try{url=new URL(mask.url,ctx.config.origin);}catch{throw httpError(400,'Invalid edit mask URL');}
+    if(url.origin!==new URL(ctx.config.origin).origin)throw httpError(400,'Edit mask must be an owned media asset or data URL');
+    const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);
+    if(!match||url.search)throw httpError(400,'Unsupported edit mask asset');
+    const owned=await ownedMedia(ctx,userId,match[1],client);
+    if(!owned.mimeType.startsWith('image/'))throw httpError(400,'Edit mask must be an image');
+  }
+  if(mask&&typeof mask.dataUrl==='string'){
+    const bytes=decodeDataUrl(mask.dataUrl);
+    if(!bytes.length)throw httpError(400,'Edit mask must be an image');
+    // decodeDataUrl performs signature validation; image formats are the only
+    // mask inputs accepted by the image-edit adapter.
+    const signature=bytes.subarray(0,8);
+    const image=signature.equals(Buffer.from([137,80,78,71,13,10,26,10]))||bytes[0]===255&&bytes[1]===216&&bytes[2]===255||/^GIF8[79]a/.test(bytes.subarray(0,6).toString())||(bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP');
+    if(!image)throw httpError(400,'Edit mask must be an image');
+  }
   for(const message of input.messages||[]){if(typeof message.content==='string')continue;for(const part of message.content){if(part.type!=='image_url')continue;const parsed=new URL(part.image_url.url,ctx.config.origin);if(parsed.origin!==new URL(ctx.config.origin).origin)throw httpError(400,'Image analysis only accepts an owned media URL');const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(parsed.pathname);if(!match||parsed.search)throw httpError(400,'Unsupported image analysis asset');await ownedMedia(ctx,userId,match[1],client);}}
 }
 export async function createJob(ctx:Context,userId:string,kind:GenerationKind,input:Json,requestId:string,attemptNo=1,providedClient?:PoolClient):Promise<Json>{

@@ -3,7 +3,7 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import type { XYPosition } from '@xyflow/react'
 import type { CreatableKind } from './node-factory'
-import type { NodeSide } from './types'
+import type { ImageEditorTarget, NodeSide } from './types'
 import type { AgentActions } from './use-agent-actions'
 import type { GenerationActions } from './use-generation-actions'
 
@@ -11,6 +11,8 @@ export type CanvasActions = GenerationActions & AgentActions & {
   createNodeNear: (sourceId: string, side: NodeSide, kind: CreatableKind) => void
   createNodeAt: (kind: CreatableKind, position: XYPosition) => void
   openDirector: (nodeId: string) => void
+  /** Open the image editor target; the canvas shell owns the panel UI. */
+  openImageEditor: (target: ImageEditorTarget) => void
   focusAgent: () => void
   exportCanvas: () => void
   selectSkills: (nodeId: string) => void

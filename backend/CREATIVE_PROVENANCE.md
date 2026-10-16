@@ -28,6 +28,15 @@ Official protocol references consulted:
 
 The adapters implement OpenAI-compatible Chat Completions, Images generation/edit, speech synthesis and asynchronous Videos protocols. This is a protocol implementation, not a guarantee that every model sold by a compatible third party supports every parameter. Channels with other protocols return unavailable and are never silently translated or simulated. Video submission uses multipart form data; video completion downloads the authenticated content endpoint and persists its bytes. Provider requests use the core public-address, DNS-pinned transport. Provider error bodies and keys never enter task output.
 
+Image edit submissions preserve the consumer's optional `edit.operation` and
+`edit.mask` fields. A mask may be an inline image data URL or an authenticated
+media URL owned by the submitting account; external URLs and non-image masks are
+rejected before debit. For OpenAI-compatible image-edit channels the owned mask
+is sent as the standard multipart `mask` part alongside the source image. An
+explicit `capabilityProfile.supportsMask: false` disables masked editing rather
+than silently dropping the mask. The operation label remains task metadata and
+does not invent unsupported provider parameters.
+
 The queue is PostgreSQL-backed. Claims use `FOR UPDATE SKIP LOCKED`, leases and conditional ownership. A lost synchronous submission becomes a review case, retaining its debit; it is never resubmitted automatically. Polling jobs with a known upstream video identifier can be reclaimed safely. Queued cancellation refunds once. Cancellation after submission records intent and waits for a confirmed provider outcome; it does not promise unsupported upstream cancellation. Administrator review is audited and can attach a known upstream identifier, attach an owned real result, or confirm failure and refund.
 
 Agent runs execute a real text planner that must return a bounded JSON plan of one to eight steps. The server validates capabilities, enabled selected models, unique step identifiers, selected owned assets, and references to earlier steps. The plan requires approval before child generation; each step creates a separately billed durable job with an idempotent identity. Earlier text results become bounded downstream prompt context, image results can become reference images, and completed outputs are persisted in the owner's library with run/step/task provenance. Pause prevents new steps and pauses queued jobs; active upstream work finishes normally before further steps are allowed. Cancellation records intent and never assumes a remote request was cancelled. Custom executable skills and vision chat remain unavailable. The run event records `executionMode: bounded-plan`.

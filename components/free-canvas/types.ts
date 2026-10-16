@@ -33,6 +33,15 @@ export type NodeResult = {
   mediaKind: MediaKind
 }
 
+/** Selected image for the canvas image-editing workspace. */
+export type ImageEditorTarget = {
+  nodeId: string
+  source: 'generation' | 'media'
+  resultIndex?: number
+  url: string
+  title: string
+}
+
 export type NodeTask = {
   /** 空字符串表示提交请求还在途中，尚未拿到后端任务 ID。 */
   id: string

@@ -12,7 +12,7 @@ import {
 import { createGroupNode, NODE_GAP, newNodeId, sizeOf } from './node-factory'
 import { arrangeCanvasNodes } from './canvas-layout'
 import { absoluteNodePosition, absoluteNodePositions, orderNodesParentsFirst, selectionNodes, selectionRoots, selectionSnapshot } from './canvas-selection'
-import { DEFAULT_SETTINGS_PLACEMENT, HANDLE_IDS, type AgentNodeData, type FreeCanvasEdge, type FreeCanvasNode, type GenerationNodeData, type MediaNodeData, type NodeSide, type SettingsPlacement } from './types'
+import { DEFAULT_SETTINGS_PLACEMENT, HANDLE_IDS, type AgentNodeData, type FreeCanvasEdge, type FreeCanvasNode, type GenerationNodeData, type ImageEditorTarget, type MediaNodeData, type NodeSide, type SettingsPlacement } from './types'
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
 
@@ -69,6 +69,8 @@ export type CanvasState = {
   assetTargetNodeId: string | null
   focusNodeId: string | null
   directorNodeId: string | null
+  /** Image selected for the canvas image editing workspace. */
+  imageEditor: ImageEditorTarget | null
   miniMapOpen: boolean
   snapToGrid: boolean
   showEdges: boolean
@@ -111,6 +113,8 @@ export type CanvasState = {
   setAssetPanel: (open: boolean, targetNodeId?: string | null) => void
   clearFocus: () => void
   setDirectorNodeId: (nodeId: string | null) => void
+  openImageEditor: (target: ImageEditorTarget) => void
+  closeImageEditor: () => void
   selectNodeOnly: (nodeId: string) => void
 }
 
@@ -248,6 +252,7 @@ const initialState = {
   assetTargetNodeId: null,
   focusNodeId: null,
   directorNodeId: null,
+  imageEditor: null,
   miniMapOpen: false,
   snapToGrid: false,
   showEdges: true,
@@ -281,6 +286,8 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   setShowEdges: (showEdges) => set({ showEdges }),
   setDirectorNodeId: (directorNodeId) => set({ directorNodeId }),
+  openImageEditor: (imageEditor) => set({ imageEditor, settingsNodeId: null, typeMenu: null, contextMenu: null, assetPanelOpen: false, assetTargetNodeId: null }),
+  closeImageEditor: () => set({ imageEditor: null }),
   arrangeLayout: () => {
     const state = get()
     if (state.saveStatus === 'conflict') {
@@ -630,7 +637,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   openContextMenu: (menu) => set({ contextMenu: menu, typeMenu: null }),
 
-  closeOverlays: () => set({ settingsNodeId: null, typeMenu: null, contextMenu: null, assetPanelOpen: false, assetTargetNodeId: null, directorNodeId: null }),
+  closeOverlays: () => set({ settingsNodeId: null, typeMenu: null, contextMenu: null, assetPanelOpen: false, assetTargetNodeId: null, directorNodeId: null, imageEditor: null }),
 
   setAssetPanel: (open, targetNodeId = null) => set({ assetPanelOpen: open, assetTargetNodeId: open ? targetNodeId : null, contextMenu: null }),
 

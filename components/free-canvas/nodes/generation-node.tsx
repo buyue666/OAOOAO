@@ -203,7 +203,7 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
     return (
       <div className={cn('grid gap-2', data.results.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
         {data.results.map((result, index) => (
-          <ResultItem key={`${result.url}-${index}`} nodeId={id} title={data.title} result={result} index={index} onFavorite={() => void actions.saveResultToLibrary(id, index)} />
+          <ResultItem key={`${result.url}-${index}`} nodeId={id} title={data.title} result={result} index={index} onFavorite={() => void actions.saveResultToLibrary(id, index)} onOpenEditor={() => actions.openImageEditor({ nodeId: id, source: 'generation', resultIndex: index, url: result.url, title: `${data.title} 结果 ${index + 1}` })} />
         ))}
       </div>
     )
@@ -216,12 +216,14 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
   )
 }
 
-function ResultItem({ title, result, index, onFavorite }: { nodeId: string; title: string; result: NodeResult; index: number; onFavorite: () => void }) {
+function ResultItem({ title, result, index, onFavorite, onOpenEditor }: { nodeId: string; title: string; result: NodeResult; index: number; onFavorite: () => void; onOpenEditor: () => void }) {
   const label = `${title} 结果 ${index + 1}`
   return (
     <figure className="nodrag relative overflow-hidden rounded-xl border border-white/10 bg-black">
       {result.mediaKind === 'image' ? (
-        <img src={result.url} alt={label} loading="lazy" decoding="async" draggable={false} className="block w-full object-cover" />
+        <button type="button" onClick={onOpenEditor} aria-label={`编辑${label}`} title="打开图片编辑" className="nodrag block w-full cursor-zoom-in text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+          <img src={result.url} alt={label} loading="lazy" decoding="async" draggable={false} className="block w-full object-cover" />
+        </button>
       ) : result.mediaKind === 'video' ? (
         <video src={result.url} poster={result.poster} controls controlsList="nodownload" playsInline preload="metadata" aria-label={label} className="nowheel block w-full bg-black" />
       ) : (

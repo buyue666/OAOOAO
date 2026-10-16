@@ -165,6 +165,7 @@ export function createImageTask(input: ImageGenerationInput) {
       ...(input.title ? { title: input.title } : {}),
       kind: input.kind ?? (references.length ? 'edit' : 'generation'),
       ...(references.length ? { references } : {}),
+      ...(input.edit ? { edit: input.edit } : {}),
       source: input.surface ?? 'image-workbench',
       context: projectTaskContext(input),
     }),

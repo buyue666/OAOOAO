@@ -127,6 +127,10 @@ export type ImageGenerationInput = {
   /** �༭ģʽ�����ο�ͼʱ��˻��� /images/edits�� */
   kind?: 'generation' | 'edit'
   references?: GenerationReference[]
+  edit?: {
+    operation?: 'inpaint' | 'remove-background' | 'erase' | 'outpaint' | 'enhance' | 'layers'
+    mask?: GenerationReference
+  }
   title?: string
   projectId?: string
   surface?: 'chat' | 'canvas' | 'drama'

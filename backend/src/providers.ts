@@ -51,6 +51,9 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   if(cost<0n||(Number(max)>0&&cost>creditUnits(max)))throw httpError(400,'Generation cost exceeds the configured limit');
   if((input.references||[]).length>(kind==='video'?1:16))throw httpError(400,'Too many reference images for this protocol');
   if(kind==='image' && input.kind==='edit' && !(input.references||[]).length)throw httpError(400,'Image editing requires a reference image');
+  if(kind==='image' && input.edit?.mask && !(input.references||[]).length)throw httpError(400,'An edit mask requires a reference image');
+  if(kind==='image' && input.edit?.operation && !['inpaint','remove-background','erase','outpaint','enhance','layers'].includes(String(input.edit.operation)))throw httpError(400,'Unsupported image edit operation');
+  if(kind==='image' && input.edit?.mask && profile.supportsMask===false)throw httpError(400,'Selected image model does not support edit masks');
   if(kind==='audio'&&!['mp3','wav','opus','flac','aac'].includes(input.config?.format||'mp3'))throw httpError(400,'Unsupported audio output format');
   return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey},cost:creditDecimal(cost)};
 }
@@ -112,6 +115,7 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     if(input.references?.length){
       const files=[];
       for(const reference of input.references){const data=await readReference(ctx,job.user_id,reference);if(!data.mimeType.startsWith('image/'))throw new ProviderFailure('Image references must be images',true);files.push({name:'image[]',data:data.bytes,mime:data.mimeType});}
+      if(input.edit?.mask){const mask=await readReference(ctx,job.user_id,input.edit.mask);if(!mask.mimeType.startsWith('image/'))throw new ProviderFailure('Image edit masks must be images',true);files.push({name:'mask',data:mask.bytes,mime:mask.mimeType});}
       const multi=multipart({model,prompt:input.prompt,size:imageSize(config.size),n:'1',...(config.quality?{quality:config.quality}:{})},files);
       response=await request('/images/edits',multi.body,multi.contentType);
     }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:imageSize(config.size),n:1,...(config.quality?{quality:config.quality}:{})}));
