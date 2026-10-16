@@ -20,7 +20,7 @@
 .landing:has(> :global(.oao-announcement-bar)) section[id] { scroll-margin-top: 160px; }
 .cover { object-fit: cover; }
 
-.header { position: fixed; z-index: 50; top: 16px; left: 50%; width: min(92%, 920px); opacity: 0; transform: translate(-50%, -10px); border-radius: 12px; transition: opacity 700ms ease, transform 700ms ease, background-color 700ms ease, box-shadow 700ms ease; }
+.header { position: fixed; z-index: 50; top: 16px; left: 50%; width: min(92%, 920px); opacity: 1; transform: translate(-50%, 0); border-radius: 12px; transition: opacity 260ms ease, transform 260ms ease, background-color 700ms ease, box-shadow 700ms ease; }
 .landing:has(> :global(.oao-announcement-bar)) .header { top: 80px; }
 .header:is([data-ready='true'], [data-scrolled='true'], [data-open='true'], :focus-within) { opacity: 1; transform: translate(-50%, 0); border: 1px solid rgb(255 255 255 / 74%); background: rgb(255 255 255 / 92%); box-shadow: 0 14px 36px rgb(20 25 30 / 13%); backdrop-filter: blur(18px); }
 .headerRow { min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; gap: 24px; }
