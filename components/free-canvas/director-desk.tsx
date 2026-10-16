@@ -20,7 +20,7 @@ const DEFAULT_MODEL_URL = '/assets/director/quaternius-superhero.glb'
 const POSE_PRESETS: Array<{ id: string; label: string; pose: DirectorActor['pose']; controls: Partial<DirectorPoseControls> }> = [
   { id: 'stand', label: '站立', pose: 'idle', controls: {} },
   { id: 't-pose', label: 'T 型', pose: 'hero', controls: { leftShoulderRoll: -230, rightShoulderRoll: 230 } },
-  { id: 'walk', label: '行走', pose: 'walk', controls: { torsoPitch: -4, headPitch: -2, leftShoulderPitch: 0, rightShoulderPitch: 0, leftShoulderYaw: 35, rightShoulderYaw: 35, leftElbow: -28, rightElbow: -28, leftHip: -18, rightHip: 18, leftKnee: 16, rightKnee: -10, leftAnkle: 4, rightAnkle: -4 } },
+  { id: 'walk', label: '行走', pose: 'walk', controls: { torsoPitch: -6, headPitch: -2, leftShoulderPitch: -35, rightShoulderPitch: 35, leftShoulderYaw: 55, rightShoulderYaw: 55, leftElbow: -34, rightElbow: -34, leftHip: -30, rightHip: 30, leftKnee: 20, rightKnee: -12, leftAnkle: 5, rightAnkle: -5 } },
   { id: 'run', label: '跑步', pose: 'walk', controls: { torsoPitch: -18, headPitch: -5, leftShoulderPitch: 0, rightShoulderPitch: 0, leftShoulderYaw: 70, rightShoulderYaw: 70, leftElbow: -58, rightElbow: -58, leftHip: 22, rightHip: -24, leftKnee: 58, rightKnee: -18, leftAnkle: -8, rightAnkle: 6 } },
   { id: 'sit', label: '坐姿', pose: 'idle', controls: { torsoPitch: -12, leftHip: -58, rightHip: -58, leftKnee: 96, rightKnee: 96, leftAnkle: -20, rightAnkle: -20 } },
   { id: 'squat', label: '蹲下', pose: 'idle', controls: { torsoPitch: -20, leftHip: -22, rightHip: -22, leftKnee: 84, rightKnee: 84, leftAnkle: -18, rightAnkle: -18 } },
