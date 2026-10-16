@@ -72,6 +72,74 @@ const operations: Array<{ value: ImageEditOperation; label: string; icon: typeof
   { value: 'to-video', label: '转视频', icon: Video },
 ]
 
+type OperationMeta = {
+  guide: string
+  placeholder: string
+  defaultPrompt: string
+  status: string
+  submitLabel: string
+  maskHint?: string
+}
+
+const operationMeta: Record<ImageEditOperation, OperationMeta> = {
+  inpaint: {
+    guide: '先在画面上涂抹或框选需要修改的区域，再描述你想替换的内容。',
+    placeholder: '例如：把圈选区域改成金色机械臂，保持原来的光影和构图',
+    defaultPrompt: '保持原来的光影和构图，只修改标记区域',
+    status: '已切换到标记改图，请在图片上标记区域',
+    submitLabel: '提交改图',
+    maskHint: '会把标记区域作为蒙版发送给图片模型',
+  },
+  'remove-background': {
+    guide: '自动识别主体并移除背景，适合制作透明 PNG 素材。',
+    placeholder: '例如：保留人物和手提箱，边缘干净，输出透明背景',
+    defaultPrompt: '保留主体，移除背景并输出透明背景',
+    status: '已切换到抠图，可直接提交或标记需要保留的区域',
+    submitLabel: '开始抠图',
+    maskHint: '不标记时由模型自动识别主体',
+  },
+  erase: {
+    guide: '涂抹要擦除的物体，模型会补全被移除区域的背景。',
+    placeholder: '例如：擦除画面中的路人，补全后面的街道纹理',
+    defaultPrompt: '擦除标记区域，并自然补全周围背景',
+    status: '已切换到擦除，请用橡皮工具涂抹目标',
+    submitLabel: '提交擦除',
+    maskHint: '橡皮工具会从蒙版中减去区域，适合精细调整',
+  },
+  outpaint: {
+    guide: '扩展画布边缘并补全画面，适合横幅、封面和社交媒体比例。',
+    placeholder: '例如：向左右扩展画面，延续天空和建筑，主体保持原位',
+    defaultPrompt: '向画布边缘自然扩展，延续原图的光影、色彩和透视',
+    status: '已切换到扩图，描述需要扩展的方向和内容',
+    submitLabel: '生成扩图',
+    maskHint: '可用矩形选区提示需要优先补全的边缘',
+  },
+  enhance: {
+    guide: '提升清晰度、细节和纹理，同时尽量保持原图构图与主体不变。',
+    placeholder: '例如：提升人像细节和发丝清晰度，保持肤色自然，不改变构图',
+    defaultPrompt: '提升整体清晰度和细节，保持原图构图、色彩和主体不变',
+    status: '已切换到高清修复，可补充想强化的细节',
+    submitLabel: '开始高清修复',
+    maskHint: '不标记时处理整张图片，标记后只强化指定区域',
+  },
+  layers: {
+    guide: '尝试把主体、背景和前景拆成便于继续编辑的图层。',
+    placeholder: '例如：将人物、桌面和背景墙拆成独立图层，保留遮挡关系',
+    defaultPrompt: '识别主体、前景和背景并拆分为可单独编辑的图层，保留遮挡关系',
+    status: '已切换到分图层，请描述想拆分的对象',
+    submitLabel: '生成图层',
+    maskHint: '可标记需要重点拆分的主体；最终结果取决于图片模型能力',
+  },
+  'to-video': {
+    guide: '把当前图片作为首帧生成短视频，描述镜头运动、主体动作或环境变化。',
+    placeholder: '例如：镜头缓慢推进，人物抬头看向远处，头发被微风吹动',
+    defaultPrompt: '让画面产生自然、平滑的轻微运动，保持主体外观和镜头构图',
+    status: '已切换到转视频，当前图片会作为首帧提交',
+    submitLabel: '生成视频',
+    maskHint: '转视频使用整张图片作为首帧，涂抹标记不会改变视频范围',
+  },
+}
+
 function emptyMaskSnapshot(canvas: HTMLCanvasElement) {
   return canvas.toDataURL('image/png')
 }
@@ -118,12 +186,13 @@ export function ImageEditorPanel({
   const [brushColor, setBrushColor] = useState('#8fe9d5')
   const [maskRevision, setMaskRevision] = useState(0)
   const [draftRect, setDraftRect] = useState<Rect | null>(null)
-  const [status, setStatus] = useState('可在图片上涂抹或框选')
+  const [status, setStatus] = useState(operationMeta[initialOperation].status)
   const [isSaving, setIsSaving] = useState(false)
 
   const hasMask = maskRevision >= 0 && historyIndexRef.current > 0
   const canUndo = historyIndexRef.current > 0
   const canRedo = historyIndexRef.current >= 0 && historyIndexRef.current < historyRef.current.length - 1
+  const selectedMeta = operationMeta[operation]
 
   const initializeMask = useCallback(() => {
     const image = imageRef.current
@@ -291,8 +360,13 @@ export function ImageEditorPanel({
   }
 
   const selectOperation = (next: ImageEditOperation) => {
+    const previousMeta = operationMeta[operation]
     setOperation(next)
     onOperationChange?.(next)
+    if (!prompt.trim() || prompt.trim() === previousMeta.defaultPrompt) {
+      setPrompt(operationMeta[next].defaultPrompt)
+    }
+    setStatus(operationMeta[next].status)
     if (next === 'erase') setTool('eraser')
     if (next === 'inpaint' || next === 'remove-background') setTool('brush')
   }
@@ -302,7 +376,7 @@ export function ImageEditorPanel({
     const canvas = maskRef.current
     const request: ImageEditRequest = {
       operation,
-      prompt: prompt.trim(),
+      prompt: prompt.trim() || selectedMeta.defaultPrompt,
       maskDataUrl: canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
       imageUrl: imageSrc,
       brushSize,
@@ -363,6 +437,15 @@ export function ImageEditorPanel({
         ))}
       </nav>
 
+      <div className={styles.operationGuide} role="note" aria-live="polite">
+        <div className={styles.operationGuideTitle}>
+          <span>{selectedMeta.submitLabel}</span>
+          <span className={styles.operationGuideMode}>{operation === 'to-video' ? '整图首帧' : selectedMeta.maskHint ? '可选蒙版' : '当前图片'}</span>
+        </div>
+        <p>{selectedMeta.guide}</p>
+        {selectedMeta.maskHint && <p className={styles.operationGuideHint}>{selectedMeta.maskHint}</p>}
+      </div>
+
       <div className={styles.workspace}>
         <section className={styles.stage} aria-label="图片编辑画布">
           {!imageSrc ? <p className={styles.stageEmpty}>暂无图片</p> : (
@@ -396,8 +479,8 @@ export function ImageEditorPanel({
         </section>
 
         <section className={styles.promptArea} aria-label="编辑提示词">
-          <div className={styles.promptLabel}><span>告诉 AI 要怎么改</span><span className={styles.promptHint}>{operation === 'to-video' ? '将当前图片作为首帧' : '支持自然语言描述'}</span></div>
-          <textarea className={styles.promptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="例如：把圈选区域改成金色机械臂，保持原来的光影和构图" />
+          <div className={styles.promptLabel}><span>{operation === 'to-video' ? '描述视频动作和镜头' : '告诉 AI 要怎么改'}</span><span className={styles.promptHint}>{operation === 'to-video' ? '当前图片作为首帧' : '支持自然语言描述'}</span></div>
+          <textarea className={styles.promptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={selectedMeta.placeholder} />
           {versions.length > 0 && (
             <div className={styles.versions} aria-label="图片版本">
               {versions.map((version, index) => (
@@ -424,7 +507,7 @@ export function ImageEditorPanel({
           <div className={styles.quickActions}>
             <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={clearMask} disabled={!hasMask}><Trash2 aria-hidden="true" /><span>清除标记</span></button>
           </div>
-          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={submit}><WandSparkles aria-hidden="true" /><span>{operation === 'to-video' ? '生成视频' : '提交编辑'}</span></button>
+          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={submit}><WandSparkles aria-hidden="true" /><span>{selectedMeta.submitLabel}</span></button>
         </div>
       </footer>
     </aside>

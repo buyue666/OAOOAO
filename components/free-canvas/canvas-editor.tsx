@@ -163,11 +163,13 @@ function CanvasWorkspace() {
       ? { type: 'image', dataUrl: request.imageUrl }
       : { type: 'image', url: request.imageUrl }
     const prompt = request.prompt.trim() || (
-      request.operation === 'erase' ? '移除标记区域，并自然补全背景，保持原图构图和光影。'
-        : request.operation === 'remove-background' ? '移除背景，保留主体并生成干净透明背景。'
-          : request.operation === 'outpaint' ? '向画布外扩展画面，保持主体、风格和光影一致。'
-            : request.operation === 'enhance' ? '提升图片清晰度和细节，保持主体与构图不变。'
-              : '根据标记区域进行自然编辑，保持未标记区域不变。'
+      request.operation === 'to-video' ? '让画面自然动起来，保持主体、镜头构图和光影一致。'
+        : request.operation === 'erase' ? '移除标记区域，并自然补全背景，保持原图构图和光影。'
+          : request.operation === 'remove-background' ? '移除背景，保留主体并生成干净透明背景。'
+            : request.operation === 'outpaint' ? '向画布外扩展画面，保持主体、风格和光影一致。'
+              : request.operation === 'enhance' ? '提升图片清晰度和细节，保持主体与构图不变。'
+                : request.operation === 'layers' ? '将图片拆分为可独立编辑的主体、前景和背景图层，保持原图构图和细节。'
+                  : '根据标记区域进行自然编辑，保持未标记区域不变。'
     )
     if (request.operation === 'to-video') {
       await generationRuntime.createVideo({

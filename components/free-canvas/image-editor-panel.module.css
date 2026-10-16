@@ -95,6 +95,21 @@
 .operationButton { min-height: 35px; white-space: nowrap; }
 .operationButtonActive { border-color: rgb(199 243 232 / 28%); background: rgb(199 243 232 / 13%); color: var(--editor-accent); }
 
+.operationGuide {
+  display: flex;
+  min-height: 54px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--editor-border);
+  background: rgb(199 243 232 / 4%);
+  padding: 8px 14px;
+}
+.operationGuideTitle { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--editor-text); font-size: 11px; font-weight: 650; }
+.operationGuideMode { color: var(--editor-accent); font-size: 10px; font-weight: 500; }
+.operationGuide p { margin: 0; color: var(--editor-muted); font-size: 10px; line-height: 1.45; }
+.operationGuideHint { color: rgb(245 247 248 / 43%) !important; }
+
 .workspace {
   display: grid;
   min-height: 0;
