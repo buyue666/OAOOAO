@@ -20,24 +20,24 @@ const DEFAULT_MODEL_URL = '/assets/director/quaternius-superhero.glb'
 const POSE_PRESETS: Array<{ id: string; label: string; pose: DirectorActor['pose']; controls: Partial<DirectorPoseControls> }> = [
   { id: 'stand', label: '站立', pose: 'idle', controls: {} },
   { id: 't-pose', label: 'T 型', pose: 'hero', controls: { leftShoulderRoll: -230, rightShoulderRoll: 230 } },
-  { id: 'walk', label: '行走', pose: 'walk', controls: { leftShoulderPitch: 24, rightShoulderPitch: -24, leftHip: -18, rightHip: 18, leftKnee: 8, rightKnee: -8 } },
-  { id: 'run', label: '跑步', pose: 'walk', controls: { torsoPitch: -20, leftShoulderPitch: 58, rightShoulderPitch: -58, leftShoulderRoll: -18, rightShoulderRoll: 18, leftElbow: -72, rightElbow: -72, leftHip: -48, rightHip: 48, leftKnee: 48, rightKnee: 48 } },
+  { id: 'walk', label: '行走', pose: 'walk', controls: { torsoPitch: -8, leftShoulderPitch: 52, rightShoulderPitch: -52, leftShoulderRoll: -32, rightShoulderRoll: 32, leftElbow: -38, rightElbow: -38, leftHip: -45, rightHip: 45, leftKnee: 32, rightKnee: -18, leftAnkle: 8, rightAnkle: -8 } },
+  { id: 'run', label: '跑步', pose: 'walk', controls: { torsoPitch: -32, headPitch: -8, leftShoulderPitch: 78, rightShoulderPitch: -78, leftShoulderRoll: -60, rightShoulderRoll: 60, leftElbow: -105, rightElbow: -105, leftHip: -82, rightHip: 48, leftKnee: 108, rightKnee: 38, leftAnkle: -32, rightAnkle: 14 } },
   { id: 'sit', label: '坐姿', pose: 'idle', controls: { torsoPitch: -18, leftHip: -88, rightHip: -88, leftKnee: 112, rightKnee: 112, leftAnkle: -28, rightAnkle: -28 } },
   { id: 'squat', label: '蹲下', pose: 'idle', controls: { torsoPitch: -26, leftHip: -68, rightHip: -68, leftKnee: 122, rightKnee: 122, leftAnkle: -32, rightAnkle: -32 } },
-  { id: 'single-jump', label: '单腿跳', pose: 'walk', controls: { torsoPitch: -4, leftHip: -24, rightHip: 18, leftKnee: 28, rightKnee: 92 } },
-  { id: 'double-jump', label: '双腿跳', pose: 'walk', controls: { torsoPitch: -10, leftHip: -24, rightHip: 24, leftKnee: 28, rightKnee: 28 } },
-  { id: 'akimbo', label: '叉腰', pose: 'hero', controls: { leftShoulderPitch: 25, rightShoulderPitch: 25, leftShoulderRoll: -38, rightShoulderRoll: 38, leftElbow: -72, rightElbow: -72 } },
-  { id: 'lean', label: '俯靠', pose: 'idle', controls: { torsoPitch: -22, torsoRoll: -10, leftShoulderPitch: 18, rightShoulderPitch: 18 } },
-  { id: 'turn', label: '翻身', pose: 'idle', controls: { torsoYaw: 55, headYaw: 35, leftShoulderYaw: -25, rightShoulderYaw: 25 } },
-  { id: 'think', label: '思考', pose: 'idle', controls: { torsoYaw: -16, torsoPitch: -6, headPitch: -24, headYaw: 22, headRoll: -8, leftShoulderPitch: 38, leftShoulderRoll: -16, leftElbow: -96, leftWrist: 28 } },
-  { id: 'fight', label: '格斗', pose: 'hero', controls: { torsoPitch: -8, leftShoulderPitch: 34, rightShoulderPitch: -34, leftElbow: -70, rightElbow: -70, leftHip: -15, rightHip: 15 } },
-  { id: 'dodge', label: '躲球', pose: 'idle', controls: { torsoRoll: -24, headRoll: -12, leftHip: -22, rightHip: 12 } },
-  { id: 'throw', label: '投球', pose: 'hero', controls: { torsoYaw: -18, rightShoulderPitch: -65, rightShoulderRoll: 35, rightElbow: -18, leftShoulderPitch: 18 } },
-  { id: 'push', label: '推进', pose: 'hero', controls: { torsoPitch: 12, leftShoulderPitch: -35, rightShoulderPitch: -35, leftElbow: -12, rightElbow: -12 } },
-  { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -38, rightShoulderRoll: 86, rightElbow: -46, rightWrist: 32 } },
-  { id: 'reach', label: '伸手', pose: 'hero', controls: { rightShoulderPitch: -24, rightShoulderRoll: 10, rightElbow: 0, rightWrist: 0 } },
-  { id: 'raise', label: '抬臂', pose: 'hero', controls: { leftShoulderRoll: -78, rightShoulderRoll: 78, leftElbow: -12, rightElbow: -12 } },
-  { id: 'phone', label: '看手机', pose: 'idle', controls: { headPitch: -18, torsoPitch: -8, rightShoulderPitch: 25, rightShoulderRoll: 18, rightElbow: -82, rightWrist: -12 } },
+  { id: 'single-jump', label: '单腿跳', pose: 'walk', controls: { torsoPitch: -12, leftShoulderPitch: 36, rightShoulderPitch: -36, leftHip: -42, rightHip: 36, leftKnee: 78, rightKnee: 118, leftAnkle: -18, rightAnkle: 32 } },
+  { id: 'double-jump', label: '双腿跳', pose: 'walk', controls: { torsoPitch: -16, leftShoulderPitch: 44, rightShoulderPitch: -44, leftHip: -64, rightHip: 64, leftKnee: 72, rightKnee: 72, leftAnkle: -20, rightAnkle: -20 } },
+  { id: 'akimbo', label: '叉腰', pose: 'hero', controls: { torsoPitch: -4, leftShoulderPitch: 32, rightShoulderPitch: 32, leftShoulderRoll: -55, rightShoulderRoll: 55, leftElbow: -98, rightElbow: -98, leftWrist: 18, rightWrist: -18 } },
+  { id: 'lean', label: '俯靠', pose: 'idle', controls: { torsoPitch: -34, torsoRoll: -18, headPitch: -16, leftShoulderPitch: 28, rightShoulderPitch: 28, leftElbow: -28, rightElbow: -28 } },
+  { id: 'turn', label: '翻身', pose: 'idle', controls: { torsoYaw: 88, headYaw: 55, leftShoulderYaw: -52, rightShoulderYaw: 52, leftHip: -18, rightHip: 18 } },
+  { id: 'think', label: '思考', pose: 'idle', controls: { torsoYaw: -24, torsoPitch: -12, headPitch: -34, headYaw: 32, headRoll: -12, leftShoulderPitch: 52, leftShoulderRoll: -28, leftElbow: -118, leftWrist: 44 } },
+  { id: 'fight', label: '格斗', pose: 'hero', controls: { torsoPitch: -16, torsoRoll: -12, leftShoulderPitch: 68, rightShoulderPitch: -68, leftShoulderRoll: -48, rightShoulderRoll: 48, leftElbow: -112, rightElbow: -112, leftHip: -34, rightHip: 34, leftKnee: 28, rightKnee: -22 } },
+  { id: 'dodge', label: '躲球', pose: 'idle', controls: { torsoPitch: -16, torsoRoll: -34, headRoll: -18, leftShoulderPitch: -42, rightShoulderPitch: -42, leftHip: -35, rightHip: 24, leftKnee: 24, rightKnee: 24 } },
+  { id: 'throw', label: '投球', pose: 'hero', controls: { torsoYaw: -34, torsoPitch: -8, rightShoulderPitch: -88, rightShoulderRoll: 58, rightElbow: -28, leftShoulderPitch: 30, leftShoulderRoll: -22, leftElbow: -52 } },
+  { id: 'push', label: '推进', pose: 'hero', controls: { torsoPitch: 18, leftShoulderPitch: -58, rightShoulderPitch: -58, leftShoulderRoll: -22, rightShoulderRoll: 22, leftElbow: -18, rightElbow: -18, leftHip: -22, rightHip: -22 } },
+  { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -58, rightShoulderRoll: 126, rightElbow: -68, rightWrist: 48, leftShoulderRoll: -22 } },
+  { id: 'reach', label: '伸手', pose: 'hero', controls: { torsoPitch: -8, rightShoulderPitch: -52, rightShoulderRoll: 24, rightElbow: -8, rightWrist: 0, leftShoulderRoll: -20 } },
+  { id: 'raise', label: '抬臂', pose: 'hero', controls: { leftShoulderRoll: -112, rightShoulderRoll: 112, leftShoulderPitch: 18, rightShoulderPitch: -18, leftElbow: -18, rightElbow: -18 } },
+  { id: 'phone', label: '看手机', pose: 'idle', controls: { headPitch: -28, torsoPitch: -14, torsoYaw: 12, rightShoulderPitch: 38, rightShoulderRoll: 28, rightElbow: -112, rightWrist: -24, leftShoulderPitch: 18, leftElbow: -54 } },
 ]
 
 const POSE_CONTROL_SECTIONS: Array<{ title: string; items: Array<{ key: keyof DirectorPoseControls; label: string }> }> = [
@@ -217,10 +217,10 @@ function Inspector({ title, subtitle, children }: { title: string; subtitle?: st
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-[11px] text-neutral-500"><span className="mb-1.5 block">{label}</span><span className="flex items-center gap-2">{children}</span></label> }
 function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) { return <label className="block text-[10px] text-neutral-500"><span className="mb-1 block">{label}</span><input type="number" step="0.1" value={Number.isFinite(value) ? value : 0} onChange={(event) => onChange(Number(event.target.value) || 0)} className="h-8 w-full rounded-md border border-white/10 bg-black/20 px-2 text-xs text-neutral-200 outline-none focus:border-cyan-200/60" /></label> }
 
-function disposeObject(root: THREE.Object3D) {
+function disposeObject(root: THREE.Object3D, options?: { skipGeometry?: boolean }) {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
-    child.geometry.dispose()
+    if (!options?.skipGeometry) child.geometry.dispose()
     const materials = Array.isArray(child.material) ? child.material : [child.material]
     materials.forEach(material => material.dispose())
   })
@@ -260,6 +260,35 @@ function setBoneRotationAbsolute(root: THREE.Object3D, name: string, axis: 'x' |
   bone.rotation[axis] = value
 }
 
+type RestBoneRotation = { x: number; y: number; z: number; order: THREE.EulerOrder }
+
+/**
+ * Keep the source rig's local rotations around so pose presets can be
+ * reapplied without accumulating the previous preset's offsets. This is
+ * intentionally stored on the cloned instance, not the cached GLB source.
+ */
+function captureActorRestPose(root: THREE.Object3D) {
+  if (root.userData.directorRestRotations instanceof Map) return
+  const rest = new Map<string, RestBoneRotation>()
+  root.traverse((child) => {
+    if (child instanceof THREE.Bone) {
+      rest.set(child.uuid, { x: child.rotation.x, y: child.rotation.y, z: child.rotation.z, order: child.rotation.order })
+    }
+  })
+  root.userData.directorRestRotations = rest
+}
+
+function resetActorPose(root: THREE.Object3D) {
+  const rest = root.userData.directorRestRotations
+  if (!(rest instanceof Map)) return
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Bone)) return
+    const rotation = rest.get(child.uuid)
+    if (!rotation) return
+    child.rotation.set(rotation.x, rotation.y, rotation.z, rotation.order)
+  })
+}
+
 function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose'], poseControls?: DirectorPoseControls) {
   // The source mesh is authored in a T-pose. Establish a natural standing
   // baseline first, then apply visible preset offsets and saved joint edits.
@@ -269,6 +298,7 @@ function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose'], poseC
   // Quaternius' arm bones point upward in the source T-pose. In this rig a
   // roughly ±140° local Z rotation brings both arms alongside the torso;
   // slider values are then relative to that natural standing baseline.
+  resetActorPose(root)
   setBoneRotationAbsolute(root, 'upperarm_l', 'z', THREE.MathUtils.degToRad(140))
   setBoneRotationAbsolute(root, 'upperarm_r', 'z', THREE.MathUtils.degToRad(-140))
   if (pose === 'hero') {
@@ -379,6 +409,7 @@ function addWhiteBoxActor(group: THREE.Group, actor: DirectorActor) {
   }
   buildLeg(-1, controls.leftHip, controls.leftKnee, controls.leftAnkle)
   buildLeg(1, controls.rightHip, controls.rightKnee, controls.rightAnkle)
+  return torso
 }
 
 function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selectedActorId, selectedCameraId, transformMode, onActorTransform, onCameraTransform }: { scene: DirectorSceneData; viewMode: 'director' | 'camera'; focusTarget: DirectorActor | DirectorCamera | null | undefined; focusRequest: number; selectedActorId: string | null; selectedCameraId: string | null; transformMode: 'translate' | 'rotate' | 'scale'; onActorTransform: (id: string, patch: Partial<DirectorActor>) => void; onCameraTransform: (id: string, patch: Partial<DirectorCamera>) => void }) {
@@ -390,10 +421,20 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
   const modelCacheRef = useRef(new Map<string, Promise<THREE.Object3D | null>>())
   const transformRef = useRef<TransformControls | null>(null)
   const objectRefs = useRef(new Map<string, THREE.Object3D>())
+  const latestSceneRef = useRef(scene)
   const actorTransformRef = useRef(onActorTransform)
   const cameraTransformRef = useRef(onCameraTransform)
+  latestSceneRef.current = scene
   actorTransformRef.current = onActorTransform
   cameraTransformRef.current = onCameraTransform
+  // Rebuild the Three.js graph only when the object list/model source changes.
+  // Pose sliders, transforms and camera settings are applied in the lightweight
+  // effect below so a preset switch does not tear down and reload the scene.
+  const sceneStructureKey = JSON.stringify({
+    grid: scene.grid,
+    actors: scene.actors.map(actor => ({ id: actor.id, modelUrl: actor.modelUrl || DEFAULT_MODEL_URL })),
+    cameras: scene.cameras.map(camera => camera.id),
+  })
 
   useEffect(() => {
     const mount = mountRef.current
@@ -402,8 +443,8 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     try { renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true }) } catch { mount.innerHTML = '<div class="flex h-full items-center justify-center text-sm text-neutral-500">当前浏览器不支持 WebGL 预览</div>'; return }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setClearColor(0x080b0f, 1); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; mount.append(renderer.domElement); renderer.domElement.dataset.directorViewport = 'true'; rendererRef.current = renderer
     const world = new THREE.Scene(); sceneRef.current = world
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100); camera.position.set(0, 3.2, 8); cameraRef.current = camera
-    const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 1, 0); controls.enableDamping = true; controls.minDistance = 3; controls.maxDistance = 18; controlsRef.current = controls
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100); camera.position.set(0, 2.8, 6.3); cameraRef.current = camera
+    const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 1.05, 0); controls.enableDamping = true; controls.minDistance = 2.2; controls.maxDistance = 16; controlsRef.current = controls
     const transform = new TransformControls(camera, renderer.domElement)
     transform.setMode('translate')
     transform.setSpace('world')
@@ -438,7 +479,14 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     let active = true
     objectRefs.current.clear()
     transformRef.current?.detach()
-    for (const object of [...world.children]) if (object.userData.directorObject) { world.remove(object); disposeObject(object) }
+    for (const object of [...world.children]) if (object.userData.directorObject) {
+      world.remove(object)
+      // SkeletonUtils.clone shares buffer geometry with the cached GLB source;
+      // dispose only clone materials here so a later actor can reuse the cache.
+      const fallbackRoot = object.userData.directorFallbackRoot as THREE.Object3D | undefined
+      if (fallbackRoot) disposeObject(fallbackRoot)
+      disposeObject(object, { skipGeometry: Boolean(object.userData.directorModelInstance) })
+    }
     if (scene.grid) { const grid = new THREE.GridHelper(14, 28, 0x2a5160, 0x1a2830); grid.position.y = 0.01; grid.userData.directorObject = true; world.add(grid) }
 
     const loader = new GLTFLoader()
@@ -456,7 +504,9 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
         const instance = cloneSkinnedModel(model)
         tintModel(instance, actor.color)
         instance.scale.setScalar(1.15)
+        captureActorRestPose(instance)
         applyActorPose(instance, actor.pose, actor.poseControls)
+        instance.userData.directorModelColor = actor.color
         instance.traverse((child) => {
           child.visible = true
           if (!(child instanceof THREE.Mesh)) return
@@ -483,7 +533,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       // files can instantiate without producing visible pixels in a user's
       // browser (for example after a context restore); the mannequin keeps
       // the scene usable instead of leaving an empty transform gizmo.
-      addWhiteBoxActor(group, actor)
+      group.userData.directorFallbackRoot = addWhiteBoxActor(group, actor)
       if (instance) {
         // The mannequin is only a loading/error fallback. Keeping it in front
         // of the GLB makes the detailed model look like a capsule character.
@@ -491,6 +541,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
           if (child.userData.directorFallback) child.visible = false
         })
         group.add(instance)
+        group.userData.directorModelInstance = instance
       }
       world.add(group)
       // A model may load after the selection effect has already run.
@@ -505,19 +556,74 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       void loadModel(requested).then(model => {
         if (!active || !model) return
         const group = objectRefs.current.get(`actor:${actor.id}`)
-        const instance = group && modelInstance(actor, model)
+        const currentActor = latestSceneRef.current.actors.find(item => item.id === actor.id) ?? actor
+        const instance = group && modelInstance(currentActor, model)
         if (!(group instanceof THREE.Group) || !instance) return
         // Hide the fallback once the detailed model has finished loading.
         // When loading fails, the fallback remains visible because this block
         // is never reached.
-        group.traverse((child) => {
-          if (child.userData.directorFallback) child.visible = false
-        })
+        const fallbackRoot = group.userData.directorFallbackRoot as THREE.Object3D | undefined
+        if (fallbackRoot) fallbackRoot.visible = false
         group.add(instance)
+        group.userData.directorModelInstance = instance
       })
     })
     scene.cameras.forEach(camera => { const marker = new THREE.Mesh(new THREE.BoxGeometry(.32, .18, .55), new THREE.MeshStandardMaterial({ color: camera.id === scene.activeCameraId ? 0x67e8f9 : 0x738091 })); marker.userData.directorObject = true; marker.userData.directorCameraId = camera.id; marker.position.set(camera.x, camera.y, camera.z); if (camera.rotationX || camera.rotationY || camera.rotationZ) marker.rotation.set(THREE.MathUtils.degToRad(camera.rotationX || 0), THREE.MathUtils.degToRad(camera.rotationY || 0), THREE.MathUtils.degToRad(camera.rotationZ || 0)); else marker.lookAt(camera.targetX, camera.targetY, camera.targetZ); objectRefs.current.set(`camera:${camera.id}`, marker); world.add(marker) })
     return () => { active = false }
+  }, [sceneStructureKey])
+
+  // Apply mutable scene data to the existing object graph. This keeps pose
+  // changes on the already-cloned skeleton and makes preset/sliders respond
+  // on the next render frame instead of waiting for a GLB reload.
+  useEffect(() => {
+    const world = sceneRef.current
+    if (!world) return
+    scene.actors.forEach((actor) => {
+      const group = objectRefs.current.get(`actor:${actor.id}`)
+      if (!(group instanceof THREE.Group)) return
+      const poseOffset = { x: 0, y: actor.pose === 'walk' ? .2 : 0, z: actor.pose === 'hero' ? -.08 : 0 }
+      group.userData.poseOffset = poseOffset
+      group.position.set(actor.x, actor.y, actor.z)
+      group.rotation.set(
+        THREE.MathUtils.degToRad(actor.rotationX || 0) + (poseOffset?.x ?? 0),
+        THREE.MathUtils.degToRad(actor.rotationY || 0) + (poseOffset?.y ?? 0),
+        THREE.MathUtils.degToRad(actor.rotationZ || 0) + (poseOffset?.z ?? 0),
+      )
+      group.scale.setScalar(actor.scale)
+      const model = group.userData.directorModelInstance as THREE.Object3D | undefined
+      if (model) {
+        if (model.userData.directorModelColor !== actor.color) {
+          tintModel(model, actor.color)
+          model.userData.directorModelColor = actor.color
+        }
+        applyActorPose(model, actor.pose, actor.poseControls)
+        model.updateMatrixWorld(true)
+      } else {
+        // Keep the error/loading mannequin interactive too. Rebuilding this
+        // tiny hierarchy is cheap and avoids stale fallback joint transforms.
+        const previousFallback = group.userData.directorFallbackRoot as THREE.Object3D | undefined
+        if (previousFallback) {
+          group.remove(previousFallback)
+          disposeObject(previousFallback)
+        }
+        group.userData.directorFallbackRoot = addWhiteBoxActor(group, actor)
+      }
+      group.updateMatrixWorld(true)
+    })
+    scene.cameras.forEach((camera) => {
+      const marker = objectRefs.current.get(`camera:${camera.id}`)
+      if (!(marker instanceof THREE.Object3D)) return
+      marker.position.set(camera.x, camera.y, camera.z)
+      if (camera.rotationX || camera.rotationY || camera.rotationZ) {
+        marker.rotation.set(THREE.MathUtils.degToRad(camera.rotationX || 0), THREE.MathUtils.degToRad(camera.rotationY || 0), THREE.MathUtils.degToRad(camera.rotationZ || 0))
+      } else {
+        marker.lookAt(camera.targetX, camera.targetY, camera.targetZ)
+      }
+      if (marker instanceof THREE.Mesh) {
+        const material = marker.material
+        if (!Array.isArray(material) && 'color' in material && material.color instanceof THREE.Color) material.color.set(camera.id === scene.activeCameraId ? 0x67e8f9 : 0x738091)
+      }
+    })
   }, [scene])
 
   useEffect(() => {
@@ -539,7 +645,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     if (viewMode === 'camera' && active) {
       camera.position.set(active.x, active.y, active.z); camera.fov = active.fov; controls?.target.set(active.targetX, active.targetY, active.targetZ); if (active.rotationX || active.rotationY || active.rotationZ) camera.rotation.set(THREE.MathUtils.degToRad(active.rotationX || 0), THREE.MathUtils.degToRad(active.rotationY || 0), THREE.MathUtils.degToRad(active.rotationZ || 0)); else camera.lookAt(active.targetX, active.targetY, active.targetZ); if (controls) { controls.enabled = false; controls.update() }
     } else {
-      camera.position.set(0, 3.2, 8); camera.fov = 42; controls?.target.set(0, 1, 0); camera.lookAt(0, 1, 0); if (controls) { controls.enabled = true; controls.update() }
+      camera.position.set(0, 2.8, 6.3); camera.fov = 42; controls?.target.set(0, 1.05, 0); camera.lookAt(0, 1.05, 0); if (controls) { controls.enabled = true; controls.update() }
     }
     camera.updateProjectionMatrix()
   }, [scene.activeCameraId, scene.cameras, viewMode])
