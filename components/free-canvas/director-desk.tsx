@@ -34,7 +34,7 @@ const POSE_PRESETS: Array<{ id: string; label: string; pose: DirectorActor['pose
   { id: 'dodge', label: '躲球', pose: 'idle', controls: { torsoPitch: -16, torsoRoll: -34, headRoll: -18, leftShoulderPitch: -42, rightShoulderPitch: -42, leftHip: -35, rightHip: 24, leftKnee: 24, rightKnee: 24 } },
   { id: 'throw', label: '投球', pose: 'hero', controls: { torsoYaw: -34, torsoPitch: -8, rightShoulderPitch: -88, rightShoulderRoll: 58, rightElbow: -28, leftShoulderPitch: 30, leftShoulderRoll: -22, leftElbow: -52 } },
   { id: 'push', label: '推进', pose: 'hero', controls: { torsoPitch: 18, leftShoulderPitch: -58, rightShoulderPitch: -58, leftShoulderRoll: -22, rightShoulderRoll: 22, leftElbow: -18, rightElbow: -18, leftHip: -22, rightHip: -22 } },
-  { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -18, rightShoulderRoll: 240, rightElbow: -70, rightWrist: 40, leftShoulderRoll: -50 } },
+  { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -72, rightShoulderRoll: 260, rightElbow: -40, rightWrist: 32, leftShoulderRoll: -50 } },
   { id: 'reach', label: '伸手', pose: 'hero', controls: { torsoPitch: -8, rightShoulderPitch: -52, rightShoulderRoll: 24, rightElbow: -8, rightWrist: 0, leftShoulderRoll: -20 } },
   { id: 'raise', label: '抬臂', pose: 'hero', controls: { leftShoulderRoll: -70, rightShoulderRoll: 250, leftShoulderPitch: 12, rightShoulderPitch: -12, leftElbow: -18, rightElbow: -18 } },
   { id: 'phone', label: '看手机', pose: 'idle', controls: { headPitch: -28, torsoPitch: -14, torsoYaw: 12, rightShoulderPitch: 38, rightShoulderRoll: 28, rightElbow: -112, rightWrist: -24, leftShoulderPitch: 18, leftElbow: -54 } },
