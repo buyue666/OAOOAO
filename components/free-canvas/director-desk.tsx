@@ -296,11 +296,15 @@ function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose'], poseC
   // small offsets were being added to horizontal arms and the head lookup was
   // using the wrong case for the `Head` bone.
   // Quaternius' arm bones point upward in the source T-pose. In this rig a
-  // roughly ±140° local Z rotation brings both arms alongside the torso;
-  // slider values are then relative to that natural standing baseline.
+  // The source rig's arms cross the chest when the baseline is left at its
+  // authored T-pose rotation. For idle/walk poses, ±200° local Z places the
+  // hands beside the hips. Hero/T-pose presets keep the earlier ±140° basis
+  // so the existing arm presets remain readable and the T-pose can use the
+  // -230°/+230° controls below.
   resetActorPose(root)
-  setBoneRotationAbsolute(root, 'upperarm_l', 'z', THREE.MathUtils.degToRad(140))
-  setBoneRotationAbsolute(root, 'upperarm_r', 'z', THREE.MathUtils.degToRad(-140))
+  const armBaseline = pose === 'hero' ? 140 : 200
+  setBoneRotationAbsolute(root, 'upperarm_l', 'z', THREE.MathUtils.degToRad(armBaseline))
+  setBoneRotationAbsolute(root, 'upperarm_r', 'z', THREE.MathUtils.degToRad(-armBaseline))
   if (pose === 'hero') {
     setBoneRotation(root, 'thigh_l', 'z', -0.1)
     setBoneRotation(root, 'thigh_r', 'z', 0.1)
