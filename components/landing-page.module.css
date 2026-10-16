@@ -38,7 +38,7 @@
 .menuToggle { display: none; border: 0; background: none; color: var(--ink); width: 40px; height: 40px; align-items: center; justify-content: center; }
 .mobileNav { display: none; }
 
-.hero { position: relative; height: 300svh; background: #dcebf1; }
+.hero { position: relative; height: 220svh; background: #dcebf1; }
 .heroStage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
 .heroStrip { display: flex; height: 100%; width: 100%; align-items: stretch; justify-content: center; }
 .heroCenter { position: relative; flex: 0 0 auto; height: 100%; overflow: hidden; will-change: width; container-type: size; isolation: isolate; }
