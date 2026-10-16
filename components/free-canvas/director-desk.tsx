@@ -508,6 +508,10 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
         const instance = cloneSkinnedModel(model)
         tintModel(instance, actor.color)
         instance.scale.setScalar(1.15)
+        // Quaternius' source character faces -Z while the director camera
+        // approaches from +Z. Rotate the instance so the actor's face and
+        // hands are presented to the user instead of showing the back.
+        instance.rotation.y = Math.PI
         captureActorRestPose(instance)
         applyActorPose(instance, actor.pose, actor.poseControls)
         instance.userData.directorModelColor = actor.color
