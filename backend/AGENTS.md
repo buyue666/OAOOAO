@@ -9,7 +9,8 @@ Do not copy proprietary assets or dependency implementation code.
 Allowed inputs: this repository, standards and official dependency/provider docs,
 and the OAOOAO frontend's API request/response type definitions and call contracts
 in the OAOOAO frontend repository: `lib/studio`. Read those only for interoperability,
-not for implementation reuse. Record consulted sources in provenance notes.
+not for implementation reuse. Document implementation decisions in the relevant module
+documentation.
 
 Use Node.js, TypeScript, Fastify, PostgreSQL, permissively licensed dependencies.
 No production writes, deployment, credentials, or user data in development tests.

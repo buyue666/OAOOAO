@@ -59,9 +59,8 @@ reports outside the public repository.
 ## Evidence and scope
 
 Public evidence should contain only synthetic fixtures and reproducible methods.
-Production backups, customer records, operational topology, deployment journals and
-private provenance-comparison reports are retained separately by the operator.
+Production backups, customer records, operational topology and deployment journals
+are retained separately by the operator.
 Do not substitute a synthetic test result for a production readiness check.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and rollback guidance, and
-[LICENSING_REVIEW.md](LICENSING_REVIEW.md) for the provenance review and its limits.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and rollback guidance.

@@ -133,10 +133,10 @@ before reimbursement, then require the reservation ID and explicit confirmation
 to finish. Cancellation requires confirmation that no reimbursement was sent;
 reservations do not expire automatically. Internal work ingestion helpers do not
 imply a public author submission flow. The public gallery exposes only server-approved
-published versions; it is documented in [PUBLIC-GALLERY-PROVENANCE.md](PUBLIC-GALLERY-PROVENANCE.md).
+published versions.
 
 Follow [the deployment and rollback procedure](DEPLOYMENT.md) before any
-production cutover. Source records and balances must be reconciled; an existing
+production cutover. Records and balances must be reconciled; an existing
 plan label must never trigger an additional conversion into permanent credits.
 
 ## Third-party notices
