@@ -19,22 +19,22 @@ const DEFAULT_MODEL_URL = '/assets/director/quaternius-superhero.glb'
 
 const POSE_PRESETS: Array<{ id: string; label: string; pose: DirectorActor['pose']; controls: Partial<DirectorPoseControls> }> = [
   { id: 'stand', label: '站立', pose: 'idle', controls: {} },
-  { id: 't-pose', label: 'T 型', pose: 'hero', controls: { leftShoulderRoll: -82, rightShoulderRoll: 82 } },
+  { id: 't-pose', label: 'T 型', pose: 'hero', controls: { leftShoulderRoll: -230, rightShoulderRoll: 230 } },
   { id: 'walk', label: '行走', pose: 'walk', controls: { leftShoulderPitch: 24, rightShoulderPitch: -24, leftHip: -18, rightHip: 18, leftKnee: 8, rightKnee: -8 } },
-  { id: 'run', label: '跑步', pose: 'walk', controls: { torsoPitch: -12, leftShoulderPitch: 50, rightShoulderPitch: -50, leftElbow: -55, rightElbow: -55, leftHip: -38, rightHip: 38, leftKnee: 32, rightKnee: 32 } },
-  { id: 'sit', label: '坐姿', pose: 'idle', controls: { torsoPitch: -8, leftHip: -82, rightHip: -82, leftKnee: 84, rightKnee: 84 } },
-  { id: 'squat', label: '蹲下', pose: 'idle', controls: { torsoPitch: -15, leftHip: -55, rightHip: -55, leftKnee: 105, rightKnee: 105 } },
+  { id: 'run', label: '跑步', pose: 'walk', controls: { torsoPitch: -20, leftShoulderPitch: 58, rightShoulderPitch: -58, leftShoulderRoll: -18, rightShoulderRoll: 18, leftElbow: -72, rightElbow: -72, leftHip: -48, rightHip: 48, leftKnee: 48, rightKnee: 48 } },
+  { id: 'sit', label: '坐姿', pose: 'idle', controls: { torsoPitch: -18, leftHip: -88, rightHip: -88, leftKnee: 112, rightKnee: 112, leftAnkle: -28, rightAnkle: -28 } },
+  { id: 'squat', label: '蹲下', pose: 'idle', controls: { torsoPitch: -26, leftHip: -68, rightHip: -68, leftKnee: 122, rightKnee: 122, leftAnkle: -32, rightAnkle: -32 } },
   { id: 'single-jump', label: '单腿跳', pose: 'walk', controls: { torsoPitch: -4, leftHip: -24, rightHip: 18, leftKnee: 28, rightKnee: 92 } },
   { id: 'double-jump', label: '双腿跳', pose: 'walk', controls: { torsoPitch: -10, leftHip: -24, rightHip: 24, leftKnee: 28, rightKnee: 28 } },
   { id: 'akimbo', label: '叉腰', pose: 'hero', controls: { leftShoulderPitch: 25, rightShoulderPitch: 25, leftShoulderRoll: -38, rightShoulderRoll: 38, leftElbow: -72, rightElbow: -72 } },
   { id: 'lean', label: '俯靠', pose: 'idle', controls: { torsoPitch: -22, torsoRoll: -10, leftShoulderPitch: 18, rightShoulderPitch: 18 } },
   { id: 'turn', label: '翻身', pose: 'idle', controls: { torsoYaw: 55, headYaw: 35, leftShoulderYaw: -25, rightShoulderYaw: 25 } },
-  { id: 'think', label: '思考', pose: 'idle', controls: { torsoYaw: -12, headPitch: -12, headYaw: 18, leftShoulderPitch: 30, leftElbow: -82, leftWrist: 22 } },
+  { id: 'think', label: '思考', pose: 'idle', controls: { torsoYaw: -16, torsoPitch: -6, headPitch: -24, headYaw: 22, headRoll: -8, leftShoulderPitch: 38, leftShoulderRoll: -16, leftElbow: -96, leftWrist: 28 } },
   { id: 'fight', label: '格斗', pose: 'hero', controls: { torsoPitch: -8, leftShoulderPitch: 34, rightShoulderPitch: -34, leftElbow: -70, rightElbow: -70, leftHip: -15, rightHip: 15 } },
   { id: 'dodge', label: '躲球', pose: 'idle', controls: { torsoRoll: -24, headRoll: -12, leftHip: -22, rightHip: 12 } },
   { id: 'throw', label: '投球', pose: 'hero', controls: { torsoYaw: -18, rightShoulderPitch: -65, rightShoulderRoll: 35, rightElbow: -18, leftShoulderPitch: 18 } },
   { id: 'push', label: '推进', pose: 'hero', controls: { torsoPitch: 12, leftShoulderPitch: -35, rightShoulderPitch: -35, leftElbow: -12, rightElbow: -12 } },
-  { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -30, rightShoulderRoll: 70, rightElbow: -28, rightWrist: 20 } },
+  { id: 'wave', label: '招手', pose: 'hero', controls: { rightShoulderPitch: -38, rightShoulderRoll: 86, rightElbow: -46, rightWrist: 32 } },
   { id: 'reach', label: '伸手', pose: 'hero', controls: { rightShoulderPitch: -24, rightShoulderRoll: 10, rightElbow: 0, rightWrist: 0 } },
   { id: 'raise', label: '抬臂', pose: 'hero', controls: { leftShoulderRoll: -78, rightShoulderRoll: 78, leftElbow: -12, rightElbow: -12 } },
   { id: 'phone', label: '看手机', pose: 'idle', controls: { headPitch: -18, torsoPitch: -8, rightShoulderPitch: 25, rightShoulderRoll: 18, rightElbow: -82, rightWrist: -12 } },
@@ -206,7 +206,7 @@ function PoseInspector({ actor, controls, setPoseControls, applyPreset }: { acto
 }
 
 function PoseSlider({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
-  return <label className="block text-[10px] text-neutral-500"><span className="mb-1 flex items-center justify-between gap-2"><span>{label}</span><output className="rounded bg-black/25 px-1.5 py-0.5 tabular-nums text-[9px] text-neutral-400">{Math.round(value)}°</output></span><input aria-label={label} type="range" min="-120" max="120" step="1" value={value} onChange={event => onChange(Number(event.target.value))} className="h-1.5 w-full accent-cyan-200" /></label>
+  return <label className="block text-[10px] text-neutral-500"><span className="mb-1 flex items-center justify-between gap-2"><span>{label}</span><output className="rounded bg-black/25 px-1.5 py-0.5 tabular-nums text-[9px] text-neutral-400">{Math.round(value)}°</output></span><input aria-label={label} type="range" min="-240" max="240" step="1" value={value} onChange={event => onChange(Number(event.target.value))} className="h-1.5 w-full accent-cyan-200" /></label>
 }
 
 function CameraInspector({ camera, onChange }: { camera: DirectorCamera; onChange: (patch: Partial<DirectorCamera>) => void }) {
@@ -229,12 +229,22 @@ function disposeObject(root: THREE.Object3D) {
 function tintModel(root: THREE.Object3D, color: string) {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
-    const materials = Array.isArray(child.material) ? child.material : [child.material]
-    child.material = materials.map(material => {
+    child.castShadow = true
+    child.receiveShadow = true
+    const isMaterialArray = Array.isArray(child.material)
+    const materials = (isMaterialArray ? child.material : [child.material]) as THREE.Material[]
+    const tinted = materials.map(material => {
       const next = material.clone()
-      if ('color' in next && next.color instanceof THREE.Color) next.color.set(color)
+      // Keep the face readable after applying the actor's chosen color. The
+      // bundled model separates the body, eyes and eyebrows into named meshes.
+      const accent = child.name === 'Eyes' ? '#f8fafc' : child.name === 'Eyebrows' ? '#1f2937' : color
+      if ('color' in next && next.color instanceof THREE.Color) next.color.set(accent)
+      if (child.name === 'Eyes' && 'roughness' in next) next.roughness = 0.25
       return next
-    }) as THREE.Mesh['material']
+    })
+    // Preserve the original material shape. A single-material mesh with a
+    // one-item array can have no matching geometry group and render nothing.
+    child.material = (isMaterialArray ? tinted : tinted[0]) as THREE.Mesh['material']
   })
 }
 
@@ -244,22 +254,33 @@ function setBoneRotation(root: THREE.Object3D, name: string, axis: 'x' | 'y' | '
   bone.rotation[axis] += value
 }
 
+function setBoneRotationAbsolute(root: THREE.Object3D, name: string, axis: 'x' | 'y' | 'z', value: number) {
+  const bone = root.getObjectByName(name)
+  if (!bone) return
+  bone.rotation[axis] = value
+}
+
 function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose'], poseControls?: DirectorPoseControls) {
-  // The bundled Quaternius model has a humanoid skeleton but no animation clips.
-  // These restrained procedural offsets keep the director desk useful without
-  // pulling in a separate animation pack or a non-redistributable runtime.
+  // The source mesh is authored in a T-pose. Establish a natural standing
+  // baseline first, then apply visible preset offsets and saved joint edits.
+  // This is why the old GLB preview looked like the pose selector did nothing:
+  // small offsets were being added to horizontal arms and the head lookup was
+  // using the wrong case for the `Head` bone.
+  // Quaternius' arm bones point upward in the source T-pose. In this rig a
+  // roughly ±140° local Z rotation brings both arms alongside the torso;
+  // slider values are then relative to that natural standing baseline.
+  setBoneRotationAbsolute(root, 'upperarm_l', 'z', THREE.MathUtils.degToRad(140))
+  setBoneRotationAbsolute(root, 'upperarm_r', 'z', THREE.MathUtils.degToRad(-140))
   if (pose === 'hero') {
-    setBoneRotation(root, 'upperarm_l', 'z', -0.16)
-    setBoneRotation(root, 'upperarm_r', 'z', 0.16)
-    setBoneRotation(root, 'thigh_l', 'z', -0.05)
-    setBoneRotation(root, 'thigh_r', 'z', 0.05)
+    setBoneRotation(root, 'thigh_l', 'z', -0.1)
+    setBoneRotation(root, 'thigh_r', 'z', 0.1)
   } else if (pose === 'walk') {
-    setBoneRotation(root, 'upperarm_l', 'z', 0.28)
-    setBoneRotation(root, 'upperarm_r', 'z', -0.28)
-    setBoneRotation(root, 'thigh_l', 'z', 0.24)
-    setBoneRotation(root, 'thigh_r', 'z', -0.24)
-    setBoneRotation(root, 'calf_l', 'z', -0.08)
-    setBoneRotation(root, 'calf_r', 'z', 0.08)
+    setBoneRotation(root, 'upperarm_l', 'z', 0.55)
+    setBoneRotation(root, 'upperarm_r', 'z', -0.55)
+    setBoneRotation(root, 'thigh_l', 'z', 0.45)
+    setBoneRotation(root, 'thigh_r', 'z', -0.45)
+    setBoneRotation(root, 'calf_l', 'z', -0.22)
+    setBoneRotation(root, 'calf_r', 'z', 0.22)
   }
   const controls = { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...(poseControls ?? {}) }
   const radians = (value: number) => THREE.MathUtils.degToRad(value)
@@ -267,9 +288,9 @@ function applyActorPose(root: THREE.Object3D, pose: DirectorActor['pose'], poseC
   rotate('spine_01', 'x', controls.torsoPitch)
   rotate('spine_01', 'y', controls.torsoYaw)
   rotate('spine_01', 'z', controls.torsoRoll)
-  rotate('head', 'x', controls.headPitch)
-  rotate('head', 'y', controls.headYaw)
-  rotate('head', 'z', controls.headRoll)
+  rotate('Head', 'x', controls.headPitch)
+  rotate('Head', 'y', controls.headYaw)
+  rotate('Head', 'z', controls.headRoll)
   rotate('upperarm_l', 'x', controls.leftShoulderPitch)
   rotate('upperarm_l', 'y', controls.leftShoulderYaw)
   rotate('upperarm_l', 'z', controls.leftShoulderRoll)
@@ -292,26 +313,72 @@ function addWhiteBoxActor(group: THREE.Group, actor: DirectorActor) {
   const controls = { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...(actor.poseControls ?? {}) }
   const radians = (value: number) => THREE.MathUtils.degToRad(value)
   const material = new THREE.MeshStandardMaterial({ color: actor.color, roughness: .72 })
-  const add = (geometry: THREE.BufferGeometry, position: [number, number, number], rotation?: [number, number, number]) => {
+  const add = (parent: THREE.Object3D, geometry: THREE.BufferGeometry, position: [number, number, number], rotation?: [number, number, number]) => {
     const mesh = new THREE.Mesh(geometry, material)
+    mesh.userData.directorFallback = true
+    mesh.castShadow = true
+    mesh.receiveShadow = true
     mesh.position.set(...position)
     if (rotation) mesh.rotation.set(...rotation)
-    group.add(mesh)
+    parent.add(mesh)
+    return mesh
   }
-  add(new THREE.CapsuleGeometry(.3, .86, 6, 12), [0, 1.2, 0])
-  add(new THREE.SphereGeometry(.31, 14, 10), [0, .78, 0])
-  add(new THREE.SphereGeometry(.28, 16, 12), [0, 2.1, 0])
-  add(new THREE.CylinderGeometry(.12, .14, .16, 10), [0, 1.84, 0])
-  const armAngle = actor.pose === 'hero' ? .18 : actor.pose === 'walk' ? .24 : .06
-  add(new THREE.CapsuleGeometry(.095, .62, 5, 8), [-.42, 1.25, 0], [radians(controls.leftShoulderPitch), 0, -armAngle + radians(controls.leftShoulderRoll)])
-  add(new THREE.CapsuleGeometry(.095, .62, 5, 8), [.42, 1.25, 0], [radians(controls.rightShoulderPitch), 0, armAngle + radians(controls.rightShoulderRoll)])
-  add(new THREE.SphereGeometry(.12, 10, 8), [-.49, .88, 0])
-  add(new THREE.SphereGeometry(.12, 10, 8), [.49, .88, 0])
-  const legAngle = actor.pose === 'walk' ? .2 : actor.pose === 'hero' ? .06 : 0
-  add(new THREE.CapsuleGeometry(.12, .62, 5, 8), [-.16, .43, 0], [radians(controls.leftHip + controls.leftKnee), 0, -legAngle])
-  add(new THREE.CapsuleGeometry(.12, .62, 5, 8), [.16, .43, 0], [radians(controls.rightHip + controls.rightKnee), 0, legAngle])
-  add(new THREE.CapsuleGeometry(.12, .25, 5, 8), [-.16, .08, -.08], [0, Math.PI / 2, 0])
-  add(new THREE.CapsuleGeometry(.12, .25, 5, 8), [.16, .08, -.08], [0, Math.PI / 2, 0])
+  const torso = new THREE.Group()
+  torso.position.set(0, .78, 0)
+  torso.rotation.set(radians(controls.torsoPitch), radians(controls.torsoYaw), radians(controls.torsoRoll))
+  group.add(torso)
+  add(torso, new THREE.CapsuleGeometry(.3, .86, 6, 12), [0, .42, 0])
+  add(torso, new THREE.SphereGeometry(.31, 14, 10), [0, 0, 0])
+  const neck = new THREE.Group()
+  neck.position.set(0, 1.05, 0)
+  torso.add(neck)
+  add(neck, new THREE.CylinderGeometry(.12, .14, .16, 10), [0, 0, 0])
+  const head = new THREE.Group()
+  head.position.set(0, .24, 0)
+  head.rotation.set(radians(controls.headPitch), radians(controls.headYaw), radians(controls.headRoll))
+  neck.add(head)
+  add(head, new THREE.SphereGeometry(.28, 16, 12), [0, .1, 0])
+  const buildArm = (side: -1 | 1, shoulderPitch: number, shoulderRoll: number, elbow: number, wrist: number) => {
+    const shoulder = new THREE.Group()
+    shoulder.position.set(side * .4, .9, 0)
+    shoulder.rotation.set(radians(shoulderPitch), 0, side * (radians(.06 * 57.3) + radians(shoulderRoll)))
+    torso.add(shoulder)
+    add(shoulder, new THREE.CapsuleGeometry(.095, .62, 5, 8), [0, -.3, 0])
+    const forearm = new THREE.Group()
+    forearm.position.set(0, -.62, 0)
+    forearm.rotation.set(radians(elbow), 0, 0)
+    shoulder.add(forearm)
+    add(forearm, new THREE.CapsuleGeometry(.095, .42, 5, 8), [0, -.22, 0])
+    const hand = new THREE.Group()
+    hand.position.set(0, -.46, 0)
+    hand.rotation.z = radians(wrist)
+    forearm.add(hand)
+    add(hand, new THREE.SphereGeometry(.12, 10, 8), [0, -.08, 0])
+  }
+  buildArm(-1, controls.leftShoulderPitch, controls.leftShoulderRoll, controls.leftElbow, controls.leftWrist)
+  buildArm(1, controls.rightShoulderPitch, controls.rightShoulderRoll, controls.rightElbow, controls.rightWrist)
+  const buildLeg = (side: -1 | 1, hip: number, knee: number, ankle: number) => {
+    const thigh = new THREE.Group()
+    // Keep the hierarchical legs anchored beneath the pelvis instead of
+    // placing the whole chain below the floor plane.
+    thigh.position.set(side * .16, .72, 0)
+    thigh.rotation.z = radians(side * (actor.pose === 'walk' ? 11 : actor.pose === 'hero' ? 3 : 0))
+    thigh.rotation.x += radians(hip)
+    torso.add(thigh)
+    add(thigh, new THREE.CapsuleGeometry(.12, .62, 5, 8), [0, -.35, 0])
+    const shin = new THREE.Group()
+    shin.position.set(0, -.67, 0)
+    shin.rotation.x = radians(knee)
+    thigh.add(shin)
+    add(shin, new THREE.CapsuleGeometry(.12, .5, 5, 8), [0, -.27, 0])
+    const foot = new THREE.Group()
+    foot.position.set(0, -.55, -.06)
+    foot.rotation.x = radians(ankle)
+    shin.add(foot)
+    add(foot, new THREE.CapsuleGeometry(.12, .25, 5, 8), [0, 0, -.08], [0, Math.PI / 2, 0])
+  }
+  buildLeg(-1, controls.leftHip, controls.leftKnee, controls.leftAnkle)
+  buildLeg(1, controls.rightHip, controls.rightKnee, controls.rightAnkle)
 }
 
 function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selectedActorId, selectedCameraId, transformMode, onActorTransform, onCameraTransform }: { scene: DirectorSceneData; viewMode: 'director' | 'camera'; focusTarget: DirectorActor | DirectorCamera | null | undefined; focusRequest: number; selectedActorId: string | null; selectedCameraId: string | null; transformMode: 'translate' | 'rotate' | 'scale'; onActorTransform: (id: string, patch: Partial<DirectorActor>) => void; onCameraTransform: (id: string, patch: Partial<DirectorCamera>) => void }) {
@@ -333,7 +400,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     if (!mount) return
     let renderer: THREE.WebGLRenderer
     try { renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true }) } catch { mount.innerHTML = '<div class="flex h-full items-center justify-center text-sm text-neutral-500">当前浏览器不支持 WebGL 预览</div>'; return }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setClearColor(0x080b0f, 1); mount.append(renderer.domElement); renderer.domElement.dataset.directorViewport = 'true'; rendererRef.current = renderer
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setClearColor(0x080b0f, 1); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; mount.append(renderer.domElement); renderer.domElement.dataset.directorViewport = 'true'; rendererRef.current = renderer
     const world = new THREE.Scene(); sceneRef.current = world
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100); camera.position.set(0, 3.2, 8); cameraRef.current = camera
     const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 1, 0); controls.enableDamping = true; controls.minDistance = 3; controls.maxDistance = 18; controlsRef.current = controls
@@ -355,8 +422,8 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     })
     transformRef.current = transform
     world.add(transform.getHelper())
-    world.add(new THREE.HemisphereLight(0xd7edff, 0x1b2030, 1.8)); const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 7, 4); world.add(key)
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 12), new THREE.MeshStandardMaterial({ color: 0x101722, roughness: 0.9, metalness: 0.05 })); floor.rotation.x = -Math.PI / 2; world.add(floor)
+    world.add(new THREE.HemisphereLight(0xd7edff, 0x1b2030, 1.8)); const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 7, 4); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); world.add(key)
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 12), new THREE.MeshStandardMaterial({ color: 0x101722, roughness: 0.9, metalness: 0.05 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; world.add(floor)
     const resize = () => { const width = mount.clientWidth || 1; const height = mount.clientHeight || 1; renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix() }; resize(); const observer = new ResizeObserver(resize); observer.observe(mount)
     let frame = 0; const animate = () => { controls.update(); renderer.render(world, camera); frame = requestAnimationFrame(animate) }; animate()
     return () => {
@@ -388,7 +455,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       try {
         const instance = cloneSkinnedModel(model)
         tintModel(instance, actor.color)
-        instance.scale.setScalar(1.05)
+        instance.scale.setScalar(1.15)
         applyActorPose(instance, actor.pose, actor.poseControls)
         instance.traverse((child) => {
           child.visible = true
@@ -417,7 +484,14 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       // browser (for example after a context restore); the mannequin keeps
       // the scene usable instead of leaving an empty transform gizmo.
       addWhiteBoxActor(group, actor)
-      if (instance) group.add(instance)
+      if (instance) {
+        // The mannequin is only a loading/error fallback. Keeping it in front
+        // of the GLB makes the detailed model look like a capsule character.
+        group.traverse((child) => {
+          if (child.userData.directorFallback) child.visible = false
+        })
+        group.add(instance)
+      }
       world.add(group)
       // A model may load after the selection effect has already run.
       if (selectedActorId === actor.id && viewMode === 'director') transformRef.current?.attach(group)
@@ -433,8 +507,12 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
         const group = objectRefs.current.get(`actor:${actor.id}`)
         const instance = group && modelInstance(actor, model)
         if (!(group instanceof THREE.Group) || !instance) return
-        // Do not remove the procedural fallback: it is an intentional
-        // compatibility layer for models that fail to render on a device.
+        // Hide the fallback once the detailed model has finished loading.
+        // When loading fails, the fallback remains visible because this block
+        // is never reached.
+        group.traverse((child) => {
+          if (child.userData.directorFallback) child.visible = false
+        })
         group.add(instance)
       })
     })
