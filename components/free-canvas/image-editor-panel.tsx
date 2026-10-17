@@ -231,6 +231,7 @@ export function ImageEditorPanel({
   const [editingRegionPrompt, setEditingRegionPrompt] = useState('')
   const [closingRegionId, setClosingRegionId] = useState<number | null>(null)
   const [toolbarDragging, setToolbarDragging] = useState(false)
+  const [layoutRevision, setLayoutRevision] = useState(0)
   const [hiddenSubmitConfirm, setHiddenSubmitConfirm] = useState(false)
   const [draftRect, setDraftRect] = useState<Rect | null>(null)
   const [status, setStatus] = useState(operationMeta[initialOperation].status)
@@ -333,6 +334,14 @@ export function ImageEditorPanel({
   useEffect(() => {
     setBrushSize(initialBrushSize)
   }, [initialBrushSize])
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => setLayoutRevision((revision) => revision + 1))
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -672,6 +681,42 @@ export function ImageEditorPanel({
     }
   }, [draftRect, maskRevision])
 
+  const regionComposerPosition = useMemo(() => {
+    if (editingRegionId === null || !showMarkers) return null
+    const region = maskRegions.find((item) => item.id === editingRegionId)
+    const canvas = maskRef.current
+    const stage = stageRef.current
+    if (!region || !canvas || !stage || !canvas.width || !canvas.height) return null
+    const canvasRect = canvas.getBoundingClientRect()
+    const stageRect = stage.getBoundingClientRect()
+    if (!canvasRect.width || !canvasRect.height || !stageRect.width || !stageRect.height) return null
+    const markerX = canvasRect.left - stageRect.left + (region.x / canvas.width) * canvasRect.width
+    const markerY = canvasRect.top - stageRect.top + (region.y / canvas.height) * canvasRect.height
+    const popupWidth = Math.min(310, Math.max(190, stageRect.width - 16))
+    const popupHeight = 42
+    const gap = 12
+    const minX = 8
+    const maxX = Math.max(minX, stageRect.width - popupWidth - 8)
+    // Leave a little extra breathing room vertically for the slide-in animation.
+    const minY = 14
+    const maxY = Math.max(minY, stageRect.height - popupHeight - 14)
+    const canRight = markerX + gap + popupWidth <= stageRect.width - 8
+    const canLeft = markerX - gap - popupWidth >= 8
+    const canBelow = markerY + gap + popupHeight <= stageRect.height - 14
+    const canAbove = markerY - gap - popupHeight >= 14
+    const left = canRight
+      ? markerX + gap
+      : canLeft
+        ? markerX - gap - popupWidth
+        : Math.min(maxX, Math.max(minX, markerX - popupWidth / 2))
+    const top = canBelow
+      ? markerY + gap
+      : canAbove
+        ? markerY - gap - popupHeight
+        : Math.min(maxY, Math.max(minY, markerY - popupHeight / 2))
+    return { left, top, width: popupWidth }
+  }, [editingRegionId, layoutRevision, maskRegions, maskRevision, pan, showMarkers, zoom])
+
   return (
     <aside className={`${styles.panel}${className ? ` ${className}` : ''}`} data-editor-theme={theme} aria-label={title}>
       {showHeader && <header className={styles.header}>
@@ -756,33 +801,35 @@ export function ImageEditorPanel({
                       aria-label={`编辑区域 ${region.id}`}
                       title={region.prompt ? `区域 ${region.id}：${region.prompt}` : `编辑区域 ${region.id}`}
                     >{region.id}</button>
-                    {editingRegionId === region.id && <span className={`${styles.regionComposer} ${region.x / Math.max(1, maskRef.current?.width || 1) > 0.62 ? styles.regionComposerRight : ''} ${region.y / Math.max(1, maskRef.current?.height || 1) > 0.62 ? styles.regionComposerAbove : ''} ${closingRegionId === region.id ? styles.regionComposerClosing : ''}`} role="group" aria-label={`编辑区域 ${region.id}`}>
-                      <span className={styles.regionComposerPrefix} aria-hidden="true">＋</span>
-                      <input
-                        autoFocus
-                        value={editingRegionPrompt}
-                        onChange={(event) => setEditingRegionPrompt(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            confirmRegionPrompt()
-                          }
-                          if (event.key === 'Escape') {
-                            event.preventDefault()
-                            closeRegionEditor(true)
-                          }
-                        }}
-                        placeholder="添加标记..."
-                        aria-label={`区域 ${region.id} 的修改说明`}
-                      />
-                      <button type="button" onClick={() => confirmRegionPrompt()} aria-label={`确认区域 ${region.id}`} title="确认"><span aria-hidden="true">✓</span></button>
-                    </span>}
                   </span>
                 ))}
               </div>}
               {operation !== 'outpaint' && maskStyle && <span className={styles.draftRect} style={maskStyle} aria-hidden="true" />}
             </div>
           )}
+          {operation !== 'outpaint' && regionComposerPosition && <div className={styles.regionComposerLayer} style={{ left: regionComposerPosition.left, top: regionComposerPosition.top, width: regionComposerPosition.width }}>
+            <span className={`${styles.regionComposer} ${closingRegionId === editingRegionId ? styles.regionComposerClosing : ''}`} role="group" aria-label={`编辑区域 ${editingRegionId}`}>
+              <span className={styles.regionComposerPrefix} aria-hidden="true">＋</span>
+              <input
+                autoFocus
+                value={editingRegionPrompt}
+                onChange={(event) => setEditingRegionPrompt(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    confirmRegionPrompt()
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeRegionEditor(true)
+                  }
+                }}
+                placeholder="添加标记..."
+                aria-label={`区域 ${editingRegionId} 的修改说明`}
+              />
+              <button type="button" onClick={() => confirmRegionPrompt()} aria-label={`确认区域 ${editingRegionId}`} title="确认"><span aria-hidden="true">✓</span></button>
+            </span>
+          </div>}
           <div ref={toolbarRef} className={`${styles.floatingTools} ${toolbarDragging ? styles.floatingToolsDragging : ''}`} style={toolbarStyle} role="toolbar" aria-label="编辑工具">
             <span
               className={styles.toolbarHandle}

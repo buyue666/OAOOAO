@@ -163,17 +163,14 @@
   animation: regionMarkerIn 180ms cubic-bezier(.22, .8, .3, 1) both;
 }
 .regionComposer {
-  position: absolute;
-  z-index: 4;
-  top: calc(100% + 8px);
-  left: 11px;
+  position: relative;
   display: flex;
-  width: min(310px, 38vw);
-  min-width: 190px;
+  width: 100%;
+  min-width: 0;
   height: 42px;
   align-items: center;
   gap: 4px;
-  transform: translateX(-8px);
+  transform: none;
   border: 1px solid rgb(20 30 38 / 12%);
   border-radius: 13px;
   background: #fff;
@@ -184,10 +181,12 @@
   transform-origin: left center;
   animation: regionComposerIn 170ms cubic-bezier(.22, .8, .3, 1) both;
 }
+.regionComposerLayer {
+  position: absolute;
+  z-index: 8;
+  pointer-events: none;
+}
 .regionComposerClosing { animation: regionComposerOut 160ms ease both; pointer-events: none; }
-.regionComposerRight { left: auto; right: 11px; transform: translateX(8px); transform-origin: right center; }
-.regionComposerAbove { top: auto; bottom: calc(100% + 8px); transform-origin: left bottom; }
-.regionComposerRight.regionComposerAbove { transform-origin: right bottom; }
 .regionComposerPrefix { flex: 0 0 auto; color: #182029; font-size: 22px; line-height: 1; }
 .regionComposer input {
   min-width: 0;
@@ -457,12 +456,12 @@
   to { opacity: 1; transform: scale(1); }
 }
 @keyframes regionComposerIn {
-  from { opacity: 0; transform: translate(-8px, 5px) scale(.96); }
-  to { opacity: 1; transform: translate(-8px, 0) scale(1); }
+  from { opacity: 0; transform: translateY(5px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes regionComposerOut {
-  from { opacity: 1; transform: translate(-8px, 0) scale(1); }
-  to { opacity: 0; transform: translate(-8px, 5px) scale(.96); }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(5px) scale(.96); }
 }
 
 @media (prefers-reduced-motion: reduce) {
