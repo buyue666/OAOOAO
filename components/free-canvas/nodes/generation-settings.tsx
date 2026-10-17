@@ -50,7 +50,7 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
   const ratios = caps?.ratios.length ? caps.ratios : data.kind === 'video' ? VIDEO_RATIO_FALLBACK : RATIO_FALLBACK
   const resolutions = data.kind === 'image' ? (caps?.resolutions?.length ? caps.resolutions : ['1K']) : []
   const qualities = data.kind === 'image'
-    ? imageQualityOptions(caps ? { capabilities: caps } : undefined, data.resolution).map((value) => ({ value, label: `${value} · ${qualityLabel(value)}` }))
+    ? imageQualityOptions(caps ? { capabilities: caps } : undefined, data.resolution).map((value) => ({ value, label: qualityLabel(value, caps?.qualityLabels) }))
     : caps?.qualities.length ? caps.qualities.map((value) => ({ value, label: value })) : VIDEO_QUALITY_FALLBACK
   const durations = caps?.durations.length ? caps.durations : VIDEO_SECONDS_FALLBACK
   const maxReferences = caps?.maxReferences && caps.maxReferences > 0 ? caps.maxReferences : 4

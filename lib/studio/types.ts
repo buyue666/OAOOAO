@@ -118,6 +118,8 @@ export interface ModelCapability {
   outputDimensionsByResolution?: Record<string, Record<string, string>>
   /** 图片质量参数，例如 auto、low、medium、high。 */
   qualities: string[]
+  /** 图片质量中文显示名；键仍是提交给上游的协议值。 */
+  qualityLabels?: Record<string, string>
   /**
    * 参考素材数量上限。
    *

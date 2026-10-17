@@ -90,7 +90,16 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
   const explicitlyUnsupported = Boolean(profile) && profile?.supportsReferenceImage === false
   const supportsReference = Boolean(profile?.supportsReferenceImage)
   const configuredResolutions = profile?.outputResolutions?.length ? profile.outputResolutions : profile?.resolutions
-  const configuredQualities = profile?.imageQualities?.length ? profile.imageQualities : profile?.qualities
+  const configuredQualityOptions = profile?.imageQualityOptions?.filter((item) => item && typeof item.value === 'string' && item.value.trim() && typeof item.label === 'string') ?? []
+  const configuredQualities = profile?.imageQualities?.length
+    ? profile.imageQualities
+    : profile?.qualities?.length
+      ? profile.qualities
+      : configuredQualityOptions.map((item) => item.value)
+  const qualityLabels = {
+    ...(profile?.imageQualityLabels || {}),
+    ...Object.fromEntries(configuredQualityOptions.map((item) => [item.value, item.label])),
+  }
   const outputDimensions = normalizeOutputDimensions(profile, configuredResolutions)
   const capability: ModelCapability = {
     ...defaultCapability,
@@ -106,6 +115,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     outputDimensions: model.capability === 'image' ? outputDimensions.selected : defaultOutputDimensionsFor(model.capability),
     outputDimensionsByResolution: model.capability === 'image' ? outputDimensions.byResolution : {},
     qualities: qualityCandidates(model.capability, settings, configuredQualities),
+    qualityLabels: Object.keys(qualityLabels).length ? qualityLabels : undefined,
     /**
      * 未配置上限时用保守默认值，**不能**给 0。
      *
@@ -237,7 +247,11 @@ function qualityCandidates(capability: SessionLogicalModel['capability'], settin
 /** 图片的“图片质量”与“清晰度/分辨率”是两个独立参数；1K 档只允许自动质量。 */
 export function imageQualityOptions(model?: Pick<ModelConfig, 'capabilities'>, resolution?: string) {
   const qualities = model?.capabilities.qualities?.length ? model.capabilities.qualities : qualityLabels
-  return resolution === '1K' ? ['auto'] : [...qualities]
+  if (resolution !== '1K') return [...qualities]
+  // Keep the 1K default on auto, but do not invent an undeclared protocol value
+  // when an administrator explicitly configured a different quality list.
+  if (!model?.capabilities.qualities?.length) return ['auto']
+  return qualities.includes('auto') ? ['auto'] : [...qualities]
 }
 
 /** 画幅比例显示实际输出尺寸；后台配置优先，兜底只用于避免空白选项。 */
@@ -261,8 +275,8 @@ export function ratioDimension(
   return outputDimensionsByResolution?.[resolution || '']?.[value] ?? outputDimensions?.[value] ?? defaultOutputDimensions[value]
 }
 
-export function qualityLabel(value: string) {
-  return qualityLabelText[value] ?? value
+export function qualityLabel(value: string, labels?: Record<string, string>) {
+  return labels?.[value] || qualityLabelText[value] || value
 }
 
 /**

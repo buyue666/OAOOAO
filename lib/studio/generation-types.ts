@@ -253,6 +253,10 @@ export type SessionLogicalModel = {
       resolutions?: string[]
       /** 新字段：图片质量（auto/low/medium/high）；保留 qualities 兼容旧配置。 */
       imageQualities?: string[]
+      /** 图片质量的中文显示名；键为提交给上游的协议值。 */
+      imageQualityLabels?: Record<string, string>
+      /** 图片质量选项；value 是上游协议值，label 只用于前台显示。 */
+      imageQualityOptions?: Array<{ value: string; label: string }>
       /**
        * 比例对应的输出尺寸。支持旧的扁平格式（{ '1:1': '1254x1254' }），
        * 也支持按清晰度分组（{ '1K': { '1:1': '1254x1254' } }）。

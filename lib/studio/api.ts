@@ -75,6 +75,10 @@ export type SessionSettings = {
         outputResolutions?: string[]
         resolutions?: string[]
         imageQualities?: string[]
+        /** 图片质量的中文显示名；键为提交给上游的协议值。 */
+        imageQualityLabels?: Record<string, string>
+        /** 图片质量选项；value 是上游协议值，label 只用于前台显示。 */
+        imageQualityOptions?: Array<{ value: string; label: string }>
         outputDimensions?: CapabilitySizeMap
         sizeMap?: CapabilitySizeMap
         qualities?: string[]

@@ -1133,7 +1133,7 @@ export function ImageWorkspace() {
           </div>
           <div className="grid grid-cols-2 gap-3">
           <SelectField label="清晰度" value={resolution} onChange={setResolution} options={resolutionOptions.map((item) => ({ value: item, label: item }))} />
-          <SelectField label="图片质量" value={quality} onChange={setQuality} options={qualityOptions.map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} />
+          <SelectField label="图片质量" value={quality} onChange={setQuality} options={qualityOptions.map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
           {maxBatch > 1 ? (
             <SelectField label="生成数量" value={count} onChange={setCount} options={countOptions.map((item) => ({ value: item, label: `${item} 张` }))} className="col-span-2" hint={`当前模型最多 ${maxBatch} 张，超出部分会按批次分多次提交。`} />
           ) : (
@@ -1960,7 +1960,7 @@ export function VideoWorkspace() {
         {advanced ? (
           <div className="flex flex-col gap-3">
             {/* 只列出后端视频任务真实接受、并且会提交的参数。 */}
-            <SelectField label="清晰度" value={quality} onChange={setQuality} options={(capabilities.qualities.length ? capabilities.qualities : ['480', '720', '1080']).map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} />
+            <SelectField label="清晰度" value={quality} onChange={setQuality} options={(capabilities.qualities.length ? capabilities.qualities : ['480', '720', '1080']).map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
             <p className="text-[11px] leading-5 text-muted-foreground">运动强度、镜头稳定等参数后端当前不接受，因此不提供无效控件。</p>
           </div>
         ) : (
