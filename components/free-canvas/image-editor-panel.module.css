@@ -139,6 +139,24 @@
 .maskCanvasMove { cursor: grab; }
 .maskCanvasMove:active { cursor: grabbing; }
 .draftRect { position: absolute; border: 1px dashed #8fe9d5; background: rgb(199 243 232 / 16%); pointer-events: none; }
+.regionMarkers { position: absolute; inset: 0; pointer-events: none; }
+.regionMarker {
+  position: absolute;
+  display: inline-flex;
+  min-width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #157d73;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
 
 .floatingTools {
   position: absolute;

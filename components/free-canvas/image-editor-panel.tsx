@@ -3,7 +3,6 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Crop,
   Eraser,
   Expand,
   GripVertical,
@@ -65,6 +64,8 @@ export interface ImageEditorPanelProps {
 
 type Point = { x: number; y: number }
 type Rect = { x: number; y: number; width: number; height: number }
+type MaskRegion = { id: number; x: number; y: number }
+type MaskSnapshot = { dataUrl: string; regions: MaskRegion[] }
 
 const operations: Array<{ value: ImageEditOperation; label: string; icon: typeof Sparkles }> = [
   { value: 'inpaint', label: '标记改图', icon: WandSparkles },
@@ -87,8 +88,8 @@ type OperationMeta = {
 
 const operationMeta: Record<ImageEditOperation, OperationMeta> = {
   inpaint: {
-    guide: '先在画面上涂抹或框选需要修改的区域，再描述你想替换的内容。',
-    placeholder: '例如：把圈选区域改成金色机械臂，保持原来的光影和构图',
+    guide: '先在画面上涂抹需要修改的区域，再描述你想替换的内容，可用区域编号对应不同位置。',
+    placeholder: '例如：把区域 1 改成金色机械臂，把区域 2 改成蓝色玻璃，保持原来的光影和构图',
     defaultPrompt: '保持原来的光影和构图，只修改标记区域',
     status: '已切换到标记改图，请在图片上标记区域',
     submitLabel: '提交改图',
@@ -116,7 +117,7 @@ const operationMeta: Record<ImageEditOperation, OperationMeta> = {
     defaultPrompt: '向画布边缘自然扩展，延续原图的光影、色彩和透视',
     status: '已切换到扩图，描述需要扩展的方向和内容',
     submitLabel: '生成扩图',
-    maskHint: '可用矩形选区提示需要优先补全的边缘',
+    maskHint: '可用画笔标记需要优先补全的边缘',
   },
   enhance: {
     guide: '提升清晰度、细节和纹理，同时尽量保持原图构图与主体不变。',
@@ -181,16 +182,19 @@ export function ImageEditorPanel({
 }: ImageEditorPanelProps) {
   const imageRef = useRef<HTMLImageElement | null>(null)
   const maskRef = useRef<HTMLCanvasElement | null>(null)
-  const historyRef = useRef<string[]>([])
+  const historyRef = useRef<MaskSnapshot[]>([])
   const historyIndexRef = useRef(-1)
   const drawingRef = useRef(false)
   const startPointRef = useRef<Point | null>(null)
+  const nextRegionIdRef = useRef(1)
+  const maskRegionsRef = useRef<MaskRegion[]>([])
   const [operation, setOperation] = useState<ImageEditOperation>(initialOperation)
   const [tool, setTool] = useState<ImageEditorTool>('brush')
   const [prompt, setPrompt] = useState(initialPrompt)
   const [brushSize, setBrushSize] = useState(initialBrushSize)
   const [brushColor, setBrushColor] = useState('#8fe9d5')
   const [maskRevision, setMaskRevision] = useState(0)
+  const [maskRegions, setMaskRegions] = useState<MaskRegion[]>([])
   const [draftRect, setDraftRect] = useState<Rect | null>(null)
   const [status, setStatus] = useState(operationMeta[initialOperation].status)
   const [isSaving, setIsSaving] = useState(false)
@@ -199,6 +203,11 @@ export function ImageEditorPanel({
   const canUndo = historyIndexRef.current > 0
   const canRedo = historyIndexRef.current >= 0 && historyIndexRef.current < historyRef.current.length - 1
   const selectedMeta = operationMeta[operation]
+
+  const updateMaskRegions = useCallback((next: MaskRegion[]) => {
+    maskRegionsRef.current = next
+    setMaskRegions(next)
+  }, [])
 
   const initializeMask = useCallback(() => {
     const image = imageRef.current
@@ -209,11 +218,13 @@ export function ImageEditorPanel({
     canvas.width = width
     canvas.height = height
     const snapshot = emptyMaskSnapshot(canvas)
-    historyRef.current = [snapshot]
+    historyRef.current = [{ dataUrl: snapshot, regions: [] }]
     historyIndexRef.current = 0
+    nextRegionIdRef.current = 1
+    updateMaskRegions([])
     setMaskRevision((revision) => revision + 1)
     setDraftRect(null)
-  }, [])
+  }, [updateMaskRegions])
 
   useEffect(() => {
     initializeMask()
@@ -236,7 +247,7 @@ export function ImageEditorPanel({
     if (!canvas) return
     const snapshot = canvas.toDataURL('image/png')
     const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1)
-    nextHistory.push(snapshot)
+    nextHistory.push({ dataUrl: snapshot, regions: maskRegionsRef.current.map((region) => ({ ...region })) })
     historyRef.current = nextHistory.slice(-30)
     historyIndexRef.current = historyRef.current.length - 1
     setMaskRevision((revision) => revision + 1)
@@ -247,29 +258,39 @@ export function ImageEditorPanel({
     historyIndexRef.current -= 1
     const snapshot = historyRef.current[historyIndexRef.current]
     const canvas = maskRef.current
-    if (canvas && snapshot) restoreMaskSnapshot(canvas, snapshot)
+    if (canvas && snapshot) restoreMaskSnapshot(canvas, snapshot.dataUrl)
+    if (snapshot) {
+      updateMaskRegions(snapshot.regions)
+      nextRegionIdRef.current = Math.max(0, ...snapshot.regions.map((region) => region.id)) + 1
+    }
     setMaskRevision((revision) => revision + 1)
-  }, [canUndo])
+  }, [canUndo, updateMaskRegions])
 
   const redo = useCallback(() => {
     if (!canRedo) return
     historyIndexRef.current += 1
     const snapshot = historyRef.current[historyIndexRef.current]
     const canvas = maskRef.current
-    if (canvas && snapshot) restoreMaskSnapshot(canvas, snapshot)
+    if (canvas && snapshot) restoreMaskSnapshot(canvas, snapshot.dataUrl)
+    if (snapshot) {
+      updateMaskRegions(snapshot.regions)
+      nextRegionIdRef.current = Math.max(0, ...snapshot.regions.map((region) => region.id)) + 1
+    }
     setMaskRevision((revision) => revision + 1)
-  }, [canRedo])
+  }, [canRedo, updateMaskRegions])
 
   const clearMask = useCallback(() => {
     const canvas = maskRef.current
     const context = canvas?.getContext('2d')
     if (!canvas || !context) return
     context.clearRect(0, 0, canvas.width, canvas.height)
-    historyRef.current = [canvas.toDataURL('image/png')]
+    historyRef.current = [{ dataUrl: canvas.toDataURL('image/png'), regions: [] }]
     historyIndexRef.current = 0
+    nextRegionIdRef.current = 1
+    updateMaskRegions([])
     setMaskRevision((revision) => revision + 1)
     setStatus('已清空标记')
-  }, [])
+  }, [updateMaskRegions])
 
   const pointFromEvent = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = maskRef.current
@@ -311,6 +332,13 @@ export function ImageEditorPanel({
     const canvas = maskRef.current
     const context = canvas?.getContext('2d')
     if (!canvas || !context) return
+    if (tool === 'brush') {
+      const region = { id: nextRegionIdRef.current++, x: point.x, y: point.y }
+      updateMaskRegions([...maskRegionsRef.current, region])
+    } else if (tool === 'eraser') {
+      const clearRadius = Math.max(brushSize * 1.5, 28)
+      updateMaskRegions(maskRegionsRef.current.filter((region) => Math.hypot(region.x - point.x, region.y - point.y) > clearRadius))
+    }
     if (tool === 'rect') {
       setDraftRect({ x: point.x, y: point.y, width: 0, height: 0 })
       return
@@ -380,9 +408,13 @@ export function ImageEditorPanel({
   const submit = async () => {
     setStatus('正在提交编辑请求…')
     const canvas = maskRef.current
+    const basePrompt = prompt.trim() || selectedMeta.defaultPrompt
+    const regionPrompt = maskRegions.length > 0
+      ? `请按照画面上的标注编号处理：${maskRegions.map((region) => `区域 ${region.id}`).join('、')}。提示词中的“区域 N”对应画面上同编号位置。`
+      : ''
     const request: ImageEditRequest = {
       operation,
-      prompt: prompt.trim() || selectedMeta.defaultPrompt,
+      prompt: [basePrompt, regionPrompt].filter(Boolean).join('\n\n'),
       maskDataUrl: canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
       imageUrl: imageSrc,
       brushSize,
@@ -466,6 +498,17 @@ export function ImageEditorPanel({
                 onPointerCancel={handlePointerUp}
                 aria-label="编辑蒙版"
               />
+              {maskRegions.length > 0 && <div className={styles.regionMarkers} aria-label="标记区域编号">
+                {maskRegions.map((region) => (
+                  <span
+                    key={region.id}
+                    className={styles.regionMarker}
+                    style={{ left: `${(region.x / Math.max(1, maskRef.current?.width || 1)) * 100}%`, top: `${(region.y / Math.max(1, maskRef.current?.height || 1)) * 100}%` }}
+                  >
+                    {region.id}
+                  </span>
+                ))}
+              </div>}
               {maskStyle && <span className={styles.draftRect} style={maskStyle} aria-hidden="true" />}
             </div>
           )}
@@ -473,7 +516,6 @@ export function ImageEditorPanel({
             <span className={styles.toolbarHandle} aria-hidden="true"><GripVertical /></span>
             <button type="button" className={`${styles.toolButton} ${tool === 'brush' ? styles.toolButtonActive : ''}`} onClick={() => setTool('brush')} aria-pressed={tool === 'brush'} title="画笔"><Paintbrush aria-hidden="true" /><span>画笔</span></button>
             <button type="button" className={`${styles.toolButton} ${tool === 'eraser' ? styles.toolButtonActive : ''}`} onClick={() => setTool('eraser')} aria-pressed={tool === 'eraser'} title="橡皮擦"><Eraser aria-hidden="true" /><span>橡皮</span></button>
-            <button type="button" className={`${styles.toolButton} ${tool === 'rect' ? styles.toolButtonActive : ''}`} onClick={() => setTool('rect')} aria-pressed={tool === 'rect'} title="矩形选区"><Crop aria-hidden="true" /><span>选区</span></button>
             <button type="button" className={`${styles.toolButton} ${tool === 'move' ? styles.toolButtonActive : ''}`} onClick={() => setTool('move')} aria-pressed={tool === 'move'} title="移动预览"><MousePointer2 aria-hidden="true" /><span>移动</span></button>
             <span className={styles.toolDivider} aria-hidden="true" />
             <button type="button" className={styles.iconButton} onClick={undo} disabled={!canUndo} aria-label="撤销" title="撤销"><Undo2 aria-hidden="true" /></button>
