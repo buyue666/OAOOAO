@@ -191,7 +191,14 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   if(job.kind==='image' && protocol==='ciyuan-async'){
     const prefer={'Prefer':'respond-async'};
     if(poll){
-      const response=await request(`/images/generations/${encodeURIComponent(job.upstream_id)}`);
+      let response:Response;
+      try{response=await request(`/images/generations/${encodeURIComponent(job.upstream_id)}`);}
+      catch(error){
+        // 词元 documents task_not_found as a terminal query result.  Do not
+        // keep retrying a task that can never produce an image.
+        if(error instanceof ProviderFailure&&/HTTP 404/.test(error.message))throw new ProviderFailure('词元异步图片任务不存在',true);
+        throw error;
+      }
       const data=await response.json() as Json;
       const status=String(data.status||'').toLowerCase();
       if(status==='failed')throw new ProviderFailure(String(data.error?.message||'词元异步生图失败'),true);
