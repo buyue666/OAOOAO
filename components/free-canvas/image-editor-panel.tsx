@@ -286,6 +286,18 @@ export function ImageEditorPanel({
   }, [])
 
   const publishRegionPrompt = useCallback((next: MaskRegion[]) => {
+    const summary = next
+      .map((region) => `区域 ${region.id}${region.prompt?.trim() ? `：${region.prompt.trim()}` : '：'}${region.referenceImageDataUrl ? '（附参考图）' : ''}`)
+      .join('；')
+    setPrompt((current) => {
+      const marker = '【区域标记】'
+      const markerIndex = current.indexOf(marker)
+      // Keep the generated marker block inside the editor prompt and remove
+      // any leading/trailing whitespace left by a previous draft. This keeps
+      // the first marker on the first line instead of showing an empty line.
+      const base = (markerIndex >= 0 ? current.slice(0, markerIndex) : current).trim()
+      return summary ? `${base}${base ? '\n' : ''}${marker}\n${summary}` : base
+    })
     onRegionPromptChange?.(next.map(({ id, prompt: regionPrompt, referenceImageDataUrl }) => ({
       id,
       prompt: regionPrompt,
@@ -711,7 +723,9 @@ export function ImageEditorPanel({
     setStatus('正在提交编辑请求…')
     setHiddenSubmitConfirm(false)
     const canvas = maskRef.current
-    const basePrompt = prompt.trim() || selectedMeta.defaultPrompt
+    const rawPrompt = prompt.trim()
+    const markerIndex = rawPrompt.indexOf('【区域标记】')
+    const basePrompt = (markerIndex >= 0 ? rawPrompt.slice(0, markerIndex) : rawPrompt).trim() || selectedMeta.defaultPrompt
     const regionPrompt = operation !== 'outpaint' && maskRegions.length > 0
       ? `请按照画面上的标注编号处理：${maskRegions.map((region) => `${region.prompt?.trim() ? `区域 ${region.id}：${region.prompt.trim()}` : `区域 ${region.id}`}${region.referenceImageDataUrl ? '（附有该区域参考图）' : ''}`).join('；')}。提示词中的“区域 N”对应画面上同编号位置。`
       : ''
