@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Eraser,
   Expand,
+  CornerDownLeft,
   Eye,
   EyeOff,
   GripVertical,
@@ -38,10 +39,12 @@ export interface ImageEditRequest {
   imageUrl: string
   brushSize: number
   /** Per-region instructions and optional reference images uploaded in the marker composer. */
-  regions?: Array<{ id: number; prompt?: string; referenceImageDataUrl?: string }>
+  regions?: ImageEditorRegion[]
   /** Target output ratio for outpaint; omitted means preserve the source ratio. */
   ratio?: '1:1' | '4:3' | '16:9' | '9:16'
 }
+
+export type ImageEditorRegion = { id: number; prompt?: string; referenceImageDataUrl?: string }
 
 export interface ImageEditorVersion {
   id: string
@@ -67,6 +70,8 @@ export interface ImageEditorPanelProps {
   onVersionSelect?: (version: ImageEditorVersion) => void
   onImageClick?: () => void
   onOperationChange?: (operation: ImageEditOperation) => void
+  /** Called after region descriptions are confirmed so the parent prompt can stay in sync. */
+  onRegionPromptChange?: (regions: ImageEditorRegion[]) => void
   showHeader?: boolean
   /** Visual treatment for the editor surface. */
   theme?: 'dark' | 'light'
@@ -74,7 +79,7 @@ export interface ImageEditorPanelProps {
 
 type Point = { x: number; y: number }
 type Rect = { x: number; y: number; width: number; height: number }
-type MaskRegion = { id: number; x: number; y: number; prompt?: string; referenceImageDataUrl?: string }
+type MaskRegion = ImageEditorRegion & { x: number; y: number }
 type MaskSnapshot = { dataUrl: string; regions: MaskRegion[] }
 type PanPoint = { x: number; y: number }
 type OutpaintRatio = 'original' | '1:1' | '4:3' | '16:9' | '9:16'
@@ -206,6 +211,7 @@ export function ImageEditorPanel({
   onVersionSelect,
   onImageClick,
   onOperationChange,
+  onRegionPromptChange,
   showHeader = true,
   theme = 'dark',
 }: ImageEditorPanelProps) {
@@ -278,6 +284,14 @@ export function ImageEditorPanel({
     maskRegionsRef.current = next
     setMaskRegions(next)
   }, [])
+
+  const publishRegionPrompt = useCallback((next: MaskRegion[]) => {
+    onRegionPromptChange?.(next.map(({ id, prompt: regionPrompt, referenceImageDataUrl }) => ({
+      id,
+      prompt: regionPrompt,
+      referenceImageDataUrl,
+    })))
+  }, [onRegionPromptChange])
 
   const closeRegionEditor = useCallback((animated = true) => {
     if (regionOpenFrameRef.current !== null) {
@@ -410,10 +424,11 @@ export function ImageEditorPanel({
     if (canvas && snapshot) restoreMaskSnapshot(canvas, snapshot.dataUrl)
     if (snapshot) {
       updateMaskRegions(snapshot.regions)
+      publishRegionPrompt(snapshot.regions)
       nextRegionIdRef.current = Math.max(0, ...snapshot.regions.map((region) => region.id)) + 1
     }
     setMaskRevision((revision) => revision + 1)
-  }, [canUndo, closeRegionEditor, updateMaskRegions])
+  }, [canUndo, closeRegionEditor, publishRegionPrompt, updateMaskRegions])
 
   const redo = useCallback(() => {
     if (!canRedo) return
@@ -424,10 +439,11 @@ export function ImageEditorPanel({
     if (canvas && snapshot) restoreMaskSnapshot(canvas, snapshot.dataUrl)
     if (snapshot) {
       updateMaskRegions(snapshot.regions)
+      publishRegionPrompt(snapshot.regions)
       nextRegionIdRef.current = Math.max(0, ...snapshot.regions.map((region) => region.id)) + 1
     }
     setMaskRevision((revision) => revision + 1)
-  }, [canRedo, closeRegionEditor, updateMaskRegions])
+  }, [canRedo, closeRegionEditor, publishRegionPrompt, updateMaskRegions])
 
   const clearMask = useCallback(() => {
     const canvas = maskRef.current
@@ -438,10 +454,11 @@ export function ImageEditorPanel({
     historyIndexRef.current = 0
     nextRegionIdRef.current = 1
     updateMaskRegions([])
+    publishRegionPrompt([])
     closeRegionEditor(false)
     setMaskRevision((revision) => revision + 1)
     setStatus('已清空标记')
-  }, [closeRegionEditor, updateMaskRegions])
+  }, [closeRegionEditor, publishRegionPrompt, updateMaskRegions])
 
   const confirmRegionPrompt = useCallback((animated = true) => {
     if (editingRegionId === null) return
@@ -450,6 +467,7 @@ export function ImageEditorPanel({
       region.id === editingRegionId ? { ...region, prompt: promptValue || undefined } : region
     ))
     updateMaskRegions(nextRegions)
+    publishRegionPrompt(nextRegions)
     if (historyIndexRef.current >= 0 && historyRef.current[historyIndexRef.current]) {
       historyRef.current[historyIndexRef.current] = {
         ...historyRef.current[historyIndexRef.current],
@@ -457,7 +475,7 @@ export function ImageEditorPanel({
       }
     }
     closeRegionEditor(animated)
-  }, [closeRegionEditor, editingRegionId, editingRegionPrompt, updateMaskRegions])
+  }, [closeRegionEditor, editingRegionId, editingRegionPrompt, publishRegionPrompt, updateMaskRegions])
 
   const handleRegionReferenceUpload = useCallback(async (regionId: number, file?: File) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -467,6 +485,7 @@ export function ImageEditorPanel({
         region.id === regionId ? { ...region, referenceImageDataUrl: dataUrl } : region
       ))
       updateMaskRegions(nextRegions)
+      publishRegionPrompt(nextRegions)
       if (historyIndexRef.current >= 0 && historyRef.current[historyIndexRef.current]) {
         historyRef.current[historyIndexRef.current] = {
           ...historyRef.current[historyIndexRef.current],
@@ -477,7 +496,7 @@ export function ImageEditorPanel({
     } catch {
       setStatus('参考图读取失败，请重试')
     }
-  }, [updateMaskRegions])
+  }, [publishRegionPrompt, updateMaskRegions])
 
   const pointFromEvent = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = maskRef.current
@@ -491,7 +510,7 @@ export function ImageEditorPanel({
   }, [])
 
   const adjustZoom = (next: number) => {
-    setZoom(Math.min(2, Math.max(0.5, Number(next.toFixed(2)))))
+    setZoom(Math.min(5, Math.max(0.5, Number(next.toFixed(2)))))
   }
 
   const resetView = () => {
@@ -890,7 +909,7 @@ export function ImageEditorPanel({
                   aria-label="上传区域参考图"
                 />
               </label>
-              <button type="button" onClick={() => confirmRegionPrompt()} aria-label={`确认区域 ${editingRegionId}`} title="确认"><span aria-hidden="true">✓</span></button>
+              <button type="button" onClick={() => confirmRegionPrompt()} aria-label={`确认区域 ${editingRegionId}`} title="确认"><CornerDownLeft aria-hidden="true" /></button>
             </span>
           </div>}
           <div ref={toolbarRef} className={`${styles.floatingTools} ${toolbarDragging ? styles.floatingToolsDragging : ''}`} style={toolbarStyle} role="toolbar" aria-label="编辑工具">
@@ -919,7 +938,7 @@ export function ImageEditorPanel({
             <span className={styles.zoomControl} aria-label="画布缩放" title="滚轮缩放；空格+左键或中键拖动平移">
               <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom - 0.1)} disabled={zoom <= 0.5} aria-label="缩小" title="缩小"><ZoomOut aria-hidden="true" /></button>
               <span>{Math.round(zoom * 100)}%</span>
-              <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom + 0.1)} disabled={zoom >= 2} aria-label="放大" title="放大"><ZoomIn aria-hidden="true" /></button>
+              <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom + 0.1)} disabled={zoom >= 5} aria-label="放大" title="放大"><ZoomIn aria-hidden="true" /></button>
               <button type="button" className={styles.iconButton} onClick={resetView} disabled={zoom === 1 && pan.x === 0 && pan.y === 0} aria-label="重置视图" title="重置视图"><Maximize2 aria-hidden="true" /></button>
             </span>
             <span className={styles.panHint}>空格+拖动平移</span>

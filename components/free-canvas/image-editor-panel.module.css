@@ -192,9 +192,12 @@
 .regionComposer input {
   min-width: 0;
   flex: 1;
-  border: 0;
+  border: none;
+  border-radius: 0;
   outline: 0;
+  box-shadow: none;
   background: transparent;
+  padding: 0;
   color: #182029;
   font: inherit;
   font-size: 14px;

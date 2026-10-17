@@ -80,7 +80,7 @@ import {
 import type { Asset, GenerationSettings, ModelConfig, Work } from '@/lib/studio/types'
 import { publishReferenceAsset } from '@/lib/studio/generation-api'
 import { buildVideoReferences } from '@/lib/studio/video-references'
-import { ImageEditorPanel, type ImageEditRequest, type ImageEditorVersion } from '@/components/free-canvas/image-editor-panel'
+import { ImageEditorPanel, type ImageEditRequest, type ImageEditorRegion, type ImageEditorVersion } from '@/components/free-canvas/image-editor-panel'
 import type { GenerationReference } from '@/lib/studio/generation-types'
 import { hasDeliverable } from '@/lib/studio/result-delivery'
 import { addMediaToProject, listProjectReferencedSourceIds, type ProjectMediaInput } from '@/lib/studio/project-media'
@@ -1042,6 +1042,19 @@ export function ImageWorkspace() {
       .map((work) => ({ id: work.id, imageUrl: work.src, label: work.id === editorWork?.id ? '当前图片' : work.title }))
   ), [editorWork?.id, stageSource])
 
+  const syncEditorRegionPrompt = useCallback((regions: ImageEditorRegion[]) => {
+    const marker = '\n\n【区域标记】'
+    const summary = regions
+      .filter((region) => region.prompt?.trim() || region.referenceImageDataUrl)
+      .map((region) => `区域 ${region.id}${region.prompt?.trim() ? `：${region.prompt.trim()}` : ''}${region.referenceImageDataUrl ? '（附参考图）' : ''}`)
+      .join('；')
+    setPrompt((current) => {
+      const markerIndex = current.indexOf(marker)
+      const base = (markerIndex >= 0 ? current.slice(0, markerIndex) : current).trim()
+      return summary ? `${base}${marker}\n${summary}` : base
+    })
+  }, [])
+
   const submitImageEditor = useCallback(async (request: ImageEditRequest) => {
     const work = editorWork
     if (!work) return
@@ -1438,6 +1451,7 @@ export function ImageWorkspace() {
           className="!w-full !min-w-0 !border-l-0"
           onClose={() => setEditorWork(null)}
           onSubmit={submitImageEditor}
+          onRegionPromptChange={syncEditorRegionPrompt}
           onSaveVersion={saveEditorVersion}
           onVersionSelect={(version) => {
             const next = stageSource.find((work) => work.id === version.id)
