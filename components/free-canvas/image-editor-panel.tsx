@@ -55,6 +55,8 @@ export type ImageEditorRegion = { id: number; prompt?: string; referenceImageDat
 export type ImageEditorModelOption = {
   id: string
   label: string
+  /** The operation family this model can serve. Omitted keeps backwards compatibility. */
+  capability?: 'image' | 'video'
   icon?: ReactNode
   ratios?: string[]
   resolutions?: string[]
@@ -91,6 +93,9 @@ export interface ImageEditorPanelProps {
   /** Optional image-to-image model choices. The first matching initialModelId is selected. */
   modelOptions?: ImageEditorModelOption[]
   initialModelId?: string
+  /** Optional video defaults used when switching this image editor to video. */
+  initialVideoModelId?: string
+  initialVideoQuality?: string
   initialResolution?: string
   initialQuality?: string
   showHeader?: boolean
@@ -239,6 +244,8 @@ export function ImageEditorPanel({
   onRegionPromptChange,
   modelOptions = [],
   initialModelId,
+  initialVideoModelId,
+  initialVideoQuality = '',
   initialResolution = '1K',
   initialQuality = 'auto',
   showHeader = true,
@@ -272,8 +279,10 @@ export function ImageEditorPanel({
   const [maskRegions, setMaskRegions] = useState<MaskRegion[]>([])
   const [outpaintRatio, setOutpaintRatio] = useState<OutpaintRatio>('original')
   const [editorModelId, setEditorModelId] = useState(initialModelId || modelOptions[0]?.id || '')
+  const [editorVideoModelId, setEditorVideoModelId] = useState(initialVideoModelId || modelOptions.find((item) => item.capability === 'video')?.id || '')
   const [editorResolution, setEditorResolution] = useState(initialResolution)
   const [editorQuality, setEditorQuality] = useState(initialQuality)
+  const [editorVideoQuality, setEditorVideoQuality] = useState(initialVideoQuality)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<PanPoint>({ x: 0, y: 0 })
   const [toolbarOffset, setToolbarOffset] = useState<PanPoint>({ x: 0, y: 0 })
@@ -292,15 +301,51 @@ export function ImageEditorPanel({
   const canUndo = historyIndexRef.current > 0
   const canRedo = historyIndexRef.current >= 0 && historyIndexRef.current < historyRef.current.length - 1
   const selectedMeta = operationMeta[operation]
-  const selectedEditorModel = modelOptions.find((item) => item.id === editorModelId) ?? modelOptions[0]
+  const editorCapability = operation === 'to-video' ? 'video' : 'image'
+  const editorModelChoices = useMemo(() => {
+    const matching = modelOptions.filter((item) => !item.capability || item.capability === editorCapability)
+    return matching.length ? matching : modelOptions
+  }, [editorCapability, modelOptions])
+  const videoModelChoices = useMemo(() => {
+    const matching = modelOptions.filter((item) => item.capability === 'video')
+    return matching.length ? matching : modelOptions
+  }, [modelOptions])
+  const selectedEditorModelId = editorCapability === 'video' ? editorVideoModelId : editorModelId
+  const selectedEditorModel = editorModelChoices.find((item) => item.id === selectedEditorModelId) ?? editorModelChoices[0]
+  const activeEditorQuality = editorCapability === 'video' ? editorVideoQuality : editorQuality
+  const setActiveEditorQuality = editorCapability === 'video' ? setEditorVideoQuality : setEditorQuality
   const editorResolutionOptions = useMemo(() => (
     selectedEditorModel?.resolutions?.length ? selectedEditorModel.resolutions : [initialResolution || '1K']
   ), [initialResolution, selectedEditorModel])
   const editorQualityOptions = useMemo(() => (
-    editorResolution === '1K'
+    editorCapability === 'image' && editorResolution === '1K'
       ? ['auto']
       : selectedEditorModel?.qualities?.length ? selectedEditorModel.qualities : ['auto']
-  ), [editorResolution, selectedEditorModel])
+  ), [editorCapability, editorResolution, selectedEditorModel])
+
+  // Keep the selected model and parameter values valid when switching between
+  // image editing and video conversion. This also makes newly loaded backend
+  // model lists safe when the original model is no longer available.
+  useEffect(() => {
+    if (!editorModelChoices.length) return
+    setEditorModelId((current) => editorModelChoices.some((item) => item.id === current)
+      ? current
+      : (editorModelChoices.find((item) => item.id === initialModelId)?.id ?? editorModelChoices[0].id))
+  }, [editorModelChoices, initialModelId])
+  useEffect(() => {
+    if (!videoModelChoices.length) return
+    setEditorVideoModelId((current) => videoModelChoices.some((item) => item.id === current)
+      ? current
+      : (videoModelChoices.find((item) => item.id === initialVideoModelId)?.id ?? videoModelChoices[0].id))
+  }, [initialVideoModelId, videoModelChoices])
+  useEffect(() => {
+    if (editorCapability !== 'image' || !editorResolutionOptions.length) return
+    setEditorResolution((current) => editorResolutionOptions.includes(current) ? current : editorResolutionOptions[0])
+  }, [editorCapability, editorResolutionOptions])
+  useEffect(() => {
+    if (!editorQualityOptions.length) return
+    setActiveEditorQuality((current) => editorQualityOptions.includes(current) ? current : editorQualityOptions[0])
+  }, [editorQualityOptions, setActiveEditorQuality])
   const editorOutpaintRatioOptions = useMemo(() => {
     const supported = selectedEditorModel?.ratios?.filter(Boolean)
     if (!supported?.length) return outpaintRatioOptions
@@ -816,9 +861,9 @@ export function ImageEditorPanel({
       maskDataUrl: operation !== 'outpaint' && canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
       imageUrl: imageSrc,
       brushSize,
-      model: editorModelId || undefined,
-      resolution: editorResolution || undefined,
-      quality: editorQuality || undefined,
+      model: selectedEditorModel?.id || selectedEditorModelId || undefined,
+      resolution: editorCapability === 'image' ? (editorResolution || undefined) : undefined,
+      quality: activeEditorQuality || undefined,
       regions: operation !== 'outpaint' && maskRegions.length > 0
         ? maskRegions.map((region) => ({ id: region.id, prompt: region.prompt, referenceImageDataUrl: region.referenceImageDataUrl }))
         : undefined,
@@ -929,25 +974,25 @@ export function ImageEditorPanel({
         {selectedMeta.maskHint && <p className={styles.operationGuideHint}>{selectedMeta.maskHint}</p>}
       </div>
 
-      {modelOptions.length > 0 && <div className={styles.editorSettingsBar} aria-label="改图参数">
+      {editorModelChoices.length > 0 && <div className={styles.editorSettingsBar} aria-label="改图参数">
         <label className={styles.editorSettingField}>
           <span>模型</span>
           <span className={styles.editorSettingControl}>
             {selectedEditorModel?.icon && <span className={styles.editorSettingIcon}>{selectedEditorModel.icon}</span>}
-            <select value={editorModelId} onChange={(event) => setEditorModelId(event.target.value)} aria-label="改图模型">
-              {modelOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            <select value={selectedEditorModel?.id ?? selectedEditorModelId} onChange={(event) => editorCapability === 'video' ? setEditorVideoModelId(event.target.value) : setEditorModelId(event.target.value)} aria-label="改图模型">
+              {editorModelChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
           </span>
         </label>
-        <label className={styles.editorSettingField}>
+        {(editorCapability === 'image' || selectedEditorModel?.resolutions?.length) && <label className={styles.editorSettingField}>
           <span>清晰度</span>
           <select value={editorResolution} onChange={(event) => setEditorResolution(event.target.value)} aria-label="改图清晰度">
             {editorResolutionOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
-        </label>
+        </label>}
         <label className={styles.editorSettingField}>
-          <span>图片质量</span>
-          <select value={editorQuality} onChange={(event) => setEditorQuality(event.target.value)} aria-label="改图图片质量">
+          <span>{editorCapability === 'video' ? '视频清晰度' : '图片质量'}</span>
+          <select value={activeEditorQuality} onChange={(event) => setActiveEditorQuality(event.target.value)} aria-label={editorCapability === 'video' ? '视频清晰度' : '改图图片质量'}>
             {editorQualityOptions.map((item) => <option key={item} value={item}>{selectedEditorModel?.qualityLabels?.[item] || (item === 'auto' ? '自动' : item)}</option>)}
           </select>
         </label>

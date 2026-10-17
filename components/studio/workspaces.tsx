@@ -1062,21 +1062,26 @@ export function ImageWorkspace() {
   ), [editorWork?.id, stageSource])
 
   // 图片编辑器默认沿用当前结果的原模型，同时允许切换到后台明确标记为
-  // 支持图生图/编辑的其它图片模型。原模型即使没有 editing 标记也保留，
-  // 这样历史结果不会因为后台能力配置变化而无法继续编辑。
+  // 支持图生图/编辑的其它图片模型。转视频时使用同一组编辑器参数条，
+  // 但模型切换到视频能力模型，并提交其清晰度参数。
   const editorModelOptions = useMemo(() => {
     const originalId = editorWork?.model || model?.id
-    const candidates = imageModelList.filter((item) => item.capabilities.editing || item.id === originalId)
+    const imageCandidates = imageModelList.filter((item) => item.capabilities.editing || item.id === originalId)
+    // Image-to-video can be advertised as either editing or first-frame
+    // support, depending on the upstream provider's capability profile.
+    const videoCandidates = videoModelList.filter((item) => item.capabilities.editing || item.capabilities.firstFrame)
+    const candidates = [...imageCandidates, ...videoCandidates]
     return candidates.map((item) => ({
       id: item.id,
       label: `${item.shortName} · ${item.creditCost} 积分/次`,
+      capability: (item.capability === 'video' ? 'video' : 'image') as 'image' | 'video',
       icon: <ModelIcon model={item} />,
       ratios: item.capabilities.ratios,
       resolutions: item.capabilities.resolutions,
       qualities: item.capabilities.qualities,
       qualityLabels: item.capabilities.qualityLabels,
     }))
-  }, [editorWork?.model, imageModelList, model?.id])
+  }, [editorWork?.model, imageModelList, model?.id, videoModelList])
 
   const submitImageEditor = useCallback(async (request: ImageEditRequest) => {
     const work = editorWork
@@ -1088,12 +1093,16 @@ export function ImageWorkspace() {
       .filter((region) => Boolean(region.referenceImageDataUrl))
       .map((region) => ({ type: 'image' as const, dataUrl: region.referenceImageDataUrl, name: `区域 ${region.id} 参考图` }))
     if (request.operation === 'to-video') {
-      const videoModel = videoModelList.find((item) => item.id === defaultModelFor('video', state.sessionSettings, videoModelList)) ?? videoModelList[0]
-      const videoRatio = videoModel?.capabilities.ratios.includes(work.ratio) ? work.ratio : videoModel?.capabilities.ratios[0] ?? '16:9'
+      const videoModel = videoModelList.find((item) => item.id === request.model)
+        ?? videoModelList.find((item) => item.id === defaultModelFor('video', state.sessionSettings, videoModelList))
+        ?? videoModelList[0]
+      const requestedRatio = request.ratio || work.ratio
+      const videoRatio = videoModel?.capabilities.ratios.includes(requestedRatio) ? requestedRatio : videoModel?.capabilities.ratios[0] ?? '16:9'
       await generation.createVideo({
         prompt: request.prompt,
         model: videoModel?.id,
         ratio: videoRatio,
+        quality: request.quality || videoModel?.capabilities.qualities?.[0] || defaultModels.videoQuality,
         seconds: 8,
         references: [source],
         surface: 'chat',
@@ -1119,7 +1128,7 @@ export function ImageWorkspace() {
       title: `编辑：${work.title}`,
     })
     setNotice({ tone: 'accent', text: `已提交${request.operation === 'outpaint' ? '扩图' : request.operation === 'enhance' ? '高清修复' : request.operation === 'layers' ? '分图层' : '图片编辑'}任务，可在下方生成任务查看结果。` })
-  }, [editorWork, generation, model?.id, quality, ratio, resolution, state.selectedProjectId, state.sessionSettings, videoModelList])
+  }, [defaultModels.videoQuality, editorWork, generation, model?.id, quality, ratio, resolution, state.selectedProjectId, state.sessionSettings, videoModelList])
 
   const saveEditorVersion = useCallback(async (imageUrl: string) => {
     if (!editorWork) return
@@ -1497,6 +1506,8 @@ export function ImageWorkspace() {
           onSubmit={submitImageEditor}
           modelOptions={editorModelOptions}
           initialModelId={editorWork.model || model?.id}
+          initialVideoModelId={defaultModelFor('video', state.sessionSettings, videoModelList)}
+          initialVideoQuality={defaultModels.videoQuality || videoModelList[0]?.capabilities.qualities?.[0] || '高清'}
           initialResolution={editorWork.resolution || resolution}
           initialQuality={editorWork.quality || quality}
           onSaveVersion={saveEditorVersion}
