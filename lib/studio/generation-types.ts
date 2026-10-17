@@ -254,8 +254,8 @@ export type SessionLogicalModel = {
       /** 新字段：图片质量（auto/low/medium/high）；保留 qualities 兼容旧配置。 */
       imageQualities?: string[]
       /**
-       * 比例对应的输出尺寸。支持旧的扁平格式（{ '1:1': '1024x1024' }），
-       * 也支持按清晰度分组（{ '1K': { '1:1': '1024x1024' } }）。
+       * 比例对应的输出尺寸。支持旧的扁平格式（{ '1:1': '1254x1254' }），
+       * 也支持按清晰度分组（{ '1K': { '1:1': '1254x1254' } }）。
        */
       outputDimensions?: CapabilitySizeMap
       /** 后台编辑器使用的同义字段；提交时两者均可兼容。 */

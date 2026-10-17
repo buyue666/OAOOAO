@@ -40,17 +40,17 @@ const defaultImageRatios = ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '
 const defaultImageResolutions = ['1K']
 /**
  * 仅作为没有配置 outputDimensions 时的展示兜底；真实渠道尺寸应由后台能力配置覆盖。
- * 尺寸遵循 GPT 图片接口的 16 倍数约束，避免把 UI 比例误当成上游不接受的自定义尺寸。
+ * 尺寸来自当前图片渠道的实际输出表；后台显式 sizeMap 配置优先于这些兜底值。
  */
 const defaultOutputDimensions: Record<string, string> = {
-  '1:1': '1024x1024',
+  '1:1': '1254x1254',
   '3:2': '1536x1024',
   '2:3': '1024x1536',
-  '16:9': '1536x864',
-  '9:16': '864x1536',
-  '4:3': '1152x864',
-  '3:4': '864x1152',
-  '21:9': '1536x656',
+  '16:9': '1672x941',
+  '9:16': '941x1672',
+  '4:3': '1448x1086',
+  '3:4': '1086x1448',
+  '21:9': '1923x817',
 }
 const audioVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
 const audioFormats = ['mp3', 'wav', 'opus', 'aac']
@@ -159,7 +159,7 @@ type NormalizedOutputDimensions = {
 /**
  * Normalize the two capability-map spellings accepted by the backend.  The
  * admin UI historically stored a flat ratio map while newer bindings may use
- * either `{ '1K': { '1:1': '1024x1024' } }` or `{ '1:1': { '1K': ... } }`.
+ * either `{ '1K': { '1:1': '1254x1254' } }` or `{ '1:1': { '1K': ... } }`.
  * Keeping a normalized map in ModelCapability lets every surface render the
  * same dimensions without leaking backend shape details into components.
  */

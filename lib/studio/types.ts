@@ -112,7 +112,7 @@ export interface ModelCapability {
   ratios: string[]
   /** 可用输出分辨率档位，例如 1K、2K、4K。 */
   resolutions: string[]
-  /** 每个画幅比例实际可能输出的尺寸，例如 { '1:1': '1024x1024' }。 */
+  /** 每个画幅比例实际可能输出的尺寸，例如 { '1:1': '1254x1254' }。 */
   outputDimensions: Record<string, string>
   /** 按清晰度分组的尺寸表；未配置分组时仅包含默认档位。 */
   outputDimensionsByResolution?: Record<string, Record<string, string>>

@@ -109,13 +109,13 @@ export function imageSize(value:unknown,resolution:unknown,profile:Json){
     const candidate=nestedByTier??nestedByRatio??flat;
     if(typeof candidate==='string'&&/^(?:auto|\d+x\d+)$/i.test(candidate.trim()))return candidate.trim();
   }
-  // GPT Image 2/2.5 accepts custom dimensions in multiples of 16. These
-  // defaults keep the eight UI ratios valid even for older bindings that do
-  // not yet have an explicit sizeMap configured in the admin panel.
+  // The ciyuan image endpoint returns these concrete dimensions for the
+  // supported GPT image ratios. Keep this fallback in sync with the UI table
+  // for bindings that do not yet have an explicit sizeMap configured.
   return ({
-    '1:1':'1024x1024', '3:2':'1536x1024', '2:3':'1024x1536',
-    '16:9':'1536x864', '9:16':'864x1536', '4:3':'1152x864',
-    '3:4':'864x1152', '21:9':'1536x656',
+    '1:1':'1254x1254', '3:2':'1536x1024', '2:3':'1024x1536',
+    '16:9':'1672x941', '9:16':'941x1672', '4:3':'1448x1086',
+    '3:4':'1086x1448', '21:9':'1923x817',
   } as Record<string,string>)[ratio]||ratio;
 }
 function videoSize(value:unknown){const v=String(value||'720x1280');return ({'1:1':'720x1280','16:9':'1280x720','9:16':'720x1280'} as Record<string,string>)[v]||v;}
