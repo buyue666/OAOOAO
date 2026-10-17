@@ -507,10 +507,10 @@ function GenerationSection({ settings, onSave, saving }: { settings: AdminSettin
         </fieldset>
       </AdminSectionCard>
 
-      <AdminSectionCard title="渠道与逻辑模型" description="渠道、逻辑模型、默认模型与模型单价统一在“模型与渠道”页面维护。">
+      <AdminSectionCard title="渠道与模型列表" description="渠道、模型列表、默认模型与模型单价统一在“模型与渠道”页面维护。">
         <div className="grid gap-3 sm:grid-cols-3">
           <AdminDefinition label="渠道数量" value={formatAdminNumber(settings.systemChannels.length)} />
-          <AdminDefinition label="逻辑模型数量" value={formatAdminNumber(settings.logicalModels.length)} />
+          <AdminDefinition label="模型列表数量" value={formatAdminNumber(settings.logicalModels.length)} />
           <AdminDefinition label="默认文本模型" value={settings.defaultModels.textModel} />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">如需修改，请前往 <a href="/admin/channels" className="underline">模型与渠道</a>。</p>

@@ -124,7 +124,7 @@ export function AdminChannelsPanel() {
   const removeChannel = useCallback((channel: SystemChannel) => {
     confirm.confirm({
       title: `删除渠道 ${channel.name || channel.id}？`,
-      description: '删除后引用该渠道的逻辑模型绑定会同时移除。已有生成记录不受影响。',
+      description: '删除后引用该渠道的模型绑定会同时移除。已有生成记录不受影响。',
       confirmLabel: '确认删除渠道',
       tone: 'danger',
       onConfirm: async () => {
@@ -169,7 +169,7 @@ export function AdminChannelsPanel() {
       {confirm.dialog}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStat label="逻辑模型" value={formatAdminNumber(models.length)} detail="对外展示给用户的模型" />
+        <AdminStat label="模型列表" value={formatAdminNumber(models.length)} detail="对外展示给用户的模型" />
         <AdminStat label="配置渠道" value={formatAdminNumber(channels.length)} detail={`其中启用 ${formatAdminNumber(enabledChannels.length)}`} tone="success" />
         <AdminStat label="冷却中渠道" value={formatAdminNumber(coolingCount)} detail="连续失败后被自动降权" tone={coolingCount ? 'danger' : 'neutral'} />
         <AdminStat label="缺少密钥" value={formatAdminNumber(missingKey)} detail="未保存 API Key 的渠道" tone={missingKey ? 'warning' : 'neutral'} />
@@ -180,7 +180,7 @@ export function AdminChannelsPanel() {
 
       <AdminTabs
         label="模型与渠道分区"
-        items={[['channels', '上游渠道'], ['models', '逻辑模型'], ['defaults', '默认模型与价格']] as const}
+        items={[['channels', '上游渠道'], ['models', '模型列表'], ['defaults', '默认模型与价格']] as const}
         value={tab}
         onChange={setTab}
       />
@@ -241,13 +241,13 @@ export function AdminChannelsPanel() {
               })}
               {!visibleChannels.length && <TableMessageRow colSpan={8} loading={false} empty="没有匹配的渠道" />}
             </AdminTable>
-          ) : <AdminEmpty title="暂无渠道配置" description="新增至少一个上游渠道后，才能为逻辑模型建立绑定并开始生成。" />}
+          ) : <AdminEmpty title="暂无渠道配置" description="新增至少一个上游渠道后，才能为模型列表建立绑定并开始生成。" />}
         </AdminDataPanel>
       )}
 
       {tab === 'models' && (
         <AdminDataPanel
-          title="逻辑模型"
+          title="模型列表"
           description="对用户展示的模型名称、能力类型与渠道绑定优先级。修改后立即影响路由。"
           actions={canManage ? <ControlButton variant="primary" size="sm" onClick={() => setRouting(true)}><Layers3 className="size-3.5" />管理路由</ControlButton> : undefined}
           filters={
@@ -261,7 +261,7 @@ export function AdminChannelsPanel() {
           }
         >
           {models.length ? (
-            <AdminTable columns={['显示名称', '标识', '能力', '状态', '渠道绑定']} minWidth={900} caption="逻辑模型列表">
+            <AdminTable columns={['显示名称', '标识', '能力', '状态', '渠道绑定']} minWidth={900} caption="模型列表">
               {visibleModels.map((model) => (
                 <AdminRow key={model.id}>
                   <AdminCell className="font-medium">{model.name || model.id}</AdminCell>
@@ -283,7 +283,7 @@ export function AdminChannelsPanel() {
               ))}
               {!visibleModels.length && <TableMessageRow colSpan={5} loading={false} empty="没有匹配的模型" />}
             </AdminTable>
-          ) : <AdminEmpty title="暂无逻辑模型" description="逻辑模型决定用户在生成页看到的模型列表。" />}
+          ) : <AdminEmpty title="暂无模型" description="模型列表决定用户在生成页看到的模型。" />}
         </AdminDataPanel>
       )}
 
@@ -556,11 +556,11 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
     if (!ids.size) return
     const apply = () => {
       setModels((current) => current.map((model) => (ids.has(model.id) ? { ...model, enabled } : model)))
-      setBatchNotice(`已${enabled ? '启用' : '停用'} ${ids.size} 个逻辑模型，保存路由配置后生效`)
+      setBatchNotice(`已${enabled ? '启用' : '停用'} ${ids.size} 个模型，保存路由配置后生效`)
     }
     if (enabled) { apply(); return }
     confirm.confirm({
-      title: `停用 ${ids.size} 个逻辑模型？`,
+      title: `停用 ${ids.size} 个模型？`,
       description: '停用后这些模型不再参与路由，用户将无法选择它们。',
       confirmLabel: '确认停用',
       tone: 'danger',
@@ -644,8 +644,8 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
     <AdminDrawer
       open
       onClose={onClose}
-      title="逻辑模型与路由"
-      description="按「渠道 → 逻辑模型 → 别名 → 显示信息 → 价格」的层级编辑；先筛选模型，保存时一次提交当前配置。"
+      title="模型列表与路由"
+      description="按「渠道 → 模型 → 别名 → 显示信息 → 价格」的层级编辑；先筛选模型，保存时一次提交当前配置。"
       width="sm:max-w-6xl"
       footer={<>
         <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
@@ -672,11 +672,11 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           </div>
         </AdminSectionCard>
 
-        <AdminSectionCard title="可售模型目录" description="一个逻辑模型可以拆成多个渠道入口；每个入口可使用独立别名、价格和图标。" className="p-4 xl:order-1">
+        <AdminSectionCard title="可售模型目录" description="一个模型可以拆成多个渠道入口；每个入口可使用独立别名、价格和图标。" className="p-4 xl:order-1">
           <div className="flex flex-wrap items-center gap-2">
             <label className="studio-field flex h-9 min-w-0 flex-1 items-center gap-2 border border-border bg-card px-3 text-muted-foreground sm:max-w-sm">
               <Search className="size-4 shrink-0" aria-hidden="true" />
-              <input aria-label="搜索逻辑模型" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、标识或别名" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" />
+              <input aria-label="搜索模型" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、标识或别名" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" />
             </label>
             <AdminSelect aria-label="按能力筛选模型" className="w-32" value={capabilityFilter} onChange={(event) => setCapabilityFilter(event.target.value as 'all' | Capability)}>
               <option value="all">全部能力</option>
@@ -763,7 +763,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                           bindings: model.bindings.map((item, position) => {
                             if (position !== index) return item
                             const profile = { ...(item.capabilityProfile || {}) }
-                            for (const key of ['aspectRatios', 'aspectRatioOptions', 'outputResolutions', 'resolutions', 'imageQualities', 'imageQualityOptions', 'imageQualityLabels', 'qualities', 'outputDimensions', 'sizeMap']) delete profile[key]
+                            for (const key of ['aspectRatios', 'aspectRatioOptions', 'outputResolutions', 'resolutions', 'imageQualities', 'imageQualityOptions', 'imageQualityLabels', 'qualities', 'outputDimensions', 'sizeMap', 'maxBatchSize']) delete profile[key]
                             return { ...item, capabilityProfile: profile }
                           }),
                         })}
@@ -779,13 +779,13 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
             </div>
 
             <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
-              <p className="text-xs font-semibold text-foreground sm:col-span-2">2 · 逻辑模型<span className="ml-2 font-normal text-muted-foreground">能力决定请求路径；停用后不参与路由</span></p>
+              <p className="text-xs font-semibold text-foreground sm:col-span-2">2 · 模型信息<span className="ml-2 font-normal text-muted-foreground">能力决定请求路径；停用后不参与路由</span></p>
               <AdminField label="能力类型">
                 <AdminSelect value={model.capability} onChange={(event) => patchModel(model.id, { capability: event.target.value as LogicalModel['capability'] })}>
                   {capabilities.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </AdminSelect>
               </AdminField>
-              <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={model.enabled} onChange={(event) => patchModel(model.id, { enabled: event.target.checked })} />启用该逻辑模型</label>
+              <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={model.enabled} onChange={(event) => patchModel(model.id, { enabled: event.target.checked })} />启用该模型</label>
             </div>
 
             {/**
@@ -826,7 +826,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               </div>
               {aliasError[model.id] && <p className="text-[11px] text-destructive" role="alert" data-testid={`model-alias-error-${model.id}`}>{aliasError[model.id]}</p>}
               <p className="text-[11px] leading-5 text-muted-foreground">
-                别名不能与任何逻辑模型的标识或别名重复（否则同一个名字会解析到两个模型）。
+                别名不能与任何模型的标识或别名重复（否则同一个名字会解析到两个模型）。
               </p>
             </div>
             <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
@@ -843,7 +843,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           </details>
         )) : null}
 
-        {!filteredModels.length && <AdminEmpty title="没有匹配的逻辑模型" description="调整搜索关键字、能力筛选或“仅看启用”条件后继续。" />}
+        {!filteredModels.length && <AdminEmpty title="没有匹配的模型" description="调整搜索关键字、能力筛选或“仅看启用”条件后继续。" />}
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       </div>
     </AdminDrawer>
@@ -943,6 +943,7 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
     : Array.isArray(profile?.qualities)
       ? profile.qualities.filter((value): value is string => typeof value === 'string')
       : qualityOptions.map(({ value }) => value)
+  const maxBatchSize = Math.max(1, Math.min(20, Math.trunc(Number(profile?.maxBatchSize) || 1)))
 
   const toggle = (key: string, current: string[], value: string) => {
     const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
@@ -1042,6 +1043,21 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
             onClick={onReset}
           >恢复默认</ControlButton>
         </div>
+      </div>
+      <div className="mt-3 grid gap-3 border-t border-border/70 pt-3 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)] sm:items-end">
+        <AdminField label="单次生成上限（张）" hint="决定前台可选的生成数量">
+          <AdminInput
+            type="number"
+            min="1"
+            max="20"
+            step="1"
+            value={maxBatchSize}
+            aria-label="单次生成上限（张）"
+            title="前台会按这个上限显示生成数量；每张会独立提交并计费"
+            onChange={(event) => onChange({ maxBatchSize: Math.max(1, Math.min(20, Math.trunc(Number(event.target.value) || 1))) })}
+          />
+        </AdminField>
+        <p className="text-[10px] leading-4 text-muted-foreground">设置为 1 时前台只生成 1 张；设置为 4 时会显示 1～4 张。当前实现会拆成多个独立任务，每张按模型单价计费。</p>
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-3">
         <ImageRatioOptionGroup

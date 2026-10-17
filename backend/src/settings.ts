@@ -172,6 +172,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
     for(const binding of model.bindings){string(binding.id,'binding ID');string(binding.upstreamModel,'upstream model');if(bindingIds.has(binding.id))throw httpError(400,'Duplicate binding ID');bindingIds.add(binding.id);if(!next.systemChannels.some((c:any)=>c.id===binding.channelId))throw httpError(400,'Binding channel does not exist');if(typeof binding.enabled!=='boolean')throw httpError(400,'Invalid binding enabled');validNumber(binding.priority,'binding priority',0,100000);
       if(binding.capabilityProfile!==undefined&&binding.capabilityProfile!==null){
         const profile=object(binding.capabilityProfile);
+        if(profile.maxBatchSize!==undefined&&(!Number.isInteger(profile.maxBatchSize)||profile.maxBatchSize<1||profile.maxBatchSize>20))throw httpError(400,'Invalid max batch size');
         if(profile.aspectRatios!==undefined)validCapabilityList(profile.aspectRatios,'aspect ratios');
         if(profile.aspectRatioOptions!==undefined){
           const options=validCapabilityRatioOptions(profile.aspectRatioOptions,'aspect ratio options');

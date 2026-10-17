@@ -251,7 +251,7 @@ function TaskDetailDrawer({ task, onClose, onReview }: { task: AdminGenerationTa
           <AdminDefinition label="用户" value={`${task.displayName || task.username || '-'}${task.accountId ? ` (#${task.accountId})` : ''}`} />
           <AdminDefinition label="任务类型" value={labelOf(taskTypeLabels, task.type)} />
           <AdminDefinition label="来源" value={labelOf(surfaceLabels, task.surface)} />
-          <AdminDefinition label="逻辑模型" value={task.model} />
+          <AdminDefinition label="模型" value={task.model} />
           <AdminDefinition label="渠道 / 协议" value={`${task.channelId || '-'} · ${task.provider || '-'}`} />
           <AdminDefinition label="耗时" value={formatAdminDuration(task.durationMs)} />
           <AdminDefinition label="积分消耗" value={task.pointsBreakdown ? `合计 ${formatAdminNumber(task.pointsBreakdown.total)}（规划 ${formatAdminNumber(task.pointsBreakdown.planner)} · 子任务 ${formatAdminNumber(task.pointsBreakdown.childTasks)}）` : formatAdminNumber(task.pointsCost)} />

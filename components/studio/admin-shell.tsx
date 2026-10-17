@@ -54,7 +54,7 @@ export const adminSectionMeta: Record<AdminSection, { title: string; description
   overview: { title: '运营总览', description: '今日与近 7 日调用、成功率、分布、渠道健康与收入摘要。' },
   users: { title: '用户与权限', description: '搜索用户、查看详情、调整积分套餐并分配管理员职责。' },
   generation: { title: '生成运维', description: '按用户、模型、渠道、类型和状态排查任务，处理失败与卡死请求。' },
-  channels: { title: '模型与渠道', description: '维护上游渠道、逻辑模型、能力与计费倍率，并测试连通性。' },
+  channels: { title: '模型与渠道', description: '维护上游渠道、模型列表、能力与计费倍率，并测试连通性。' },
   products: { title: '商品与套餐', description: '管理积分包、订阅套餐及其在订阅页展示的权益。' },
   orders: { title: '订单与财务', description: '查询订单与支付状态，处理退款、优惠券、促销与邀请返利。' },
   content: { title: '内容与公告', description: '发布公告并处理作品审核、下架与举报治理。' },
