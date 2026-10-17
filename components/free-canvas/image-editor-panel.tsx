@@ -6,6 +6,7 @@ import {
   Crop,
   Eraser,
   Expand,
+  GripVertical,
   Layers3,
   Minus,
   MousePointer2,
@@ -469,6 +470,7 @@ export function ImageEditorPanel({
             </div>
           )}
           <div className={styles.floatingTools} role="toolbar" aria-label="编辑工具">
+            <span className={styles.toolbarHandle} aria-hidden="true"><GripVertical /></span>
             <button type="button" className={`${styles.toolButton} ${tool === 'brush' ? styles.toolButtonActive : ''}`} onClick={() => setTool('brush')} aria-pressed={tool === 'brush'} title="画笔"><Paintbrush aria-hidden="true" /><span>画笔</span></button>
             <button type="button" className={`${styles.toolButton} ${tool === 'eraser' ? styles.toolButtonActive : ''}`} onClick={() => setTool('eraser')} aria-pressed={tool === 'eraser'} title="橡皮擦"><Eraser aria-hidden="true" /><span>橡皮</span></button>
             <button type="button" className={`${styles.toolButton} ${tool === 'rect' ? styles.toolButtonActive : ''}`} onClick={() => setTool('rect')} aria-pressed={tool === 'rect'} title="矩形选区"><Crop aria-hidden="true" /><span>选区</span></button>

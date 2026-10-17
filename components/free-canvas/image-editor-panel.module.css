@@ -238,7 +238,7 @@
 .workspace { grid-template-rows: minmax(360px, 1fr) auto; }
 .stage {
   min-height: 360px;
-  padding: 24px 28px 66px;
+  padding: 74px 28px 24px;
   background-color: #0b0d0f;
   background-image: radial-gradient(rgb(255 255 255 / 8%) 1px, transparent 1px);
   background-size: 20px 20px;
@@ -251,14 +251,26 @@
 }
 .image { width: auto; height: auto; max-width: min(100%, 820px); max-height: min(650px, calc(100vh - 530px)); }
 .floatingTools {
-  top: auto;
-  bottom: 17px;
+  top: 16px;
+  bottom: auto;
   max-width: calc(100% - 40px);
   border-radius: 11px;
   padding: 5px;
   background: rgb(25 28 30 / 96%);
   box-shadow: 0 10px 30px rgb(0 0 0 / 48%);
 }
+.toolbarHandle {
+  display: inline-flex;
+  width: 18px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--editor-muted);
+  cursor: grab;
+}
+.toolbarHandle svg { width: 14px; height: 14px; }
+.toolbarHandle:active { cursor: grabbing; }
 .promptArea {
   min-height: 108px;
   gap: 7px;
@@ -291,7 +303,15 @@
   background-image: radial-gradient(rgb(20 31 40 / 11%) 1px, transparent 1px);
 }
 .panel[data-editor-theme='light'] .mediaFrame { border-color: rgb(18 28 36 / 16%); background: #fff; box-shadow: 0 18px 46px rgb(18 28 36 / 15%); }
-.panel[data-editor-theme='light'] .floatingTools { background: rgb(255 255 255 / 96%); box-shadow: 0 9px 28px rgb(18 28 36 / 18%); }
+.panel[data-editor-theme='light'] .floatingTools {
+  --editor-border: rgb(255 255 255 / 18%);
+  --editor-border-strong: rgb(255 255 255 / 30%);
+  --editor-text: #fff;
+  --editor-muted: rgb(255 255 255 / 70%);
+  --editor-accent: #a6eee2;
+  background: rgb(43 46 49 / 97%);
+  box-shadow: 0 9px 28px rgb(18 28 36 / 28%);
+}
 .panel[data-editor-theme='light'] .promptTextarea { background: #fff; }
 .panel[data-editor-theme='light'] .primaryAction { background: #111820; border-color: #111820; color: #fff; }
 .panel[data-editor-theme='light'] .primaryAction:hover { background: #27323c; border-color: #27323c; color: #fff; }
@@ -303,8 +323,8 @@
   .operationGuide { align-items: flex-start; flex-direction: column; gap: 2px; }
   .operationGuideTitle { width: 100%; }
   .operationGuide p { width: 100%; }
-  .stage { min-height: 270px; padding-inline: 12px; }
+  .stage { min-height: 270px; padding: 68px 12px 18px; }
   .mediaFrame,
-  .image { max-height: min(420px, calc(100vh - 430px)); }
-  .floatingTools { max-width: calc(100% - 20px); bottom: 10px; }
+  .image { max-height: min(420px, calc(100vh - 470px)); }
+  .floatingTools { top: 10px; bottom: auto; max-width: calc(100% - 20px); }
 }
