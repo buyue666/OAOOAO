@@ -68,6 +68,8 @@ export type GenerationHistoryItem = {
   ratio?: string
   resolution?: string
   quality?: string
+  /** 素材库分类；生成结果也可以在创作资产中调整。 */
+  category?: AssetCategory
   settings?: { modelId?: string; ratio?: string; resolution?: string; quality?: string; count?: number }
   source?: string
   durationMs?: number
@@ -98,6 +100,7 @@ export type StudioWork = {
   ratio?: string
   resolution?: string
   quality?: string
+  category?: AssetCategory
   prompt: string
   durationMs?: number
   taskStatus: string
@@ -150,6 +153,7 @@ function toHistoryItem(raw: Record<string, unknown>): GenerationHistoryItem | nu
     ratio: typeof raw.ratio === 'string' ? raw.ratio : typeof settings?.ratio === 'string' ? settings.ratio : undefined,
     resolution: typeof raw.resolution === 'string' ? raw.resolution : typeof settings?.resolution === 'string' ? settings.resolution : undefined,
     quality: typeof raw.quality === 'string' ? raw.quality : typeof settings?.quality === 'string' ? settings.quality : undefined,
+    category: raw.category === 'character' || raw.category === 'scene' || raw.category === 'prop' || raw.category === 'style' ? raw.category : 'general',
     source: raw.source ? String(raw.source) : undefined,
     durationMs: Number(raw.durationMs) || undefined,
     pointsCost: Number(raw.pointsCost) || Number(billing?.pointsCost) || undefined,
@@ -183,6 +187,7 @@ export function historyToWorks(items: GenerationHistoryItem[]): StudioWork[] {
         ratio: item.ratio,
         resolution: item.resolution,
         quality: item.quality,
+        category: item.category,
         prompt: item.prompt,
         durationMs: item.durationMs,
         taskStatus: item.status,
@@ -509,10 +514,10 @@ export async function renameLibraryAsset(id: string, title: string, category?: A
 }
 
 /** 修改生成记录的显示名称，结果媒体与任务参数保持不变。 */
-export async function renameGenerationLog(id: string, title: string): Promise<void> {
+export async function renameGenerationLog(id: string, title: string, category?: AssetCategory): Promise<void> {
   const payload = await request<{ code?: number; msg?: string }>(`/api/generation-logs/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ title: title.trim() }),
+    body: JSON.stringify({ title: title.trim(), ...(category ? { category } : {}) }),
   })
   if (typeof payload.code === 'number' && payload.code !== 0) throw new StudioApiError(payload.msg || '生成记录重命名失败', payload.code)
 }

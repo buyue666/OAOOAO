@@ -126,7 +126,7 @@ function workToAsset(work: StudioWork): Asset {
   return {
     id: `generated-${work.id}`,
     kind: work.kind === 'video' ? 'video' : work.kind === 'audio' ? 'audio' : 'image',
-    category: 'general',
+    category: work.category ?? 'general',
     title: work.title,
     src: work.src,
     poster: work.poster,
@@ -363,7 +363,7 @@ export function AssetsPage() {
       if (renameSource === 'generation') {
         const rawId = renameId.startsWith('generated-') ? renameId.slice('generated-'.length) : renameId
         const separator = rawId.lastIndexOf('-')
-        await renameGenerationLog(separator > 0 ? rawId.slice(0, separator) : rawId, renameTitle)
+        await renameGenerationLog(separator > 0 ? rawId.slice(0, separator) : rawId, renameTitle, renameCategory)
         await serverWorks.reload()
       } else {
         await renameLibraryAsset(renameId, renameTitle, renameCategory)
@@ -423,9 +423,9 @@ export function AssetsPage() {
           <FilterChips value={filter} onChange={setFilter} options={assetFilters} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-foreground">新上传素材分类</span>
-            <span className="text-[10px] leading-4 text-muted-foreground">只影响接下来上传的文件；已有素材请点卡片旁的铅笔修改。</span>
+          <div className="flex flex-col gap-0.5 rounded-lg border border-border bg-muted/20 px-2.5 py-1.5">
+            <span className="text-xs font-medium text-foreground">上传时默认分类</span>
+            <span className="text-[10px] leading-4 text-muted-foreground">用于下一次上传；已有素材请点卡片标题旁的铅笔，在“素材分类”中修改。</span>
           </div>
           <FilterChips value={uploadCategory} onChange={(value) => setUploadCategory(value as AssetCategory)} options={Object.entries(assetCategoryLabels).map(([value, label]) => ({ value, label }))} />
           <SegmentedControl value={view} onChange={setView} options={[{ value: 'grid', label: '缩略图', icon: <Grid2X2 className="size-3.5" /> }, { value: 'list', label: '列表', icon: <List className="size-3.5" /> }]} />
@@ -502,7 +502,7 @@ export function AssetsPage() {
         open={Boolean(renameId)}
         onClose={() => { if (!renaming) setRenameId(null) }}
         title={renameSource === 'generation' ? '编辑生成资产' : '编辑素材'}
-        description={renameSource === 'generation' ? '修改生成结果的显示名称，结果媒体与任务参数保持不变。' : '修改素材名称和分类，媒体文件本身保持不变。'}
+        description={renameSource === 'generation' ? '修改生成结果的显示名称和素材分类，结果媒体与任务参数保持不变。' : '修改素材名称和分类，媒体文件本身保持不变。'}
         footer={(
           <>
             <ControlButton variant="ghost" disabled={renaming} onClick={() => setRenameId(null)}>取消</ControlButton>
@@ -514,12 +514,13 @@ export function AssetsPage() {
           名称
           <input autoFocus value={renameTitle} maxLength={250} onChange={(event) => setRenameTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void renameAsset() } }} className="studio-field w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
         </label>
-        {renameSource === 'library' && <label className="mt-3 flex flex-col gap-1.5 text-xs text-muted-foreground">
+        <label className="mt-3 flex flex-col gap-1.5 text-xs text-muted-foreground">
           素材分类
           <select value={renameCategory} onChange={(event) => setRenameCategory(event.target.value as AssetCategory)} className="studio-field w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15">
             {Object.entries(assetCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-        </label>}
+          <span className="text-[11px] leading-4 text-muted-foreground">分类会保存到素材库，用于筛选和后续选择参考素材。</span>
+        </label>
       </Modal>
     </div>
   )
