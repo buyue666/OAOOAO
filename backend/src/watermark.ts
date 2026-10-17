@@ -80,7 +80,7 @@ export async function labelMedia(bytes:Buffer,mimeType:string):Promise<{bytes:Bu
   const image=['image/png','image/jpeg','image/webp'].includes(mimeType),video=['video/mp4','video/webm'].includes(mimeType);
   if(!image&&!video)throw httpError(415,'AI-labelled export supports PNG, JPEG, static WebP, MP4 and WebM sources');
   // Signed provenance cannot simply be copied to altered pixels and remain valid.
-  if(/c2pa|jumbf/iu.test(bytes.toString('latin1')))throw httpError(422,'This file contains signed provenance. Labelled export cannot preserve its signature; the original remains unchanged.');
+  if(/c2pa|jumbf/iu.test(bytes.toString('latin1')))throw httpError(422,'该文件包含已签名的来源信息，带水印的导出副本无法保留签名。原文件未被修改；如需下载原文件，请先关闭账户水印。');
   if(mimeType==='image/webp'&&chunksWebp(bytes).some(part=>['ANIM','ANMF'].includes(part.type)))throw httpError(415,'Animated WebP labelled export is not supported');
   const directory=await mkdtemp(join(tmpdir(),'oaooao-export-'));
   try{
