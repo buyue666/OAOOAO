@@ -150,7 +150,9 @@ export function historyToWorks(items: GenerationHistoryItem[]): StudioWork[] {
     item.assets.forEach((asset, index) => {
       works.push({
         id: `${item.id}-${index}`,
-        taskId: item.taskId,
+        // 历史记录可能没有单独的 taskId 字段；记录自身 id 就是任务 id。
+        // 不能回退到作品 id（会多出 `-0` / `-1`），否则详情页和下载文件名会误导用户。
+        taskId: item.taskId ?? item.id,
         title: item.assets.length > 1 ? `${item.title} · ${index + 1}` : item.title,
         kind,
         src: asset.url,
