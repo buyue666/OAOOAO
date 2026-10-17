@@ -1048,6 +1048,9 @@ export function ImageWorkspace() {
     const source = request.imageUrl.startsWith('data:')
       ? ({ type: 'image', dataUrl: request.imageUrl } as const)
       : ({ type: 'image', url: request.imageUrl } as const)
+    const regionReferences = (request.regions ?? [])
+      .filter((region) => Boolean(region.referenceImageDataUrl))
+      .map((region) => ({ type: 'image' as const, dataUrl: region.referenceImageDataUrl, name: `区域 ${region.id} 参考图` }))
     if (request.operation === 'to-video') {
       const videoModel = videoModelList.find((item) => item.id === defaultModelFor('video', state.sessionSettings, videoModelList)) ?? videoModelList[0]
       const videoRatio = videoModel?.capabilities.ratios.includes(work.ratio) ? work.ratio : videoModel?.capabilities.ratios[0] ?? '16:9'
@@ -1070,7 +1073,7 @@ export function ImageWorkspace() {
       resolution,
       quality,
       kind: 'edit',
-      references: [source],
+      references: [source, ...regionReferences],
       edit: {
         operation: request.operation,
         ...(request.maskDataUrl ? { mask: { type: 'image', dataUrl: request.maskDataUrl } as const } : {}),

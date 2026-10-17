@@ -188,6 +188,7 @@
 }
 .regionComposerClosing { animation: regionComposerOut 160ms ease both; pointer-events: none; }
 .regionComposerPrefix { flex: 0 0 auto; color: #182029; font-size: 22px; line-height: 1; }
+.regionReferencePreview { width: 28px; height: 28px; flex: 0 0 auto; border: 1px solid rgb(24 32 41 / 13%); border-radius: 6px; object-fit: cover; }
 .regionComposer input {
   min-width: 0;
   flex: 1;
@@ -199,6 +200,20 @@
   font-size: 13px;
 }
 .regionComposer input::placeholder { color: rgb(24 32 41 / 47%); }
+.regionUploadButton {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: rgb(24 32 41 / 58%);
+  cursor: pointer;
+}
+.regionUploadButton:hover { background: rgb(24 32 41 / 8%); color: #182029; }
+.regionUploadButton svg { width: 16px; height: 16px; }
+.regionUploadButton input { display: none; }
 .regionComposer button {
   display: inline-flex;
   width: 29px;

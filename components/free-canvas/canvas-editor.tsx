@@ -164,6 +164,9 @@ function CanvasWorkspace() {
     const source = request.imageUrl.startsWith('data:')
       ? { type: 'image', dataUrl: request.imageUrl }
       : { type: 'image', url: request.imageUrl }
+    const regionReferences = (request.regions ?? [])
+      .filter((region) => Boolean(region.referenceImageDataUrl))
+      .map((region) => ({ type: 'image' as const, dataUrl: region.referenceImageDataUrl, name: `区域 ${region.id} 参考图` }))
     const prompt = request.prompt.trim() || (
       request.operation === 'to-video' ? '让画面自然动起来，保持主体、镜头构图和光影一致。'
         : request.operation === 'erase' ? '移除标记区域，并自然补全背景，保持原图构图和光影。'
@@ -187,7 +190,7 @@ function CanvasWorkspace() {
       prompt,
       kind: 'edit',
       ...(request.ratio || sourceRatio ? { ratio: request.ratio || sourceRatio } : {}),
-      references: [source],
+      references: [source, ...regionReferences],
       edit: {
         operation: request.operation as Exclude<ImageEditOperation, 'to-video'>,
         ...(request.maskDataUrl ? { mask: { type: 'image', dataUrl: request.maskDataUrl } } : {}),

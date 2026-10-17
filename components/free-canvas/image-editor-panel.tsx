@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   GripVertical,
+  ImagePlus,
   Layers3,
   Maximize2,
   Minus,
@@ -36,6 +37,8 @@ export interface ImageEditRequest {
   maskDataUrl?: string
   imageUrl: string
   brushSize: number
+  /** Per-region instructions and optional reference images uploaded in the marker composer. */
+  regions?: Array<{ id: number; prompt?: string; referenceImageDataUrl?: string }>
   /** Target output ratio for outpaint; omitted means preserve the source ratio. */
   ratio?: '1:1' | '4:3' | '16:9' | '9:16'
 }
@@ -71,7 +74,7 @@ export interface ImageEditorPanelProps {
 
 type Point = { x: number; y: number }
 type Rect = { x: number; y: number; width: number; height: number }
-type MaskRegion = { id: number; x: number; y: number; prompt?: string }
+type MaskRegion = { id: number; x: number; y: number; prompt?: string; referenceImageDataUrl?: string }
 type MaskSnapshot = { dataUrl: string; regions: MaskRegion[] }
 type PanPoint = { x: number; y: number }
 type OutpaintRatio = 'original' | '1:1' | '4:3' | '16:9' | '9:16'
@@ -177,6 +180,15 @@ function restoreMaskSnapshot(canvas: HTMLCanvasElement, source: string) {
   image.src = source
 }
 
+function readImageAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('无法读取图片'))
+    reader.onerror = () => reject(reader.error ?? new Error('无法读取图片'))
+    reader.readAsDataURL(file)
+  })
+}
+
 export function ImageEditorPanel({
   imageSrc,
   alt = '待编辑图片',
@@ -213,6 +225,7 @@ export function ImageEditorPanel({
   const toolbarDragStartRef = useRef<Point | null>(null)
   const toolbarOriginRef = useRef<PanPoint>({ x: 0, y: 0 })
   const regionCloseTimerRef = useRef<number | null>(null)
+  const regionOpenFrameRef = useRef<number | null>(null)
   const nextRegionIdRef = useRef(1)
   const maskRegionsRef = useRef<MaskRegion[]>([])
   const [operation, setOperation] = useState<ImageEditOperation>(initialOperation)
@@ -267,6 +280,10 @@ export function ImageEditorPanel({
   }, [])
 
   const closeRegionEditor = useCallback((animated = true) => {
+    if (regionOpenFrameRef.current !== null) {
+      window.cancelAnimationFrame(regionOpenFrameRef.current)
+      regionOpenFrameRef.current = null
+    }
     if (regionCloseTimerRef.current !== null) {
       window.clearTimeout(regionCloseTimerRef.current)
       regionCloseTimerRef.current = null
@@ -289,7 +306,20 @@ export function ImageEditorPanel({
 
   useEffect(() => () => {
     if (regionCloseTimerRef.current !== null) window.clearTimeout(regionCloseTimerRef.current)
+    if (regionOpenFrameRef.current !== null) window.cancelAnimationFrame(regionOpenFrameRef.current)
   }, [])
+
+  const openRegionEditor = useCallback((regionId: number, regionPrompt = '') => {
+    closeRegionEditor(false)
+    setClosingRegionId(null)
+    // Let the opaque number badge render for one frame before mounting the
+    // composer, matching the two-step feedback in Doubao's editor.
+    regionOpenFrameRef.current = window.requestAnimationFrame(() => {
+      regionOpenFrameRef.current = null
+      setEditingRegionId(regionId)
+      setEditingRegionPrompt(regionPrompt)
+    })
+  }, [closeRegionEditor])
 
   const initializeMask = useCallback(() => {
     const image = imageRef.current
@@ -307,6 +337,10 @@ export function ImageEditorPanel({
     if (regionCloseTimerRef.current !== null) {
       window.clearTimeout(regionCloseTimerRef.current)
       regionCloseTimerRef.current = null
+    }
+    if (regionOpenFrameRef.current !== null) {
+      window.cancelAnimationFrame(regionOpenFrameRef.current)
+      regionOpenFrameRef.current = null
     }
     setZoom(1)
     setPan({ x: 0, y: 0 })
@@ -426,6 +460,26 @@ export function ImageEditorPanel({
     }
     closeRegionEditor(animated)
   }, [closeRegionEditor, editingRegionId, editingRegionPrompt, updateMaskRegions])
+
+  const handleRegionReferenceUpload = useCallback(async (regionId: number, file?: File) => {
+    if (!file || !file.type.startsWith('image/')) return
+    try {
+      const dataUrl = await readImageAsDataUrl(file)
+      const nextRegions = maskRegionsRef.current.map((region) => (
+        region.id === regionId ? { ...region, referenceImageDataUrl: dataUrl } : region
+      ))
+      updateMaskRegions(nextRegions)
+      if (historyIndexRef.current >= 0 && historyRef.current[historyIndexRef.current]) {
+        historyRef.current[historyIndexRef.current] = {
+          ...historyRef.current[historyIndexRef.current],
+          regions: nextRegions.map((region) => ({ ...region })),
+        }
+      }
+      setMaskRevision((revision) => revision + 1)
+    } catch {
+      setStatus('参考图读取失败，请重试')
+    }
+  }, [updateMaskRegions])
 
   const pointFromEvent = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = maskRef.current
@@ -609,8 +663,7 @@ export function ImageEditorPanel({
     if (tool === 'brush' && point && start) {
       const nearestRegion = maskRegionsRef.current[maskRegionsRef.current.length - 1]
       if (nearestRegion) {
-        setEditingRegionId(nearestRegion.id)
-        setEditingRegionPrompt(nearestRegion.prompt ?? '')
+        openRegionEditor(nearestRegion.id, nearestRegion.prompt ?? '')
       }
     }
   }
@@ -647,6 +700,9 @@ export function ImageEditorPanel({
       maskDataUrl: operation !== 'outpaint' && canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
       imageUrl: imageSrc,
       brushSize,
+      regions: operation !== 'outpaint' && maskRegions.length > 0
+        ? maskRegions.map((region) => ({ id: region.id, prompt: region.prompt, referenceImageDataUrl: region.referenceImageDataUrl }))
+        : undefined,
       ratio: operation === 'outpaint' && outpaintRatio !== 'original' ? outpaintRatio : undefined,
     }
     try {
@@ -716,6 +772,10 @@ export function ImageEditorPanel({
         : Math.min(maxY, Math.max(minY, markerY - popupHeight / 2))
     return { left, top, width: popupWidth }
   }, [editingRegionId, layoutRevision, maskRegions, maskRevision, pan, showMarkers, zoom])
+
+  const editingRegion = editingRegionId === null
+    ? undefined
+    : maskRegions.find((region) => region.id === editingRegionId)
 
   return (
     <aside className={`${styles.panel}${className ? ` ${className}` : ''}`} data-editor-theme={theme} aria-label={title}>
@@ -788,16 +848,7 @@ export function ImageEditorPanel({
                     <button
                       type="button"
                       className={styles.regionMarker}
-                      onClick={() => {
-                        closeRegionEditor(false)
-                        if (regionCloseTimerRef.current !== null) {
-                          window.clearTimeout(regionCloseTimerRef.current)
-                          regionCloseTimerRef.current = null
-                        }
-                        setClosingRegionId(null)
-                        setEditingRegionId(region.id)
-                        setEditingRegionPrompt(region.prompt ?? '')
-                      }}
+                      onClick={() => openRegionEditor(region.id, region.prompt ?? '')}
                       aria-label={`编辑区域 ${region.id}`}
                       title={region.prompt ? `区域 ${region.id}：${region.prompt}` : `编辑区域 ${region.id}`}
                     >{region.id}</button>
@@ -810,6 +861,7 @@ export function ImageEditorPanel({
           {operation !== 'outpaint' && regionComposerPosition && <div className={styles.regionComposerLayer} style={{ left: regionComposerPosition.left, top: regionComposerPosition.top, width: regionComposerPosition.width }}>
             <span className={`${styles.regionComposer} ${closingRegionId === editingRegionId ? styles.regionComposerClosing : ''}`} role="group" aria-label={`编辑区域 ${editingRegionId}`}>
               <span className={styles.regionComposerPrefix} aria-hidden="true">＋</span>
+              {editingRegion?.referenceImageDataUrl && <img className={styles.regionReferencePreview} src={editingRegion.referenceImageDataUrl} alt="" aria-label="已上传区域参考图" />}
               <input
                 autoFocus
                 value={editingRegionPrompt}
@@ -827,6 +879,19 @@ export function ImageEditorPanel({
                 placeholder="添加标记..."
                 aria-label={`区域 ${editingRegionId} 的修改说明`}
               />
+              <label className={styles.regionUploadButton} title="上传区域参考图">
+                <ImagePlus aria-hidden="true" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0]
+                    event.currentTarget.value = ''
+                    if (editingRegionId !== null) void handleRegionReferenceUpload(editingRegionId, file)
+                  }}
+                  aria-label="上传区域参考图"
+                />
+              </label>
               <button type="button" onClick={() => confirmRegionPrompt()} aria-label={`确认区域 ${editingRegionId}`} title="确认"><span aria-hidden="true">✓</span></button>
             </span>
           </div>}
