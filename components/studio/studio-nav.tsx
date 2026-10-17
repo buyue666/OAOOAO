@@ -4,7 +4,6 @@ import {
   History,
   LayoutGrid,
   Library,
-  ListChecks,
   Puzzle,
   WandSparkles,
   Settings,
@@ -30,7 +29,6 @@ export const studioPrimaryNav: readonly StudioNavItem[] = [
 
 export const studioSecondaryNav: readonly StudioNavItem[] = [
   { label: '生成记录', href: '/works', icon: History, matches: ['/works', '/gallery'] },
-  { label: '任务', href: '/tasks', icon: ListChecks, matches: ['/tasks'] },
   { label: '技能库', href: '/skills', icon: Puzzle, matches: ['/skills'] },
   { label: '创作工具', href: '/tools', icon: WandSparkles, matches: ['/tools'] },
 ]

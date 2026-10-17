@@ -3,7 +3,6 @@
 import type { FormEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowDownToLine,
   Bot,
   Check,
   Columns2,
@@ -13,7 +12,6 @@ import {
   Maximize2,
   MoreHorizontal,
   Plus,
-  RefreshCw,
   RotateCcw,
   Send,
   SlidersHorizontal,
@@ -1101,7 +1099,7 @@ export function ImageWorkspace() {
         surface: 'chat',
         projectId: state.selectedProjectId,
       })
-      setNotice({ tone: 'accent', text: '已提交转视频任务，可在任务记录查看进度。' })
+      setNotice({ tone: 'accent', text: '已提交转视频任务，可在下方生成任务查看进度。' })
       return
     }
     await generation.createImage({
@@ -1120,7 +1118,7 @@ export function ImageWorkspace() {
       projectId: state.selectedProjectId,
       title: `编辑：${work.title}`,
     })
-    setNotice({ tone: 'accent', text: `已提交${request.operation === 'outpaint' ? '扩图' : request.operation === 'enhance' ? '高清修复' : request.operation === 'layers' ? '分图层' : '图片编辑'}任务，可在任务记录查看结果。` })
+    setNotice({ tone: 'accent', text: `已提交${request.operation === 'outpaint' ? '扩图' : request.operation === 'enhance' ? '高清修复' : request.operation === 'layers' ? '分图层' : '图片编辑'}任务，可在下方生成任务查看结果。` })
   }, [editorWork, generation, model?.id, quality, ratio, resolution, state.selectedProjectId, state.sessionSettings, videoModelList])
 
   const saveEditorVersion = useCallback(async (imageUrl: string) => {
@@ -1425,10 +1423,6 @@ export function ImageWorkspace() {
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
           导演 Agent
-        </ControlButton>
-        <ControlButton size="sm" variant="ghost" onClick={() => router.push('/tasks')}>
-          <ArrowDownToLine className="size-3.5" aria-hidden="true" />
-          任务记录
         </ControlButton>
       </ResultActions>
 
@@ -2217,10 +2211,6 @@ export function VideoWorkspace() {
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
           导演 Agent
-        </ControlButton>
-        <ControlButton size="sm" variant="ghost" onClick={() => router.push('/tasks')}>
-          <RefreshCw className="size-3.5" aria-hidden="true" />
-          任务记录
         </ControlButton>
       </ResultActions>
 
