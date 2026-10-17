@@ -922,7 +922,7 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
   }
 
   const toggleQuality = (option: ImageQualityOption) => {
-    if (autoRequired && option.value.trim() === 'auto') return
+    if (autoRequired && option.value.trim() === 'auto' && qualities.includes('auto')) return
     toggle('imageQualities', qualities, option.value)
   }
 

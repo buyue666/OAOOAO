@@ -170,17 +170,16 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
           const options=validCapabilityOptions(profile.imageQualityOptions,'image quality options');
           const selected=profile.imageQualities ?? profile.qualities;
           if(Array.isArray(selected)&&selected.some((value:any)=>!options.has(String(value).trim())))throw httpError(400,'Image quality must use a configured parameter');
-          const resolutions=profile.outputResolutions ?? profile.resolutions;
+          const configuredResolutions=profile.outputResolutions ?? profile.resolutions;
+          const resolutions=Array.isArray(configuredResolutions)&&configuredResolutions.length ? configuredResolutions : (model.capability==='image' ? ['1K'] : undefined);
           if(Array.isArray(resolutions)&&resolutions.includes('1K')&&!options.has('auto'))throw httpError(400,'1K 图片质量必须绑定 auto（自动）');
           if(Array.isArray(resolutions)&&resolutions.includes('1K')&&Array.isArray(selected)&&!selected.some((value:any)=>String(value).trim()==='auto'))throw httpError(400,'启用 1K 时必须勾选 auto（自动）图片质量');
         } else {
-          const resolutions=profile.outputResolutions ?? profile.resolutions;
+          const configuredResolutions=profile.outputResolutions ?? profile.resolutions;
+          const resolutions=Array.isArray(configuredResolutions)&&configuredResolutions.length ? configuredResolutions : (model.capability==='image' ? ['1K'] : undefined);
           const selected=profile.imageQualities ?? profile.qualities;
           if(Array.isArray(resolutions)&&resolutions.includes('1K')&&Array.isArray(selected)&&!selected.some((value:any)=>String(value).trim()==='auto'))throw httpError(400,'启用 1K 时必须勾选 auto（自动）图片质量');
         }
-        const resolutionValues=profile.outputResolutions ?? profile.resolutions;
-        const qualityValues=profile.imageQualities ?? profile.qualities ?? (Array.isArray(profile.imageQualityOptions) ? profile.imageQualityOptions.map((item:any)=>item?.value) : undefined);
-        if(Array.isArray(resolutionValues)&&resolutionValues.includes('1K')&&Array.isArray(qualityValues)&&!qualityValues.some((value:any)=>String(value).trim()==='auto'))throw httpError(400,'1K image resolution requires the auto quality parameter');
         if(profile.sizeMap!==undefined)validCapabilitySizeMap(profile.sizeMap,'capability size map');
         if(profile.outputDimensions!==undefined)validCapabilitySizeMap(profile.outputDimensions,'capability output dimensions');
       }
