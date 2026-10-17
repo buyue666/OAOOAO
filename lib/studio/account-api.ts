@@ -67,6 +67,7 @@ export type GenerationHistoryItem = {
   ratio?: string
   resolution?: string
   quality?: string
+  settings?: { modelId?: string; ratio?: string; resolution?: string; quality?: string; count?: number }
   source?: string
   durationMs?: number
   pointsCost?: number

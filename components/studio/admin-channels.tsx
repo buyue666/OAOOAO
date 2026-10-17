@@ -763,7 +763,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                           bindings: model.bindings.map((item, position) => {
                             if (position !== index) return item
                             const profile = { ...(item.capabilityProfile || {}) }
-                            for (const key of ['aspectRatios', 'aspectRatioOptions', 'outputResolutions', 'resolutions', 'imageQualities', 'imageQualityOptions', 'imageQualityLabels', 'qualities', 'outputDimensions', 'sizeMap', 'maxBatchSize']) delete profile[key]
+                            for (const key of ['aspectRatios', 'aspectRatioOptions', 'outputResolutions', 'resolutions', 'imageQualities', 'imageQualityOptions', 'imageQualityLabels', 'qualities', 'outputDimensions', 'sizeMap', 'maxBatchSize', 'maxReferenceImages']) delete profile[key]
                             return { ...item, capabilityProfile: profile }
                           }),
                         })}
@@ -944,6 +944,7 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
       ? profile.qualities.filter((value): value is string => typeof value === 'string')
       : qualityOptions.map(({ value }) => value)
   const maxBatchSize = Math.max(1, Math.min(20, Math.trunc(Number(profile?.maxBatchSize) || 1)))
+  const maxReferenceImages = Math.max(0, Math.min(16, Math.trunc(Number(profile?.maxReferenceImages) || 0)))
 
   const toggle = (key: string, current: string[], value: string) => {
     const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
@@ -1058,6 +1059,21 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
           />
         </AdminField>
         <p className="text-[10px] leading-4 text-muted-foreground">设置为 1 时前台只生成 1 张；设置为 4 时会显示 1～4 张。当前实现会拆成多个独立任务，每张按模型单价计费。</p>
+      </div>
+      <div className="mt-3 grid gap-3 border-t border-border/70 pt-3 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)] sm:items-end">
+        <AdminField label="参考素材上限（张）" hint="0 表示该模型不接受参考素材">
+          <AdminInput
+            type="number"
+            min="0"
+            max="16"
+            step="1"
+            value={maxReferenceImages}
+            aria-label="参考素材上限（张）"
+            title="前台按此数量限制上传和素材库选择"
+            onChange={(event) => onChange({ supportsReferenceImage: Number(event.target.value) > 0, maxReferenceImages: Math.max(0, Math.min(16, Math.trunc(Number(event.target.value) || 0))) })}
+          />
+        </AdminField>
+        <p className="text-[10px] leading-4 text-muted-foreground">前台会显示“已选 / 上限”，上传和素材库选择共用此上限。填写大于 0 会启用参考素材入口。</p>
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-3">
         <ImageRatioOptionGroup

@@ -140,7 +140,7 @@ export function StatBlock({ label, value, detail, tone = 'neutral' }: { label: s
   )
 }
 
-export function MediaThumb({ src, poster, alt, fallback, kind = 'image', className, overlay, onLoadError, loading = 'eager' }: { src?: string; poster?: string; alt: string; fallback: string; kind?: 'image' | 'video'; className?: string; overlay?: ReactNode; onLoadError?: () => void; loading?: 'lazy' | 'eager' }) {
+export function MediaThumb({ src, poster, alt, fallback, kind = 'image', className, overlay, onLoadError, loading = 'lazy' }: { src?: string; poster?: string; alt: string; fallback: string; kind?: 'image' | 'video'; className?: string; overlay?: ReactNode; onLoadError?: () => void; loading?: 'lazy' | 'eager' }) {
   const [failed, setFailed] = useState(false)
   useEffect(() => { setFailed(false) }, [src, poster, kind])
   const fail = () => { setFailed(true); onLoadError?.() }
@@ -185,10 +185,11 @@ export function SelectField({ label, value, onChange, options, className, hint, 
       const roomAbove = rect.top - gap - 12
       const openAbove = roomBelow < Math.min(preferredHeight, 220) && roomAbove > roomBelow
       const maxHeight = Math.max(120, Math.min(preferredHeight, openAbove ? roomAbove : roomBelow))
+      const menuWidth = Math.min(Math.max(rect.width, 300), Math.max(180, window.innerWidth - 16))
       setMenuStyle({
         top: openAbove ? rect.top - gap - maxHeight : rect.bottom + gap,
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)),
-        width: rect.width,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8)),
+        width: menuWidth,
         maxHeight,
       })
     }
@@ -257,7 +258,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
           >
             {options.map((option) => {
               const active = option.value === value
-              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 truncate">{option.label}</span>{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
+              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 flex-1 truncate whitespace-nowrap">{option.label}</span>{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
             })}
           </div>,
           document.body,

@@ -162,6 +162,7 @@ export function createImageTask(input: ImageGenerationInput) {
         ...(input.ratio ? { size: input.ratio } : {}),
         ...(input.resolution ? { resolution: input.resolution } : {}),
         ...(input.quality ? { quality: input.quality } : {}),
+        ...(Number.isFinite(input.count) && Number(input.count) > 0 ? { n: Math.max(1, Math.min(20, Math.floor(Number(input.count)))) } : {}),
       },
       ...(input.title ? { title: input.title } : {}),
       kind: input.kind ?? (references.length ? 'edit' : 'generation'),

@@ -189,10 +189,12 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   /** Persist image data returned by either a synchronous response or a
    * completed 词元 async task.  The upstream URL is temporary, so always
    * download it before storing the media in our own media service. */
-  const persistImageData=async(data:Json)=>{
+  const persistImageData=async(data:Json,maxResults=1)=>{
     const results=[];
     if(!Array.isArray(data.data)||!data.data.length)throw new ProviderFailure('Provider returned no usable image output');
-    for(const item of data.data){
+    // Some edit endpoints ignore n=1 when multiple references are attached.
+    // Keep stored results aligned with the requested output count.
+    for(const item of data.data.slice(0, Math.max(1, Math.trunc(maxResults)))){
       let bytes:Buffer;
       if(typeof item?.b64_json==='string'&&item.b64_json.trim())bytes=Buffer.from(item.b64_json,'base64');
       else if(typeof item?.url==='string'&&item.url.trim()){
@@ -218,24 +220,25 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
       const data=await response.json() as Json;
       const status=String(data.status||'').toLowerCase();
       if(status==='failed')throw new ProviderFailure(String(data.error?.message||'词元异步生图失败'),true);
-      if(status==='completed')return{type:'complete',result:await persistImageData(data)};
+      if(status==='completed')return{type:'complete',result:await persistImageData(data,Math.max(1, Math.min(20, Math.trunc(Number(config.n)||1))))};
       if(['queued','in_progress','pending','processing'].includes(status))return{type:'pending',upstreamId:String(data.id||job.upstream_id)};
       throw new ProviderFailure('词元返回了未知的异步图片任务状态');
     }
     const outputSize=imageSize(config.size,config.resolution,profile);
+    const outputCount=Math.max(1, Math.min(20, Math.trunc(Number(config.n)||1)));
     let response:Response;
     if(input.references?.length){
       const files=[];
       for(const reference of input.references){const data=await readReference(ctx,job.user_id,reference);if(!data.mimeType.startsWith('image/'))throw new ProviderFailure('Image references must be images',true);files.push({name:'image',data:data.bytes,mime:data.mimeType});}
       if(input.edit?.mask){const mask=await readReference(ctx,job.user_id,input.edit.mask);if(!mask.mimeType.startsWith('image/'))throw new ProviderFailure('Image edit masks must be images',true);files.push({name:'mask',data:mask.bytes,mime:mask.mimeType});}
-      const multi=multipart({model,prompt:input.prompt,size:outputSize,n:'1',...(config.quality?{quality:config.quality}:{})},files);
+      const multi=multipart({model,prompt:input.prompt,size:outputSize,n:String(outputCount),...(config.quality?{quality:config.quality}:{})},files);
       response=await request('/images/edits',multi.body,multi.contentType,'POST',prefer);
-    }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:outputSize,n:1,...(config.quality?{quality:config.quality}:{})}),'application/json','POST',prefer);
+    }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:outputSize,n:outputCount,...(config.quality?{quality:config.quality}:{})}),'application/json','POST',prefer);
     const data=await response.json() as Json;
     // A ciyuan async submission is normally 202 + a queued task.  Accept a
     // completed body as well so an upstream deployment can safely transition
     // from sync to async without losing an already-finished response.
-    if(String(data.status||'').toLowerCase()==='completed')return{type:'complete',result:await persistImageData(data)};
+    if(String(data.status||'').toLowerCase()==='completed')return{type:'complete',result:await persistImageData(data,outputCount)};
     const upstreamId=String(data.id||'');
     if(!upstreamId)throw new ProviderFailure('词元异步接口未返回任务 ID',true);
     const status=String(data.status||'queued').toLowerCase();
@@ -246,15 +249,16 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   if(job.kind==='image'){
     let response:Response;
     const outputSize=imageSize(config.size,config.resolution,profile);
+    const outputCount=Math.max(1, Math.min(20, Math.trunc(Number(config.n)||1)));
     if(input.references?.length){
       const files=[];
       for(const reference of input.references){const data=await readReference(ctx,job.user_id,reference);if(!data.mimeType.startsWith('image/'))throw new ProviderFailure('Image references must be images',true);files.push({name:'image[]',data:data.bytes,mime:data.mimeType});}
       if(input.edit?.mask){const mask=await readReference(ctx,job.user_id,input.edit.mask);if(!mask.mimeType.startsWith('image/'))throw new ProviderFailure('Image edit masks must be images',true);files.push({name:'mask',data:mask.bytes,mime:mask.mimeType});}
-      const multi=multipart({model,prompt:input.prompt,size:outputSize,n:'1',...(config.quality?{quality:config.quality}:{})},files);
+      const multi=multipart({model,prompt:input.prompt,size:outputSize,n:String(outputCount),...(config.quality?{quality:config.quality}:{})},files);
       response=await request('/images/edits',multi.body,multi.contentType);
-    }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:outputSize,n:1,...(config.quality?{quality:config.quality}:{})}));
+    }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:outputSize,n:outputCount,...(config.quality?{quality:config.quality}:{})}));
     const data=await response.json() as Json;
-    return{type:'complete',result:await persistImageData(data)};
+    return{type:'complete',result:await persistImageData(data,outputCount)};
   }
   if(job.kind==='video'){
     let data:Json;
