@@ -1419,7 +1419,7 @@ export function ImageWorkspace() {
         onClose={() => setEditorWork(null)}
         title="图片编辑"
         description={editorWork?.title}
-        width="lg:w-[720px] lg:max-w-[720px]"
+        width="lg:w-[min(920px,calc(100vw-160px))] lg:max-w-none"
       >
         {editorWork && <ImageEditorPanel
           imageSrc={editorWork.src}
@@ -1428,6 +1428,7 @@ export function ImageWorkspace() {
           versions={editorVersions}
           activeVersionId={editorWork.id}
           showHeader={false}
+          theme="light"
           className="!w-full !min-w-0 !border-l-0"
           onClose={() => setEditorWork(null)}
           onSubmit={submitImageEditor}

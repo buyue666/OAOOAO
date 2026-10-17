@@ -58,6 +58,8 @@ export interface ImageEditorPanelProps {
   onImageClick?: () => void
   onOperationChange?: (operation: ImageEditOperation) => void
   showHeader?: boolean
+  /** Visual treatment for the editor surface. */
+  theme?: 'dark' | 'light'
 }
 
 type Point = { x: number; y: number }
@@ -68,9 +70,9 @@ const operations: Array<{ value: ImageEditOperation; label: string; icon: typeof
   { value: 'remove-background', label: '抠图', icon: Scissors },
   { value: 'erase', label: '擦除', icon: Eraser },
   { value: 'outpaint', label: '扩图', icon: Expand },
-  { value: 'enhance', label: '高清修复', icon: Sparkles },
+  { value: 'enhance', label: '变清晰', icon: Sparkles },
   { value: 'layers', label: '分图层', icon: Layers3 },
-  { value: 'to-video', label: '转视频', icon: Video },
+  { value: 'to-video', label: '变视频', icon: Video },
 ]
 
 type OperationMeta = {
@@ -120,7 +122,7 @@ const operationMeta: Record<ImageEditOperation, OperationMeta> = {
     placeholder: '例如：提升人像细节和发丝清晰度，保持肤色自然，不改变构图',
     defaultPrompt: '提升整体清晰度和细节，保持原图构图、色彩和主体不变',
     status: '已切换到高清修复，可补充想强化的细节',
-    submitLabel: '开始高清修复',
+    submitLabel: '变清晰',
     maskHint: '不标记时处理整张图片，标记后只强化指定区域',
   },
   layers: {
@@ -174,6 +176,7 @@ export function ImageEditorPanel({
   onImageClick,
   onOperationChange,
   showHeader = true,
+  theme = 'dark',
 }: ImageEditorPanelProps) {
   const imageRef = useRef<HTMLImageElement | null>(null)
   const maskRef = useRef<HTMLCanvasElement | null>(null)
@@ -416,7 +419,7 @@ export function ImageEditorPanel({
   }, [draftRect, maskRevision])
 
   return (
-    <aside className={`${styles.panel}${className ? ` ${className}` : ''}`} aria-label={title}>
+    <aside className={`${styles.panel}${className ? ` ${className}` : ''}`} data-editor-theme={theme} aria-label={title}>
       {showHeader && <header className={styles.header}>
         <div className={styles.titleBlock}>
           <h2 className={styles.title}>{title}</h2>
@@ -508,6 +511,7 @@ export function ImageEditorPanel({
         <div className={styles.footerActions}>
           <div className={styles.quickActions}>
             <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={clearMask} disabled={!hasMask}><Trash2 aria-hidden="true" /><span>清除标记</span></button>
+            {onSaveVersion && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={saveVersion} disabled={isSaving}><Save aria-hidden="true" /><span>{isSaving ? '保存中…' : '保存'}</span></button>}
           </div>
           <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={submit}><WandSparkles aria-hidden="true" /><span>{selectedMeta.submitLabel}</span></button>
         </div>
