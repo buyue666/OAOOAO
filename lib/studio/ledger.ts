@@ -32,6 +32,30 @@ export type PointRecord = {
   createdAt: string
 }
 
+/** 把账单后端的内部 kind/英文兜底说明转换成中文用户说明。 */
+export function ledgerDescription(record: Pick<PointRecord, 'description' | 'model' | 'type' | 'idempotencyKey'>): string {
+  const raw = String(record.description || '').trim()
+  const exact: Record<string, string> = {
+    generation: '生成消费',
+    generation_refund: '生成失败退款',
+    order_purchase: '购买积分',
+    order_refund: '订单退款',
+    referral_reward: '邀请奖励',
+    check_in: '每日签到奖励',
+    daily_expiration: '每日额度到期',
+    timed_expiration: '限时积分到期',
+    order_refund_reserve: '退款积分冻结',
+    order_refund_release: '退款取消，积分恢复',
+    'Credits reserved pending verified external refund': '退款核实中，积分暂时冻结',
+    'Refund canceled without external transfer; reserved credits restored': '退款取消，冻结积分已恢复',
+  }
+  const translated = exact[raw]
+  if (translated) return record.model && raw === 'generation' ? `${translated} · ${record.model}` : translated
+  if (raw === 'admin-adjust' || record.type === 'admin-adjust') return '管理员调整'
+  if (raw) return raw
+  return record.model || '积分变动'
+}
+
 /** Keep server bucket changes separate; a total must never be added a second time. */
 export function pointRecordBreakdown(record: Pick<PointRecord, 'permanentAmount' | 'dailyAmount' | 'timedAmount'>) {
   return ([['永久', record.permanentAmount], ['每日', record.dailyAmount], ['限时', record.timedAmount]] as const)
