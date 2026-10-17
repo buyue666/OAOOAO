@@ -15,6 +15,11 @@ const iso=(v:unknown)=>new Date(v as string).toISOString();
 function stable(value:any):string{return JSON.stringify(value&&typeof value==='object'?Array.isArray(value)?value.map(v=>JSON.parse(stable(v))):Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,JSON.parse(stable(value[k]))])):value??null);}
 export const inputHash=(value:unknown)=>createHash('sha256').update(stable(value)).digest('hex');
 export function taskView(row:Json){return{id:row.id,kind:row.kind,status:row.status,model:row.model,result:row.result||undefined,error:row.error||undefined,pointsCost:Number(row.cost),pointsRefunded:['error','cancelled'].includes(row.status)&&Number(row.cost)>0,needsReview:row.needs_review,reviewReason:row.needs_review?row.error:undefined,executionPhase:row.phase,upstreamId:row.upstream_id||undefined,canRetry:row.status==='error',createdAt:new Date(row.created_at).getTime(),updatedAt:new Date(row.updated_at).getTime(),prompt:row.input.prompt,clientRequestId:row.client_request_id,cancelRequested:row.cancel_requested};}
+function generationAssets(result:Json|undefined,kind:string){
+  const listed=Array.isArray(result?.results)?result.results.filter((item:unknown)=>item&&typeof item==='object') as Json[]:[];
+  const candidates=listed.length?listed:(result&&typeof result==='object'&&(typeof result.url==='string'||typeof result.remoteUrl==='string')?[result]:[]);
+  return candidates.map((item:Json)=>{const url=String(item.url||item.remoteUrl||'');return url?{type:kind,...item,url}:null;}).filter(Boolean);
+}
 function projectView(row:Json){return{...row.document,id:row.id,title:row.title,sourceHandoffId:row.source_handoff_id||undefined,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
 function assetView(row:Json){return{...row.document,id:row.id,kind:row.kind,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
 function textMessageContent(value:unknown){
@@ -239,7 +244,7 @@ export async function registerCreative(app:FastifyInstance,ctx:Context){
       UNION ALL SELECT id,created_at,null::jsonb job,document FROM oaooao_generation_history WHERE user_id=$1 AND ($2='' OR document->>'kind'=$2) AND ($3='' OR document->>'status'=$3)`;
     const rows=await ctx.db.query(`SELECT * FROM (${selection}) combined ORDER BY created_at DESC,id LIMIT $4 OFFSET $5`,[...values,page.pageSize,page.offset]);
     const total=Number((await ctx.db.query(`SELECT count(*) total FROM (${selection}) combined`,values)).rows[0].total);
-    return{items:rows.rows.map(entry=>{if(entry.document)return{...entry.document,id:entry.id,createdAt:iso(entry.created_at)};const row=entry.job;return{...taskView(row),source:row.input.source,title:row.input.title||row.input.prompt.slice(0,80),summary:row.result?.content,assets:row.result?.results?.map((r:Json)=>({type:row.kind,...r}))||(row.result?.url?[{type:row.kind,url:row.result.url}]:[]),durationMs:row.finished_at?new Date(row.finished_at).getTime()-new Date(row.created_at).getTime():0,createdAt:iso(row.created_at)};}),total,page:page.page,pageSize:page.pageSize};
+    return{items:rows.rows.map(entry=>{if(entry.document)return{...entry.document,id:entry.id,createdAt:iso(entry.created_at)};const row=entry.job;return{...taskView(row),source:row.input.source,title:row.input.title||row.input.prompt.slice(0,80),summary:row.result?.content,assets:generationAssets(row.result,row.kind),durationMs:row.finished_at?new Date(row.finished_at).getTime()-new Date(row.created_at).getTime():0,createdAt:iso(row.created_at)};}),total,page:page.page,pageSize:page.pageSize};
   });
   if(ctx.config.workerEnabled){let stop:(()=>Promise<void>)|undefined;app.addHook('onReady',async()=>{stop=startWorker(ctx);});app.addHook('onClose',async()=>{await stop?.();});}
 }

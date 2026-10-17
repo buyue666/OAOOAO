@@ -84,6 +84,15 @@ test('history merges imported rows and jobs with stable scoped pagination',async
     const empty=(await f.app.inject({url:'/api/generation-logs?page=9&pageSize=1',headers:a.headers})).json();assert.equal(empty.total,2);assert.equal(empty.items.length,0);
   }finally{await f.cleanup();}
 });
+test('generation logs keep a top-level result asset when the result list is empty',async()=>{
+  const f=await fixture();try{
+    const owner=f.users[0];const media=await saveMedia(f.ctx,owner.id,image,true);
+    const job=await createJob(f.ctx,owner.id,'image',{...input,config:{model:'synthetic-image'}},'history-result-fallback');
+    await f.ctx.db.query("UPDATE oaooao_generation_jobs SET status='success',phase='complete',result=$2,finished_at=clock_timestamp() WHERE id=$1",[job.id,{results:[],url:media.url,mimeType:'image/png'}]);
+    const response=await f.app.inject({url:'/api/generation-logs?page=1&pageSize=20',headers:owner.headers});assert.equal(response.statusCode,200,response.body);
+    const item=response.json().items.find((entry:any)=>entry.id===job.id);assert.equal(item.assets.length,1);assert.equal(item.assets[0].url,media.url);
+  }finally{await f.cleanup();}
+});
 test('Agent validates a real plan, approves once, executes dependent steps and persists assets/events',async()=>{
   const f=await fixture();try{
     const[a,b]=f.users;const payload={clientRequestId:'agent-fixture',prompt:'Synthetic agent prompt',surface:'chat',modelIds:['synthetic-text']};

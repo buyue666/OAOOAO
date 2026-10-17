@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
+import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
 import { ControlButton, KeyValue, MediaThumb, Modal, Notice, PageHeader, SectionHeading, SegmentedControl, StatusBadge } from './ui'
 import { useStudio } from '@/lib/studio/store'
 import { moneyLabel, StudioApiError } from '@/lib/studio/api'
@@ -200,7 +200,6 @@ function WorkCard({ work }: { work: StudioWork }) {
             <KeyValue label="类型" value={work.kind === 'video' ? '视频' : work.kind === 'audio' ? '音频' : '图片'} />
             <KeyValue label="任务 ID" value={<span className="font-mono text-[11px]">{work.taskId ?? work.id}</span>} />
           </div>
-          <Notice tone="neutral"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" />结果地址由后端按账户归属校验，其他账号无法访问。</Notice>
         </div>
       </Modal>
     </article>
