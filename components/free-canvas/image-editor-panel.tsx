@@ -57,6 +57,8 @@ export type ImageEditorModelOption = {
   label: string
   /** The operation family this model can serve. Omitted keeps backwards compatibility. */
   capability?: 'image' | 'video'
+  /** Base credit price used when the parent does not provide a live estimator. */
+  creditCost?: number
   icon?: ReactNode
   ratios?: string[]
   resolutions?: string[]
@@ -98,6 +100,8 @@ export interface ImageEditorPanelProps {
   initialVideoQuality?: string
   initialResolution?: string
   initialQuality?: string
+  /** Optional live estimate for the current editor settings. */
+  estimateCredits?: (modelId: string, settings?: { quality?: string; count?: number; seconds?: number }) => number
   showHeader?: boolean
   /** Visual treatment for the editor surface. */
   theme?: 'dark' | 'light'
@@ -248,6 +252,7 @@ export function ImageEditorPanel({
   initialVideoQuality = '',
   initialResolution = '1K',
   initialQuality = 'auto',
+  estimateCredits,
   showHeader = true,
   theme = 'dark',
 }: ImageEditorPanelProps) {
@@ -314,6 +319,14 @@ export function ImageEditorPanel({
   const selectedEditorModel = editorModelChoices.find((item) => item.id === selectedEditorModelId) ?? editorModelChoices[0]
   const activeEditorQuality = editorCapability === 'video' ? editorVideoQuality : editorQuality
   const setActiveEditorQuality = editorCapability === 'video' ? setEditorVideoQuality : setEditorQuality
+  const estimatedCredits = useMemo(() => {
+    const modelId = selectedEditorModel?.id || selectedEditorModelId
+    if (!modelId) return 0
+    const settings = editorCapability === 'video'
+      ? { quality: activeEditorQuality || undefined, count: 1, seconds: 8 }
+      : { quality: activeEditorQuality || undefined, count: 1 }
+    return estimateCredits?.(modelId, settings) ?? selectedEditorModel?.creditCost ?? 0
+  }, [activeEditorQuality, editorCapability, estimateCredits, selectedEditorModel?.creditCost, selectedEditorModel?.id, selectedEditorModelId])
   const editorResolutionOptions = useMemo(() => (
     selectedEditorModel?.resolutions?.length ? selectedEditorModel.resolutions : [initialResolution || '1K']
   ), [initialResolution, selectedEditorModel])
@@ -512,16 +525,35 @@ export function ImageEditorPanel({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code === 'Space') spacePressedRef.current = true
+      if (event.code !== 'Space') return
+      // Space is a native interaction key for selects, checkboxes, buttons and
+      // text fields.  Do not turn it into the canvas pan modifier while one of
+      // those controls is focused; otherwise selecting an editor parameter and
+      // then dragging can unexpectedly move the image.
+      const isInteractive = (target: EventTarget | null) => {
+        if (!(target instanceof HTMLElement)) return false
+        return Boolean(target.closest('input, textarea, select, button, [contenteditable="true"], [role="button"]'))
+      }
+      if (isInteractive(event.target) || isInteractive(document.activeElement)) {
+        spacePressedRef.current = false
+        return
+      }
+      event.preventDefault()
+      spacePressedRef.current = true
     }
     const handleKeyUp = (event: KeyboardEvent) => {
       if (event.code === 'Space') spacePressedRef.current = false
     }
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    const clearSpace = () => { spacePressedRef.current = false }
+    window.addEventListener('blur', clearSpace)
+    document.addEventListener('visibilitychange', clearSpace)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', clearSpace)
+      document.removeEventListener('visibilitychange', clearSpace)
     }
   }, [])
 
@@ -1156,7 +1188,13 @@ export function ImageEditorPanel({
             {operation !== 'outpaint' && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={clearMask} disabled={!hasMask}><Trash2 aria-hidden="true" /><span>清除标记</span></button>}
             {onSaveVersion && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={saveVersion} disabled={isSaving}><Save aria-hidden="true" /><span>{isSaving ? '保存中…' : '保存'}</span></button>}
           </div>
-          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit()}><WandSparkles aria-hidden="true" /><span>{operation === 'outpaint' ? '按新尺寸生成图片' : selectedMeta.submitLabel}</span></button>
+          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit()}>
+            <WandSparkles aria-hidden="true" />
+            <span className={styles.primaryActionCopy}>
+              <span>{operation === 'outpaint' ? '按新尺寸生成图片' : selectedMeta.submitLabel}</span>
+              <small>{estimatedCredits > 0 ? `预计消耗 ${estimatedCredits} 积分` : '预计消耗以任务账单为准'}</small>
+            </span>
+          </button>
         </div>
       </footer>
 

@@ -358,12 +358,15 @@
   font-size: 12px;
   font-weight: 540;
 }
-.operationButton svg { width: 16px; height: 16px; }
+.operationButton svg { width: 21px; height: 21px; padding: 3px; border: 1px solid var(--editor-border); border-radius: 6px; background: var(--editor-surface-soft); transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
+.operationButton:hover svg,
+.operationButton:focus-visible svg { border-color: var(--editor-border-strong); background: rgb(255 255 255 / 10%); }
 .operationButtonActive {
   border-color: rgb(199 243 232 / 52%);
   background: rgb(199 243 232 / 16%);
   box-shadow: inset 0 -2px 0 var(--editor-accent);
 }
+.operationButtonActive svg { border-color: rgb(199 243 232 / 46%); background: rgb(199 243 232 / 16%); color: var(--editor-accent); }
 .operationGuide {
   min-height: 46px;
   flex-direction: row;
@@ -464,7 +467,9 @@
 }
 .promptTextarea { min-height: 48px; }
 .footer { min-height: 58px; padding: 10px 16px; }
-.primaryAction { min-width: 126px; }
+.primaryAction { min-width: 150px; }
+.primaryActionCopy { display: inline-flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 1px; line-height: 1.2; }
+.primaryActionCopy small { color: inherit; font-size: 9px; font-weight: 520; opacity: .72; white-space: nowrap; }
 
 .panel[data-editor-theme='light'] {
   --editor-bg: #f8fafb;

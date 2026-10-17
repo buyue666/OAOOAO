@@ -1080,6 +1080,7 @@ export function ImageWorkspace() {
       resolutions: item.capabilities.resolutions,
       qualities: item.capabilities.qualities,
       qualityLabels: item.capabilities.qualityLabels,
+      creditCost: item.creditCost,
     }))
   }, [editorWork?.model, imageModelList, model?.id, videoModelList])
 
@@ -1510,6 +1511,11 @@ export function ImageWorkspace() {
           initialVideoQuality={defaultModels.videoQuality || videoModelList[0]?.capabilities.qualities?.[0] || '高清'}
           initialResolution={editorWork.resolution || resolution}
           initialQuality={editorWork.quality || quality}
+          estimateCredits={(modelId, settings = {}) => estimateCredits(modelId, {
+            quality: settings.quality,
+            count: settings.count ?? 1,
+            duration: settings.seconds ? `${settings.seconds} 秒` : undefined,
+          })}
           onSaveVersion={saveEditorVersion}
           onVersionSelect={(version) => {
             const next = stageSource.find((work) => work.id === version.id)
