@@ -692,7 +692,7 @@ export function ImageEditorPanel({
     const canvas = maskRef.current
     const basePrompt = prompt.trim() || selectedMeta.defaultPrompt
     const regionPrompt = operation !== 'outpaint' && maskRegions.length > 0
-      ? `请按照画面上的标注编号处理：${maskRegions.map((region) => region.prompt?.trim() ? `区域 ${region.id}：${region.prompt.trim()}` : `区域 ${region.id}`).join('；')}。提示词中的“区域 N”对应画面上同编号位置。`
+      ? `请按照画面上的标注编号处理：${maskRegions.map((region) => `${region.prompt?.trim() ? `区域 ${region.id}：${region.prompt.trim()}` : `区域 ${region.id}`}${region.referenceImageDataUrl ? '（附有该区域参考图）' : ''}`).join('；')}。提示词中的“区域 N”对应画面上同编号位置。`
       : ''
     const request: ImageEditRequest = {
       operation,
