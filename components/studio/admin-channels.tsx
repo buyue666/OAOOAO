@@ -944,7 +944,12 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
       ? profile.qualities.filter((value): value is string => typeof value === 'string')
       : qualityOptions.map(({ value }) => value)
   const maxBatchSize = Math.max(1, Math.min(20, Math.trunc(Number(profile?.maxBatchSize) || 1)))
-  const maxReferenceImages = Math.max(0, Math.min(16, Math.trunc(Number(profile?.maxReferenceImages) || 0)))
+  // Keep the editor aligned with the frontend fallback: an unconfigured
+  // reference-capable image binding currently accepts up to four references.
+  // Administrators can enter 0 explicitly to disable reference images.
+  const maxReferenceImages = profile?.maxReferenceImages !== undefined
+    ? Math.max(0, Math.min(16, Math.trunc(Number(profile.maxReferenceImages) || 0)))
+    : profile?.supportsReferenceImage === false ? 0 : 4
 
   const toggle = (key: string, current: string[], value: string) => {
     const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
