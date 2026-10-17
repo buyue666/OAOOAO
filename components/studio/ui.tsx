@@ -412,14 +412,17 @@ function useDialogBehavior(open: boolean, onClose: () => void) {
 export function Modal({ open, title, description, onClose, children, footer, className }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; className?: string }) {
   const containerRef = useDialogBehavior(open, onClose)
   if (!open) return null
-  return (
+  if (typeof document === 'undefined') return null
+  const portalRoot = document.querySelector<HTMLElement>('[data-studio-portal-root]') ?? document.body
+  return createPortal(
     <div className="studio-modal-backdrop motion-fade fixed inset-0 z-50 flex items-center justify-center bg-studio-ink/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <section ref={containerRef} tabIndex={-1} className={cn('studio-modal-surface lg-glass-overlay motion-panel flex max-h-[calc(100dvh-32px)] w-full max-w-lg flex-col overflow-hidden border border-border outline-none', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4"><div><h2 id="modal-title" className="text-base font-semibold tracking-[-0.01em] text-foreground">{title}</h2>{description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}</div><IconAction label="关闭" onClick={onClose}><X /></IconAction></div>
         <div className="min-h-0 overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="flex max-h-32 flex-wrap items-center justify-end gap-2 overflow-y-auto border-t border-border bg-muted/40 px-4 py-3 sm:px-5">{footer}</div>}
       </section>
-    </div>
+    </div>,
+    portalRoot,
   )
 }
 
