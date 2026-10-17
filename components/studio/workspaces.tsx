@@ -56,6 +56,7 @@ import { useServerWorks, useLibraryAssets } from '@/lib/studio/use-account-data'
 import { useVideoReferenceLibrary } from '@/lib/studio/use-video-reference-library'
 import type { StudioWork } from '@/lib/studio/account-api'
 import { createLibraryAsset } from '@/lib/studio/account-api'
+import { ModelIcon } from './model-icon'
 import { libraryAssetToReferenceAsset, mergeReferenceAssets, workToReferenceAsset } from '@/lib/studio/reference-assets'
 /**
  * 已选参考素材用**独立快照**保存（含地址），不再只存 id 后回到候选池反查。
@@ -1181,7 +1182,7 @@ export function ImageWorkspace() {
       </ParamSection>
 
       <ParamSection title="模型">
-        <SelectField label="图像模型" value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))} />
+        <SelectField label="图像模型" value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
         {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">模型与计费以当前账户配置为准；实际扣费以任务结果为准。</p>}
       </ParamSection>
@@ -1949,7 +1950,7 @@ export function VideoWorkspace() {
       </ParamSection>
 
       <ParamSection title="模型">
-        <SelectField label="视频模型" value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))} />
+        <SelectField label="视频模型" value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
       </ParamSection>
 

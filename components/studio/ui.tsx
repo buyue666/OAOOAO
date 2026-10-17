@@ -167,7 +167,7 @@ export function SearchField({ value, onChange, placeholder = '搜索' }: { value
   )
 }
 
-export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }>; className?: string; hint?: string; disabled?: boolean }) {
+export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode }>; className?: string; hint?: string; disabled?: boolean }) {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [menuStyle, setMenuStyle] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
@@ -241,7 +241,10 @@ export function SelectField({ label, value, onChange, options, className, hint, 
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpen((current) => !current) }
           }}
         >
-          <span className={cn('min-w-0 truncate', !selected && 'text-muted-foreground')}>{selected?.label || '暂无选项'}</span>
+          <span className={cn('flex min-w-0 items-center gap-2 truncate', !selected && 'text-muted-foreground')}>
+            {selected?.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{selected.icon}</span>}
+            <span className="truncate">{selected?.label || '暂无选项'}</span>
+          </span>
           <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-180 text-studio-accent')} aria-hidden="true" />
         </button>
         {open && menuStyle && createPortal(
@@ -254,7 +257,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
           >
             {options.map((option) => {
               const active = option.value === value
-              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}><span className="min-w-0 truncate">{option.label}</span>{active && <Check className="size-3.5 shrink-0" aria-hidden="true" />}</button>
+              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 truncate">{option.label}</span>{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
             })}
           </div>,
           document.body,

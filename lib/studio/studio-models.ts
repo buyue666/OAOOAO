@@ -68,7 +68,7 @@ const kindByCapability: Record<SessionLogicalModel['capability'], StudioMode> = 
 /** 逻辑模型 ID 在前台保持不变，这样任务请求提交的就是后端认识的标识。 */
 export function modelsFromSession(settings: SessionGenerationSettings | undefined): ModelConfig[] {
   const logicalModels = settings?.logicalModels ?? []
-  return logicalModels
+  const candidates = logicalModels
     .filter((model) => model.enabled && model.bindings.some((binding) => binding.enabled))
     .flatMap((model) => {
       const bindings = model.bindings.filter((binding) => binding.enabled)
@@ -76,6 +76,17 @@ export function modelsFromSession(settings: SessionGenerationSettings | undefine
       // 保留逻辑模型作为默认/兜底入口，同时把每个绑定别名作为独立可售入口展示。
       return [toModelConfig(model, settings), ...aliasedBindings.map((binding) => toModelConfig(model, settings, binding))]
     })
+
+  // 一个逻辑模型的首个绑定也可能带有 requestAlias。这样上面的“逻辑模型兜底项”
+  // 与该绑定别名会得到完全相同的 id，过去会在前台下拉里出现两次。请求名是后端
+  // 真正识别模型的唯一键，因此只保留第一次出现的配置，同时保留不同别名作为独立入口。
+  const seen = new Set<string>()
+  return candidates.filter((model) => {
+    const key = `${model.capability}:${model.id.trim().toLowerCase()}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationSettings, binding?: SessionLogicalModel['bindings'][number]): ModelConfig {
