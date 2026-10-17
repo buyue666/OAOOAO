@@ -245,11 +245,11 @@
 }
 .mediaFrame {
   max-width: min(100%, 820px);
-  max-height: min(100%, 650px);
+  max-height: min(650px, calc(100vh - 620px));
   border-radius: 7px;
   box-shadow: 0 22px 64px rgb(0 0 0 / 46%);
 }
-.image { width: auto; height: auto; max-width: min(100%, 820px); max-height: min(100%, 650px); }
+.image { width: auto; height: auto; max-width: min(100%, 820px); max-height: min(650px, calc(100vh - 620px)); }
 .floatingTools {
   top: auto;
   bottom: 17px;
@@ -304,5 +304,7 @@
   .operationGuideTitle { width: 100%; }
   .operationGuide p { width: 100%; }
   .stage { min-height: 270px; padding-inline: 12px; }
+  .mediaFrame,
+  .image { max-height: min(420px, calc(100vh - 430px)); }
   .floatingTools { max-width: calc(100% - 20px); bottom: 10px; }
 }
