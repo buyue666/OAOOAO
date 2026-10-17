@@ -756,7 +756,7 @@ export function ImageEditorPanel({
                       aria-label={`编辑区域 ${region.id}`}
                       title={region.prompt ? `区域 ${region.id}：${region.prompt}` : `编辑区域 ${region.id}`}
                     >{region.id}</button>
-                    {editingRegionId === region.id && <span className={`${styles.regionComposer} ${closingRegionId === region.id ? styles.regionComposerClosing : ''}`} role="group" aria-label={`编辑区域 ${region.id}`}>
+                    {editingRegionId === region.id && <span className={`${styles.regionComposer} ${region.x / Math.max(1, maskRef.current?.width || 1) > 0.62 ? styles.regionComposerRight : ''} ${region.y / Math.max(1, maskRef.current?.height || 1) > 0.62 ? styles.regionComposerAbove : ''} ${closingRegionId === region.id ? styles.regionComposerClosing : ''}`} role="group" aria-label={`编辑区域 ${region.id}`}>
                       <span className={styles.regionComposerPrefix} aria-hidden="true">＋</span>
                       <input
                         autoFocus

@@ -185,6 +185,9 @@
   animation: regionComposerIn 170ms cubic-bezier(.22, .8, .3, 1) both;
 }
 .regionComposerClosing { animation: regionComposerOut 160ms ease both; pointer-events: none; }
+.regionComposerRight { left: auto; right: 11px; transform: translateX(8px); transform-origin: right center; }
+.regionComposerAbove { top: auto; bottom: calc(100% + 8px); transform-origin: left bottom; }
+.regionComposerRight.regionComposerAbove { transform-origin: right bottom; }
 .regionComposerPrefix { flex: 0 0 auto; color: #182029; font-size: 22px; line-height: 1; }
 .regionComposer input {
   min-width: 0;
