@@ -578,7 +578,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
     })
   }
 
-  /** 将当前编辑模型的能力参数同步到勾选的其他模型，保留各自渠道、别名、价格和图标。 */
+  /** 将当前编辑模型的生成参数同步到勾选的其他模型，保留各自能力、渠道、别名、价格和图标。 */
   const copySelectedModelParameters = () => {
     const source = selectedModel || models.find((model) => model.id === selectedModelId)
     const targetIds = [...selectedModelIds].filter((id) => id !== source?.id)
@@ -587,17 +587,21 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
       if (!targetIds.includes(model.id)) return model
       return {
         ...model,
-        capability: source.capability,
+        // 能力类型是模型的路由身份，不属于可批量复制的生成参数；
+        // 保留目标模型自己的 text/image/video/audio 类型，避免误把跨能力模型改坏。
         bindings: model.bindings.map((binding, index) => {
           const sourceBinding = source.bindings.find((candidate) => candidate.channelId === binding.channelId)
             || source.bindings[index]
-          return sourceBinding?.capabilityProfile
-            ? { ...binding, capabilityProfile: structuredClone(sourceBinding.capabilityProfile) }
-            : binding
+          // 同步应当是精确复制：源模型没有配置某项能力参数时，
+          // 目标模型也要清掉旧配置，不能因为字段缺失而继续沿用旧值。
+          const nextBinding = { ...binding }
+          if (sourceBinding?.capabilityProfile) nextBinding.capabilityProfile = structuredClone(sourceBinding.capabilityProfile)
+          else delete nextBinding.capabilityProfile
+          return nextBinding
         }),
       }
     }))
-    setBatchNotice(`已将「${source.name || source.id}」的模型参数同步到 ${targetIds.length} 个勾选模型，保存后生效`)
+    setBatchNotice(`已将「${source.name || source.id}」的生成参数同步到 ${targetIds.length} 个勾选模型，保留各自模型能力，保存后生效`)
   }
 
   /**
@@ -731,7 +735,12 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                 onClick={() => setSelectedModelId(model.id)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedModelId(model.id) } }}
+                onKeyDown={(event) => {
+                  // 复选框自身是可交互控件；只有卡片本身获得焦点时才响应
+                  // 空格/回车，避免键盘操作复选框被父级 preventDefault 拦截。
+                  if (event.target !== event.currentTarget) return
+                  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedModelId(model.id) }
+                }}
                 className={cn('relative min-w-0 cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors', selectedModel?.id === model.id ? 'border-studio-accent/55 bg-studio-accent/10' : 'border-border bg-card/45 hover:bg-muted')}
               >
                   <span className="flex items-start justify-between gap-2">
@@ -772,7 +781,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     variant="secondary"
                     size="sm"
                     disabled={selectedModelIds.size < 2}
-                    title={selectedModelIds.size < 2 ? '先在模型卡片左上角至少勾选两个模型' : '把当前编辑模型的能力参数复制到其他勾选模型'}
+                    title={selectedModelIds.size < 2 ? '先在模型卡片左上角至少勾选两个模型' : '把当前编辑模型的生成参数复制到其他勾选模型'}
                     onClick={() => copySelectedModelParameters()}
                   >批量更改所选模型参数</ControlButton>
                   <ControlButton variant="ghost" size="sm" onClick={() => setModels((current) => current.filter((item) => item.id !== model.id))} aria-label={`删除 ${model.id}`}><Trash2 className="size-3.5" /></ControlButton>
