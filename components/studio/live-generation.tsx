@@ -232,7 +232,7 @@ function pointsSummary(task: GenerationTaskView): string {
   return task.pointsRefunded ? '未产生积分消耗 · 已退回' : '未产生积分消耗'
 }
 
-export function GenerationTaskCard({ task, compact = false }: { task: GenerationTaskView; compact?: boolean }) {
+export function GenerationTaskCard({ task, compact = false, onSelect }: { task: GenerationTaskView; compact?: boolean; onSelect?: (task: GenerationTaskView) => void }) {
   const unconfirmed = Boolean(task.unconfirmed) || task.id.startsWith('unconfirmed:')
   const meta = unconfirmed ? { label: '提交未确认', tone: 'warning' as Tone } : taskStatusMeta(task.status)
   const active = isActiveStatus(task.status) && !unconfirmed
@@ -253,7 +253,9 @@ export function GenerationTaskCard({ task, compact = false }: { task: Generation
     <article className="studio-surface flex flex-col gap-3 p-3" data-unconfirmed={unconfirmed ? 'true' : undefined}>
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-foreground">{task.title}</p>
+          {onSelect ? (
+            <button type="button" onClick={() => onSelect(task)} className="block max-w-full truncate text-left text-xs font-medium text-foreground hover:text-studio-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent" title="在预览中查看此任务结果">{task.title}</button>
+          ) : <p className="truncate text-xs font-medium text-foreground">{task.title}</p>}
           <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{task.model || '未指定模型'} · {task.id.slice(0, 8)}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -266,7 +268,7 @@ export function GenerationTaskCard({ task, compact = false }: { task: Generation
       {task.media.length > 0 && (
         <div className={cn('grid gap-2', task.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
           {task.media.slice(0, compact ? 2 : 4).map((item, index) => (
-            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className={compact ? 'h-24 rounded-md' : 'h-40 rounded-md'} />
+            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full rounded-md [&_img]:object-contain [&_video]:object-contain" />
           ))}
         </div>
       )}
@@ -314,7 +316,7 @@ export function GenerationTaskCard({ task, compact = false }: { task: Generation
 /**
  * 真实生成任务列表。按类型过滤后展示，并包含刷新、加载、空数据与错误状态。
  */
-export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint }: { kinds?: GenerationKind[]; limit?: number; compact?: boolean; emptyHint?: string }) {
+export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint, onSelectTask }: { kinds?: GenerationKind[]; limit?: number; compact?: boolean; emptyHint?: string; onSelectTask?: (task: GenerationTaskView) => void }) {
   const { tasks, loading, refresh, queryUnavailable } = useGeneration()
   const matching = useMemo(() => kinds?.length ? tasks.filter((task) => kinds.includes(task.kind)) : tasks, [kinds, tasks])
   const activeCount = matching.filter((task) => isActiveStatus(task.status)).length
@@ -339,7 +341,7 @@ export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint }: {
         </div>
       )}
 
-      {visible.map((task) => <GenerationTaskCard key={task.id} task={task} compact={compact} />)}
+      {visible.map((task) => <GenerationTaskCard key={task.id} task={task} compact={compact} onSelect={onSelectTask} />)}
 
       {queryUnavailable && <QueryUnavailableNotice />}
       {!loading && !queryUnavailable && !visible.length && (

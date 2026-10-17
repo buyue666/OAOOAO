@@ -18,6 +18,7 @@ import {
   List,
   LoaderCircle,
   MoreHorizontal,
+  Pencil,
   Play,
   RefreshCw,
   Trash2,
@@ -50,6 +51,7 @@ import {
   createLibraryAsset,
   deleteLibraryAsset,
   listAllWorks,
+  renameLibraryAsset,
   readImageSize,
   uploadPersistentAsset,
   type GenerationHistoryItem,
@@ -143,6 +145,9 @@ export function AssetsPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [notice, setNotice] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [renameId, setRenameId] = useState<string | null>(null)
+  const [renameTitle, setRenameTitle] = useState('')
+  const [renaming, setRenaming] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadCategory, setUploadCategory] = useState<AssetCategory>('general')
   const [projectBusy, setProjectBusy] = useState(false)
@@ -314,6 +319,21 @@ export function AssetsPage() {
     setNotice('生成结果属于「我的作品」，请在作品页删除。素材库里删除的是上传的素材。')
   }
 
+  async function renameAsset() {
+    if (!renameId || !renameTitle.trim()) return
+    setRenaming(true)
+    try {
+      await renameLibraryAsset(renameId, renameTitle)
+      bumpAccountData()
+      setRenameId(null)
+      setNotice('素材名称已更新。')
+    } catch (reason) {
+      setNotice(`重命名失败：${reason instanceof Error ? reason.message : '未知错误'}`)
+    } finally {
+      setRenaming(false)
+    }
+  }
+
   const deleteAssetView = mergedAssets.find((asset) => asset.id === deleteId)
 
   return (
@@ -376,7 +396,7 @@ export function AssetsPage() {
         />
       ) : view === 'grid' ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visible.map((asset) => <AssetCard key={asset.id} asset={asset} selected={selected.includes(asset.id)} onToggle={() => toggle(asset.id)} onDelete={() => setDeleteId(asset.id)} />)}
+          {visible.map((asset) => <AssetCard key={asset.id} asset={asset} selected={selected.includes(asset.id)} onToggle={() => toggle(asset.id)} onDelete={() => setDeleteId(asset.id)} onRename={serverLibrary.assets.some((item) => item.id === asset.id) ? () => { setRenameId(asset.id); setRenameTitle(asset.title) } : undefined} />)}
         </div>
       ) : (
         <div className="flex flex-col studio-surface">
@@ -387,7 +407,7 @@ export function AssetsPage() {
               <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-foreground">{asset.title}</p><p className="mt-1 truncate text-xs text-muted-foreground">{asset.tags.join(' · ')}</p></div>
               <span className="hidden text-xs text-muted-foreground sm:block">{asset.size}</span>
               <StatusBadge tone={asset.status === '处理中' ? 'accent' : 'neutral'}>{asset.status}</StatusBadge>
-              <AssetMenu title={asset.title} onDelete={() => setDeleteId(asset.id)} />
+              <AssetMenu title={asset.title} onDelete={() => setDeleteId(asset.id)} onRename={serverLibrary.assets.some((item) => item.id === asset.id) ? () => { setRenameId(asset.id); setRenameTitle(asset.title) } : undefined} />
             </div>
           ))}
         </div>
@@ -410,15 +430,33 @@ export function AssetsPage() {
           只想解除本项目的使用请用「移除引用」。
         </Notice>
       </Modal>
+      <Modal
+        open={Boolean(renameId)}
+        onClose={() => { if (!renaming) setRenameId(null) }}
+        title="重命名素材"
+        description="只修改素材在创作资产中的显示名称。"
+        footer={(
+          <>
+            <ControlButton variant="ghost" disabled={renaming} onClick={() => setRenameId(null)}>取消</ControlButton>
+            <ControlButton variant="primary" disabled={renaming || !renameTitle.trim()} onClick={() => void renameAsset()}>{renaming ? '保存中…' : '保存名称'}</ControlButton>
+          </>
+        )}
+      >
+        <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          名称
+          <input autoFocus value={renameTitle} maxLength={250} onChange={(event) => setRenameTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void renameAsset() } }} className="studio-field w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
+        </label>
+      </Modal>
     </div>
   )
 }
 
-function AssetCard({ asset, selected, onToggle, onDelete }: {
+function AssetCard({ asset, selected, onToggle, onDelete, onRename }: {
   asset: ReturnType<typeof useStudio>['state']['assets'][number]
   selected: boolean
   onToggle: () => void
   onDelete: () => void
+  onRename?: () => void
 }) {
   return (
     <article className={selected ? 'studio-surface overflow-hidden border-2 border-studio-accent shadow-sm' : 'studio-surface studio-surface-interactive overflow-hidden'}>
@@ -427,7 +465,7 @@ function AssetCard({ asset, selected, onToggle, onDelete }: {
         <MediaThumb src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="aspect-[4/3]" overlay={asset.kind === 'video' ? <span className="absolute bottom-2 left-2 rounded bg-studio-ink/65 px-1.5 py-0.5 text-[10px] text-studio-ink-foreground"><Play className="mr-1 inline size-3" />{asset.duration}</span> : undefined} />
       </div>
       <div className="p-3">
-        <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-medium text-foreground">{asset.title}</p><p className="mt-1 text-[11px] text-muted-foreground">{asset.dimensions ?? asset.duration ?? asset.size}</p></div><AssetMenu title={asset.title} onDelete={onDelete} /></div>
+        <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-medium text-foreground">{asset.title}</p><p className="mt-1 text-[11px] text-muted-foreground">{asset.dimensions ?? asset.duration ?? asset.size}</p></div><AssetMenu title={asset.title} onDelete={onDelete} onRename={onRename} /></div>
         <div className="mt-3 flex flex-wrap gap-1">{[asset.category && asset.category !== 'general' ? assetCategoryLabels[asset.category] : '', ...asset.tags].filter(Boolean).slice(0, 3).map((tag) => <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tag}</span>)}</div>
         <div className="mt-3 flex items-center justify-between gap-2"><StatusBadge tone={asset.status === '处理中' ? 'accent' : 'neutral'}>{asset.status}</StatusBadge><span className="truncate text-[10px] text-muted-foreground">{asset.referencedBy.length ? `${asset.referencedBy.length} 处引用` : '未引用'}</span></div>
       </div>
@@ -435,7 +473,7 @@ function AssetCard({ asset, selected, onToggle, onDelete }: {
   )
 }
 
-function AssetMenu({ title, onDelete }: { title: string; onDelete: () => void }) {
+function AssetMenu({ title, onDelete, onRename }: { title: string; onDelete: () => void; onRename?: () => void }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -444,7 +482,8 @@ function AssetMenu({ title, onDelete }: { title: string; onDelete: () => void })
         <MoreHorizontal />
       </IconAction>
       {open && (
-        <div className="absolute right-0 top-9 z-20 w-28 rounded-lg border border-border bg-popover p-1 shadow-lg">
+        <div className="absolute right-0 top-9 z-20 w-32 rounded-lg border border-border bg-popover p-1 shadow-lg">
+          {onRename && <button type="button" onClick={() => { setOpen(false); onRename() }} className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil className="size-3.5" />重命名</button>}
           <button
             type="button"
             onClick={() => {
@@ -621,7 +660,7 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
       {item.assets.length > 0 && (
         <div className={cn('grid gap-2', item.assets.length > 1 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:max-w-xs')}>
           {item.assets.map((asset, index) => (
-            <MediaThumb key={`${asset.url}-${index}`} src={asset.url} poster={asset.poster} alt={`${item.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="h-28 rounded-md" />
+            <MediaThumb key={`${asset.url}-${index}`} src={asset.url} poster={asset.poster} alt={`${item.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full rounded-md [&_img]:object-contain [&_video]:object-contain" />
           ))}
         </div>
       )}

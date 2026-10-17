@@ -183,7 +183,7 @@ function WorkCard({ work }: { work: StudioWork }) {
         kind={work.kind === 'video' ? 'video' : 'image'}
         alt={workTitle}
         fallback={work.fallback}
-        className="aspect-[4/3]"
+        className="aspect-square [&_img]:object-contain [&_video]:object-contain"
         overlay={<div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-studio-ink/80 to-transparent px-3 pb-2.5 pt-8"><StatusBadge solid tone="success">已完成</StatusBadge><span className="text-[10px] text-studio-ink-muted">{ratio}{resultAssets.length > 1 ? ` · ${resultAssets.length} 张` : ''}</span></div>}
       />}
       <div className="p-3">
