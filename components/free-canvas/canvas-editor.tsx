@@ -159,6 +159,8 @@ function CanvasWorkspace() {
   const handleImageEditSubmit = useCallback(async (request: ImageEditRequest) => {
     const store = useCanvasStore.getState()
     if (!store.projectId) throw new Error('请先保存画布，再提交图片编辑')
+    const sourceNode = imageEditor ? canvasNodes.find((node) => node.id === imageEditor.nodeId) : undefined
+    const sourceRatio = sourceNode?.type === 'generation' ? sourceNode.data.ratio : undefined
     const source = request.imageUrl.startsWith('data:')
       ? { type: 'image', dataUrl: request.imageUrl }
       : { type: 'image', url: request.imageUrl }
@@ -184,6 +186,7 @@ function CanvasWorkspace() {
     await generationRuntime.createImage({
       prompt,
       kind: 'edit',
+      ...(request.ratio || sourceRatio ? { ratio: request.ratio || sourceRatio } : {}),
       references: [source],
       edit: {
         operation: request.operation as Exclude<ImageEditOperation, 'to-video'>,
@@ -194,7 +197,7 @@ function CanvasWorkspace() {
       title: `编辑：${imageEditor?.title || '图片'}`,
     })
     store.setNotice('已提交图片编辑任务，可在任务记录查看结果')
-  }, [generationRuntime, imageEditor?.title])
+  }, [canvasNodes, generationRuntime, imageEditor])
 
   const handleSaveEditorVersion = useCallback(async (imageUrl: string) => {
     const target = useCanvasStore.getState().imageEditor

@@ -1063,7 +1063,7 @@ export function ImageWorkspace() {
     await generation.createImage({
       prompt: request.prompt,
       model: work.model || model?.id,
-      ratio: work.ratio || ratio,
+      ratio: request.ratio || work.ratio || ratio,
       resolution,
       quality,
       kind: 'edit',

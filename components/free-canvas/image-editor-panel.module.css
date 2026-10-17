@@ -138,6 +138,7 @@
 .maskCanvasRect { cursor: crosshair; }
 .maskCanvasMove { cursor: grab; }
 .maskCanvasMove:active { cursor: grabbing; }
+.maskCanvasHidden { opacity: 0; }
 .draftRect { position: absolute; border: 1px dashed #8fe9d5; background: rgb(199 243 232 / 16%); pointer-events: none; }
 .regionMarkers { position: absolute; inset: 0; pointer-events: none; }
 .regionMarker {
@@ -182,6 +183,8 @@
 .sizeControl { display: inline-flex; align-items: center; gap: 6px; padding: 0 7px; color: var(--editor-muted); font-size: 10px; white-space: nowrap; }
 .sizeControl input { width: 74px; accent-color: var(--editor-accent); }
 .colorControl { width: 23px; height: 23px; padding: 0; border: 1px solid var(--editor-border-strong); border-radius: 7px; background: transparent; cursor: pointer; }
+.zoomControl { display: inline-flex; min-height: 31px; align-items: center; gap: 1px; color: var(--editor-muted); font-size: 10px; white-space: nowrap; }
+.zoomControl > span { min-width: 37px; text-align: center; }
 
 .promptArea { display: flex; min-height: 132px; flex-direction: column; gap: 8px; border-top: 1px solid var(--editor-border); background: var(--editor-surface); padding: 12px 14px; }
 .promptLabel { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--editor-muted); font-size: 11px; }
@@ -203,6 +206,12 @@
 .primaryAction:hover { border-color: #e4fff8; background: #e4fff8; color: #102322; }
 .secondaryAction { border-color: var(--editor-border); background: var(--editor-surface-soft); }
 .status { max-width: 210px; overflow: hidden; color: var(--editor-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.confirmBackdrop { position: absolute; z-index: 20; inset: 0; display: flex; align-items: center; justify-content: center; background: rgb(7 10 12 / 48%); padding: 20px; }
+.confirmDialog { width: min(360px, 100%); overflow: hidden; border: 1px solid var(--editor-border-strong); border-radius: 14px; background: var(--editor-surface); box-shadow: 0 24px 70px rgb(0 0 0 / 34%); color: var(--editor-text); }
+.confirmDialogHeader { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--editor-border); padding: 10px 12px 10px 16px; font-size: 13px; }
+.confirmThumbnail { display: block; width: calc(100% - 32px); height: 150px; margin: 16px; border-radius: 8px; background: var(--editor-surface-soft); object-fit: contain; }
+.confirmMessage { margin: 0; padding: 0 16px; color: var(--editor-muted); font-size: 12px; line-height: 1.55; }
+.confirmActions { display: flex; justify-content: flex-end; gap: 8px; padding: 16px; }
 
 @media (max-width: 640px) {
   .panel { min-width: 0; width: 100%; }
@@ -253,6 +262,34 @@
 .operationGuideTitle { flex: 0 0 auto; min-width: 130px; }
 .operationGuide p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operationGuideHint { display: none; }
+.outpaintRatioBar {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--editor-border);
+  background: var(--editor-surface);
+  padding: 7px 16px;
+}
+.outpaintRatioLabel { flex: 0 0 auto; color: var(--editor-muted); font-size: 11px; font-weight: 650; }
+.outpaintRatioOptions { display: flex; min-width: 0; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.outpaintRatioOptions::-webkit-scrollbar { display: none; }
+.outpaintRatioButton {
+  min-height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--editor-border);
+  border-radius: 7px;
+  background: var(--editor-surface-soft);
+  padding: 0 13px;
+  color: var(--editor-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+.outpaintRatioButton:hover,
+.outpaintRatioButton:focus-visible { border-color: var(--editor-border-strong); color: var(--editor-text); outline: none; }
+.outpaintRatioButtonActive { border-color: var(--editor-accent); background: rgb(21 125 115 / 11%); color: var(--editor-accent); font-weight: 680; }
 .workspace { grid-template-rows: minmax(360px, 1fr) auto; }
 .stage {
   min-height: 360px;
@@ -268,6 +305,21 @@
   box-shadow: 0 22px 64px rgb(0 0 0 / 46%);
 }
 .image { width: auto; height: auto; max-width: min(100%, 820px); max-height: min(650px, calc(100vh - 530px)); }
+.outpaintMediaFrame {
+  width: min(100%, 820px);
+  aspect-ratio: var(--outpaint-aspect, 1);
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgb(18 28 36 / 28%);
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #f2f4f6 25%, transparent 25%), linear-gradient(-45deg, #f2f4f6 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f2f4f6 75%), linear-gradient(-45deg, transparent 75%, #f2f4f6 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+}
+.outpaintMediaFrame::before { position: absolute; inset: 10px; border: 1px dashed rgb(21 125 115 / 40%); content: ''; pointer-events: none; }
+.outpaintMediaFrame::after { position: absolute; right: 13px; bottom: 10px; z-index: 3; border-radius: 4px; background: rgb(255 255 255 / 90%); padding: 3px 6px; color: #157d73; content: '扩展画布'; font-size: 10px; font-weight: 650; }
+.outpaintMediaFrame .image { z-index: 1; max-width: 86%; max-height: 86%; border: 1px solid rgb(18 28 36 / 18%); border-radius: 4px; box-shadow: 0 10px 28px rgb(18 28 36 / 20%); object-fit: contain; }
+.outpaintMaskCanvas { display: none; }
 .floatingTools {
   top: 16px;
   bottom: auto;
@@ -320,6 +372,8 @@
   background-color: #f1f3f5;
   background-image: radial-gradient(rgb(20 31 40 / 11%) 1px, transparent 1px);
 }
+.panel[data-editor-theme='light'] .outpaintRatioBar { background: #fff; }
+.panel[data-editor-theme='light'] .outpaintMediaFrame { border-color: rgb(21 125 115 / 44%); background-color: #fff; }
 .panel[data-editor-theme='light'] .mediaFrame { border-color: rgb(18 28 36 / 16%); background: #fff; box-shadow: 0 18px 46px rgb(18 28 36 / 15%); }
 .panel[data-editor-theme='light'] .floatingTools {
   --editor-border: rgb(255 255 255 / 18%);
@@ -341,6 +395,8 @@
   .operationGuide { align-items: flex-start; flex-direction: column; gap: 2px; }
   .operationGuideTitle { width: 100%; }
   .operationGuide p { width: 100%; }
+  .outpaintRatioBar { align-items: flex-start; flex-direction: column; gap: 5px; padding: 8px 12px; }
+  .outpaintRatioOptions { width: 100%; }
   .stage { min-height: 270px; padding: 68px 12px 18px; }
   .mediaFrame,
   .image { max-height: min(420px, calc(100vh - 470px)); }

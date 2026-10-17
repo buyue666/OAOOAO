@@ -1,12 +1,15 @@
 'use client'
 
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Eraser,
   Expand,
+  Eye,
+  EyeOff,
   GripVertical,
   Layers3,
+  Maximize2,
   Minus,
   MousePointer2,
   Paintbrush,
@@ -19,6 +22,8 @@ import {
   WandSparkles,
   X,
   Save,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import styles from './image-editor-panel.module.css'
 
@@ -31,6 +36,8 @@ export interface ImageEditRequest {
   maskDataUrl?: string
   imageUrl: string
   brushSize: number
+  /** Target output ratio for outpaint; omitted means preserve the source ratio. */
+  ratio?: '1:1' | '4:3' | '16:9' | '9:16'
 }
 
 export interface ImageEditorVersion {
@@ -66,6 +73,16 @@ type Point = { x: number; y: number }
 type Rect = { x: number; y: number; width: number; height: number }
 type MaskRegion = { id: number; x: number; y: number }
 type MaskSnapshot = { dataUrl: string; regions: MaskRegion[] }
+type PanPoint = { x: number; y: number }
+type OutpaintRatio = 'original' | '1:1' | '4:3' | '16:9' | '9:16'
+
+const outpaintRatioOptions: Array<{ value: OutpaintRatio; label: string; width?: number; height?: number }> = [
+  { value: 'original', label: '原比例' },
+  { value: '1:1', label: '1:1', width: 1, height: 1 },
+  { value: '4:3', label: '4:3', width: 4, height: 3 },
+  { value: '16:9', label: '16:9', width: 16, height: 9 },
+  { value: '9:16', label: '9:16', width: 9, height: 16 },
+]
 
 const operations: Array<{ value: ImageEditOperation; label: string; icon: typeof Sparkles }> = [
   { value: 'inpaint', label: '标记改图', icon: WandSparkles },
@@ -112,12 +129,12 @@ const operationMeta: Record<ImageEditOperation, OperationMeta> = {
     maskHint: '橡皮工具会从蒙版中减去区域，适合精细调整',
   },
   outpaint: {
-    guide: '扩展画布边缘并补全画面，适合横幅、封面和社交媒体比例。',
+    guide: '选择新的画幅比例，原图会居中放入扩展画布，再由模型补全留白区域。',
     placeholder: '例如：向左右扩展画面，延续天空和建筑，主体保持原位',
     defaultPrompt: '向画布边缘自然扩展，延续原图的光影、色彩和透视',
     status: '已切换到扩图，描述需要扩展的方向和内容',
     submitLabel: '生成扩图',
-    maskHint: '可用画笔标记需要优先补全的边缘',
+    maskHint: '画布中的虚线区域是待补全的扩展范围',
   },
   enhance: {
     guide: '提升清晰度、细节和纹理，同时尽量保持原图构图与主体不变。',
@@ -186,6 +203,9 @@ export function ImageEditorPanel({
   const historyIndexRef = useRef(-1)
   const drawingRef = useRef(false)
   const startPointRef = useRef<Point | null>(null)
+  const panningRef = useRef(false)
+  const panStartRef = useRef<Point | null>(null)
+  const panOriginRef = useRef<PanPoint>({ x: 0, y: 0 })
   const nextRegionIdRef = useRef(1)
   const maskRegionsRef = useRef<MaskRegion[]>([])
   const [operation, setOperation] = useState<ImageEditOperation>(initialOperation)
@@ -195,6 +215,11 @@ export function ImageEditorPanel({
   const [brushColor, setBrushColor] = useState('#8fe9d5')
   const [maskRevision, setMaskRevision] = useState(0)
   const [maskRegions, setMaskRegions] = useState<MaskRegion[]>([])
+  const [outpaintRatio, setOutpaintRatio] = useState<OutpaintRatio>('original')
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState<PanPoint>({ x: 0, y: 0 })
+  const [showMarkers, setShowMarkers] = useState(true)
+  const [hiddenSubmitConfirm, setHiddenSubmitConfirm] = useState(false)
   const [draftRect, setDraftRect] = useState<Rect | null>(null)
   const [status, setStatus] = useState(operationMeta[initialOperation].status)
   const [isSaving, setIsSaving] = useState(false)
@@ -203,6 +228,22 @@ export function ImageEditorPanel({
   const canUndo = historyIndexRef.current > 0
   const canRedo = historyIndexRef.current >= 0 && historyIndexRef.current < historyRef.current.length - 1
   const selectedMeta = operationMeta[operation]
+
+  const originalAspectRatio = useMemo(() => {
+    const image = imageRef.current
+    return image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 1
+  }, [imageSrc, maskRevision])
+  const outpaintAspectRatio = useMemo(() => {
+    const selected = outpaintRatioOptions.find((option) => option.value === outpaintRatio)
+    return selected?.width && selected.height ? selected.width / selected.height : originalAspectRatio
+  }, [originalAspectRatio, outpaintRatio])
+  const outpaintFrameStyle = operation === 'outpaint'
+    ? { '--outpaint-aspect': `${outpaintAspectRatio}` } as CSSProperties
+    : undefined
+  const mediaFrameStyle: CSSProperties = {
+    ...(outpaintFrameStyle ?? {}),
+    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+  }
 
   const updateMaskRegions = useCallback((next: MaskRegion[]) => {
     maskRegionsRef.current = next
@@ -222,6 +263,9 @@ export function ImageEditorPanel({
     historyIndexRef.current = 0
     nextRegionIdRef.current = 1
     updateMaskRegions([])
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+    setShowMarkers(true)
     setMaskRevision((revision) => revision + 1)
     setDraftRect(null)
   }, [updateMaskRegions])
@@ -303,6 +347,20 @@ export function ImageEditorPanel({
     }
   }, [])
 
+  const adjustZoom = (next: number) => {
+    setZoom(Math.min(2, Math.max(0.5, Number(next.toFixed(2)))))
+  }
+
+  const resetView = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
+  const handleWheel = (event: ReactWheelEvent<HTMLElement>) => {
+    event.preventDefault()
+    adjustZoom(zoom + (event.deltaY < 0 ? 0.1 : -0.1))
+  }
+
   const drawPoint = useCallback((point: Point) => {
     const canvas = maskRef.current
     const context = canvas?.getContext('2d')
@@ -324,8 +382,15 @@ export function ImageEditorPanel({
   }, [brushColor, brushSize, tool])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (tool === 'move') {
+      event.currentTarget.setPointerCapture(event.pointerId)
+      panningRef.current = true
+      panStartRef.current = { x: event.clientX, y: event.clientY }
+      panOriginRef.current = pan
+      return
+    }
     const point = pointFromEvent(event)
-    if (!point || tool === 'move') return
+    if (!point) return
     event.currentTarget.setPointerCapture(event.pointerId)
     drawingRef.current = true
     startPointRef.current = point
@@ -360,6 +425,13 @@ export function ImageEditorPanel({
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (panningRef.current && panStartRef.current) {
+      setPan({
+        x: panOriginRef.current.x + event.clientX - panStartRef.current.x,
+        y: panOriginRef.current.y + event.clientY - panStartRef.current.y,
+      })
+      return
+    }
     if (!drawingRef.current) return
     const point = pointFromEvent(event)
     const start = startPointRef.current
@@ -372,6 +444,11 @@ export function ImageEditorPanel({
   }
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (panningRef.current) {
+      panningRef.current = false
+      panStartRef.current = null
+      return
+    }
     if (!drawingRef.current) return
     drawingRef.current = false
     const point = pointFromEvent(event)
@@ -402,22 +479,29 @@ export function ImageEditorPanel({
     }
     setStatus(operationMeta[next].status)
     if (next === 'erase') setTool('eraser')
+    if (next === 'outpaint') setTool('move')
     if (next === 'inpaint' || next === 'remove-background') setTool('brush')
   }
 
-  const submit = async () => {
+  const submit = async (confirmedHiddenMarkers = false) => {
+    if (!confirmedHiddenMarkers && operation !== 'outpaint' && hasMask && !showMarkers) {
+      setHiddenSubmitConfirm(true)
+      return
+    }
     setStatus('正在提交编辑请求…')
+    setHiddenSubmitConfirm(false)
     const canvas = maskRef.current
     const basePrompt = prompt.trim() || selectedMeta.defaultPrompt
-    const regionPrompt = maskRegions.length > 0
+    const regionPrompt = operation !== 'outpaint' && maskRegions.length > 0
       ? `请按照画面上的标注编号处理：${maskRegions.map((region) => `区域 ${region.id}`).join('、')}。提示词中的“区域 N”对应画面上同编号位置。`
       : ''
     const request: ImageEditRequest = {
       operation,
       prompt: [basePrompt, regionPrompt].filter(Boolean).join('\n\n'),
-      maskDataUrl: canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
+      maskDataUrl: operation !== 'outpaint' && canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
       imageUrl: imageSrc,
       brushSize,
+      ratio: operation === 'outpaint' && outpaintRatio !== 'original' ? outpaintRatio : undefined,
     }
     try {
       await onSubmit?.(request)
@@ -478,27 +562,45 @@ export function ImageEditorPanel({
       <div className={styles.operationGuide} role="note" aria-live="polite">
         <div className={styles.operationGuideTitle}>
           <span>{selectedMeta.submitLabel}</span>
-          <span className={styles.operationGuideMode}>{operation === 'to-video' ? '整图首帧' : selectedMeta.maskHint ? '可选蒙版' : '当前图片'}</span>
+          <span className={styles.operationGuideMode}>{operation === 'to-video' ? '整图首帧' : operation === 'outpaint' ? '新画布预览' : selectedMeta.maskHint ? '可选蒙版' : '当前图片'}</span>
         </div>
         <p>{selectedMeta.guide}</p>
         {selectedMeta.maskHint && <p className={styles.operationGuideHint}>{selectedMeta.maskHint}</p>}
       </div>
 
+      {operation === 'outpaint' && <div className={styles.outpaintRatioBar} role="radiogroup" aria-label="扩图比例">
+        <span className={styles.outpaintRatioLabel}>扩图比例</span>
+        <div className={styles.outpaintRatioOptions}>
+          {outpaintRatioOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`${styles.outpaintRatioButton} ${outpaintRatio === option.value ? styles.outpaintRatioButtonActive : ''}`}
+              onClick={() => setOutpaintRatio(option.value)}
+              role="radio"
+              aria-checked={outpaintRatio === option.value}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>}
+
       <div className={styles.workspace}>
-        <section className={styles.stage} aria-label="图片编辑画布">
+        <section className={styles.stage} aria-label="图片编辑画布" onWheel={handleWheel}>
           {!imageSrc ? <p className={styles.stageEmpty}>暂无图片</p> : (
-            <div className={styles.mediaFrame}>
+            <div className={`${styles.mediaFrame} ${operation === 'outpaint' ? styles.outpaintMediaFrame : ''}`} style={mediaFrameStyle}>
               <img ref={imageRef} src={imageSrc} alt={alt} className={styles.image} onLoad={initializeMask} onClick={onImageClick} draggable={false} />
               <canvas
                 ref={maskRef}
-                className={`${styles.maskCanvas} ${tool === 'rect' ? styles.maskCanvasRect : tool === 'move' ? styles.maskCanvasMove : styles.maskCanvasBrush}`}
+                className={`${styles.maskCanvas} ${operation === 'outpaint' ? styles.outpaintMaskCanvas : ''} ${!showMarkers ? styles.maskCanvasHidden : ''} ${tool === 'rect' ? styles.maskCanvasRect : tool === 'move' ? styles.maskCanvasMove : styles.maskCanvasBrush}`}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 aria-label="编辑蒙版"
               />
-              {maskRegions.length > 0 && <div className={styles.regionMarkers} aria-label="标记区域编号">
+              {operation !== 'outpaint' && showMarkers && maskRegions.length > 0 && <div className={styles.regionMarkers} aria-label="标记区域编号">
                 {maskRegions.map((region) => (
                   <span
                     key={region.id}
@@ -509,7 +611,7 @@ export function ImageEditorPanel({
                   </span>
                 ))}
               </div>}
-              {maskStyle && <span className={styles.draftRect} style={maskStyle} aria-hidden="true" />}
+              {operation !== 'outpaint' && maskStyle && <span className={styles.draftRect} style={maskStyle} aria-hidden="true" />}
             </div>
           )}
           <div className={styles.floatingTools} role="toolbar" aria-label="编辑工具">
@@ -520,15 +622,23 @@ export function ImageEditorPanel({
             <span className={styles.toolDivider} aria-hidden="true" />
             <button type="button" className={styles.iconButton} onClick={undo} disabled={!canUndo} aria-label="撤销" title="撤销"><Undo2 aria-hidden="true" /></button>
             <button type="button" className={styles.iconButton} onClick={redo} disabled={!canRedo} aria-label="重做" title="重做"><Redo2 aria-hidden="true" /></button>
-            <button type="button" className={styles.iconButton} onClick={clearMask} disabled={!hasMask} aria-label="清空标记" title="清空标记"><Trash2 aria-hidden="true" /></button>
+            {operation !== 'outpaint' && <button type="button" className={styles.iconButton} onClick={clearMask} disabled={!hasMask} aria-label="清空标记" title="清空标记"><Trash2 aria-hidden="true" /></button>}
             <span className={styles.toolDivider} aria-hidden="true" />
             <label className={styles.sizeControl} title="画笔大小"><Minus aria-hidden="true" /><input type="range" min="4" max="160" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} aria-label="画笔大小" /><span>{brushSize}px</span></label>
             <input type="color" className={styles.colorControl} value={brushColor} onChange={(event) => setBrushColor(event.target.value)} aria-label="标记颜色" title="标记颜色" />
+            <span className={styles.toolDivider} aria-hidden="true" />
+            <span className={styles.zoomControl} aria-label="画布缩放">
+              <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom - 0.1)} disabled={zoom <= 0.5} aria-label="缩小" title="缩小"><ZoomOut aria-hidden="true" /></button>
+              <span>{Math.round(zoom * 100)}%</span>
+              <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom + 0.1)} disabled={zoom >= 2} aria-label="放大" title="放大"><ZoomIn aria-hidden="true" /></button>
+              <button type="button" className={styles.iconButton} onClick={resetView} disabled={zoom === 1 && pan.x === 0 && pan.y === 0} aria-label="重置视图" title="重置视图"><Maximize2 aria-hidden="true" /></button>
+            </span>
+            {operation !== 'outpaint' && <button type="button" className={`${styles.iconButton} ${!showMarkers ? styles.toolButtonActive : ''}`} onClick={() => setShowMarkers((visible) => !visible)} aria-pressed={!showMarkers} aria-label={showMarkers ? '隐藏标记' : '显示标记'} title={showMarkers ? '隐藏标记' : '显示标记'}>{showMarkers ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}</button>}
           </div>
         </section>
 
         <section className={styles.promptArea} aria-label="编辑提示词">
-          <div className={styles.promptLabel}><span>{operation === 'to-video' ? '描述视频动作和镜头' : '告诉 AI 要怎么改'}</span><span className={styles.promptHint}>{operation === 'to-video' ? '当前图片作为首帧' : '支持自然语言描述'}</span></div>
+          <div className={styles.promptLabel}><span>{operation === 'to-video' ? '描述视频动作和镜头' : operation === 'outpaint' ? '描述要扩展的方向和内容' : '告诉 AI 要怎么改'}</span><span className={styles.promptHint}>{operation === 'to-video' ? '当前图片作为首帧' : operation === 'outpaint' ? '当前图片会置于新画布中央' : '支持自然语言描述'}</span></div>
           <textarea className={styles.promptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={selectedMeta.placeholder} />
           {versions.length > 0 && (
             <div className={styles.versions} aria-label="图片版本">
@@ -554,12 +664,27 @@ export function ImageEditorPanel({
         <span className={styles.status} role="status">{status}</span>
         <div className={styles.footerActions}>
           <div className={styles.quickActions}>
-            <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={clearMask} disabled={!hasMask}><Trash2 aria-hidden="true" /><span>清除标记</span></button>
+            {operation !== 'outpaint' && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={clearMask} disabled={!hasMask}><Trash2 aria-hidden="true" /><span>清除标记</span></button>}
             {onSaveVersion && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={saveVersion} disabled={isSaving}><Save aria-hidden="true" /><span>{isSaving ? '保存中…' : '保存'}</span></button>}
           </div>
-          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={submit}><WandSparkles aria-hidden="true" /><span>{selectedMeta.submitLabel}</span></button>
+          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit()}><WandSparkles aria-hidden="true" /><span>{operation === 'outpaint' ? '按新尺寸生成图片' : selectedMeta.submitLabel}</span></button>
         </div>
       </footer>
+
+      {hiddenSubmitConfirm && <div className={styles.confirmBackdrop} role="presentation">
+        <div className={styles.confirmDialog} role="dialog" aria-modal="true" aria-labelledby="hidden-markers-title">
+          <div className={styles.confirmDialogHeader}>
+            <strong id="hidden-markers-title">确认提交标记</strong>
+            <button type="button" className={styles.iconButton} onClick={() => setHiddenSubmitConfirm(false)} aria-label="取消提交"><X aria-hidden="true" /></button>
+          </div>
+          <img className={styles.confirmThumbnail} src={imageSrc} alt="当前图片预览" />
+          <p className={styles.confirmMessage}>已隐藏标记，但标记会一并提交。</p>
+          <div className={styles.confirmActions}>
+            <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={() => setHiddenSubmitConfirm(false)}>取消</button>
+            <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit(true)}>确认提交</button>
+          </div>
+        </div>
+      </div>}
     </aside>
   )
 }
