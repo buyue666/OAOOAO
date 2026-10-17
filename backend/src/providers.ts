@@ -73,6 +73,15 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
     const resolutionList=Array.isArray(profile.outputResolutions)?profile.outputResolutions:profile.resolutions;
     const declaredResolutions=Array.isArray(resolutionList)?resolutionList.map((value:any)=>String(value)):[];
     if(input.config?.resolution!==undefined&&declaredResolutions.length&&!declaredResolutions.includes(String(input.config.resolution)))throw httpError(400,'Image resolution is not supported by this model');
+    // A configured 1K tier is fixed to the provider's automatic quality.  The
+    // settings validator prevents saving an inconsistent binding, but this
+    // request-level check also protects direct/stale clients from sending
+    // `high` (or another quality) to the upstream endpoint.  Profiles without
+    // any capability declaration retain the legacy pass-through behavior.
+    const requestedResolution=String(input.config?.resolution??'').trim();
+    const requestedQuality=input.config?.quality===undefined?'':String(input.config.quality).trim().toLowerCase();
+    const supportsConfigured1K=declaredResolutions.includes('1K')||(declaredResolutions.length===0&&hasDeclaredQualities);
+    if(requestedResolution==='1K'&&supportsConfigured1K&&requestedQuality&&requestedQuality!=='auto')throw httpError(400,'1K 清晰度只支持自动图片质量（auto）');
     if(input.config?.size&&profile.aspectRatios?.length&&!profile.aspectRatios.includes(input.config.size)&&!profile.resolutions?.includes(input.config.size))throw httpError(400,'Image size is not supported by this model');
   }
   if(kind==='video'){
