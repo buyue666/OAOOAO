@@ -194,8 +194,8 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     if(!Array.isArray(data.data)||!data.data.length)throw new ProviderFailure('Provider returned no usable image output');
     for(const item of data.data){
       let bytes:Buffer;
-      if(typeof item?.b64_json==='string')bytes=Buffer.from(item.b64_json,'base64');
-      else if(typeof item?.url==='string'){
+      if(typeof item?.b64_json==='string'&&item.b64_json.trim())bytes=Buffer.from(item.b64_json,'base64');
+      else if(typeof item?.url==='string'&&item.url.trim()){
         const image=await transport(item.url,{maxBytes:MAX_MEDIA_BYTES,timeoutMs:30000});
         if(!image.ok)throw new ProviderFailure('Generated image could not be persisted');
         bytes=Buffer.from(await image.arrayBuffer());
