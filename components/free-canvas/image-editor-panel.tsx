@@ -574,6 +574,23 @@ export function ImageEditorPanel({
     }
   }, [publishRegionPrompt, updateMaskRegions])
 
+  const removeRegionReference = useCallback((regionId: number) => {
+    const nextRegions = maskRegionsRef.current.map((region) => {
+      if (region.id !== regionId || !region.referenceImageDataUrl) return region
+      const { referenceImageDataUrl: _removed, ...withoutReference } = region
+      return withoutReference
+    })
+    updateMaskRegions(nextRegions)
+    publishRegionPrompt(nextRegions)
+    if (historyIndexRef.current >= 0 && historyRef.current[historyIndexRef.current]) {
+      historyRef.current[historyIndexRef.current] = {
+        ...historyRef.current[historyIndexRef.current],
+        regions: nextRegions.map((region) => ({ ...region })),
+      }
+    }
+    setMaskRevision((revision) => revision + 1)
+  }, [publishRegionPrompt, updateMaskRegions])
+
   const pointFromEvent = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = maskRef.current
     if (!canvas) return null
@@ -987,7 +1004,16 @@ export function ImageEditorPanel({
           {operation !== 'outpaint' && regionComposerPosition && <div className={styles.regionComposerLayer} style={{ left: regionComposerPosition.left, top: regionComposerPosition.top, width: regionComposerPosition.width }}>
             <span className={`${styles.regionComposer} ${closingRegionId === editingRegionId ? styles.regionComposerClosing : ''}`} role="group" aria-label={`编辑区域 ${editingRegionId}`}>
               <span className={styles.regionComposerPrefix} aria-hidden="true">＋</span>
-              {editingRegion?.referenceImageDataUrl && <img className={styles.regionReferencePreview} src={editingRegion.referenceImageDataUrl} alt="" aria-label="已上传区域参考图" />}
+              {editingRegion?.referenceImageDataUrl && <span className={styles.regionReferencePreviewWrap}>
+                <img className={styles.regionReferencePreview} src={editingRegion.referenceImageDataUrl} alt="已上传区域参考图" />
+                <button
+                  type="button"
+                  className={styles.regionReferenceRemove}
+                  onClick={() => removeRegionReference(editingRegion.id)}
+                  aria-label={`删除区域 ${editingRegion.id} 的参考图`}
+                  title="删除参考图"
+                ><X aria-hidden="true" /></button>
+              </span>}
               <input
                 autoFocus
                 value={editingRegionPrompt}
