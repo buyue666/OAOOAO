@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AdminInput } from './admin-kit'
@@ -16,6 +16,7 @@ export type LobeIconEntry = {
   label: string
   aliases: string[]
   group: '模型' | '平台' | '工具'
+  url?: string
 }
 
 export const lobeIconCatalog: LobeIconEntry[] = [
@@ -79,8 +80,29 @@ type LobeIconPickerProps = {
 export function LobeIconPicker({ value, onChange, className, compact = false, 'aria-label': ariaLabel = '选择模型图标' }: LobeIconPickerProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const results = useMemo(() => filterLobeIcons(query), [query])
-  const selected = lobeIconCatalog.find((item) => value === lobeIconUrl(item.slug))
+  const [remoteResults, setRemoteResults] = useState<LobeIconEntry[] | null>(null)
+  const [remoteTotal, setRemoteTotal] = useState(0)
+  const [searching, setSearching] = useState(false)
+  const localResults = useMemo(() => filterLobeIcons(query), [query])
+  const results = remoteResults ?? localResults
+  const selected = [...lobeIconCatalog, ...(remoteResults || [])].find((item) => value === lobeIconUrl(item.slug) || value === item.url)
+
+  useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      setSearching(true)
+      void fetch(`/api/lobe-icons?q=${encodeURIComponent(query)}`, { signal: controller.signal, cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('icon search failed')))
+        .then((data: { items?: LobeIconEntry[]; total?: number }) => {
+          setRemoteResults(Array.isArray(data.items) ? data.items : [])
+          setRemoteTotal(Number(data.total) || 0)
+        })
+        .catch((error: unknown) => { if ((error as { name?: string })?.name !== 'AbortError') setRemoteResults(null) })
+        .finally(() => setSearching(false))
+    }, 140)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [open, query])
 
   return (
     <div className={cn('relative min-w-0', className)}>
@@ -109,10 +131,10 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
           </div>
           <button type="button" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="关闭图标选择器" onClick={() => setOpen(false)}><X className="size-4" /></button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">图标来自 LobeHub Icons，单选后立即写入模型设置。</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">实时搜索完整的 LobeHub Icons 图标索引，单选后立即写入模型设置。{remoteTotal > results.length ? ` 共 ${remoteTotal} 个匹配结果，显示前 ${results.length} 个。` : ''}</p>
         <div className="mt-2 grid max-h-64 grid-cols-4 gap-1.5 overflow-y-auto pr-1" role="radiogroup" aria-label="模型图标结果">
           {results.map((item) => {
-            const iconUrl = lobeIconUrl(item.slug)
+            const iconUrl = item.url || lobeIconUrl(item.slug)
             const checked = value === iconUrl
             return <button key={item.slug} type="button" role="radio" aria-checked={checked} title={`${item.label} · ${item.group}`} onClick={() => { onChange(iconUrl); setOpen(false) }} className={cn('relative flex min-w-0 flex-col items-center gap-1 rounded-md border p-2 text-center transition-colors', checked ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-background hover:border-studio-accent/50 hover:bg-muted')}>
               <span className="flex size-8 items-center justify-center overflow-hidden rounded-md bg-muted p-1.5"><img src={iconUrl} alt="" loading="lazy" className="size-full object-contain" /></span>
@@ -120,7 +142,7 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
               {checked && <Check className="absolute right-1 top-1 size-3 text-studio-accent" />}
             </button>
           })}
-          {!results.length && <p className="col-span-4 py-6 text-center text-xs text-muted-foreground">没有匹配的图标</p>}
+          {!results.length && <p className="col-span-4 py-6 text-center text-xs text-muted-foreground">{searching ? '正在搜索图标…' : '没有匹配的图标'}</p>}
         </div>
         <div className="mt-3 border-t border-border pt-3">
           <div className="text-[11px] text-muted-foreground">或使用自定义图标地址</div>
