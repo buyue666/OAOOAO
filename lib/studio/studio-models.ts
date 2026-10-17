@@ -247,11 +247,10 @@ function qualityCandidates(capability: SessionLogicalModel['capability'], settin
 /** 图片的“图片质量”与“清晰度/分辨率”是两个独立参数；1K 档只允许自动质量。 */
 export function imageQualityOptions(model?: Pick<ModelConfig, 'capabilities'>, resolution?: string) {
   const qualities = model?.capabilities.qualities?.length ? model.capabilities.qualities : qualityLabels
-  if (resolution !== '1K') return [...qualities]
-  // Keep the 1K default on auto, but do not invent an undeclared protocol value
-  // when an administrator explicitly configured a different quality list.
-  if (!model?.capabilities.qualities?.length) return ['auto']
-  return qualities.includes('auto') ? ['auto'] : [...qualities]
+  // 1K is the fixed automatic tier; higher tiers may expose the configured
+  // provider quality values. The backend applies the same rule when validating
+  // the request so the UI never offers a conflicting combination.
+  return resolution === '1K' ? ['auto'] : [...qualities]
 }
 
 /** 画幅比例显示实际输出尺寸；后台配置优先，兜底只用于避免空白选项。 */
