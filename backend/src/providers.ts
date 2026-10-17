@@ -11,7 +11,13 @@ export class ProviderFailure extends Error {
   constructor(message:string,readonly definitive=false){super(message);this.name='ProviderFailure';}
 }
 export type ProviderSelection={model:string;channelId:string;upstreamModel:string;config:Json;cost:string};
-const protocols=new Set(['openai','openai-compatible','openai-chat','openai-images','openai-audio','openai-video']);
+/**
+ * Protocols implemented by the provider adapter.  `ciyuan-async` is the
+ * OpenAI Images wire format exposed by 词元 with `Prefer: respond-async`:
+ * image submissions return a task id and are completed by polling the
+ * generations endpoint.
+ */
+const protocols=new Set(['openai','openai-compatible','openai-chat','openai-images','openai-audio','openai-video','ciyuan-async']);
 function moneyProduct(a:bigint,b:unknown){return a*creditUnits(typeof b==='number'||typeof b==='string'?b:1)/10000n;}
 export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json,client?:PoolClient):Promise<ProviderSelection>{
   if(kind!=='text'){
@@ -141,10 +147,10 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   if(job.kind==='render'){const result=await renderShots(ctx,job.user_id,job.input.shots,job.input.ratio);return{type:'complete',result:{url:result.url}};}
   const settings=await getSettings(ctx);const channel=settings.systemChannels?.find((c:Json)=>c.id===job.channel_id&&c.enabled&&c.apiKey);
   if(!channel&&!poll)throw new ProviderFailure('Provider channel is no longer available',true);
-  const key=ctx.decrypt(job.provider_config.apiKey);const base=String(job.provider_config.baseUrl).replace(/\/$/,'');const profile=job.provider_config.capabilityProfile||{};
-  const request=async(path:string,body?:string|Buffer,contentType='application/json',method=body===undefined?'GET':'POST')=>{
+  const key=ctx.decrypt(job.provider_config.apiKey);const base=String(job.provider_config.baseUrl).replace(/\/$/,'');const profile=job.provider_config.capabilityProfile||{};const protocol=String(job.provider_config.protocol||'openai');
+  const request=async(path:string,body?:string|Buffer,contentType='application/json',method=body===undefined?'GET':'POST',extraHeaders:Record<string,string>={})=>{
     let response:Response;
-    try{if(method==='POST')onSubmit();response=await transport(base+path,{method,headers:{authorization:`Bearer ${key}`,...(body===undefined?{}:{'content-type':contentType})},body,timeoutMs:120000,maxBytes:MAX_MEDIA_BYTES*2});}
+    try{if(method==='POST')onSubmit();response=await transport(base+path,{method,headers:{authorization:`Bearer ${key}`,...(body===undefined?{}:{'content-type':contentType}),...extraHeaders},body,timeoutMs:120000,maxBytes:MAX_MEDIA_BYTES*2});}
     catch(error){
       if(!poll&&((error as any)?.statusCode===400||['ENOTFOUND','EAI_AGAIN'].includes((error as any)?.code)))throw new ProviderFailure('Provider destination was rejected before submission',true);
       throw new ProviderFailure('Provider connection result is unknown; manual verification may be required');
@@ -164,6 +170,56 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     const media=await saveMedia(ctx,job.user_id,Buffer.from(await response.arrayBuffer()));
     return{type:'complete',result:{url:media.url,mimeType:media.mimeType}};
   }
+  /** Persist image data returned by either a synchronous response or a
+   * completed 词元 async task.  The upstream URL is temporary, so always
+   * download it before storing the media in our own media service. */
+  const persistImageData=async(data:Json)=>{
+    const results=[];
+    if(!Array.isArray(data.data)||!data.data.length)throw new ProviderFailure('Provider returned no usable image output');
+    for(const item of data.data){
+      let bytes:Buffer;
+      if(typeof item?.b64_json==='string')bytes=Buffer.from(item.b64_json,'base64');
+      else if(typeof item?.url==='string'){
+        const image=await transport(item.url,{maxBytes:MAX_MEDIA_BYTES,timeoutMs:30000});
+        if(!image.ok)throw new ProviderFailure('Generated image could not be persisted');
+        bytes=Buffer.from(await image.arrayBuffer());
+      } else throw new ProviderFailure('Provider returned an invalid image output');
+      const media=await saveMedia(ctx,job.user_id,bytes);results.push({url:media.url,mimeType:media.mimeType});
+    }
+    return{results,remoteUrl:results[0].url};
+  };
+  if(job.kind==='image' && protocol==='ciyuan-async'){
+    const prefer={'Prefer':'respond-async'};
+    if(poll){
+      const response=await request(`/images/generations/${encodeURIComponent(job.upstream_id)}`);
+      const data=await response.json() as Json;
+      const status=String(data.status||'').toLowerCase();
+      if(status==='failed')throw new ProviderFailure(String(data.error?.message||'词元异步生图失败'),true);
+      if(status==='completed')return{type:'complete',result:await persistImageData(data)};
+      if(['queued','in_progress','pending','processing'].includes(status))return{type:'pending',upstreamId:String(data.id||job.upstream_id)};
+      throw new ProviderFailure('词元返回了未知的异步图片任务状态');
+    }
+    const outputSize=imageSize(config.size,config.resolution,profile);
+    let response:Response;
+    if(input.references?.length){
+      const files=[];
+      for(const reference of input.references){const data=await readReference(ctx,job.user_id,reference);if(!data.mimeType.startsWith('image/'))throw new ProviderFailure('Image references must be images',true);files.push({name:'image',data:data.bytes,mime:data.mimeType});}
+      if(input.edit?.mask){const mask=await readReference(ctx,job.user_id,input.edit.mask);if(!mask.mimeType.startsWith('image/'))throw new ProviderFailure('Image edit masks must be images',true);files.push({name:'mask',data:mask.bytes,mime:mask.mimeType});}
+      const multi=multipart({model,prompt:input.prompt,size:outputSize,n:'1',...(config.quality?{quality:config.quality}:{})},files);
+      response=await request('/images/edits',multi.body,multi.contentType,'POST',prefer);
+    }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:outputSize,n:1,...(config.quality?{quality:config.quality}:{})}),'application/json','POST',prefer);
+    const data=await response.json() as Json;
+    // A ciyuan async submission is normally 202 + a queued task.  Accept a
+    // completed body as well so an upstream deployment can safely transition
+    // from sync to async without losing an already-finished response.
+    if(String(data.status||'').toLowerCase()==='completed')return{type:'complete',result:await persistImageData(data)};
+    const upstreamId=String(data.id||'');
+    if(!upstreamId)throw new ProviderFailure('词元异步接口未返回任务 ID',true);
+    const status=String(data.status||'queued').toLowerCase();
+    if(['queued','in_progress','pending','processing'].includes(status))return{type:'pending',upstreamId};
+    if(status==='failed')throw new ProviderFailure(String(data.error?.message||'词元异步生图失败'),true);
+    throw new ProviderFailure('词元返回了未知的异步图片任务状态');
+  }
   if(job.kind==='image'){
     let response:Response;
     const outputSize=imageSize(config.size,config.resolution,profile);
@@ -174,16 +230,8 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
       const multi=multipart({model,prompt:input.prompt,size:outputSize,n:'1',...(config.quality?{quality:config.quality}:{})},files);
       response=await request('/images/edits',multi.body,multi.contentType);
     }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:outputSize,n:1,...(config.quality?{quality:config.quality}:{})}));
-    const data=await response.json() as Json;const results=[];
-    if(!Array.isArray(data.data)||!data.data.length)throw new ProviderFailure('Provider returned no usable image output');
-    for(const item of data.data){
-      let bytes:Buffer;
-      if(typeof item.b64_json==='string')bytes=Buffer.from(item.b64_json,'base64');
-      else if(typeof item.url==='string'){const image=await transport(item.url,{maxBytes:MAX_MEDIA_BYTES,timeoutMs:30000});if(!image.ok)throw new ProviderFailure('Generated image could not be persisted');bytes=Buffer.from(await image.arrayBuffer());}
-      else throw new ProviderFailure('Provider returned an invalid image output');
-      const media=await saveMedia(ctx,job.user_id,bytes);results.push({url:media.url,mimeType:media.mimeType});
-    }
-    return{type:'complete',result:{results,remoteUrl:results[0].url}};
+    const data=await response.json() as Json;
+    return{type:'complete',result:await persistImageData(data)};
   }
   if(job.kind==='video'){
     let data:Json;

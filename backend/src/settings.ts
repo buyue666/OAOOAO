@@ -230,7 +230,7 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
     const baseUrl=string(body.baseUrl||saved?.baseUrl,'base URL',2000);validUrl(baseUrl,'base URL');
     if(saved?.apiKey&&!body.apiKey&&new URL(baseUrl).origin!==new URL(saved.baseUrl).origin)throw httpError(400,'A saved API key cannot be used with a different provider origin');
     const key=body.apiKey?string(body.apiKey,'API key',16384):ctx.decrypt(saved?.apiKey||'');
-    const format=body.apiFormat||saved?.apiFormat||'openai';if(!['openai','openai-compatible'].includes(format))throw httpError(501,'Model catalog discovery is unavailable for this protocol');
+    const format=body.apiFormat||saved?.apiFormat||'openai';if(!['openai','openai-compatible','ciyuan-async'].includes(format))throw httpError(501,'Model catalog discovery is unavailable for this protocol');
     const base=new URL(baseUrl);base.pathname=`${base.pathname.replace(/\/$/,'')}/models`;
     const response=await safeFetch(base,{headers:key?{authorization:`Bearer ${key}`}:{},maxBytes:2*1024*1024});
     if(!response.ok)throw httpError(502,`Upstream model catalog returned HTTP ${response.status}`);

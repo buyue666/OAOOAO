@@ -134,3 +134,25 @@ test('official protocol adapter serializes real requests and persists returned m
     await assert.rejects(invokeProvider(f.ctx,text,false,async()=>new Response('{}',{status:502})),error=>error instanceof ProviderFailure&&!error.definitive);
   }finally{await f.cleanup();}
 });
+test('词元异步图片协议 submits with Prefer and polls generation tasks',async()=>{
+  const f=await fixture();try{
+    const owner=f.users[0];
+    const imageJob=await createJob(f.ctx,owner.id,'image',{...input,config:{model:'synthetic-image',size:'1:1',resolution:'1K',quality:'auto'}},'ciyuan-async-submit');
+    const asyncJob={...imageJob,provider_config:{...imageJob.provider_config,protocol:'ciyuan-async'}};
+    let submittedOptions:any;
+    const pending=await invokeProvider(f.ctx,asyncJob,false,async(url,options)=>{
+      assert.equal(url,'https://provider.example/v1/images/generations');submittedOptions=options;
+      return new Response(JSON.stringify({id:'ciyuan-task',object:'image.generation.task',status:'queued',progress:'10%'}),{status:202});
+    });
+    assert.deepEqual(pending,{type:'pending',upstreamId:'ciyuan-task'});
+    assert.equal(submittedOptions.headers.Prefer,'respond-async');
+    assert.equal(JSON.parse(submittedOptions.body).size,'1254x1254');
+    const completedJob={...asyncJob,upstream_id:'ciyuan-task'};
+    const completed=await invokeProvider(f.ctx,completedJob,true,async(url)=>{
+      if(String(url).endsWith('/images/generations/ciyuan-task'))return new Response(JSON.stringify({id:'ciyuan-task',status:'completed',data:[{url:'https://provider.example/temporary.png'}]}),{status:200});
+      assert.equal(url,'https://provider.example/temporary.png');return new Response(image,{status:200,headers:{'content-type':'image/png'}});
+    });
+    assert.equal(completed.type,'complete');
+    if(completed.type==='complete')assert.match(completed.result.remoteUrl,/^\/api\/reference-assets\//);
+  }finally{await f.cleanup();}
+});
