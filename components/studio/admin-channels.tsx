@@ -49,6 +49,7 @@ function localizeChannelError(reason: unknown, fallback: string) {
     ['Changing a channel origin requires a new webhook secret or clearing the saved secret', '留空表示不修改已保存的 Webhook 密钥；如需移除旧密钥，请清空已保存的密钥。'],
     ['A saved API key cannot be used with a different provider origin', '留空表示不修改已保存的 API Key；如需移除旧密钥，请勾选“清空已保存的 API Key”。'],
     ['Changing the storage origin requires a new access key ID or clearing the saved key', '更换存储地址后，必须填写新的 Access Key ID，或清空已保存的密钥。'],
+    ['1K image resolution requires the auto quality parameter', '启用 1K 清晰度时，图片质量必须绑定“自动”（参数值 auto）。'],
   ]
   return translations.find(([english]) => message.includes(english))?.[1] || message || fallback
 }
@@ -891,6 +892,7 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
   const ratios = profileList(profile, 'aspectRatios', imageProfileRatios.map(([value]) => value))
   const resolutions = profileList(profile, 'outputResolutions', imageProfileResolutions.map(([value]) => value), 'resolutions')
   const qualityOptions = qualityOptionsFromProfile(profile)
+  const autoRequired = resolutions.includes('1K')
   const qualities = Array.isArray(profile?.imageQualities)
     ? profile.imageQualities.filter((value): value is string => typeof value === 'string')
     : Array.isArray(profile?.qualities)
@@ -920,6 +922,7 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
   }
 
   const toggleQuality = (option: ImageQualityOption) => {
+    if (autoRequired && option.value.trim() === 'auto') return
     toggle('imageQualities', qualities, option.value)
   }
 
@@ -934,6 +937,7 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
 
   const removeQuality = (index: number) => {
     const removed = qualityOptions[index]?.value
+    if (autoRequired && removed?.trim() === 'auto') return
     const nextOptions = qualityOptions.filter((_, optionIndex) => optionIndex !== index)
     qualityPatch(nextOptions, qualities.filter((value) => value !== removed))
   }
@@ -1007,7 +1011,7 @@ function ImageQualityOptionGroup({
         <legend className="text-[11px] font-medium text-muted-foreground">支持图片质量</legend>
         <ControlButton type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" onClick={onAdd}><Plus className="size-3" />添加</ControlButton>
       </div>
-      <p className="mb-2 text-[10px] leading-4 text-muted-foreground">显示名用于中文界面，参数值原样发送给上游，例如“高”绑定为 <code>high</code>。</p>
+      <p className="mb-2 text-[10px] leading-4 text-muted-foreground">显示名用于中文界面，参数值原样发送给上游，例如“高”绑定为 <code>high</code>。启用 1K 时必须保留并勾选 <code>auto</code>（自动）。</p>
       <div className="space-y-1.5">
         {options.map((option, index) => {
           const checked = selected.includes(option.value)
