@@ -52,11 +52,23 @@ export const lobeIconCatalog: LobeIconEntry[] = [
 ]
 
 // 国内后台优先走 npm 镜像，避免管理员在内网搜索图标时等待 unpkg；地址仍然是
-// LobeHub 官方静态包的同一份 SVG 资源。
+// LobeHub 官方静态包的同一份 SVG 资源。彩色变体只在包中实际存在的图标上启用，
+// 其余图标继续使用普通 SVG。
 const CDN_BASE = 'https://registry.npmmirror.com/@lobehub/icons-static-svg/latest/files/icons'
+const COLOR_ICON_SLUGS = new Set([
+  'claude', 'gemini', 'google', 'deepseek', 'qwen', 'doubao', 'jimeng', 'zhipu', 'minimax',
+  'mistral', 'perplexity', 'cohere', 'azure', 'vertexai', 'dalle', 'stability', 'kling', 'sora',
+  'ideogram',
+])
 
 export function lobeIconUrl(slug: string) {
-  return `${CDN_BASE}/${encodeURIComponent(slug)}.svg`
+  const normalized = slug.trim()
+  const iconSlug = COLOR_ICON_SLUGS.has(normalized) ? `${normalized}-color` : normalized
+  return `${CDN_BASE}/${encodeURIComponent(iconSlug)}.svg`
+}
+
+function lobeIconPlainUrl(slug: string) {
+  return `${CDN_BASE}/${encodeURIComponent(slug.trim())}.svg`
 }
 
 function normalize(value: string) {
@@ -85,7 +97,8 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
   const [searching, setSearching] = useState(false)
   const localResults = useMemo(() => filterLobeIcons(query), [query])
   const results = remoteResults ?? localResults
-  const selected = [...lobeIconCatalog, ...(remoteResults || [])].find((item) => value === lobeIconUrl(item.slug) || value === item.url)
+  const selected = [...lobeIconCatalog, ...(remoteResults || [])].find((item) => value === lobeIconUrl(item.slug) || value === lobeIconPlainUrl(item.slug) || value === item.url)
+  const selectedIconUrl = selected?.url || (selected ? lobeIconUrl(selected.slug) : value)
 
   useEffect(() => {
     if (!open) return
@@ -115,7 +128,7 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
           className={cn('flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-2.5 text-left transition-colors hover:border-studio-accent/60', compact ? 'h-9' : 'h-10')}
         >
           <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted p-1">
-            {value ? <img src={value} alt="" className="size-full object-contain" /> : <span className="text-xs text-muted-foreground">—</span>}
+            {value ? <img src={selectedIconUrl || value} alt="" className="size-full object-contain" onError={(event) => { const target = event.currentTarget; if (selected && target.src !== lobeIconPlainUrl(selected.slug)) target.src = lobeIconPlainUrl(selected.slug) }} /> : <span className="text-xs text-muted-foreground">—</span>}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs text-foreground">{selected?.label || (value ? '自定义图标' : '选择图标')}</span>
           <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
@@ -135,9 +148,9 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
         <div className="mt-2 grid max-h-64 grid-cols-4 gap-1.5 overflow-y-auto pr-1" role="radiogroup" aria-label="模型图标结果">
           {results.map((item) => {
             const iconUrl = item.url || lobeIconUrl(item.slug)
-            const checked = value === iconUrl
+            const checked = value === iconUrl || value === lobeIconUrl(item.slug) || value === lobeIconPlainUrl(item.slug)
             return <button key={item.slug} type="button" role="radio" aria-checked={checked} title={`${item.label} · ${item.group}`} onClick={() => { onChange(iconUrl); setOpen(false) }} className={cn('relative flex min-w-0 flex-col items-center gap-1 rounded-md border p-2 text-center transition-colors', checked ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-background hover:border-studio-accent/50 hover:bg-muted')}>
-              <span className="flex size-8 items-center justify-center overflow-hidden rounded-md bg-muted p-1.5"><img src={iconUrl} alt="" loading="lazy" className="size-full object-contain" /></span>
+              <span className="flex size-8 items-center justify-center overflow-hidden rounded-md bg-muted p-1.5"><img src={iconUrl} alt="" loading="lazy" className="size-full object-contain" onError={(event) => { const target = event.currentTarget; const fallback = lobeIconPlainUrl(item.slug); if (target.src !== fallback) target.src = fallback }} /></span>
               <span className="w-full truncate text-[10px] text-foreground">{item.label}</span>
               {checked && <Check className="absolute right-1 top-1 size-3 text-studio-accent" />}
             </button>

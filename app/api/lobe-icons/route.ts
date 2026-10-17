@@ -36,23 +36,31 @@ async function readIndex() {
   if (!response.ok) throw new Error(`LobeHub icon index returned ${response.status}`)
   const data = await response.json() as LobeIconIndex
   const files = (data.files || []).filter((file) => file.type === 'file' && typeof file.path === 'string' && file.path.endsWith('.svg'))
-  // Prefer the plain icon when the package contains monochrome, text and color variants.
-  const slugs = new Set<string>()
+  // Each icon can have a monochrome, text and color file. Keep one logical
+  // result per icon and prefer the color artwork when it exists. Some icons
+  // only ship a monochrome file, so those continue to work as before.
+  const variants = new Map<string, { plain?: string; color?: string; text?: string }>()
   for (const file of files) {
     const slug = slugFromPath(file.path!)
-    if (!slug.endsWith('-color') && !slug.endsWith('-text')) slugs.add(slug)
+    const match = /^(.*)-(color|text)$/.exec(slug)
+    const base = match?.[1] || slug
+    const kind = match?.[2] as 'color' | 'text' | undefined
+    const entry = variants.get(base) || {}
+    if (kind === 'color') entry.color = slug
+    else if (kind === 'text') entry.text = slug
+    else entry.plain = slug
+    variants.set(base, entry)
   }
-  for (const file of files) {
-    const slug = slugFromPath(file.path!)
-    if ((slug.endsWith('-color') || slug.endsWith('-text')) && !slugs.has(slug.replace(/-(?:color|text)$/, ''))) slugs.add(slug)
-  }
-  return [...slugs].sort().map((slug) => ({
-    slug,
-    label: labelFor(slug),
-    aliases: [],
-    group: '模型' as const,
-    url: `${ICON_CDN_BASE}/${encodeURIComponent(slug)}.svg`,
-  }))
+  return [...variants.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([slug, variant]) => {
+    const iconSlug = variant.color || variant.plain || variant.text || slug
+    return {
+      slug,
+      label: labelFor(slug),
+      aliases: [],
+      group: '模型' as const,
+      url: `${ICON_CDN_BASE}/${encodeURIComponent(iconSlug)}.svg`,
+    }
+  })
 }
 
 export async function GET(request: NextRequest) {
