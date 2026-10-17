@@ -149,6 +149,7 @@ export function AssetsPage() {
   const [renameTitle, setRenameTitle] = useState('')
   const [renaming, setRenaming] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
   const [uploadCategory, setUploadCategory] = useState<AssetCategory>('general')
   const [projectBusy, setProjectBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -189,21 +190,37 @@ export function AssetsPage() {
    * → 登记到 `/api/library-assets`。两步都必须成功才算上传完成；
    * 任一步失败都如实报错，绝不显示成「已上传」。
    */
-  async function onFiles(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? [])
-    event.target.value = ''
+  function uploadKind(file: File): 'image' | 'video' | 'audio' | null {
+    if (file.type.startsWith('image/')) return 'image'
+    if (file.type.startsWith('video/')) return 'video'
+    if (file.type.startsWith('audio/')) return 'audio'
+    if (/\.(png|jpe?g|webp|gif|mp4|webm|mov|m4v|mp3|wav|ogg|m4a)$/i.test(file.name)) {
+      if (/\.(mp4|webm|mov|m4v)$/i.test(file.name)) return 'video'
+      if (/\.(mp3|wav|ogg|m4a)$/i.test(file.name)) return 'audio'
+      return 'image'
+    }
+    return null
+  }
+
+  async function uploadFiles(files: File[]) {
     if (!files.length) return
+    if (uploading) return
     if (state.backendStatus !== 'connected') {
       setNotice('未登录：无法上传素材。请先登录后再上传。')
       return
     }
+    const supported = files.filter((file) => uploadKind(file))
+    const rejected = files.filter((file) => !uploadKind(file)).map((file) => file.name)
+    if (rejected.length) setNotice(`已忽略 ${rejected.length} 个不支持的文件：${rejected.join('、')}。支持 PNG、JPG、WEBP、GIF、MP4、WEBM、MOV、MP3、WAV、OGG。`)
+    if (!supported.length) return
     setUploading(true)
-    setNotice(`正在上传 ${files.length} 个文件…`)
+    setNotice(`正在上传 ${supported.length} 个文件…`)
     const uploaded: string[] = []
     const failed: string[] = []
-    for (const file of files) {
+    for (const file of supported) {
       try {
-        const kind = file.type.startsWith('video') ? 'video' : file.type.startsWith('audio') ? 'audio' : 'image'
+        const kind = uploadKind(file)
+        if (!kind) throw new Error('文件类型不受支持')
         const stored = await uploadPersistentAsset(file, kind)
         const size = kind === 'image' ? await readImageSize(file).catch(() => null) : null
         await createLibraryAsset({
@@ -230,12 +247,27 @@ export function AssetsPage() {
     }
     // 上传完成后统一刷新账户数据（素材库是其中之一）。
     bumpAccountData()
+    await serverLibrary.reload()
+    const rejectedDetails = rejected.map((name) => `${name}（文件类型不受支持）`)
+    const issues = [...failed, ...rejectedDetails]
     setNotice(
-      failed.length
-        ? `已上传 ${uploaded.length} 个，失败 ${failed.length} 个：${failed.join('；')}`
-        : `已上传并保存 ${uploaded.length} 个素材，刷新或换浏览器都能看到。`,
+      issues.length
+        ? `已上传 ${uploaded.length} 个，失败 ${issues.length} 个：${issues.join('；')}`
+        : `已上传并保存 ${uploaded.length} 个素材，素材库已刷新。`,
     )
     setUploading(false)
+  }
+
+  function onFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    void uploadFiles(files)
+  }
+
+  function onDrop(event: React.DragEvent<HTMLElement>) {
+    event.preventDefault()
+    setDragActive(false)
+    void uploadFiles(Array.from(event.dataTransfer.files ?? []))
   }
 
   /**
@@ -345,13 +377,26 @@ export function AssetsPage() {
         actions={(
           <>
             <Link href="/skills" className="inline-flex h-9 items-center px-3 text-sm text-muted-foreground underline">技能库</Link>
-            <input ref={fileRef} type="file" multiple className="sr-only" onChange={onFiles} disabled={uploading} />
+            <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/ogg,audio/mp4" className="sr-only" onChange={onFiles} disabled={uploading} />
             <ControlButton variant="secondary" disabled={uploading} onClick={() => fileRef.current?.click()}><Upload className="size-4" />{uploading ? '上传中…' : '上传素材'}</ControlButton>
             {selected.length > 0 && <ControlButton variant="primary" disabled={projectBusy} onClick={() => void addToProject()}><FolderPlus className="size-4" />{projectBusy ? '处理中…' : `加入项目（${selected.length}）`}</ControlButton>}
             {selected.length > 0 && <ControlButton variant="ghost" disabled={projectBusy} onClick={() => void removeReference(selected[0])}>移除引用</ControlButton>}
           </>
         )}
       />
+      <section
+        aria-label="上传素材"
+        onDragEnter={(event) => { event.preventDefault(); setDragActive(true) }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false) }}
+        onDrop={onDrop}
+        className={cn('rounded-xl border-2 border-dashed p-5 text-center transition-colors', dragActive ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-muted/20 hover:border-studio-accent/50')}
+      >
+        <Upload className="mx-auto size-6 text-studio-accent" aria-hidden="true" />
+        <p className="mt-2 text-sm font-medium text-foreground">拖拽文件到这里，或点击选择</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">支持 PNG、JPG、WEBP、GIF、MP4、WEBM、MOV、MP3、WAV、OGG，可一次选择多个文件。</p>
+        <ControlButton type="button" variant="secondary" size="sm" className="mt-3" disabled={uploading} onClick={() => fileRef.current?.click()}><Upload className="size-3.5" />{uploading ? '上传中…' : '选择文件'}</ControlButton>
+      </section>
       <div className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
           <div className="w-full sm:max-w-sm"><SearchField value={search} onChange={setSearch} placeholder="搜索素材、标签或引用位置" /></div>
