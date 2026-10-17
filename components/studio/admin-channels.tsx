@@ -761,7 +761,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                           bindings: model.bindings.map((item, position) => {
                             if (position !== index) return item
                             const profile = { ...(item.capabilityProfile || {}) }
-                            for (const key of ['aspectRatios', 'outputResolutions', 'resolutions', 'imageQualities', 'qualities', 'outputDimensions', 'sizeMap']) delete profile[key]
+                            for (const key of ['aspectRatios', 'outputResolutions', 'resolutions', 'imageQualities', 'imageQualityOptions', 'imageQualityLabels', 'qualities', 'outputDimensions', 'sizeMap']) delete profile[key]
                             return { ...item, capabilityProfile: profile }
                           }),
                         })}
@@ -860,14 +860,82 @@ function profileList(profile: BindingCapabilityProfile | undefined, key: string,
   return [...fallback]
 }
 
+type ImageQualityOption = { value: string; label: string }
+
+/**
+ * 图片质量同时保存协议值和中文显示名：
+ * `imageQualities` 只保存启用并发给上游的值（例如 `high`），
+ * `imageQualityOptions` 保存所有可编辑行（例如 `{ value: 'high', label: '高' }`）。
+ * 把未勾选的值也保留在选项表中，这样管理员取消勾选后仍可重新启用或编辑。
+ */
+function qualityOptionsFromProfile(profile: BindingCapabilityProfile | undefined): ImageQualityOption[] {
+  const values = profileList(profile, 'imageQualities', imageProfileQualities.map(([value]) => value), 'qualities')
+  const configured = profile?.imageQualityOptions
+  if (Array.isArray(configured)) {
+    const options = configured
+      .filter((item): item is { value: string; label: string } => Boolean(item) && typeof item === 'object' && typeof (item as Record<string, unknown>).value === 'string')
+      .map((item) => ({ value: item.value, label: typeof item.label === 'string' ? item.label : item.value }))
+    if (options.length) return options
+  }
+  // 兼容早期试验配置：先读 imageQualityLabels，再回退到内置中文名称。
+  const labels = profile?.imageQualityLabels
+  const labelMap = labels && typeof labels === 'object' && !Array.isArray(labels)
+    ? Object.fromEntries(Object.entries(labels).filter(([, label]) => typeof label === 'string')) as Record<string, string>
+    : {}
+  const defaultLabels = Object.fromEntries(imageProfileQualities) as Record<string, string>
+  const keys = [...new Set([...values, ...Object.keys(labelMap)])]
+  return keys.map((value) => ({ value, label: labelMap[value] || defaultLabels[value] || value }))
+}
+
 function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?: BindingCapabilityProfile; onChange: (patch: BindingCapabilityProfile) => void; onReset: () => void }) {
   const ratios = profileList(profile, 'aspectRatios', imageProfileRatios.map(([value]) => value))
   const resolutions = profileList(profile, 'outputResolutions', imageProfileResolutions.map(([value]) => value), 'resolutions')
-  const qualities = profileList(profile, 'imageQualities', imageProfileQualities.map(([value]) => value), 'qualities')
+  const qualityOptions = qualityOptionsFromProfile(profile)
+  const qualities = Array.isArray(profile?.imageQualities)
+    ? profile.imageQualities.filter((value): value is string => typeof value === 'string')
+    : Array.isArray(profile?.qualities)
+      ? profile.qualities.filter((value): value is string => typeof value === 'string')
+      : qualityOptions.map(({ value }) => value)
 
   const toggle = (key: string, current: string[], value: string) => {
     const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
     onChange({ [key]: next })
+  }
+
+  const qualityPatch = (nextOptions: ImageQualityOption[], selectedValues: string[]) => {
+    const values = [...new Set(selectedValues.map((value) => value.trim()).filter(Boolean))]
+    const options = nextOptions
+      .map(({ value, label }) => ({ value: value.trim(), label: label.trim() || value.trim() }))
+      .filter(({ value }) => value)
+    onChange({ imageQualities: values, imageQualityOptions: options })
+  }
+
+  const updateQuality = (index: number, field: keyof ImageQualityOption, rawValue: string) => {
+    const nextOptions = qualityOptions.map((option, optionIndex) => optionIndex === index ? { ...option, [field]: rawValue } : option)
+    const previous = qualityOptions[index]?.value.trim()
+    const nextValue = nextOptions[index]?.value.trim()
+    const selected = qualities.filter((value) => value !== previous)
+    if (nextValue && qualities.includes(previous)) selected.push(nextValue)
+    qualityPatch(nextOptions, selected)
+  }
+
+  const toggleQuality = (option: ImageQualityOption) => {
+    toggle('imageQualities', qualities, option.value)
+  }
+
+  const addQuality = () => {
+    const used = new Set(qualityOptions.map(({ value }) => value))
+    let index = qualityOptions.length + 1
+    let value = `quality-${index}`
+    while (used.has(value)) value = `quality-${++index}`
+    const nextOptions = [...qualityOptions, { value, label: '新质量' }]
+    qualityPatch(nextOptions, [...qualities, value])
+  }
+
+  const removeQuality = (index: number) => {
+    const removed = qualityOptions[index]?.value
+    const nextOptions = qualityOptions.filter((_, optionIndex) => optionIndex !== index)
+    qualityPatch(nextOptions, qualities.filter((value) => value !== removed))
   }
 
   return (
@@ -905,14 +973,56 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
           selected={resolutions}
           onToggle={(value) => toggle('outputResolutions', resolutions, value)}
         />
-        <CapabilityOptionGroup
-          title="支持图片质量"
-          options={imageProfileQualities}
+        <ImageQualityOptionGroup
+          options={qualityOptions}
           selected={qualities}
-          onToggle={(value) => toggle('imageQualities', qualities, value)}
+          onToggle={toggleQuality}
+          onChange={updateQuality}
+          onAdd={addQuality}
+          onRemove={removeQuality}
         />
       </div>
     </div>
+  )
+}
+
+function ImageQualityOptionGroup({
+  options,
+  selected,
+  onToggle,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  options: ImageQualityOption[]
+  selected: string[]
+  onToggle: (option: ImageQualityOption) => void
+  onChange: (index: number, field: keyof ImageQualityOption, value: string) => void
+  onAdd: () => void
+  onRemove: (index: number) => void
+}) {
+  return (
+    <fieldset className="min-w-0 lg:col-span-1">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <legend className="text-[11px] font-medium text-muted-foreground">支持图片质量</legend>
+        <ControlButton type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" onClick={onAdd}><Plus className="size-3" />添加</ControlButton>
+      </div>
+      <p className="mb-2 text-[10px] leading-4 text-muted-foreground">显示名用于中文界面，参数值原样发送给上游，例如“高”绑定为 <code>high</code>。</p>
+      <div className="space-y-1.5">
+        {options.map((option, index) => {
+          const checked = selected.includes(option.value)
+          return (
+            <div key={`${option.value}-${index}`} className={cn('grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-1.5 py-1.5', checked ? 'border-studio-accent/60 bg-studio-accent/5' : 'border-border bg-background')}>
+              <input type="checkbox" className="size-3 accent-studio-accent" checked={checked} onChange={() => onToggle(option)} aria-label={`启用图片质量 ${option.label || option.value}`} />
+              <AdminInput value={option.label} placeholder="中文显示名" aria-label={`图片质量${index + 1}中文显示名`} onChange={(event) => onChange(index, 'label', event.target.value)} />
+              <AdminInput value={option.value} placeholder="上游参数值" aria-label={`图片质量${index + 1}参数值`} onChange={(event) => onChange(index, 'value', event.target.value)} />
+              <ControlButton type="button" variant="ghost" size="sm" className="size-7 p-0" aria-label={`删除图片质量 ${option.label || option.value}`} onClick={() => onRemove(index)}><Trash2 className="size-3.5" /></ControlButton>
+            </div>
+          )
+        })}
+        {!options.length && <p className="rounded-md border border-dashed border-border px-2 py-2 text-[11px] text-muted-foreground">暂无质量参数，请点击“添加”。</p>}
+      </div>
+    </fieldset>
   )
 }
 

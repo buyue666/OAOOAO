@@ -2970,7 +2970,7 @@ function StoryboardPanel({
                     label="图片质量"
                     value={quality}
                     onChange={setQuality}
-                    options={qualityOptions.map((value) => ({ value, label: `${value} · ${qualityLabel(value)}` }))}
+                    options={qualityOptions.map((value) => ({ value, label: `${value} · ${qualityLabel(value, selectedImageModel?.capabilities.qualityLabels)}` }))}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-2 text-xs">
