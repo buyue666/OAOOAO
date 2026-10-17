@@ -78,7 +78,7 @@ import { uploadPersistentAsset, readImageSize } from "@/lib/studio/account-api";
 import { bumpAccountData } from "@/lib/studio/account-data-sync";
 import { useGeneration } from "@/lib/studio/generation-store";
 import { isTerminalStatus, newClientRequestId } from "@/lib/studio/generation-api";
-import { defaultModelFor, filterModelsByCapability, qualityLabel } from "@/lib/studio/studio-models";
+import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioDimension } from "@/lib/studio/studio-models";
 
 const projectTabs = [
   { slug: "overview", label: "概览", icon: Grid2X2 },
@@ -2448,7 +2448,8 @@ function StoryboardPanel({
   );
   const [modelId, setModelId] = useState("");
   const [ratio, setRatio] = useState("16:9");
-  const [quality, setQuality] = useState("高清");
+  const [resolution, setResolution] = useState("1K");
+  const [quality, setQuality] = useState("auto");
   const [selectedCandidate, setSelectedCandidate] = useState("");
   const [favoriteCandidateIds, setFavoriteCandidateIds] = useState<string[]>([]);
   const [editingCandidateId, setEditingCandidateId] = useState<string | null>(null);
@@ -2464,6 +2465,16 @@ function StoryboardPanel({
   /** 已写回终态的 任务 id，避免轮询结果重复触发 PATCH。 */
   const settledRef = useRef<Set<string>>(new Set());
   const estimatedCredits = estimateCredits(modelId, { ratio, quality, count: 1 });
+  const selectedImageModel = imageModels.find((item) => item.id === modelId) ?? imageModels[0];
+  const ratioOptions = useMemo(() => {
+    const values = selectedImageModel?.capabilities.ratios?.filter(Boolean) ?? [];
+    return values.length ? values : ["1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4", "21:9"];
+  }, [selectedImageModel]);
+  const resolutionOptions = useMemo(() => {
+    const values = selectedImageModel?.capabilities.resolutions?.filter(Boolean) ?? [];
+    return values.length ? values : ["1K"];
+  }, [selectedImageModel]);
+  const qualityOptions = useMemo(() => imageQualityOptions(selectedImageModel, resolution), [selectedImageModel, resolution]);
   /**
    * 项目显示名。
    *
@@ -2480,6 +2491,18 @@ function StoryboardPanel({
     if (!imageModels.length) return;
     setModelId((current) => imageModels.some((item) => item.id === current) ? current : defaultModelFor("image", state.sessionSettings, imageModels));
   }, [imageModels, state.sessionSettings]);
+
+  useEffect(() => {
+    setRatio((current) => ratioOptions.includes(current) ? current : (ratioOptions[0] ?? "1:1"));
+  }, [ratioOptions]);
+
+  useEffect(() => {
+    setResolution((current) => resolutionOptions.includes(current) ? current : (resolutionOptions[0] ?? "1K"));
+  }, [resolutionOptions]);
+
+  useEffect(() => {
+    setQuality((current) => qualityOptions.includes(current) ? current : (qualityOptions[0] ?? "auto"));
+  }, [qualityOptions]);
 
   useEffect(() => {
     setSelectedCandidate(shot?.storyboardImageUrl ?? "");
@@ -2588,6 +2611,7 @@ function StoryboardPanel({
         prompt,
         model: modelId || undefined,
         ratio,
+        resolution,
         quality,
         count: 1,
         title: `分镜生成 · ${currentShot.title}`,
@@ -2934,13 +2958,19 @@ function StoryboardPanel({
                     label="比例"
                     value={ratio}
                     onChange={setRatio}
-                    options={["16:9", "9:16", "1:1"].map((value) => ({ value, label: value }))}
+                    options={ratioOptions.map((value) => ({ value, label: ratioDimension(value, selectedImageModel?.capabilities.outputDimensions, resolution, selectedImageModel?.capabilities.outputDimensionsByResolution) ? `${value} · ${ratioDimension(value, selectedImageModel?.capabilities.outputDimensions, resolution, selectedImageModel?.capabilities.outputDimensionsByResolution)}` : value }))}
                   />
                   <SelectField
-                    label="质量"
+                    label="清晰度"
+                    value={resolution}
+                    onChange={setResolution}
+                    options={resolutionOptions.map((value) => ({ value, label: value }))}
+                  />
+                  <SelectField
+                    label="图片质量"
                     value={quality}
                     onChange={setQuality}
-                    options={["auto", "low", "medium", "high"].map((value) => ({ value, label: qualityLabel(value) }))}
+                    options={qualityOptions.map((value) => ({ value, label: `${value} · ${qualityLabel(value)}` }))}
                   />
                 </div>
                 <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-2 text-xs">
