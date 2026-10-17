@@ -172,7 +172,7 @@ function WorkCard({ work }: { work: StudioWork }) {
         <p className="mt-1 truncate text-xs text-muted-foreground">{work.model || '未记录模型'}{work.createdAt ? ` · ${new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <ControlButton variant="secondary" size="sm" onClick={() => setPreview(true)}><ExternalLink className="size-3.5" />预览</ControlButton>
-          <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
+          <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
           {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link> : null}
           <ControlButton variant="ghost" size="sm" onClick={sendToCanvas}><WandSparkles className="size-3.5" />发到画布</ControlButton>
           <ControlButton variant="ghost" size="sm" onClick={() => void addToProject()} disabled={projectBusy}><FolderPlus className="size-3.5" />{projectBusy ? '保存中…' : '加入项目'}</ControlButton>
@@ -187,7 +187,7 @@ function WorkCard({ work }: { work: StudioWork }) {
         footer={(
           <>
             <ControlButton variant="ghost" onClick={() => setPreview(false)}>关闭</ControlButton>
-            <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} label="下载作品" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted disabled:opacity-50" />
+            <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} label="下载作品" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted disabled:opacity-50" />
             {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Copy className="size-4" />复用这组参数</Link> : null}
           </>
         )}

@@ -467,7 +467,7 @@ function Delivery({ project, episode, disabled, renderAvailable, renderCheckErro
     {renderAvailable === false && <p className="text-sm text-muted-foreground">当前服务器未启用成片合成。已选镜头和字幕可继续使用。</p>}
     {renderCheckError && <p role="alert" className="text-sm text-destructive">合成服务读取失败：{renderCheckError}</p>}
     {episode.renderTask?.error && <p role="alert" className="text-sm text-destructive">{episode.renderTask.error}</p>}
-    {episode.renderTask?.status === 'success' && episode.renderTask.result?.url && <div className="space-y-3"><video controls controlsList="nodownload" playsInline src={episode.renderTask.result.url} className="max-h-[560px] w-full rounded-xl bg-black" aria-label="已合成作品" /><MediaDownloadButton media={{ url: episode.renderTask.result.url, kind: 'video' }} title={project.title} label="下载成片" className="inline-flex items-center gap-2 text-sm underline disabled:opacity-50" /></div>}
+    {episode.renderTask?.status === 'success' && episode.renderTask.result?.url && <div className="space-y-3"><video controls controlsList="nodownload" playsInline src={episode.renderTask.result.url} className="max-h-[560px] w-full rounded-xl bg-black" aria-label="已合成作品" /><MediaDownloadButton media={{ url: episode.renderTask.result.url, kind: 'video' }} title={project.title} taskId={episode.renderTask.id} label="下载成片" className="inline-flex items-center gap-2 text-sm underline disabled:opacity-50" /></div>}
   </section>
 }
 

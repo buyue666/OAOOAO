@@ -6,9 +6,25 @@ import ts from 'typescript'
 const compiled = ts.transpileModule(readFileSync(new URL('../lib/studio/result-delivery.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
 const module = { exports: {} }
 new Function('module', 'exports', compiled)(module, module.exports)
-const { mediaExportPath, downloadMedia } = module.exports
+const { mediaExportPath, downloadMedia, safeDownloadName } = module.exports
 const id = '12345678-1234-1234-1234-123456789abc'
 const origin = 'https://oao.test'
+
+test('long titles and prompts use the task ID instead of a truncated filename', () => {
+  const longText = '一张非常长的生成提示词 '.repeat(12)
+  assert.equal(safeDownloadName(longText, 'png', 'task-123'), 'task-123.png')
+  assert.equal(safeDownloadName('短标题', 'png', 'task-123'), '短标题.png')
+})
+
+test('downloadMedia uses the task ID when the prompt is longer than the filename limit', async () => withDownloads(async ({ anchors }) => {
+  global.fetch = async url => url === '/api/auth/session'
+    ? Response.json({ user: { id: 'account-a' } })
+    : new Response(new Blob(['image'], { type: 'image/png' }))
+  const longPrompt = '一张非常长的生成提示词 '.repeat(12)
+  const result = await downloadMedia(media, '猫', { accountId: 'account-a', taskId: 'task-prompt-456', prompt: longPrompt })
+  assert.deepEqual(result, { ok: true, filename: 'task-prompt-456.png' })
+  assert.deepEqual(anchors, ['task-prompt-456.png'])
+}))
 
 test('exports resolve only the three owned same-origin media routes, stripping bearer query tokens', () => {
   for (const route of ['media', 'reference-assets', 'generation-log-assets']) {

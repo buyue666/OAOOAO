@@ -269,7 +269,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
               <Maximize2 className="size-3" aria-hidden="true" />
             </IconAction>
           </Tooltip>
-          <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} iconOnly className="flex size-6 items-center justify-center rounded text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-50" />
+          <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} iconOnly className="flex size-6 items-center justify-center rounded text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-50" />
           <Tooltip label="更多操作">
             <IconAction label={`${work.title} 的更多操作`} onClick={onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
               <MoreHorizontal className="size-3" aria-hidden="true" />
@@ -464,7 +464,7 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
               <Plus className="size-3.5" aria-hidden="true" />
               加入项目
             </ControlButton>
-            <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} className="inline-flex h-8 items-center gap-2 rounded-lg border border-border px-3 text-xs hover:bg-muted disabled:opacity-50" />
+            <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg border border-border px-3 text-xs hover:bg-muted disabled:opacity-50" />
           </>
         )
       }
@@ -648,6 +648,7 @@ export function ImageWorkspace() {
     if (serverWorksResult.state === 'unauthenticated') return []
     return serverWorksResult.works.map((work) => ({
       id: work.id,
+      taskId: work.taskId,
       kind: (work.kind === 'video' ? 'video' : 'image') as Work['kind'],
       title: work.title,
       src: work.src,
@@ -676,6 +677,7 @@ export function ImageWorkspace() {
       .filter((task) => hasDeliverable(task))
       .flatMap((task) => task.media.map((media, index) => ({
         id: `${task.id}#${index}`,
+        taskId: task.id,
         kind: (media.kind === 'video' ? 'video' : 'image') as Work['kind'],
         title: task.title,
         src: media.url,
@@ -1365,7 +1367,7 @@ export function ImageWorkspace() {
           <Plus className="size-3.5" aria-hidden="true" />
           {projectBusy ? '处理中…' : '加入项目'}
         </ControlButton>
-        <MediaDownloadButton media={{ url: selectedWork?.src ?? '', kind: 'image' }} title={selectedWork?.title ?? '作品'} disabled={!selectedWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
+        <MediaDownloadButton media={{ url: selectedWork?.src ?? '', kind: 'image' }} title={selectedWork?.title ?? '作品'} prompt={selectedWork?.prompt} taskId={selectedWork?.taskId ?? selectedWork?.id} disabled={!selectedWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
           导演 Agent
@@ -1725,6 +1727,7 @@ export function VideoWorkspace() {
     ? []
     : serverWorksResult.works.map((work) => ({
         id: work.id,
+        taskId: work.taskId,
         kind: 'video' as Work['kind'],
         title: work.title,
         src: work.src,
@@ -1745,6 +1748,7 @@ export function VideoWorkspace() {
     .filter((task) => hasDeliverable(task))
     .flatMap((task) => task.media.map((media, index) => ({
       id: `${task.id}#${index}`,
+      taskId: task.id,
       kind: 'video' as Work['kind'],
       title: task.title,
       src: media.url,
@@ -2138,7 +2142,7 @@ export function VideoWorkspace() {
           <Send className="size-3.5" aria-hidden="true" />
           送入画布
         </ControlButton>
-        <MediaDownloadButton media={{ url: currentWork?.src ?? '', kind: 'video' }} title={currentWork?.title ?? '作品'} disabled={!currentWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
+        <MediaDownloadButton media={{ url: currentWork?.src ?? '', kind: 'video' }} title={currentWork?.title ?? '作品'} prompt={currentWork?.prompt} taskId={currentWork?.taskId ?? currentWork?.id} disabled={!currentWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
           导演 Agent

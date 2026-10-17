@@ -78,18 +78,28 @@ export function resolveDownloadExtension(media: Pick<DeliverableMedia, 'kind' | 
   return media.kind === 'video' ? 'mp4' : media.kind === 'audio' ? 'mp3' : 'png'
 }
 
-/** 文件名清洗：去掉路径分隔符与后端不允许的字符，避免下载被浏览器改名。 */
-export function safeDownloadName(title: string, extension: string): string {
-  const base = String(title || 'oaooao-result')
+/** 下载文件名的主体上限；过长标题使用任务 ID，避免浏览器截断或拒绝保存。 */
+export const MAX_DOWNLOAD_TITLE_LENGTH = 80
+
+function cleanDownloadBase(value: string) {
+  return String(value || '')
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 80)
-  return `${base || 'oaooao-result'}.${extension}`
+}
+
+/** 文件名清洗：去掉路径分隔符与后端不允许的字符，避免下载被浏览器改名。 */
+export function safeDownloadName(title: string, extension: string, fallbackName?: string): string {
+  const base = cleanDownloadBase(title)
+  const fallback = cleanDownloadBase(fallbackName || '')
+  const chosen = base.length > MAX_DOWNLOAD_TITLE_LENGTH
+    ? fallback || 'oaooao-result'
+    : base || fallback || 'oaooao-result'
+  return `${chosen}.${extension}`
 }
 
 export type DownloadResult = { ok: true; filename: string } | { ok: false; message: string }
-export type DownloadOptions = { accountId?: string; signal?: AbortSignal }
+export type DownloadOptions = { accountId?: string; signal?: AbortSignal; taskId?: string; prompt?: string }
 
 /** Only canonical, same-origin owned media may be submitted to the export service. */
 export function mediaExportPath(value: string, origin: string): string | null {
@@ -113,7 +123,11 @@ export function mediaExportPath(value: string, origin: string): string | null {
  */
 export async function downloadMedia(media: DeliverableMedia, title: string, options: DownloadOptions = {}): Promise<DownloadResult> {
   if (!media?.url) return { ok: false, message: '该结果没有可下载的文件地址' }
-  const filename = safeDownloadName(title, resolveDownloadExtension(media))
+  // 提示词可能比展示标题更长：一旦任一来源超过上限，就让 safeDownloadName
+  // 使用任务 ID，保证下载名短且可追溯，而不是只截断成一段难以识别的文本。
+  const nameSource = options.prompt && options.prompt.length > MAX_DOWNLOAD_TITLE_LENGTH ? options.prompt : title
+  const fallbackName = options.taskId?.trim() || undefined
+  const filename = safeDownloadName(nameSource, resolveDownloadExtension(media), fallbackName)
   try {
     const exportPath = mediaExportPath(media.url, window.location.origin)
     if (!exportPath && media.kind !== 'audio') return { ok: false, message: '此历史文件尚无可验证的导出来源，请联系站点客服核对媒体迁移。' }
@@ -150,7 +164,7 @@ export async function downloadMedia(media: DeliverableMedia, title: string, opti
      */
     const serverMime = blob.type || media.mimeType
     const finalName = serverMime && blob.type
-      ? safeDownloadName(title, resolveDownloadExtension({ ...media, mimeType: serverMime }))
+      ? safeDownloadName(nameSource, resolveDownloadExtension({ ...media, mimeType: serverMime }), fallbackName)
       : filename
     const objectUrl = URL.createObjectURL(blob)
     try {

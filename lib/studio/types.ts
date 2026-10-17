@@ -180,6 +180,8 @@ export interface Task {
 
 export interface Work {
   id: ID
+  /** 生成任务 ID；下载文件名过长时用作稳定回退名称。 */
+  taskId?: ID
   title: string
   kind: WorkKind
   src: string

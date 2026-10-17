@@ -5,7 +5,7 @@ import { Download, LoaderCircle } from 'lucide-react'
 import { downloadMedia, type DeliverableMedia } from '@/lib/studio/result-delivery'
 import { useStudio } from '@/lib/studio/store'
 
-type Props = { media: DeliverableMedia; title: string; label?: string; iconOnly?: boolean; className?: string; disabled?: boolean }
+type Props = { media: DeliverableMedia; title: string; prompt?: string; taskId?: string; label?: string; iconOnly?: boolean; className?: string; disabled?: boolean }
 
 export function MediaDownloadButton(props: Props) {
   const { state } = useStudio()
@@ -13,7 +13,7 @@ export function MediaDownloadButton(props: Props) {
   return <ScopedMediaDownloadButton key={`${accountId}:${props.media.url}`} {...props} accountId={accountId} />
 }
 
-function ScopedMediaDownloadButton({ media, title, accountId, label = '下载', iconOnly = false, className, disabled }: Props & { accountId: string }) {
+function ScopedMediaDownloadButton({ media, title, prompt, taskId, accountId, label = '下载', iconOnly = false, className, disabled }: Props & { accountId: string }) {
   const lock = useRef(false)
   const mounted = useRef(true)
   const controller = useRef<AbortController | null>(null)
@@ -29,7 +29,7 @@ function ScopedMediaDownloadButton({ media, title, accountId, label = '下载', 
     lock.current = true; setBusy(true); setError(''); setSuccess(false)
     controller.current = new AbortController()
     try {
-      const result = await downloadMedia(media, title, { accountId, signal: controller.current.signal })
+      const result = await downloadMedia(media, title, { accountId, signal: controller.current.signal, taskId, prompt })
       if (mounted.current) { if (!result.ok) setError(result.message); else setSuccess(true) }
     } finally { lock.current = false; if (mounted.current) setBusy(false) }
   }

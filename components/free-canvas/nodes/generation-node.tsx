@@ -203,7 +203,7 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
     return (
       <div className={cn('grid gap-2', data.results.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
         {data.results.map((result, index) => (
-          <ResultItem key={`${result.url}-${index}`} nodeId={id} title={data.title} result={result} index={index} onFavorite={() => void actions.saveResultToLibrary(id, index)} onOpenEditor={() => actions.openImageEditor({ nodeId: id, source: 'generation', resultIndex: index, url: result.url, title: `${data.title} 结果 ${index + 1}` })} />
+          <ResultItem key={`${result.url}-${index}`} nodeId={id} title={data.title} prompt={data.prompt} taskId={data.task?.id} result={result} index={index} onFavorite={() => void actions.saveResultToLibrary(id, index)} onOpenEditor={() => actions.openImageEditor({ nodeId: id, source: 'generation', resultIndex: index, url: result.url, title: `${data.title} 结果 ${index + 1}` })} />
         ))}
       </div>
     )
@@ -216,7 +216,7 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
   )
 }
 
-function ResultItem({ title, result, index, onFavorite, onOpenEditor }: { nodeId: string; title: string; result: NodeResult; index: number; onFavorite: () => void; onOpenEditor: () => void }) {
+function ResultItem({ nodeId, title, prompt, taskId, result, index, onFavorite, onOpenEditor }: { nodeId: string; title: string; prompt: string; taskId?: string; result: NodeResult; index: number; onFavorite: () => void; onOpenEditor: () => void }) {
   const label = `${title} 结果 ${index + 1}`
   return (
     <figure className="nodrag relative overflow-hidden rounded-xl border border-white/10 bg-black">
@@ -236,7 +236,7 @@ function ResultItem({ title, result, index, onFavorite, onOpenEditor }: { nodeId
         <button type="button" aria-label={`收藏${label}`} title="收藏到资产库" onClick={onFavorite} className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black">
           <Star className="size-3.5" aria-hidden="true" />
         </button>
-        <MediaDownloadButton media={{ url: result.url, kind: result.mediaKind }} title={label} iconOnly className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black disabled:opacity-50" />
+        <MediaDownloadButton media={{ url: result.url, kind: result.mediaKind }} title={label} prompt={prompt} taskId={taskId || nodeId} iconOnly className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black disabled:opacity-50" />
       </figcaption>
     </figure>
   )
