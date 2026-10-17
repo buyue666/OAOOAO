@@ -133,9 +133,11 @@ export async function listGenerationHistory(params: { page?: number; pageSize?: 
 function toHistoryItem(raw: Record<string, unknown>): GenerationHistoryItem | null {
   const id = String(raw.id || '')
   if (!id) return null
-  const assets = Array.isArray(raw.assets) ? raw.assets.flatMap((asset) => (asset && typeof asset === 'object' ? [normalizeAsset(asset as Record<string, unknown>)].filter(Boolean) as GenerationAsset[] : [])) : []
+  const rawAssets = Array.isArray(raw.assets) ? raw.assets.flatMap((asset) => (asset && typeof asset === 'object' ? [normalizeAsset(asset as Record<string, unknown>)].filter(Boolean) as GenerationAsset[] : [])) : []
   const billing = raw.billing && typeof raw.billing === 'object' ? (raw.billing as Record<string, unknown>) : undefined
   const settings = raw.settings && typeof raw.settings === 'object' ? raw.settings as Record<string, unknown> : undefined
+  const requestedCount = Number(settings?.count)
+  const assets = Number.isFinite(requestedCount) && requestedCount > 0 ? rawAssets.slice(0, Math.max(1, Math.trunc(requestedCount))) : rawAssets
   return {
     id,
     taskId: raw.taskId ? String(raw.taskId) : undefined,
