@@ -535,6 +535,8 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
   const [capabilityFilter, setCapabilityFilter] = useState<'all' | Capability>('all')
   const [enabledOnly, setEnabledOnly] = useState(false)
   const [selectedModelId, setSelectedModelId] = useState(() => settings.defaultModels.imageModel || settings.logicalModels[0]?.id || '')
+  // 复选框与“当前编辑”分开：点击卡片只切换编辑对象，只有明确勾选的模型才会参与批量操作。
+  const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(() => new Set())
   const [batchNotice, setBatchNotice] = useState('')
   const confirm = useConfirm()
 
@@ -550,9 +552,17 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
   }, [capabilityFilter, enabledOnly, models, query])
   const selectedModel = filteredModels.find((model) => model.id === selectedModelId) || filteredModels[0]
 
-  /* 批量作用于当前筛选结果；停用会让模型脱离路由，因此必须二次确认。草稿仍需「保存路由配置」才生效。 */
+  const toggleModelSelection = (id: string) => {
+    setSelectedModelIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  /* 启用/停用只作用于明确勾选的模型，避免“停用当前结果”误伤整个目录。 */
   const setFilteredEnabled = (enabled: boolean) => {
-    const ids = new Set(filteredModels.map((model) => model.id))
+    const ids = new Set([...selectedModelIds].filter((id) => models.some((model) => model.id === id)))
     if (!ids.size) return
     const apply = () => {
       setModels((current) => current.map((model) => (ids.has(model.id) ? { ...model, enabled } : model)))
@@ -566,6 +576,28 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
       tone: 'danger',
       onConfirm: apply,
     })
+  }
+
+  /** 将当前编辑模型的能力参数同步到勾选的其他模型，保留各自渠道、别名、价格和图标。 */
+  const copySelectedModelParameters = () => {
+    const source = selectedModel || models.find((model) => model.id === selectedModelId)
+    const targetIds = [...selectedModelIds].filter((id) => id !== source?.id)
+    if (!source || !targetIds.length) return
+    setModels((current) => current.map((model) => {
+      if (!targetIds.includes(model.id)) return model
+      return {
+        ...model,
+        capability: source.capability,
+        bindings: model.bindings.map((binding, index) => {
+          const sourceBinding = source.bindings.find((candidate) => candidate.channelId === binding.channelId)
+            || source.bindings[index]
+          return sourceBinding?.capabilityProfile
+            ? { ...binding, capabilityProfile: structuredClone(sourceBinding.capabilityProfile) }
+            : binding
+        }),
+      }
+    }))
+    setBatchNotice(`已将「${source.name || source.id}」的模型参数同步到 ${targetIds.length} 个勾选模型，保存后生效`)
   }
 
   /**
@@ -686,27 +718,39 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               <input type="checkbox" checked={enabledOnly} onChange={(event) => setEnabledOnly(event.target.checked)} />仅看启用
             </label>
             <div className="flex flex-wrap items-center gap-1.5">
-              <ControlButton variant="secondary" size="sm" disabled={!filteredModels.length} onClick={() => setFilteredEnabled(true)}>启用当前结果</ControlButton>
-              <ControlButton variant="secondary" size="sm" disabled={!filteredModels.length} onClick={() => setFilteredEnabled(false)}>停用当前结果</ControlButton>
+              <ControlButton variant="secondary" size="sm" disabled={!selectedModelIds.size} onClick={() => setFilteredEnabled(true)}>启用所选模型</ControlButton>
+              <ControlButton variant="secondary" size="sm" disabled={!selectedModelIds.size} onClick={() => setFilteredEnabled(false)}>停用所选模型</ControlButton>
+              {selectedModelIds.size > 0 && <ControlButton variant="ghost" size="sm" onClick={() => setSelectedModelIds(new Set())}>清除选择</ControlButton>}
             </div>
-            <span className="ml-auto text-xs tabular-nums text-muted-foreground">显示 {filteredModels.length} / {models.length}</span>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">显示 {filteredModels.length} / {models.length} · 已选 {selectedModelIds.size}</span>
           </div>
           <div className="mt-3 grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
             {filteredModels.map((model) => (
-              <button
+              <div
                 key={model.id}
-                type="button"
-                aria-pressed={selectedModel?.id === model.id}
                 onClick={() => setSelectedModelId(model.id)}
-                className={cn('min-w-0 rounded-lg border px-3 py-2.5 text-left transition-colors', selectedModel?.id === model.id ? 'border-studio-accent/55 bg-studio-accent/10' : 'border-border bg-card/45 hover:bg-muted')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedModelId(model.id) } }}
+                className={cn('relative min-w-0 cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-colors', selectedModel?.id === model.id ? 'border-studio-accent/55 bg-studio-accent/10' : 'border-border bg-card/45 hover:bg-muted')}
               >
-                  <span className="flex items-center justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-2"><span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted p-1 text-studio-accent"><ModelIcon model={model} /></span><span className="min-w-0 truncate text-xs font-semibold">{model.name || model.id}</span></span>
+                  <span className="flex items-start justify-between gap-2">
+                  <span className="flex min-w-0 items-start gap-2">
+                    <input
+                      type="checkbox"
+                      aria-label={`选择模型 ${model.name || model.id}`}
+                      checked={selectedModelIds.has(model.id)}
+                      onChange={() => toggleModelSelection(model.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      className="mt-1 size-4 shrink-0 accent-teal-600"
+                    />
+                    <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted p-1 text-studio-accent"><ModelIcon model={model} /></span><span className="min-w-0 truncate text-xs font-semibold">{model.name || model.id}</span>
+                  </span>
                   <StatusBadge tone={model.enabled ? 'success' : 'muted'}>{model.enabled ? '启用' : '停用'}</StatusBadge>
                 </span>
                 <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">{model.id}</span>
                 <span className="mt-1 block text-[11px] text-muted-foreground">{capabilityLabel(model.capability)} · {model.bindings.length} 个渠道绑定 · {formatAdminNumber(costs[model.id] ?? 0)} 积分/次</span>
-              </button>
+              </div>
             ))}
           </div>
           {batchNotice && <p role="status" className="mt-2 text-xs text-muted-foreground">{batchNotice}</p>}
@@ -723,7 +767,16 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               <AdminSectionCard
                 title={`${model.name || model.id}`}
                 description={`标识 ${model.id} · 能力 ${capabilityLabel(model.capability)}`}
-                action={<ControlButton variant="ghost" size="sm" onClick={() => setModels((current) => current.filter((item) => item.id !== model.id))} aria-label={`删除 ${model.id}`}><Trash2 className="size-3.5" /></ControlButton>}
+                action={<div className="flex items-center gap-1.5">
+                  <ControlButton
+                    variant="secondary"
+                    size="sm"
+                    disabled={selectedModelIds.size < 2}
+                    title={selectedModelIds.size < 2 ? '先在模型卡片左上角至少勾选两个模型' : '把当前编辑模型的能力参数复制到其他勾选模型'}
+                    onClick={() => copySelectedModelParameters()}
+                  >批量更改所选模型参数</ControlButton>
+                  <ControlButton variant="ghost" size="sm" onClick={() => setModels((current) => current.filter((item) => item.id !== model.id))} aria-label={`删除 ${model.id}`}><Trash2 className="size-3.5" /></ControlButton>
+                </div>}
                 className="p-4"
               >
             <div className="flex flex-col gap-2">
