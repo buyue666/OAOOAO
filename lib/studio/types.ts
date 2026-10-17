@@ -192,6 +192,9 @@ export interface Work {
   updatedAt: string
   ratio: string
   model: string
+  /** Parameters recorded with the source generation, when the backend provides them. */
+  resolution?: string
+  quality?: string
   /**
    * 生成该结果的提示词。
    *

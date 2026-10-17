@@ -64,6 +64,9 @@ export type GenerationHistoryItem = {
   title: string
   prompt: string
   model?: string
+  ratio?: string
+  resolution?: string
+  quality?: string
   source?: string
   durationMs?: number
   pointsCost?: number
@@ -90,6 +93,9 @@ export type StudioWork = {
   status: '已完成'
   createdAt?: string
   model?: string
+  ratio?: string
+  resolution?: string
+  quality?: string
   prompt: string
   durationMs?: number
   taskStatus: string
@@ -128,6 +134,7 @@ function toHistoryItem(raw: Record<string, unknown>): GenerationHistoryItem | nu
   if (!id) return null
   const assets = Array.isArray(raw.assets) ? raw.assets.flatMap((asset) => (asset && typeof asset === 'object' ? [normalizeAsset(asset as Record<string, unknown>)].filter(Boolean) as GenerationAsset[] : [])) : []
   const billing = raw.billing && typeof raw.billing === 'object' ? (raw.billing as Record<string, unknown>) : undefined
+  const settings = raw.settings && typeof raw.settings === 'object' ? raw.settings as Record<string, unknown> : undefined
   return {
     id,
     taskId: raw.taskId ? String(raw.taskId) : undefined,
@@ -136,6 +143,9 @@ function toHistoryItem(raw: Record<string, unknown>): GenerationHistoryItem | nu
     title: String(raw.title || raw.prompt || id),
     prompt: String(raw.prompt || ''),
     model: raw.model ? String(raw.model) : undefined,
+    ratio: typeof raw.ratio === 'string' ? raw.ratio : typeof settings?.ratio === 'string' ? settings.ratio : undefined,
+    resolution: typeof raw.resolution === 'string' ? raw.resolution : typeof settings?.resolution === 'string' ? settings.resolution : undefined,
+    quality: typeof raw.quality === 'string' ? raw.quality : typeof settings?.quality === 'string' ? settings.quality : undefined,
     source: raw.source ? String(raw.source) : undefined,
     durationMs: Number(raw.durationMs) || undefined,
     pointsCost: Number(raw.pointsCost) || Number(billing?.pointsCost) || undefined,
@@ -166,6 +176,9 @@ export function historyToWorks(items: GenerationHistoryItem[]): StudioWork[] {
         status: '已完成',
         createdAt: item.createdAt,
         model: item.model,
+        ratio: item.ratio,
+        resolution: item.resolution,
+        quality: item.quality,
         prompt: item.prompt,
         durationMs: item.durationMs,
         taskStatus: item.status,
@@ -476,6 +489,18 @@ export async function createLibraryAsset(input: {
   if (typeof payload.code === 'number' && payload.code !== 0) throw new StudioApiError(payload.msg || '素材保存失败', payload.code)
   const asset = payload.data?.asset
   if (!asset) throw new StudioApiError('素材保存失败：后端没有返回素材', 502)
+  return asset
+}
+
+/** 修改素材库条目的显示名称，媒体文件本身保持不变。 */
+export async function renameLibraryAsset(id: string, title: string): Promise<LibraryAssetView> {
+  const payload = await request<{ code?: number; msg?: string; data?: { asset?: LibraryAssetView } }>(`/api/library-assets/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title: title.trim() }),
+  })
+  if (typeof payload.code === 'number' && payload.code !== 0) throw new StudioApiError(payload.msg || '素材重命名失败', payload.code)
+  const asset = payload.data?.asset
+  if (!asset) throw new StudioApiError('素材重命名失败：后端没有返回素材', 502)
   return asset
 }
 

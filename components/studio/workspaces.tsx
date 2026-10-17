@@ -665,7 +665,9 @@ export function ImageWorkspace() {
       poster: work.poster,
       fallback: work.fallback,
       model: work.model ?? '',
-      ratio,
+      ratio: work.ratio || ratio,
+      resolution: work.resolution,
+      quality: work.quality,
       // 后端成功结果在结果舞台上就是已完成；本地预览条目使用自己的状态值。
       status: '已发布' as Work['status'],
       prompt: work.prompt,
@@ -720,10 +722,11 @@ export function ImageWorkspace() {
   const stageSource = useMemo<Work[]>(() => {
     if (!stageTaskId) return allStageSource
     const selected = allStageSource.filter((work) => work.taskId === stageTaskId)
-    return selected.length ? selected : allStageSource
-  }, [allStageSource, stageTaskId])
+    // 用户明确选中某个尚未产出结果的任务时显示空态/处理中，
+    // 不能把另一条任务的图片冒充成当前任务结果。
+    return selected.length || selectedTaskId ? selected : allStageSource
+  }, [allStageSource, selectedTaskId, stageTaskId])
   const selectedLiveTask = liveImageTasks.find((task) => task.id === stageTaskId) ?? liveLatest
-  const latestLiveMedia = selectedLiveTask?.media ?? []
   // 真实任务可用时，舞台状态与文案来自后端任务；否则回落到本地预览状态。
   const stageStatus: 'idle' | 'queued' | 'processing' | 'failed' | 'done' = selectedLiveTask
     ? selectedLiveTask.status === 'pending' ? 'queued' : selectedLiveTask.status === 'running' ? 'processing' : selectedLiveTask.status === 'error' ? 'failed' : selectedLiveTask.status === 'success' ? 'done' : 'idle'
@@ -1105,8 +1108,8 @@ export function ImageWorkspace() {
       prompt: request.prompt,
       model: request.model || work.model || model?.id,
       ratio: request.ratio || work.ratio || ratio,
-      resolution: request.resolution || resolution,
-      quality: request.quality || quality,
+      resolution: request.resolution || work.resolution || resolution,
+      quality: request.quality || work.quality || quality,
       kind: 'edit',
       references: [source, ...regionReferences],
       edit: {
@@ -1500,8 +1503,8 @@ export function ImageWorkspace() {
           onSubmit={submitImageEditor}
           modelOptions={editorModelOptions}
           initialModelId={editorWork.model || model?.id}
-          initialResolution={resolution}
-          initialQuality={quality}
+          initialResolution={editorWork.resolution || resolution}
+          initialQuality={editorWork.quality || quality}
           onSaveVersion={saveEditorVersion}
           onVersionSelect={(version) => {
             const next = stageSource.find((work) => work.id === version.id)
