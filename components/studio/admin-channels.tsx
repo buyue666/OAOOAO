@@ -90,7 +90,7 @@ export function AdminChannelsPanel() {
     setLoading(true); setError('')
     Promise.all([getAdminSettings(), listGenerationOperations({ page: 1, pageSize: 1 }).then((result) => result.channels).catch(() => [] as AdminGenerationChannel[])])
       .then(([next, channels]) => { setSettings(next); setHealth(channels) })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : '渠道配置加载失败'))
+      .catch((reason) => setError(localizeChannelError(reason, '渠道配置加载失败')))
       .finally(() => setLoading(false))
   }, [reloadKey])
 
@@ -126,9 +126,13 @@ export function AdminChannelsPanel() {
       confirmLabel: '确认删除渠道',
       tone: 'danger',
       onConfirm: async () => {
-        await saveChannels(channels.filter((item) => item.id !== channel.id))
-        setMessage('渠道已删除')
-        load()
+        try {
+          await saveChannels(channels.filter((item) => item.id !== channel.id))
+          setMessage('渠道已删除')
+          load()
+        } catch (reason) {
+          setError(localizeChannelError(reason, '删除渠道失败'))
+        }
       },
     })
   }, [channels, confirm, load])
@@ -139,7 +143,7 @@ export function AdminChannelsPanel() {
       setMessage(channel.enabled ? '渠道已停用' : '渠道已启用')
       load()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '状态修改失败')
+      setError(localizeChannelError(reason, '状态修改失败'))
     }
   }, [channels, load])
 
