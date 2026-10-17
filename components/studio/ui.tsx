@@ -185,7 +185,9 @@ export function SelectField({ label, value, onChange, options, className, hint, 
       const roomAbove = rect.top - gap - 12
       const openAbove = roomBelow < Math.min(preferredHeight, 220) && roomAbove > roomBelow
       const maxHeight = Math.max(120, Math.min(preferredHeight, openAbove ? roomAbove : roomBelow))
-      const menuWidth = Math.min(Math.max(rect.width, 300), Math.max(180, window.innerWidth - 16))
+      // Model names include the display price; give the portal menu enough
+      // room to show the complete label instead of truncating the cost.
+      const menuWidth = Math.min(Math.max(rect.width, 360), Math.max(180, window.innerWidth - 16))
       setMenuStyle({
         top: openAbove ? rect.top - gap - maxHeight : rect.bottom + gap,
         left: Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8)),
