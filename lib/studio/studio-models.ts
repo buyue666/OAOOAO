@@ -80,13 +80,14 @@ export function modelsFromSession(settings: SessionGenerationSettings | undefine
   // 一个逻辑模型的首个绑定也可能带有 requestAlias。这样上面的“逻辑模型兜底项”
   // 与该绑定别名会得到完全相同的 id，过去会在前台下拉里出现两次。请求名是后端
   // 真正识别模型的唯一键，因此只保留第一次出现的配置，同时保留不同别名作为独立入口。
-  const seen = new Set<string>()
-  return candidates.filter((model) => {
+  const unique = new Map<string, ModelConfig>()
+  for (const model of candidates) {
     const key = `${model.capability}:${model.id.trim().toLowerCase()}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+    const current = unique.get(key)
+    // 同一请求名只展示一项；如果重复项中有更具体的绑定图标，优先保留它。
+    if (!current || (!current.iconUrl && model.iconUrl)) unique.set(key, model)
+  }
+  return [...unique.values()]
 }
 
 function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationSettings, binding?: SessionLogicalModel['bindings'][number]): ModelConfig {
@@ -160,7 +161,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     creditCost: Number(cost) || 0,
     capabilities: capability,
     status: '可用',
-    iconUrl: selectedBinding?.iconUrl || model.iconUrl,
+    iconUrl: selectedBinding?.iconUrl?.trim() || model.iconUrl?.trim() || undefined,
   }
 }
 
