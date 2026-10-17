@@ -235,21 +235,21 @@
 .operationGuideTitle { flex: 0 0 auto; min-width: 130px; }
 .operationGuide p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operationGuideHint { display: none; }
-.workspace { grid-template-rows: minmax(330px, 1fr) auto; }
+.workspace { grid-template-rows: minmax(360px, 1fr) auto; }
 .stage {
-  min-height: 330px;
-  padding: 40px 28px 70px;
+  min-height: 360px;
+  padding: 24px 28px 66px;
   background-color: #0b0d0f;
   background-image: radial-gradient(rgb(255 255 255 / 8%) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 .mediaFrame {
   max-width: min(100%, 820px);
-  max-height: min(650px, calc(100vh - 620px));
+  max-height: min(650px, calc(100vh - 530px));
   border-radius: 7px;
   box-shadow: 0 22px 64px rgb(0 0 0 / 46%);
 }
-.image { width: auto; height: auto; max-width: min(100%, 820px); max-height: min(650px, calc(100vh - 620px)); }
+.image { width: auto; height: auto; max-width: min(100%, 820px); max-height: min(650px, calc(100vh - 530px)); }
 .floatingTools {
   top: auto;
   bottom: 17px;
@@ -260,11 +260,11 @@
   box-shadow: 0 10px 30px rgb(0 0 0 / 48%);
 }
 .promptArea {
-  min-height: 145px;
+  min-height: 108px;
   gap: 7px;
-  padding: 13px 16px 14px;
+  padding: 10px 16px 10px;
 }
-.promptTextarea { min-height: 66px; }
+.promptTextarea { min-height: 48px; }
 .footer { min-height: 58px; padding: 10px 16px; }
 .primaryAction { min-width: 126px; }
 
