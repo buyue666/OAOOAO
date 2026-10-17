@@ -185,6 +185,7 @@
 .colorControl { width: 23px; height: 23px; padding: 0; border: 1px solid var(--editor-border-strong); border-radius: 7px; background: transparent; cursor: pointer; }
 .zoomControl { display: inline-flex; min-height: 31px; align-items: center; gap: 1px; color: var(--editor-muted); font-size: 10px; white-space: nowrap; }
 .zoomControl > span { min-width: 37px; text-align: center; }
+.panHint { color: var(--editor-muted); font-size: 10px; white-space: nowrap; }
 
 .promptArea { display: flex; min-height: 132px; flex-direction: column; gap: 8px; border-top: 1px solid var(--editor-border); background: var(--editor-surface); padding: 12px 14px; }
 .promptLabel { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--editor-muted); font-size: 11px; }
@@ -403,4 +404,5 @@
   .mediaFrame,
   .image { max-height: min(420px, calc(100vh - 470px)); }
   .floatingTools { top: 10px; bottom: auto; max-width: calc(100% - 20px); }
+  .panHint { display: none; }
 }

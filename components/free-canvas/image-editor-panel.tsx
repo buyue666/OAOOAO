@@ -711,6 +711,7 @@ export function ImageEditorPanel({
               <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom + 0.1)} disabled={zoom >= 2} aria-label="放大" title="放大"><ZoomIn aria-hidden="true" /></button>
               <button type="button" className={styles.iconButton} onClick={resetView} disabled={zoom === 1 && pan.x === 0 && pan.y === 0} aria-label="重置视图" title="重置视图"><Maximize2 aria-hidden="true" /></button>
             </span>
+            <span className={styles.panHint}>空格+拖动平移</span>
             {operation !== 'outpaint' && <button type="button" className={`${styles.iconButton} ${!showMarkers ? styles.toolButtonActive : ''}`} onClick={() => setShowMarkers((visible) => !visible)} aria-pressed={!showMarkers} aria-label={showMarkers ? '隐藏标记' : '显示标记'} title={showMarkers ? '隐藏标记' : '显示标记'}>{showMarkers ? <Eye aria-hidden="true" /> : <EyeOff aria-hidden="true" />}</button>}
           </div>
         </section>
