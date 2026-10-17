@@ -226,6 +226,8 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
   selected,
   onSelect,
   onOpen,
+  onImageClick,
+  onEdit,
   label,
   className,
   fit = false,
@@ -235,13 +237,17 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
   selected: boolean
   onSelect: () => void
   onOpen: () => void
+  /** Open the editor after selecting the tile. Compare mode intentionally leaves this unset. */
+  onImageClick?: () => void
+  /** Open the editor from the more-actions button. */
+  onEdit?: () => void
   label: string
   className?: string
   fit?: boolean
 }) {
   return (
     <div className={cn('group relative min-w-0 overflow-hidden rounded-lg border bg-studio-ink', selected ? 'border-studio-accent ring-1 ring-inset ring-studio-accent' : 'border-studio-ink-line', className)}>
-      <button type="button" onClick={onSelect} aria-pressed={selected} aria-label={`选择 ${label}`} className={cn('block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent', fit && 'h-full')}>
+      <button type="button" onClick={() => { onSelect(); onImageClick?.() }} aria-pressed={selected} aria-label={`${onImageClick ? '编辑并选择' : '选择'} ${label}`} className={cn('block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent', fit && 'h-full')}>
         <span className={cn('block w-full', fit && 'h-full')} style={fit ? undefined : { aspectRatio: ratioToCss(work.ratio || ratio) }}>
           <MediaThumb
             src={work.src}
@@ -271,7 +277,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
           </Tooltip>
           <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} iconOnly className="flex size-6 items-center justify-center rounded text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-50" />
           <Tooltip label="更多操作">
-            <IconAction label={`${work.title} 的更多操作`} onClick={onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
+            <IconAction label={`${work.title} 的更多操作`} onClick={onEdit ?? onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
               <MoreHorizontal className="size-3" aria-hidden="true" />
             </IconAction>
           </Tooltip>
@@ -346,7 +352,7 @@ function ZoomableMedia({ work }: { work: Work }) {
   }, [clampToMediaBounds, work.poster, work.src])
 
   const updateZoom = (nextZoom: number) => {
-    const next = Math.min(4, Math.max(1, Math.round(nextZoom * 10) / 10))
+    const next = Math.min(5, Math.max(1, Math.round(nextZoom * 10) / 10))
     setZoom(next)
     setPan((currentPan) => next === 1 ? { x: 0, y: 0 } : clampToMediaBounds(currentPan, next))
   }
@@ -407,7 +413,7 @@ function ZoomableMedia({ work }: { work: Work }) {
             <ZoomOut className="size-3.5" aria-hidden="true" />
           </IconAction>
           <span className="min-w-11 text-center text-[11px] font-medium tabular-nums" aria-live="polite">{Math.round(zoom * 100)}%</span>
-          <IconAction label="放大" onClick={() => updateZoom(zoom + 0.5)} disabled={zoom >= 4} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-40">
+          <IconAction label="放大" onClick={() => updateZoom(zoom + 0.5)} disabled={zoom >= 5} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-40">
             <ZoomIn className="size-3.5" aria-hidden="true" />
           </IconAction>
           <span className="mx-0.5 h-4 w-px bg-studio-ink-foreground/20" aria-hidden="true" />
@@ -480,7 +486,7 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
             className="group relative block w-full overflow-hidden rounded-lg border border-border bg-studio-workspace text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent"
           >
             <div style={{ aspectRatio: ratioToCss(work.ratio) }}>
-              <MediaThumb src={work.src} poster={work.poster} kind={work.kind === 'video' ? 'video' : 'image'} alt={work.title} fallback={work.fallback} className="size-full" />
+              <MediaThumb src={work.src} poster={work.poster} kind={work.kind === 'video' ? 'video' : 'image'} alt={work.title} fallback={work.fallback} className="size-full [&_img]:object-contain [&_video]:object-contain" />
             </div>
             <span className="pointer-events-none absolute inset-0 flex items-end justify-end bg-studio-ink/0 p-3 transition-colors duration-200 group-hover:bg-studio-ink/25 group-focus-visible:bg-studio-ink/25">
               <span className="inline-flex items-center gap-1.5 rounded-md bg-studio-ink/80 px-2.5 py-1.5 text-xs font-medium text-studio-ink-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -537,7 +543,11 @@ export function ImageWorkspace() {
   const [selectedRefs, setSelectedRefs] = useState<SelectedReference[]>([])
   const [uploads, setUploads] = useState<UploadItem[]>([])
   const [notice, setNotice] = useState<{ tone: 'neutral' | 'warning' | 'accent'; text: string } | null>(null)
+  /** 任务队列选中的任务；舞台结果按任务隔离。 */
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null)
+  /** Preview is intentionally separate from the editor: the preview action only zooms. */
+  const [detailWork, setDetailWork] = useState<Work | null>(null)
   const [editorWork, setEditorWork] = useState<Work | null>(null)
   const [agentOpen, setAgentOpen] = useState(false)
   /** 提交锁：从点击生成到后端确认之前，禁止再次提交，避免双击产生两条任务。 */
@@ -693,7 +703,7 @@ export function ImageWorkspace() {
   }, [liveImageTasks, ratio])
 
   /** 舞台来源 = 已完成任务（最新） + 后端作品；按 id 去重，任务结果优先。 */
-  const stageSource = useMemo<Work[]>(() => {
+  const allStageSource = useMemo<Work[]>(() => {
     const seen = new Set<string>()
     const merged: Work[] = []
     for (const work of [...completedTaskWorks, ...stageWorks]) {
@@ -705,13 +715,21 @@ export function ImageWorkspace() {
     }
     return merged
   }, [completedTaskWorks, stageWorks])
-  const latestLiveMedia = liveLatest?.media ?? []
+  /** 默认使用最新任务；点击任务卡后只展示该任务自己的结果。 */
+  const stageTaskId = selectedTaskId ?? liveLatest?.id ?? allStageSource[0]?.taskId
+  const stageSource = useMemo<Work[]>(() => {
+    if (!stageTaskId) return allStageSource
+    const selected = allStageSource.filter((work) => work.taskId === stageTaskId)
+    return selected.length ? selected : allStageSource
+  }, [allStageSource, stageTaskId])
+  const selectedLiveTask = liveImageTasks.find((task) => task.id === stageTaskId) ?? liveLatest
+  const latestLiveMedia = selectedLiveTask?.media ?? []
   // 真实任务可用时，舞台状态与文案来自后端任务；否则回落到本地预览状态。
-  const stageStatus: 'idle' | 'queued' | 'processing' | 'failed' | 'done' = liveLatest
-    ? liveLatest.status === 'pending' ? 'queued' : liveLatest.status === 'running' ? 'processing' : liveLatest.status === 'error' ? 'failed' : liveLatest.status === 'success' ? 'done' : 'idle'
+  const stageStatus: 'idle' | 'queued' | 'processing' | 'failed' | 'done' = selectedLiveTask
+    ? selectedLiveTask.status === 'pending' ? 'queued' : selectedLiveTask.status === 'running' ? 'processing' : selectedLiveTask.status === 'error' ? 'failed' : selectedLiveTask.status === 'success' ? 'done' : 'idle'
     : stageSource.length > 0 ? 'done' : 'idle'
-  const stageLabel = liveLatest
-    ? liveLatest.unconfirmed ? '提交结果待确认' : ({ pending: '已提交，等待处理', running: '生成中', paused: '已暂停', success: '已完成', error: '生成失败', cancelled: '已取消' } as Record<string, string>)[liveLatest.status] ?? liveLatest.status
+  const stageLabel = selectedLiveTask
+    ? selectedLiveTask.unconfirmed ? '提交结果待确认' : ({ pending: '已提交，等待处理', running: '生成中', paused: '已暂停', success: '已完成', error: '生成失败', cancelled: '已取消' } as Record<string, string>)[selectedLiveTask.status] ?? selectedLiveTask.status
     : stageSource.length ? '已完成' : '等待创作'
   const selectedWork = stageSource.find((work) => work.id === selectedWorkId) ?? stageSource[0]
   const visibleWorks = previewWorks(stageSource, view, selectedWorkId)
@@ -1042,6 +1060,23 @@ export function ImageWorkspace() {
       .map((work) => ({ id: work.id, imageUrl: work.src, label: work.id === editorWork?.id ? '当前图片' : work.title }))
   ), [editorWork?.id, stageSource])
 
+  // 图片编辑器默认沿用当前结果的原模型，同时允许切换到后台明确标记为
+  // 支持图生图/编辑的其它图片模型。原模型即使没有 editing 标记也保留，
+  // 这样历史结果不会因为后台能力配置变化而无法继续编辑。
+  const editorModelOptions = useMemo(() => {
+    const originalId = editorWork?.model || model?.id
+    const candidates = imageModelList.filter((item) => item.capabilities.editing || item.id === originalId)
+    return candidates.map((item) => ({
+      id: item.id,
+      label: `${item.shortName} · ${item.creditCost} 积分/次`,
+      icon: <ModelIcon model={item} />,
+      ratios: item.capabilities.ratios,
+      resolutions: item.capabilities.resolutions,
+      qualities: item.capabilities.qualities,
+      qualityLabels: item.capabilities.qualityLabels,
+    }))
+  }, [editorWork?.model, imageModelList, model?.id])
+
   const submitImageEditor = useCallback(async (request: ImageEditRequest) => {
     const work = editorWork
     if (!work) return
@@ -1068,10 +1103,10 @@ export function ImageWorkspace() {
     }
     await generation.createImage({
       prompt: request.prompt,
-      model: work.model || model?.id,
+      model: request.model || work.model || model?.id,
       ratio: request.ratio || work.ratio || ratio,
-      resolution,
-      quality,
+      resolution: request.resolution || resolution,
+      quality: request.quality || quality,
       kind: 'edit',
       references: [source, ...regionReferences],
       edit: {
@@ -1313,7 +1348,18 @@ export function ImageWorkspace() {
         emptyHint={serverWorksResult.state === 'loading' ? '正在读取已有结果…' : serverWorksResult.state === 'error' ? '暂时无法读取结果，请刷新页面重试。' : '写下画面描述，在创作参数中选择模型。完成的图片会自动出现在这里。'}
       >
         {view === 'single' && selectedWork && (
-          <ResultTile work={selectedWork} ratio={ratio} fit selected label="当前结果" onSelect={() => setEditorWork(selectedWork)} onOpen={() => setEditorWork(selectedWork)} className="size-full" />
+          <ResultTile
+            work={selectedWork}
+            ratio={ratio}
+            fit
+            selected
+            label="当前结果"
+            onSelect={() => setSelectedWorkId(selectedWork.id)}
+            onOpen={() => setDetailWork(selectedWork)}
+            onImageClick={() => setEditorWork(selectedWork)}
+            onEdit={() => setEditorWork(selectedWork)}
+            className="size-full"
+          />
         )}
         {view === 'grid' && (
           <div className={cn('grid min-h-full content-start gap-2', visibleWorks.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
@@ -1324,8 +1370,10 @@ export function ImageWorkspace() {
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
                 label={work.id === selectedWork?.id ? '当前选择' : `结果 ${index + 1}`}
-                onSelect={() => { setSelectedWorkId(work.id); setEditorWork(work) }}
-                onOpen={() => setEditorWork(work)}
+                onSelect={() => setSelectedWorkId(work.id)}
+                onOpen={() => setDetailWork(work)}
+                onImageClick={() => setEditorWork(work)}
+                onEdit={() => setEditorWork(work)}
               />
             ))}
           </div>
@@ -1339,8 +1387,8 @@ export function ImageWorkspace() {
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
                 label={index === 0 ? 'A · 当前结果' : 'B · 对比结果'}
-                onSelect={() => { setSelectedWorkId(work.id); setEditorWork(work) }}
-                onOpen={() => setEditorWork(work)}
+                onSelect={() => setSelectedWorkId(work.id)}
+                onOpen={() => setDetailWork(work)}
               />
             ))}
             {visibleWorks.length < 2 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center text-xs leading-6 text-muted-foreground"><Columns2 className="size-5" aria-hidden="true" />再生成一张图片，即可并排比较。</div>}
@@ -1387,7 +1435,19 @@ export function ImageWorkspace() {
           <span className="text-[11px] text-muted-foreground">{liveImageTasks.length} 条任务</span>
         </div>
         <div className="mt-2">
-          <LiveTaskList kinds={['image']} limit={4} compact emptyHint="还没有图片任务" />
+          <LiveTaskList
+            kinds={['image']}
+            limit={4}
+            compact
+            emptyHint="还没有图片任务"
+            onSelectTask={(task) => {
+              setSelectedTaskId(task.id)
+              setSelectedWorkId(null)
+              setEditorWork(null)
+              setDetailWork(null)
+              setView('single')
+            }}
+          />
         </div>
       </section>
 
@@ -1438,6 +1498,10 @@ export function ImageWorkspace() {
           className="!w-full !min-w-0 !border-l-0"
           onClose={() => setEditorWork(null)}
           onSubmit={submitImageEditor}
+          modelOptions={editorModelOptions}
+          initialModelId={editorWork.model || model?.id}
+          initialResolution={resolution}
+          initialQuality={quality}
           onSaveVersion={saveEditorVersion}
           onVersionSelect={(version) => {
             const next = stageSource.find((work) => work.id === version.id)
@@ -1445,6 +1509,7 @@ export function ImageWorkspace() {
           }}
         />}
       </SidePanel>
+      <ResultDetailModal work={detailWork} onClose={() => setDetailWork(null)} onNotice={(text) => setNotice({ tone: 'accent', text })} />
     </>
   )
 }

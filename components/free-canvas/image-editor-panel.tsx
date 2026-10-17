@@ -1,6 +1,6 @@
 'use client'
 
-import type { CSSProperties, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent as ReactWheelEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Eraser,
@@ -41,10 +41,26 @@ export interface ImageEditRequest {
   /** Per-region instructions and optional reference images uploaded in the marker composer. */
   regions?: ImageEditorRegion[]
   /** Target output ratio for outpaint; omitted means preserve the source ratio. */
-  ratio?: '1:1' | '4:3' | '16:9' | '9:16'
+  ratio?: '1:1' | '3:2' | '2:3' | '16:9' | '9:16' | '4:3' | '3:4' | '21:9'
+  /** Optional model and image settings selected in the editor. */
+  model?: string
+  resolution?: string
+  quality?: string
 }
 
 export type ImageEditorRegion = { id: number; prompt?: string; referenceImageDataUrl?: string }
+
+/** Model and capability data used by the editor settings strip. Kept small so
+ * the canvas editor can opt out without importing the studio model registry. */
+export type ImageEditorModelOption = {
+  id: string
+  label: string
+  icon?: ReactNode
+  ratios?: string[]
+  resolutions?: string[]
+  qualities?: string[]
+  qualityLabels?: Record<string, string>
+}
 
 export interface ImageEditorVersion {
   id: string
@@ -72,6 +88,11 @@ export interface ImageEditorPanelProps {
   onOperationChange?: (operation: ImageEditOperation) => void
   /** Called after region descriptions are confirmed so the parent prompt can stay in sync. */
   onRegionPromptChange?: (regions: ImageEditorRegion[]) => void
+  /** Optional image-to-image model choices. The first matching initialModelId is selected. */
+  modelOptions?: ImageEditorModelOption[]
+  initialModelId?: string
+  initialResolution?: string
+  initialQuality?: string
   showHeader?: boolean
   /** Visual treatment for the editor surface. */
   theme?: 'dark' | 'light'
@@ -82,14 +103,18 @@ type Rect = { x: number; y: number; width: number; height: number }
 type MaskRegion = ImageEditorRegion & { x: number; y: number }
 type MaskSnapshot = { dataUrl: string; regions: MaskRegion[] }
 type PanPoint = { x: number; y: number }
-type OutpaintRatio = 'original' | '1:1' | '4:3' | '16:9' | '9:16'
+type OutpaintRatio = 'original' | '1:1' | '3:2' | '2:3' | '16:9' | '9:16' | '4:3' | '3:4' | '21:9'
 
 const outpaintRatioOptions: Array<{ value: OutpaintRatio; label: string; width?: number; height?: number }> = [
   { value: 'original', label: '原比例' },
   { value: '1:1', label: '1:1', width: 1, height: 1 },
+  { value: '3:2', label: '3:2', width: 3, height: 2 },
+  { value: '2:3', label: '2:3', width: 2, height: 3 },
   { value: '4:3', label: '4:3', width: 4, height: 3 },
   { value: '16:9', label: '16:9', width: 16, height: 9 },
   { value: '9:16', label: '9:16', width: 9, height: 16 },
+  { value: '3:4', label: '3:4', width: 3, height: 4 },
+  { value: '21:9', label: '21:9', width: 21, height: 9 },
 ]
 
 const operations: Array<{ value: ImageEditOperation; label: string; icon: typeof Sparkles }> = [
@@ -212,6 +237,10 @@ export function ImageEditorPanel({
   onImageClick,
   onOperationChange,
   onRegionPromptChange,
+  modelOptions = [],
+  initialModelId,
+  initialResolution = '1K',
+  initialQuality = 'auto',
   showHeader = true,
   theme = 'dark',
 }: ImageEditorPanelProps) {
@@ -242,6 +271,9 @@ export function ImageEditorPanel({
   const [maskRevision, setMaskRevision] = useState(0)
   const [maskRegions, setMaskRegions] = useState<MaskRegion[]>([])
   const [outpaintRatio, setOutpaintRatio] = useState<OutpaintRatio>('original')
+  const [editorModelId, setEditorModelId] = useState(initialModelId || modelOptions[0]?.id || '')
+  const [editorResolution, setEditorResolution] = useState(initialResolution)
+  const [editorQuality, setEditorQuality] = useState(initialQuality)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<PanPoint>({ x: 0, y: 0 })
   const [toolbarOffset, setToolbarOffset] = useState<PanPoint>({ x: 0, y: 0 })
@@ -260,6 +292,21 @@ export function ImageEditorPanel({
   const canUndo = historyIndexRef.current > 0
   const canRedo = historyIndexRef.current >= 0 && historyIndexRef.current < historyRef.current.length - 1
   const selectedMeta = operationMeta[operation]
+  const selectedEditorModel = modelOptions.find((item) => item.id === editorModelId) ?? modelOptions[0]
+  const editorResolutionOptions = useMemo(() => (
+    selectedEditorModel?.resolutions?.length ? selectedEditorModel.resolutions : [initialResolution || '1K']
+  ), [initialResolution, selectedEditorModel])
+  const editorQualityOptions = useMemo(() => (
+    editorResolution === '1K'
+      ? ['auto']
+      : selectedEditorModel?.qualities?.length ? selectedEditorModel.qualities : ['auto']
+  ), [editorResolution, selectedEditorModel])
+  const editorOutpaintRatioOptions = useMemo(() => {
+    const supported = selectedEditorModel?.ratios?.filter(Boolean)
+    if (!supported?.length) return outpaintRatioOptions
+    const supportedSet = new Set(supported)
+    return outpaintRatioOptions.filter((option) => option.value === 'original' || supportedSet.has(option.value))
+  }, [selectedEditorModel])
 
   const originalAspectRatio = useMemo(() => {
     const image = imageRef.current
@@ -392,6 +439,23 @@ export function ImageEditorPanel({
   useEffect(() => {
     setBrushSize(initialBrushSize)
   }, [initialBrushSize])
+
+  useEffect(() => {
+    const next = modelOptions.find((item) => item.id === initialModelId)?.id || modelOptions[0]?.id || ''
+    setEditorModelId(next)
+  }, [initialModelId, modelOptions])
+
+  useEffect(() => {
+    setEditorResolution((current) => editorResolutionOptions.includes(current) ? current : editorResolutionOptions[0] || '1K')
+  }, [editorResolutionOptions])
+
+  useEffect(() => {
+    setEditorQuality((current) => editorQualityOptions.includes(current) ? current : editorQualityOptions[0] || 'auto')
+  }, [editorQualityOptions])
+
+  useEffect(() => {
+    setOutpaintRatio((current) => editorOutpaintRatioOptions.some((item) => item.value === current) ? current : 'original')
+  }, [editorOutpaintRatioOptions])
 
   useEffect(() => {
     const stage = stageRef.current
@@ -735,6 +799,9 @@ export function ImageEditorPanel({
       maskDataUrl: operation !== 'outpaint' && canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
       imageUrl: imageSrc,
       brushSize,
+      model: editorModelId || undefined,
+      resolution: editorResolution || undefined,
+      quality: editorQuality || undefined,
       regions: operation !== 'outpaint' && maskRegions.length > 0
         ? maskRegions.map((region) => ({ id: region.id, prompt: region.prompt, referenceImageDataUrl: region.referenceImageDataUrl }))
         : undefined,
@@ -845,10 +912,34 @@ export function ImageEditorPanel({
         {selectedMeta.maskHint && <p className={styles.operationGuideHint}>{selectedMeta.maskHint}</p>}
       </div>
 
+      {modelOptions.length > 0 && <div className={styles.editorSettingsBar} aria-label="改图参数">
+        <label className={styles.editorSettingField}>
+          <span>模型</span>
+          <span className={styles.editorSettingControl}>
+            {selectedEditorModel?.icon && <span className={styles.editorSettingIcon}>{selectedEditorModel.icon}</span>}
+            <select value={editorModelId} onChange={(event) => setEditorModelId(event.target.value)} aria-label="改图模型">
+              {modelOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </span>
+        </label>
+        <label className={styles.editorSettingField}>
+          <span>清晰度</span>
+          <select value={editorResolution} onChange={(event) => setEditorResolution(event.target.value)} aria-label="改图清晰度">
+            {editorResolutionOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label className={styles.editorSettingField}>
+          <span>图片质量</span>
+          <select value={editorQuality} onChange={(event) => setEditorQuality(event.target.value)} aria-label="改图图片质量">
+            {editorQualityOptions.map((item) => <option key={item} value={item}>{selectedEditorModel?.qualityLabels?.[item] || (item === 'auto' ? '自动' : item)}</option>)}
+          </select>
+        </label>
+      </div>}
+
       {operation === 'outpaint' && <div className={styles.outpaintRatioBar} role="radiogroup" aria-label="扩图比例">
         <span className={styles.outpaintRatioLabel}>扩图比例</span>
         <div className={styles.outpaintRatioOptions}>
-          {outpaintRatioOptions.map((option) => (
+          {editorOutpaintRatioOptions.map((option) => (
             <button
               key={option.value}
               type="button"
