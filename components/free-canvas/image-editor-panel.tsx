@@ -199,13 +199,19 @@ export function ImageEditorPanel({
 }: ImageEditorPanelProps) {
   const imageRef = useRef<HTMLImageElement | null>(null)
   const maskRef = useRef<HTMLCanvasElement | null>(null)
+  const stageRef = useRef<HTMLElement | null>(null)
+  const toolbarRef = useRef<HTMLDivElement | null>(null)
   const historyRef = useRef<MaskSnapshot[]>([])
   const historyIndexRef = useRef(-1)
   const drawingRef = useRef(false)
   const startPointRef = useRef<Point | null>(null)
   const panningRef = useRef(false)
+  const spacePressedRef = useRef(false)
   const panStartRef = useRef<Point | null>(null)
   const panOriginRef = useRef<PanPoint>({ x: 0, y: 0 })
+  const toolbarDraggingRef = useRef(false)
+  const toolbarDragStartRef = useRef<Point | null>(null)
+  const toolbarOriginRef = useRef<PanPoint>({ x: 0, y: 0 })
   const nextRegionIdRef = useRef(1)
   const maskRegionsRef = useRef<MaskRegion[]>([])
   const [operation, setOperation] = useState<ImageEditOperation>(initialOperation)
@@ -218,6 +224,7 @@ export function ImageEditorPanel({
   const [outpaintRatio, setOutpaintRatio] = useState<OutpaintRatio>('original')
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<PanPoint>({ x: 0, y: 0 })
+  const [toolbarOffset, setToolbarOffset] = useState<PanPoint>({ x: 0, y: 0 })
   const [showMarkers, setShowMarkers] = useState(true)
   const [hiddenSubmitConfirm, setHiddenSubmitConfirm] = useState(false)
   const [draftRect, setDraftRect] = useState<Rect | null>(null)
@@ -244,6 +251,9 @@ export function ImageEditorPanel({
     ...(outpaintFrameStyle ?? {}),
     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
   }
+  const toolbarStyle: CSSProperties = {
+    transform: `translate(calc(-50% + ${toolbarOffset.x}px), ${toolbarOffset.y}px)`,
+  }
 
   const updateMaskRegions = useCallback((next: MaskRegion[]) => {
     maskRegionsRef.current = next
@@ -265,6 +275,7 @@ export function ImageEditorPanel({
     updateMaskRegions([])
     setZoom(1)
     setPan({ x: 0, y: 0 })
+    setToolbarOffset({ x: 0, y: 0 })
     setShowMarkers(true)
     setMaskRevision((revision) => revision + 1)
     setDraftRect(null)
@@ -285,6 +296,21 @@ export function ImageEditorPanel({
   useEffect(() => {
     setBrushSize(initialBrushSize)
   }, [initialBrushSize])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space') spacePressedRef.current = true
+    }
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') spacePressedRef.current = false
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [])
 
   const snapshotMask = useCallback(() => {
     const canvas = maskRef.current
@@ -361,6 +387,46 @@ export function ImageEditorPanel({
     adjustZoom(zoom + (event.deltaY < 0 ? 0.1 : -0.1))
   }
 
+  const clampToolbarOffset = (next: PanPoint) => {
+    const stage = stageRef.current
+    const toolbar = toolbarRef.current
+    if (!stage || !toolbar) return next
+    const maxX = Math.max(0, (stage.clientWidth - toolbar.offsetWidth) / 2 - 8)
+    const baseTop = toolbar.offsetTop || 16
+    const minY = 8 - baseTop
+    const maxY = Math.max(minY, stage.clientHeight - toolbar.offsetHeight - 8 - baseTop)
+    return {
+      x: Math.min(maxX, Math.max(-maxX, next.x)),
+      y: Math.min(maxY, Math.max(minY, next.y)),
+    }
+  }
+
+  const handleToolbarPointerDown = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    toolbarDraggingRef.current = true
+    toolbarDragStartRef.current = { x: event.clientX, y: event.clientY }
+    toolbarOriginRef.current = toolbarOffset
+  }
+
+  const handleToolbarPointerMove = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!toolbarDraggingRef.current || !toolbarDragStartRef.current) return
+    event.preventDefault()
+    const start = toolbarDragStartRef.current
+    setToolbarOffset(clampToolbarOffset({
+      x: toolbarOriginRef.current.x + event.clientX - start.x,
+      y: toolbarOriginRef.current.y + event.clientY - start.y,
+    }))
+  }
+
+  const handleToolbarPointerUp = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!toolbarDraggingRef.current) return
+    toolbarDraggingRef.current = false
+    toolbarDragStartRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+
   const drawPoint = useCallback((point: Point) => {
     const canvas = maskRef.current
     const context = canvas?.getContext('2d')
@@ -382,13 +448,15 @@ export function ImageEditorPanel({
   }, [brushColor, brushSize, tool])
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (tool === 'move') {
+    if (tool === 'move' || spacePressedRef.current || event.button === 1) {
+      event.preventDefault()
       event.currentTarget.setPointerCapture(event.pointerId)
       panningRef.current = true
       panStartRef.current = { x: event.clientX, y: event.clientY }
       panOriginRef.current = pan
       return
     }
+    if (event.button !== 0) return
     const point = pointFromEvent(event)
     if (!point) return
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -587,7 +655,7 @@ export function ImageEditorPanel({
       </div>}
 
       <div className={styles.workspace}>
-        <section className={styles.stage} aria-label="图片编辑画布" onWheel={handleWheel}>
+        <section ref={stageRef} className={styles.stage} aria-label="图片编辑画布" onWheel={handleWheel}>
           {!imageSrc ? <p className={styles.stageEmpty}>暂无图片</p> : (
             <div className={`${styles.mediaFrame} ${operation === 'outpaint' ? styles.outpaintMediaFrame : ''}`} style={mediaFrameStyle}>
               <img ref={imageRef} src={imageSrc} alt={alt} className={styles.image} onLoad={initializeMask} onClick={onImageClick} draggable={false} />
@@ -614,8 +682,18 @@ export function ImageEditorPanel({
               {operation !== 'outpaint' && maskStyle && <span className={styles.draftRect} style={maskStyle} aria-hidden="true" />}
             </div>
           )}
-          <div className={styles.floatingTools} role="toolbar" aria-label="编辑工具">
-            <span className={styles.toolbarHandle} aria-hidden="true"><GripVertical /></span>
+          <div ref={toolbarRef} className={styles.floatingTools} style={toolbarStyle} role="toolbar" aria-label="编辑工具">
+            <span
+              className={styles.toolbarHandle}
+              role="button"
+              tabIndex={0}
+              aria-label="拖动工具栏"
+              title="拖动工具栏"
+              onPointerDown={handleToolbarPointerDown}
+              onPointerMove={handleToolbarPointerMove}
+              onPointerUp={handleToolbarPointerUp}
+              onPointerCancel={handleToolbarPointerUp}
+            ><GripVertical aria-hidden="true" /></span>
             <button type="button" className={`${styles.toolButton} ${tool === 'brush' ? styles.toolButtonActive : ''}`} onClick={() => setTool('brush')} aria-pressed={tool === 'brush'} title="画笔"><Paintbrush aria-hidden="true" /><span>画笔</span></button>
             <button type="button" className={`${styles.toolButton} ${tool === 'eraser' ? styles.toolButtonActive : ''}`} onClick={() => setTool('eraser')} aria-pressed={tool === 'eraser'} title="橡皮擦"><Eraser aria-hidden="true" /><span>橡皮</span></button>
             <button type="button" className={`${styles.toolButton} ${tool === 'move' ? styles.toolButtonActive : ''}`} onClick={() => setTool('move')} aria-pressed={tool === 'move'} title="移动预览"><MousePointer2 aria-hidden="true" /><span>移动</span></button>
@@ -627,7 +705,7 @@ export function ImageEditorPanel({
             <label className={styles.sizeControl} title="画笔大小"><Minus aria-hidden="true" /><input type="range" min="4" max="160" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} aria-label="画笔大小" /><span>{brushSize}px</span></label>
             <input type="color" className={styles.colorControl} value={brushColor} onChange={(event) => setBrushColor(event.target.value)} aria-label="标记颜色" title="标记颜色" />
             <span className={styles.toolDivider} aria-hidden="true" />
-            <span className={styles.zoomControl} aria-label="画布缩放">
+            <span className={styles.zoomControl} aria-label="画布缩放" title="滚轮缩放；空格+左键或中键拖动平移">
               <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom - 0.1)} disabled={zoom <= 0.5} aria-label="缩小" title="缩小"><ZoomOut aria-hidden="true" /></button>
               <span>{Math.round(zoom * 100)}%</span>
               <button type="button" className={styles.iconButton} onClick={() => adjustZoom(zoom + 0.1)} disabled={zoom >= 2} aria-label="放大" title="放大"><ZoomIn aria-hidden="true" /></button>

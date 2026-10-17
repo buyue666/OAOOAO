@@ -338,6 +338,8 @@
   justify-content: center;
   color: var(--editor-muted);
   cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 .toolbarHandle svg { width: 14px; height: 14px; }
 .toolbarHandle:active { cursor: grabbing; }
