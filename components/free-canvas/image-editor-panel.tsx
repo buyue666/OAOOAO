@@ -57,6 +57,7 @@ export interface ImageEditorPanelProps {
   onVersionSelect?: (version: ImageEditorVersion) => void
   onImageClick?: () => void
   onOperationChange?: (operation: ImageEditOperation) => void
+  showHeader?: boolean
 }
 
 type Point = { x: number; y: number }
@@ -172,6 +173,7 @@ export function ImageEditorPanel({
   onVersionSelect,
   onImageClick,
   onOperationChange,
+  showHeader = true,
 }: ImageEditorPanelProps) {
   const imageRef = useRef<HTMLImageElement | null>(null)
   const maskRef = useRef<HTMLCanvasElement | null>(null)
@@ -415,7 +417,7 @@ export function ImageEditorPanel({
 
   return (
     <aside className={`${styles.panel}${className ? ` ${className}` : ''}`} aria-label={title}>
-      <header className={styles.header}>
+      {showHeader && <header className={styles.header}>
         <div className={styles.titleBlock}>
           <h2 className={styles.title}>{title}</h2>
           <p className={styles.description}>{description}</p>
@@ -426,7 +428,7 @@ export function ImageEditorPanel({
           </button>
           {onClose && <button type="button" className={styles.iconButton} onClick={onClose} aria-label="关闭图片编辑" title="关闭"><X aria-hidden="true" /></button>}
         </div>
-      </header>
+      </header>}
 
       <nav className={styles.operations} aria-label="图片操作">
         {operations.map(({ value, label, icon: Icon }) => (

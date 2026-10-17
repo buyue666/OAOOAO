@@ -55,6 +55,7 @@ import { accountDataEpoch } from '@/lib/studio/account-data-sync'
 import { useServerWorks, useLibraryAssets } from '@/lib/studio/use-account-data'
 import { useVideoReferenceLibrary } from '@/lib/studio/use-video-reference-library'
 import type { StudioWork } from '@/lib/studio/account-api'
+import { createLibraryAsset } from '@/lib/studio/account-api'
 import { libraryAssetToReferenceAsset, mergeReferenceAssets, workToReferenceAsset } from '@/lib/studio/reference-assets'
 /**
  * 已选参考素材用**独立快照**保存（含地址），不再只存 id 后回到候选池反查。
@@ -78,6 +79,7 @@ import {
 import type { Asset, GenerationSettings, ModelConfig, Work } from '@/lib/studio/types'
 import { publishReferenceAsset } from '@/lib/studio/generation-api'
 import { buildVideoReferences } from '@/lib/studio/video-references'
+import { ImageEditorPanel, type ImageEditRequest, type ImageEditorVersion } from '@/components/free-canvas/image-editor-panel'
 import type { GenerationReference } from '@/lib/studio/generation-types'
 import { hasDeliverable } from '@/lib/studio/result-delivery'
 import { addMediaToProject, listProjectReferencedSourceIds, type ProjectMediaInput } from '@/lib/studio/project-media'
@@ -503,6 +505,7 @@ export function ImageWorkspace() {
   const [prompt, setPrompt] = useState('')
   const intentDraft = useRef(false)
   const imageModelList = useMemo(() => filterModelsByCapability(liveModels, 'image'), [liveModels])
+  const videoModelList = useMemo(() => filterModelsByCapability(liveModels, 'video'), [liveModels])
   /** 真实生成结果：既作为参考素材候选，也作为结果舞台的展示来源。 */
   const serverWorksResult = useServerWorks({ pageSize: 24, kind: 'image' })
   /** 素材库搜索词（服务端 keyword 参数）：素材超过一页时用户仍能找到目标素材。 */
@@ -534,7 +537,7 @@ export function ImageWorkspace() {
   const [uploads, setUploads] = useState<UploadItem[]>([])
   const [notice, setNotice] = useState<{ tone: 'neutral' | 'warning' | 'accent'; text: string } | null>(null)
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null)
-  const [detailWork, setDetailWork] = useState<Work | null>(null)
+  const [editorWork, setEditorWork] = useState<Work | null>(null)
   const [agentOpen, setAgentOpen] = useState(false)
   /** 提交锁：从点击生成到后端确认之前，禁止再次提交，避免双击产生两条任务。 */
   const [submitting, setSubmitting] = useState(false)
@@ -1030,6 +1033,64 @@ export function ImageWorkspace() {
     if (added && state.selectedProjectId) router.push(`/canvas/${state.selectedProjectId}`)
   }
 
+  const editorVersions = useMemo<ImageEditorVersion[]>(() => (
+    stageSource
+      .filter((work) => work.kind === 'image')
+      .map((work) => ({ id: work.id, imageUrl: work.src, label: work.id === editorWork?.id ? '当前图片' : work.title }))
+  ), [editorWork?.id, stageSource])
+
+  const submitImageEditor = useCallback(async (request: ImageEditRequest) => {
+    const work = editorWork
+    if (!work) return
+    const source = request.imageUrl.startsWith('data:')
+      ? ({ type: 'image', dataUrl: request.imageUrl } as const)
+      : ({ type: 'image', url: request.imageUrl } as const)
+    if (request.operation === 'to-video') {
+      const videoModel = videoModelList.find((item) => item.id === defaultModelFor('video', state.sessionSettings, videoModelList)) ?? videoModelList[0]
+      const videoRatio = videoModel?.capabilities.ratios.includes(work.ratio) ? work.ratio : videoModel?.capabilities.ratios[0] ?? '16:9'
+      await generation.createVideo({
+        prompt: request.prompt,
+        model: videoModel?.id,
+        ratio: videoRatio,
+        seconds: 8,
+        references: [source],
+        surface: 'chat',
+        projectId: state.selectedProjectId,
+      })
+      setNotice({ tone: 'accent', text: '已提交转视频任务，可在任务记录查看进度。' })
+      return
+    }
+    await generation.createImage({
+      prompt: request.prompt,
+      model: work.model || model?.id,
+      ratio: work.ratio || ratio,
+      resolution,
+      quality,
+      kind: 'edit',
+      references: [source],
+      edit: {
+        operation: request.operation,
+        ...(request.maskDataUrl ? { mask: { type: 'image', dataUrl: request.maskDataUrl } as const } : {}),
+      },
+      surface: 'chat',
+      projectId: state.selectedProjectId,
+      title: `编辑：${work.title}`,
+    })
+    setNotice({ tone: 'accent', text: `已提交${request.operation === 'outpaint' ? '扩图' : request.operation === 'enhance' ? '高清修复' : request.operation === 'layers' ? '分图层' : '图片编辑'}任务，可在任务记录查看结果。` })
+  }, [editorWork, generation, model?.id, quality, ratio, resolution, state.selectedProjectId, state.sessionSettings, videoModelList])
+
+  const saveEditorVersion = useCallback(async (imageUrl: string) => {
+    if (!editorWork) return
+    await createLibraryAsset({
+      kind: 'image',
+      title: `${editorWork.title} 编辑版`.slice(0, 120),
+      source: 'image-editor',
+      tags: ['图片编辑'],
+      data: { serverUrl: imageUrl, dataUrl: imageUrl, mediaKind: 'image', assetRole: 'general' },
+    })
+    setNotice({ tone: 'accent', text: '已保存到资产库。' })
+  }, [editorWork])
+
   /** 当前项目已引用的媒体，用于按钮文案如实反映状态。 */
   const currentReferenced = Boolean(selectedWork && referencedIds.includes(selectedWork.src))
 
@@ -1246,7 +1307,7 @@ export function ImageWorkspace() {
         emptyHint={serverWorksResult.state === 'loading' ? '正在读取已有结果…' : serverWorksResult.state === 'error' ? '暂时无法读取结果，请刷新页面重试。' : '写下画面描述，在创作参数中选择模型。完成的图片会自动出现在这里。'}
       >
         {view === 'single' && selectedWork && (
-          <ResultTile work={selectedWork} ratio={ratio} fit selected label="当前结果" onSelect={() => setDetailWork(selectedWork)} onOpen={() => setDetailWork(selectedWork)} className="size-full" />
+          <ResultTile work={selectedWork} ratio={ratio} fit selected label="当前结果" onSelect={() => setEditorWork(selectedWork)} onOpen={() => setEditorWork(selectedWork)} className="size-full" />
         )}
         {view === 'grid' && (
           <div className={cn('grid min-h-full content-start gap-2', visibleWorks.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
@@ -1257,8 +1318,8 @@ export function ImageWorkspace() {
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
                 label={work.id === selectedWork?.id ? '当前选择' : `结果 ${index + 1}`}
-                onSelect={() => setSelectedWorkId(work.id)}
-                onOpen={() => setDetailWork(work)}
+                onSelect={() => { setSelectedWorkId(work.id); setEditorWork(work) }}
+                onOpen={() => setEditorWork(work)}
               />
             ))}
           </div>
@@ -1272,8 +1333,8 @@ export function ImageWorkspace() {
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
                 label={index === 0 ? 'A · 当前结果' : 'B · 对比结果'}
-                onSelect={() => setSelectedWorkId(work.id)}
-                onOpen={() => setDetailWork(work)}
+                onSelect={() => { setSelectedWorkId(work.id); setEditorWork(work) }}
+                onOpen={() => setEditorWork(work)}
               />
             ))}
             {visibleWorks.length < 2 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center text-xs leading-6 text-muted-foreground"><Columns2 className="size-5" aria-hidden="true" />再生成一张图片，即可并排比较。</div>}
@@ -1353,7 +1414,30 @@ export function ImageWorkspace() {
       <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title="导演 Agent" description="基于当前图片参数继续拆解镜头与素材">
         <DirectorAgent context="图片工作台 · 极光之后" />
       </SidePanel>
-      <ResultDetailModal work={detailWork} onClose={() => setDetailWork(null)} onNotice={(text) => setNotice({ tone: 'accent', text })} />
+      <SidePanel
+        open={Boolean(editorWork)}
+        onClose={() => setEditorWork(null)}
+        title="图片编辑"
+        description={editorWork?.title}
+        width="lg:w-[720px] lg:max-w-[720px]"
+      >
+        {editorWork && <ImageEditorPanel
+          imageSrc={editorWork.src}
+          title={editorWork.title}
+          description="画笔、涂抹、扩图、高清修复、分图层和转视频"
+          versions={editorVersions}
+          activeVersionId={editorWork.id}
+          showHeader={false}
+          className="!w-full !min-w-0 !border-l-0"
+          onClose={() => setEditorWork(null)}
+          onSubmit={submitImageEditor}
+          onSaveVersion={saveEditorVersion}
+          onVersionSelect={(version) => {
+            const next = stageSource.find((work) => work.id === version.id)
+            if (next) setEditorWork(next)
+          }}
+        />}
+      </SidePanel>
     </>
   )
 }
