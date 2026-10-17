@@ -167,17 +167,17 @@
   display: flex;
   width: 100%;
   min-width: 0;
-  height: 42px;
+  height: 56px;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
   transform: none;
   border: 1px solid rgb(20 30 38 / 12%);
-  border-radius: 13px;
+  border-radius: 16px;
   background: #fff;
-  box-shadow: 0 9px 26px rgb(20 30 38 / 25%);
+  box-shadow: 0 12px 30px rgb(20 30 38 / 28%);
   color: #182029;
   pointer-events: auto;
-  padding: 4px 5px 4px 9px;
+  padding: 6px 7px 6px 14px;
   transform-origin: left center;
   animation: regionComposerIn 170ms cubic-bezier(.22, .8, .3, 1) both;
 }
@@ -187,8 +187,8 @@
   pointer-events: none;
 }
 .regionComposerClosing { animation: regionComposerOut 160ms ease both; pointer-events: none; }
-.regionComposerPrefix { flex: 0 0 auto; color: #182029; font-size: 22px; line-height: 1; }
-.regionReferencePreview { width: 28px; height: 28px; flex: 0 0 auto; border: 1px solid rgb(24 32 41 / 13%); border-radius: 6px; object-fit: cover; }
+.regionComposerPrefix { flex: 0 0 auto; color: #182029; font-size: 26px; line-height: 1; }
+.regionReferencePreview { width: 34px; height: 34px; flex: 0 0 auto; border: 1px solid rgb(24 32 41 / 13%); border-radius: 9px; object-fit: cover; }
 .regionComposer input {
   min-width: 0;
   flex: 1;
@@ -197,17 +197,17 @@
   background: transparent;
   color: #182029;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 .regionComposer input::placeholder { color: rgb(24 32 41 / 47%); }
 .regionUploadButton {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
+  border-radius: 10px;
   color: rgb(24 32 41 / 58%);
   cursor: pointer;
 }
@@ -216,8 +216,8 @@
 .regionUploadButton input { display: none; }
 .regionComposer button {
   display: inline-flex;
-  width: 29px;
-  height: 29px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -226,7 +226,7 @@
   background: #1f73f1;
   color: #fff;
   cursor: pointer;
-  font-size: 17px;
+  font-size: 19px;
 }
 .regionComposer button:hover { background: #155bc6; }
 .cancelDrawButton { width: auto; min-width: 32px; padding-inline: 8px; }

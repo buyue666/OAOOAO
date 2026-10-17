@@ -748,8 +748,8 @@ export function ImageEditorPanel({
     if (!canvasRect.width || !canvasRect.height || !stageRect.width || !stageRect.height) return null
     const markerX = canvasRect.left - stageRect.left + (region.x / canvas.width) * canvasRect.width
     const markerY = canvasRect.top - stageRect.top + (region.y / canvas.height) * canvasRect.height
-    const popupWidth = Math.min(310, Math.max(190, stageRect.width - 16))
-    const popupHeight = 42
+    const popupWidth = Math.min(340, Math.max(220, stageRect.width - 16))
+    const popupHeight = 56
     const gap = 12
     const minX = 8
     const maxX = Math.max(minX, stageRect.width - popupWidth - 8)
