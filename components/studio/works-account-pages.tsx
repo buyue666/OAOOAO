@@ -112,6 +112,8 @@ function WorkCard({ work }: { work: StudioWork }) {
   const [projectBusy, setProjectBusy] = useState(false)
   const projectLock = useRef(false)
   const ratio = work.kind === 'video' ? '16:9' : '1:1'
+  const openPreview = useCallback(() => setPreview(true), [])
+  const closePreview = useCallback(() => setPreview(false), [])
 
   /** 复用参数：把结果带回工作台，由工作台继续用同一组参数创作。 */
   function reuseParams(event: React.MouseEvent<HTMLAnchorElement>) {
@@ -171,7 +173,7 @@ function WorkCard({ work }: { work: StudioWork }) {
         <p className="truncate text-sm font-semibold text-foreground" title={work.title}>{work.title}</p>
         <p className="mt-1 truncate text-xs text-muted-foreground">{work.model || '未记录模型'}{work.createdAt ? ` · ${new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <ControlButton variant="secondary" size="sm" onClick={() => setPreview(true)}><ExternalLink className="size-3.5" />预览</ControlButton>
+          <ControlButton variant="secondary" size="sm" onClick={openPreview} aria-haspopup="dialog"><ExternalLink className="size-3.5" />预览</ControlButton>
           <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
           {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link> : null}
           <ControlButton variant="ghost" size="sm" onClick={sendToCanvas}><WandSparkles className="size-3.5" />发到画布</ControlButton>
@@ -181,12 +183,12 @@ function WorkCard({ work }: { work: StudioWork }) {
       </div>
       <Modal
         open={preview}
-        onClose={() => setPreview(false)}
+        onClose={closePreview}
         title={work.title}
         description={`生成于 ${work.createdAt ? new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false }) : '未知时间'}${work.durationMs ? ` · 耗时 ${Math.round(work.durationMs / 1000)} 秒` : ''}`}
         footer={(
           <>
-            <ControlButton variant="ghost" onClick={() => setPreview(false)}>关闭</ControlButton>
+            <ControlButton variant="ghost" onClick={closePreview}>关闭</ControlButton>
             <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} label="下载作品" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted disabled:opacity-50" />
             {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Copy className="size-4" />复用这组参数</Link> : null}
           </>

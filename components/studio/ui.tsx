@@ -366,6 +366,11 @@ export function FilterChips<T extends string>({ value, onChange, options, classN
 /** 打开时锁定焦点到对话框，关闭后把焦点还给触发元素；Escape 关闭。 */
 function useDialogBehavior(open: boolean, onClose: () => void) {
   const containerRef = useRef<HTMLElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!open) return
@@ -377,7 +382,7 @@ function useDialogBehavior(open: boolean, onClose: () => void) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !container) return
@@ -399,7 +404,7 @@ function useDialogBehavior(open: boolean, onClose: () => void) {
       document.removeEventListener('keydown', handleKeyDown)
       previous?.focus?.()
     }
-  }, [onClose, open])
+  }, [open])
 
   return containerRef
 }
