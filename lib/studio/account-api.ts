@@ -12,6 +12,7 @@
 import { request, StudioApiError } from './api'
 import { summarizePointRecordsWith, type LedgerSummary, type PointRecord, type PointRecordPage } from './ledger'
 import { WORK_ID_PREFIX } from './reference-selection'
+import type { AssetCategory } from './types'
 
 /* -------------------------------- 积分流水 -------------------------------- */
 
@@ -496,10 +497,10 @@ export async function createLibraryAsset(input: {
 }
 
 /** 修改素材库条目的显示名称，媒体文件本身保持不变。 */
-export async function renameLibraryAsset(id: string, title: string): Promise<LibraryAssetView> {
+export async function renameLibraryAsset(id: string, title: string, category?: AssetCategory): Promise<LibraryAssetView> {
   const payload = await request<{ code?: number; msg?: string; data?: { asset?: LibraryAssetView } }>(`/api/library-assets/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ title: title.trim() }),
+    body: JSON.stringify({ title: title.trim(), ...(category ? { category } : {}) }),
   })
   if (typeof payload.code === 'number' && payload.code !== 0) throw new StudioApiError(payload.msg || '素材重命名失败', payload.code)
   const asset = payload.data?.asset
