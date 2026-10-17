@@ -51,9 +51,16 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
      */
     // `qualities` is accepted as the legacy/editor spelling; new configs use
     // `imageQualities` to make the distinction from output resolution explicit.
-    const qualityList=Array.isArray(profile.imageQualities)?profile.imageQualities:profile.qualities;
+    const qualityList=Array.isArray(profile.imageQualities)
+      ? profile.imageQualities
+      : Array.isArray(profile.qualities)
+        ? profile.qualities
+        : Array.isArray(profile.imageQualityOptions)
+          ? profile.imageQualityOptions.map((option:any)=>option?.value)
+          : undefined;
     const declaredQualities=Array.isArray(qualityList)?qualityList.map((value:any)=>String(value)):[];
-    if(input.config?.quality!==undefined&&declaredQualities.length&&!declaredQualities.includes(String(input.config.quality)))throw httpError(400,'Image quality is not supported by this model');
+    const hasDeclaredQualities=Array.isArray(profile.imageQualities)||Array.isArray(profile.qualities)||Array.isArray(profile.imageQualityOptions);
+    if(input.config?.quality!==undefined&&hasDeclaredQualities&&!declaredQualities.includes(String(input.config.quality)))throw httpError(400,'Image quality is not supported by this model');
     const qualityIsDeclared=declaredQualities.includes(String(input.config?.quality));
     if(qualityIsDeclared) {
       // Skip the legacy "every non-default option must have a multiplier" rule:
