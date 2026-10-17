@@ -55,16 +55,17 @@ function localizeChannelError(reason: unknown, fallback: string) {
 }
 
 /** 图片模型的能力选项。绑定级配置会随 capabilityProfile 一起提交给后端。 */
-const imageProfileRatios = [
-  ['1:1', '1:1 · 1254×1254'],
-  ['3:2', '3:2 · 1536×1024'],
-  ['2:3', '2:3 · 1024×1536'],
-  ['16:9', '16:9 · 1672×941'],
-  ['9:16', '9:16 · 941×1672'],
-  ['4:3', '4:3 · 1448×1086'],
-  ['3:4', '3:4 · 1086×1448'],
-  ['21:9', '21:9 · 1923×817'],
-] as const
+type ImageRatioOption = { value: string; dimension: string }
+const imageProfileRatioOptions: readonly ImageRatioOption[] = [
+  { value: '1:1', dimension: '1254x1254' },
+  { value: '3:2', dimension: '1536x1024' },
+  { value: '2:3', dimension: '1024x1536' },
+  { value: '16:9', dimension: '1672x941' },
+  { value: '9:16', dimension: '941x1672' },
+  { value: '4:3', dimension: '1448x1086' },
+  { value: '3:4', dimension: '1086x1448' },
+  { value: '21:9', dimension: '1923x817' },
+]
 const imageProfileResolutions = [['1K', '1K'], ['2K', '2K'], ['4K', '4K']] as const
 const imageProfileQualities = [['auto', '自动'], ['low', '低'], ['medium', '中'], ['high', '高']] as const
 
@@ -762,7 +763,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                           bindings: model.bindings.map((item, position) => {
                             if (position !== index) return item
                             const profile = { ...(item.capabilityProfile || {}) }
-                            for (const key of ['aspectRatios', 'outputResolutions', 'resolutions', 'imageQualities', 'imageQualityOptions', 'imageQualityLabels', 'qualities', 'outputDimensions', 'sizeMap']) delete profile[key]
+                            for (const key of ['aspectRatios', 'aspectRatioOptions', 'outputResolutions', 'resolutions', 'imageQualities', 'imageQualityOptions', 'imageQualityLabels', 'qualities', 'outputDimensions', 'sizeMap']) delete profile[key]
                             return { ...item, capabilityProfile: profile }
                           }),
                         })}
@@ -861,6 +862,47 @@ function profileList(profile: BindingCapabilityProfile | undefined, key: string,
   return [...fallback]
 }
 
+function capabilityDimension(profile: BindingCapabilityProfile | undefined, ratio: string) {
+  const maps = [profile?.sizeMap, profile?.outputDimensions]
+  for (const map of maps) {
+    if (!map || typeof map !== 'object' || Array.isArray(map)) continue
+    const value = (map as Record<string, unknown>)[ratio]
+    if (typeof value === 'string' && /^(?:auto|\d+x\d+)$/i.test(value.trim())) return value.trim()
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = Object.values(value as Record<string, unknown>).find((item) => typeof item === 'string' && /^(?:auto|\d+x\d+)$/i.test(item.trim()))
+      if (typeof nested === 'string') return nested.trim()
+    }
+    for (const key of [`1K:${ratio}`, `${ratio}:1K`]) {
+      const candidate = (map as Record<string, unknown>)[key]
+      if (typeof candidate === 'string' && /^(?:auto|\d+x\d+)$/i.test(candidate.trim())) return candidate.trim()
+    }
+  }
+  return imageProfileRatioOptions.find((item) => item.value === ratio)?.dimension || ''
+}
+
+/**
+ * 画幅与清晰度一样，保存可编辑的绑定行。
+ * `aspectRatios` 只保存勾选并发送给上游的比例值，
+ * `aspectRatioOptions` 保存所有行及其实际输出尺寸，`sizeMap` 保持旧客户端兼容。
+ */
+function ratioOptionsFromProfile(profile: BindingCapabilityProfile | undefined): ImageRatioOption[] {
+  const configured = profile?.aspectRatioOptions
+  if (Array.isArray(configured)) {
+    return configured
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
+      .map((item) => ({
+        value: typeof item.value === 'string' ? item.value : '',
+        dimension: typeof item.dimension === 'string' ? item.dimension : typeof item.outputDimension === 'string' ? item.outputDimension : '',
+      }))
+      .filter((item) => item.value.trim())
+  }
+  const configuredValues = profile?.aspectRatios
+  const values = Array.isArray(configuredValues) && configuredValues.every((item) => typeof item === 'string')
+    ? configuredValues as string[]
+    : imageProfileRatioOptions.map(({ value }) => value)
+  return values.map((value) => ({ value, dimension: capabilityDimension(profile, value) }))
+}
+
 type ImageQualityOption = { value: string; label: string }
 
 /**
@@ -889,7 +931,10 @@ function qualityOptionsFromProfile(profile: BindingCapabilityProfile | undefined
 }
 
 function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?: BindingCapabilityProfile; onChange: (patch: BindingCapabilityProfile) => void; onReset: () => void }) {
-  const ratios = profileList(profile, 'aspectRatios', imageProfileRatios.map(([value]) => value))
+  const ratioOptions = ratioOptionsFromProfile(profile)
+  const ratios = Array.isArray(profile?.aspectRatios)
+    ? profile.aspectRatios.filter((value): value is string => typeof value === 'string')
+    : ratioOptions.map(({ value }) => value)
   const resolutions = profileList(profile, 'outputResolutions', imageProfileResolutions.map(([value]) => value), 'resolutions')
   const qualityOptions = qualityOptionsFromProfile(profile)
   const autoRequired = resolutions.includes('1K')
@@ -910,6 +955,40 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
       .map(({ value, label }) => ({ value: value.trim(), label: label.trim() || value.trim() }))
       .filter(({ value }) => value)
     onChange({ imageQualities: values, imageQualityOptions: options })
+  }
+
+  const ratioPatch = (nextOptions: ImageRatioOption[], selectedValues: string[]) => {
+    const options = nextOptions
+      .map(({ value, dimension }) => ({ value: value.trim(), dimension: dimension.trim() }))
+      .filter(({ value }) => value)
+    const allowed = new Set(options.map(({ value }) => value))
+    const values = [...new Set(selectedValues.map((value) => value.trim()).filter((value) => value && allowed.has(value)))]
+    const sizeMap = Object.fromEntries(options.filter(({ dimension }) => dimension).map(({ value, dimension }) => [value, dimension]))
+    onChange({ aspectRatios: values, aspectRatioOptions: options, sizeMap })
+  }
+
+  const updateRatio = (index: number, field: keyof ImageRatioOption, rawValue: string) => {
+    const nextOptions = ratioOptions.map((option, optionIndex) => optionIndex === index ? { ...option, [field]: rawValue } : option)
+    const previous = ratioOptions[index]?.value.trim()
+    const nextValue = nextOptions[index]?.value.trim()
+    const selected = ratios.filter((value) => value !== previous)
+    if (nextValue && ratios.includes(previous)) selected.push(nextValue)
+    ratioPatch(nextOptions, selected)
+  }
+
+  const addRatio = () => {
+    const used = new Set(ratioOptions.map(({ value }) => value))
+    let index = ratioOptions.length + 1
+    let value = `ratio-${index}`
+    while (used.has(value)) value = `ratio-${++index}`
+    const nextOptions = [...ratioOptions, { value, dimension: 'auto' }]
+    ratioPatch(nextOptions, [...ratios, value])
+  }
+
+  const removeRatio = (index: number) => {
+    const removed = ratioOptions[index]?.value
+    const nextOptions = ratioOptions.filter((_, optionIndex) => optionIndex !== index)
+    ratioPatch(nextOptions, ratios.filter((value) => value !== removed))
   }
 
   const updateQuality = (index: number, field: keyof ImageQualityOption, rawValue: string) => {
@@ -954,7 +1033,7 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onChange({ aspectRatios: imageProfileRatios.map(([value]) => value) })}
+            onClick={() => ratioPatch([...imageProfileRatioOptions], imageProfileRatioOptions.map(({ value }) => value))}
           >GPT 八比例</ControlButton>
           <ControlButton
             type="button"
@@ -965,11 +1044,13 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
         </div>
       </div>
       <div className="mt-3 grid gap-3 lg:grid-cols-3">
-        <CapabilityOptionGroup
-          title="支持画幅"
-          options={imageProfileRatios}
+        <ImageRatioOptionGroup
+          options={ratioOptions}
           selected={ratios}
-          onToggle={(value) => toggle('aspectRatios', ratios, value)}
+          onToggle={(option) => toggle('aspectRatios', ratios, option.value)}
+          onChange={updateRatio}
+          onAdd={addRatio}
+          onRemove={removeRatio}
         />
         <CapabilityOptionGroup
           title="支持清晰度"
@@ -987,6 +1068,46 @@ function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?
         />
       </div>
     </div>
+  )
+}
+
+function ImageRatioOptionGroup({
+  options,
+  selected,
+  onToggle,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  options: ImageRatioOption[]
+  selected: string[]
+  onToggle: (option: ImageRatioOption) => void
+  onChange: (index: number, field: keyof ImageRatioOption, value: string) => void
+  onAdd: () => void
+  onRemove: (index: number) => void
+}) {
+  return (
+    <fieldset className="min-w-0 lg:col-span-1">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <legend className="text-[11px] font-medium text-muted-foreground">支持画幅</legend>
+        <ControlButton type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[11px]" onClick={onAdd}><Plus className="size-3" />添加</ControlButton>
+      </div>
+      <p className="mb-2 text-[10px] leading-4 text-muted-foreground">输入上游接受的比例值和实际输出尺寸，例如 <code>1:1</code> 绑定为 <code>1254x1254</code>。勾选项才会显示在前台并发送给上游。</p>
+      <div className="space-y-1.5">
+        {options.map((option, index) => {
+          const checked = selected.includes(option.value)
+          return (
+            <div key={`${option.value}-${index}`} className={cn('grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-1.5 py-1.5', checked ? 'border-studio-accent/60 bg-studio-accent/5' : 'border-border bg-background')}>
+              <input type="checkbox" className="size-3 accent-studio-accent" checked={checked} onChange={() => onToggle(option)} aria-label={`启用画幅 ${option.value}`} />
+              <AdminInput value={option.value} placeholder="上游比例值" aria-label={`画幅${index + 1}比例值`} onChange={(event) => onChange(index, 'value', event.target.value)} />
+              <AdminInput value={option.dimension} placeholder="实际输出尺寸，如 1254x1254" aria-label={`画幅${index + 1}输出尺寸`} onChange={(event) => onChange(index, 'dimension', event.target.value)} />
+              <ControlButton type="button" variant="ghost" size="sm" className="size-7 p-0" aria-label={`删除画幅 ${option.value}`} onClick={() => onRemove(index)}><Trash2 className="size-3.5" /></ControlButton>
+            </div>
+          )
+        })}
+        {!options.length && <p className="rounded-md border border-dashed border-border px-2 py-2 text-[11px] text-muted-foreground">暂无画幅参数，请点击“添加”。</p>}
+      </div>
+    </fieldset>
   )
 }
 

@@ -90,6 +90,16 @@ function validCapabilityOptions(value:unknown,name:string,max=32) {
   }
   return values;
 }
+function validCapabilityRatioOptions(value:unknown,name:string,max=32) {
+  if(!Array.isArray(value)||value.length>max)throw httpError(400,`Invalid ${name}`);
+  const values=new Set<string>();
+  for(const item of value){
+    const option=object(item);const ratio=option.value,dimension=option.dimension;
+    if(typeof ratio!=='string'||!ratio.trim()||ratio.length>100||values.has(ratio.trim())||typeof dimension!=='string'||!dimension.trim()||dimension.length>100||!/^(?:auto|\d+x\d+)$/i.test(dimension.trim()))throw httpError(400,`Invalid ${name}`);
+    values.add(ratio.trim());
+  }
+  return values;
+}
 function validCapabilitySizeMap(value:unknown,name:string) {
   const map=object(value);const entries=Object.entries(map);
   if(entries.length>128)throw httpError(400,`Invalid ${name}`);
@@ -163,6 +173,10 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
       if(binding.capabilityProfile!==undefined&&binding.capabilityProfile!==null){
         const profile=object(binding.capabilityProfile);
         if(profile.aspectRatios!==undefined)validCapabilityList(profile.aspectRatios,'aspect ratios');
+        if(profile.aspectRatioOptions!==undefined){
+          const options=validCapabilityRatioOptions(profile.aspectRatioOptions,'aspect ratio options');
+          if(Array.isArray(profile.aspectRatios)&&profile.aspectRatios.some((value:any)=>!options.has(String(value).trim())))throw httpError(400,'Aspect ratio must use a configured parameter');
+        }
         if(profile.outputResolutions!==undefined)validCapabilityList(profile.outputResolutions,'output resolutions');
         if(profile.imageQualities!==undefined)validCapabilityList(profile.imageQualities,'image qualities');
         if(profile.qualities!==undefined)validCapabilityList(profile.qualities,'image qualities');

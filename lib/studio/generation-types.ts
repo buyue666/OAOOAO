@@ -248,6 +248,8 @@ export type SessionLogicalModel = {
       supportsReferenceImage?: boolean
       maxReferenceImages?: number
       aspectRatios?: string[]
+      /** 可编辑的画幅及实际输出尺寸绑定；value 是上游比例参数。 */
+      aspectRatioOptions?: Array<{ value: string; dimension: string }>
       /** 新字段：清晰度档位（1K/2K/4K）；保留 resolutions 兼容旧配置。 */
       outputResolutions?: string[]
       resolutions?: string[]

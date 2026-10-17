@@ -72,6 +72,8 @@ export type SessionSettings = {
         supportsReferenceImage?: boolean
         maxReferenceImages?: number
         aspectRatios?: string[]
+        /** 可编辑的画幅及实际输出尺寸绑定；value 是上游比例参数。 */
+        aspectRatioOptions?: Array<{ value: string; dimension: string }>
         outputResolutions?: string[]
         resolutions?: string[]
         imageQualities?: string[]

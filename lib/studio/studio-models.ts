@@ -90,6 +90,10 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
   const explicitlyUnsupported = Boolean(profile) && profile?.supportsReferenceImage === false
   const supportsReference = Boolean(profile?.supportsReferenceImage)
   const configuredResolutions = profile?.outputResolutions?.length ? profile.outputResolutions : profile?.resolutions
+  const configuredRatioOptions = profile?.aspectRatioOptions?.filter((item) => item && typeof item.value === 'string' && item.value.trim() && typeof item.dimension === 'string' && item.dimension.trim()) ?? []
+  const configuredRatios = Array.isArray(profile?.aspectRatios)
+    ? [...profile.aspectRatios]
+    : configuredRatioOptions.map((item) => item.value)
   const configuredQualityOptions = profile?.imageQualityOptions?.filter((item) => item && typeof item.value === 'string' && item.value.trim() && typeof item.label === 'string') ?? []
   const configuredQualities = profile?.imageQualities?.length
     ? profile.imageQualities
@@ -108,7 +112,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     multiReference: supportsReference && (profile?.maxReferenceImages ?? 0) > 1,
     editing: supportsReference,
     durations: (profile?.durationSeconds ?? []).map((value) => `${value} 秒`),
-    ratios: profile?.aspectRatios?.length ? [...profile.aspectRatios] : defaultRatiosFor(model.capability),
+    ratios: (Array.isArray(profile?.aspectRatios) || configuredRatioOptions.length) ? configuredRatios : defaultRatiosFor(model.capability),
     resolutions: configuredResolutions?.length
       ? [...configuredResolutions]
       : defaultResolutionsFor(model.capability),
@@ -179,7 +183,10 @@ function normalizeOutputDimensions(
 ): NormalizedOutputDimensions {
   const byResolution: Record<string, Record<string, string>> = {}
   const selected: Record<string, string> = {}
-  const maps = [profile?.sizeMap, profile?.outputDimensions]
+  const ratioOptionMap = profile?.aspectRatioOptions?.length
+    ? Object.fromEntries(profile.aspectRatioOptions.map((item) => [item.value, item.dimension]))
+    : undefined
+  const maps = [profile?.sizeMap, profile?.outputDimensions, ratioOptionMap]
   const inferredResolutions = maps.flatMap((map) => Object.entries(map || {}).flatMap(([key, value]) => {
     if (typeof value === 'string') return []
     return [/^\d+(?:K|M)$/i.test(key) ? key : '', ...Object.keys(value).filter((nested) => /^\d+(?:K|M)$/i.test(nested))]
