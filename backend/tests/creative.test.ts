@@ -149,7 +149,7 @@ test('词元异步图片协议 submits with Prefer and polls generation tasks',a
     assert.equal(JSON.parse(submittedOptions.body).size,'1254x1254');
     const completedJob={...asyncJob,upstream_id:'ciyuan-task'};
     const completed=await invokeProvider(f.ctx,completedJob,true,async(url)=>{
-      if(String(url).endsWith('/images/generations/ciyuan-task'))return new Response(JSON.stringify({id:'ciyuan-task',status:'completed',data:[{url:'https://provider.example/temporary.png'}]}),{status:200});
+      if(String(url).endsWith('/images/generations/ciyuan-task'))return new Response(JSON.stringify({id:'ciyuan-task',status:'completed',data:[{url:'https://provider.example/temporary.png',b64_json:''}]}),{status:200});
       assert.equal(url,'https://provider.example/temporary.png');return new Response(image,{status:200,headers:{'content-type':'image/png'}});
     });
     assert.equal(completed.type,'complete');
