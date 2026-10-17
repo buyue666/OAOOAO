@@ -15,6 +15,9 @@ const defaultCapability: ModelCapability = {
   editing: false,
   durations: [],
   ratios: [],
+  resolutions: [],
+  outputDimensions: {},
+  outputDimensionsByResolution: {},
   qualities: [],
   maxReferences: 0,
   maxBatchSize: 1,
@@ -31,9 +34,24 @@ const defaultCapability: ModelCapability = {
 const UNCONFIGURED_REFERENCE_LIMIT = 4
 
 const qualityLabels = ['auto', 'low', 'medium', 'high']
-const qualityLabelText: Record<string, string> = { auto: '自动', low: '低', medium: '中', high: '高清', standard: '标准', hd: '超清' }
+const qualityLabelText: Record<string, string> = { auto: '自动', low: '低', medium: '中', high: '高', standard: '标准', hd: '超清' }
 const defaultVideoQualities = ['480', '720', '1080']
-const defaultImageRatios = ['1:1', '4:5', '16:9', '9:16']
+const defaultImageRatios = ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '21:9']
+const defaultImageResolutions = ['1K']
+/**
+ * 仅作为没有配置 outputDimensions 时的展示兜底；真实渠道尺寸应由后台能力配置覆盖。
+ * 尺寸遵循 GPT 图片接口的 16 倍数约束，避免把 UI 比例误当成上游不接受的自定义尺寸。
+ */
+const defaultOutputDimensions: Record<string, string> = {
+  '1:1': '1024x1024',
+  '3:2': '1536x1024',
+  '2:3': '1024x1536',
+  '16:9': '1536x864',
+  '9:16': '864x1536',
+  '4:3': '1152x864',
+  '3:4': '864x1152',
+  '21:9': '1536x656',
+}
 const audioVoices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer']
 const audioFormats = ['mp3', 'wav', 'opus', 'aac']
 
@@ -71,6 +89,9 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
    */
   const explicitlyUnsupported = Boolean(profile) && profile?.supportsReferenceImage === false
   const supportsReference = Boolean(profile?.supportsReferenceImage)
+  const configuredResolutions = profile?.outputResolutions?.length ? profile.outputResolutions : profile?.resolutions
+  const configuredQualities = profile?.imageQualities?.length ? profile.imageQualities : profile?.qualities
+  const outputDimensions = normalizeOutputDimensions(profile, configuredResolutions)
   const capability: ModelCapability = {
     ...defaultCapability,
     firstFrame: supportsReference,
@@ -79,7 +100,12 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     editing: supportsReference,
     durations: (profile?.durationSeconds ?? []).map((value) => `${value} 秒`),
     ratios: profile?.aspectRatios?.length ? [...profile.aspectRatios] : defaultRatiosFor(model.capability),
-    qualities: qualityCandidates(model.capability, settings, profile?.resolutions),
+    resolutions: configuredResolutions?.length
+      ? [...configuredResolutions]
+      : defaultResolutionsFor(model.capability),
+    outputDimensions: model.capability === 'image' ? outputDimensions.selected : defaultOutputDimensionsFor(model.capability),
+    outputDimensionsByResolution: model.capability === 'image' ? outputDimensions.byResolution : {},
+    qualities: qualityCandidates(model.capability, settings, configuredQualities),
     /**
      * 未配置上限时用保守默认值，**不能**给 0。
      *
@@ -117,12 +143,88 @@ function defaultRatiosFor(capability: SessionLogicalModel['capability']) {
   return capability === 'image' || capability === 'video' ? defaultImageRatios : []
 }
 
+function defaultResolutionsFor(capability: SessionLogicalModel['capability']) {
+  return capability === 'image' ? defaultImageResolutions : []
+}
+
+function defaultOutputDimensionsFor(capability: SessionLogicalModel['capability']) {
+  return capability === 'image' ? { ...defaultOutputDimensions } : {}
+}
+
+type NormalizedOutputDimensions = {
+  selected: Record<string, string>
+  byResolution: Record<string, Record<string, string>>
+}
+
+/**
+ * Normalize the two capability-map spellings accepted by the backend.  The
+ * admin UI historically stored a flat ratio map while newer bindings may use
+ * either `{ '1K': { '1:1': '1024x1024' } }` or `{ '1:1': { '1K': ... } }`.
+ * Keeping a normalized map in ModelCapability lets every surface render the
+ * same dimensions without leaking backend shape details into components.
+ */
+function normalizeOutputDimensions(
+  profile: SessionLogicalModel['bindings'][number]['capabilityProfile'] | undefined,
+  resolutions?: string[],
+): NormalizedOutputDimensions {
+  const byResolution: Record<string, Record<string, string>> = {}
+  const selected: Record<string, string> = {}
+  const maps = [profile?.sizeMap, profile?.outputDimensions]
+  const inferredResolutions = maps.flatMap((map) => Object.entries(map || {}).flatMap(([key, value]) => {
+    if (typeof value === 'string') return []
+    return [/^\d+(?:K|M)$/i.test(key) ? key : '', ...Object.keys(value).filter((nested) => /^\d+(?:K|M)$/i.test(nested))]
+  })).filter(Boolean)
+  const knownResolutions = [...new Set([...(resolutions || []), ...inferredResolutions, '1K'])]
+
+  const put = (resolution: string, ratio: string, value: unknown) => {
+    if (!resolution || !ratio || typeof value !== 'string' || !/^auto$|^\d+x\d+$/i.test(value.trim())) return
+    const row = byResolution[resolution] || (byResolution[resolution] = {})
+    // Match backend precedence: sizeMap wins over outputDimensions.
+    if (row[ratio] === undefined) row[ratio] = value.trim()
+  }
+  const putFlat = (ratio: string, value: unknown) => {
+    for (const resolution of knownResolutions) put(resolution, ratio, value)
+  }
+  const visit = (map: Record<string, string | Record<string, string>> | undefined) => {
+    if (!map || typeof map !== 'object') return
+    for (const [key, value] of Object.entries(map)) {
+      if (typeof value === 'string') {
+        const parts = key.split(':')
+        if (parts.length === 3) {
+          const ratioFirst = `${parts[0]}:${parts[1]}`
+          const ratioLast = `${parts[1]}:${parts[2]}`
+          if (knownResolutions.includes(parts[2])) put(parts[2], ratioFirst, value)
+          else if (knownResolutions.includes(parts[0])) put(parts[0], ratioLast, value)
+          else putFlat(key, value)
+        } else {
+          putFlat(key, value)
+        }
+        continue
+      }
+      for (const [nestedKey, nestedValue] of Object.entries(value)) {
+        if (knownResolutions.includes(key)) put(key, nestedKey, nestedValue)
+        else if (knownResolutions.includes(nestedKey)) put(nestedKey, key, nestedValue)
+      }
+    }
+  }
+  for (const map of maps) visit(map)
+
+  const defaultResolution = knownResolutions[0] || '1K'
+  const firstRow = byResolution[defaultResolution] || {}
+  for (const [ratio, value] of Object.entries(firstRow)) selected[ratio] = value
+  if (!Object.keys(selected).length) {
+    Object.assign(selected, defaultOutputDimensions)
+    byResolution[defaultResolution] = { ...selected }
+  }
+  return { selected, byResolution }
+}
+
 /**
  * 清晰度候选。返回的是**协议值**（auto/low/medium/high、480/720/1080、mp3…），
  * 中文只用于展示，由 qualityLabel 转换，避免把中文直接发给上游。
  */
-function qualityCandidates(capability: SessionLogicalModel['capability'], settings?: SessionGenerationSettings, profileResolutions?: string[]) {
-  if (profileResolutions?.length) return [...profileResolutions]
+function qualityCandidates(capability: SessionLogicalModel['capability'], settings?: SessionGenerationSettings, profileQualities?: string[]) {
+  if (profileQualities?.length) return [...profileQualities]
   if (capability === 'video') {
     const configured = Object.keys(settings?.generationPointMultipliers?.videoQuality ?? {})
     return configured.length ? configured : defaultVideoQualities
@@ -130,6 +232,33 @@ function qualityCandidates(capability: SessionLogicalModel['capability'], settin
   if (capability === 'image') return qualityLabels
   if (capability === 'audio') return audioFormats
   return []
+}
+
+/** 图片的“图片质量”与“清晰度/分辨率”是两个独立参数；1K 档只允许自动质量。 */
+export function imageQualityOptions(model?: Pick<ModelConfig, 'capabilities'>, resolution?: string) {
+  const qualities = model?.capabilities.qualities?.length ? model.capabilities.qualities : qualityLabels
+  return resolution === '1K' ? ['auto'] : [...qualities]
+}
+
+/** 画幅比例显示实际输出尺寸；后台配置优先，兜底只用于避免空白选项。 */
+export function ratioLabel(
+  value: string,
+  outputDimensions?: Record<string, string>,
+  resolution?: string,
+  outputDimensionsByResolution?: Record<string, Record<string, string>>,
+) {
+  const dimensions = ratioDimension(value, outputDimensions, resolution, outputDimensionsByResolution)
+  return dimensions ? `${value} · ${dimensions}` : value
+}
+
+/** Return only the concrete width×height text used in ratio option hints. */
+export function ratioDimension(
+  value: string,
+  outputDimensions?: Record<string, string>,
+  resolution?: string,
+  outputDimensionsByResolution?: Record<string, Record<string, string>>,
+) {
+  return outputDimensionsByResolution?.[resolution || '']?.[value] ?? outputDimensions?.[value] ?? defaultOutputDimensions[value]
 }
 
 export function qualityLabel(value: string) {

@@ -8,7 +8,7 @@ import { ArrowLeft, Bot, Check, ChevronDown, Download, Film, GitBranch, Image as
 import { getDramaProject, saveDramaProject, StudioApiError } from '@/lib/studio/api'
 import { useStudio } from '@/lib/studio/store'
 import { useGeneration } from '@/lib/studio/generation-store'
-import { defaultGenerationDefaults, qualityLabel } from '@/lib/studio/studio-models'
+import { defaultGenerationDefaults, imageQualityOptions, qualityLabel } from '@/lib/studio/studio-models'
 import { getGenerationTask, newClientRequestId } from '@/lib/studio/generation-api'
 import { createProjectRender, getProjectRender, getRenderCapability, listShotCandidates, normalizeCandidateMedia, registerAdoptedShotCandidate, registerShotCandidate } from '@/lib/studio/creative-api'
 import { adoptShotCandidate, buildProjectSrt, buildShotPrompt, newCreativeShot, shotReferences, updateCreativeShot, type ShotCandidate } from '@/lib/studio/creative-project'
@@ -128,7 +128,9 @@ export function CreativeWorkspace({ projectId, initialView }: { projectId: strin
   const references = draft && shot ? shotReferences(draft, shot, kind) : []
   const defaults = defaultGenerationDefaults(state.sessionSettings)
   const preferredQuality = kind === 'image' ? defaults.imageQuality : defaults.videoQuality
-  const quality = model?.capabilities.qualities.includes(preferredQuality) ? preferredQuality : model?.capabilities.qualities[0] || preferredQuality
+  const resolution = kind === 'image' ? model?.capabilities.resolutions?.[0] || '1K' : undefined
+  const availableQualities = kind === 'image' ? imageQualityOptions(model, resolution) : model?.capabilities.qualities || []
+  const quality = availableQualities.includes(preferredQuality) ? preferredQuality : availableQualities[0] || preferredQuality
   const estimated = model ? estimateCredits(model.id, { quality, ...(kind === 'video' ? { duration: String(shot?.duration ?? 5) } : {}), count: 1 }) : 0
   const blockedTask = generation.tasks.find((task) => {
     const input = task.retryInput?.input
@@ -263,7 +265,7 @@ export function CreativeWorkspace({ projectId, initialView }: { projectId: strin
       if (selectedKind === 'video' && references.length && !model.capabilities.firstFrame) throw new Error('这个模型不支持首帧参考，请选择支持首帧的视频模型。')
       await registerAdoptedShotCandidate(project, episode.id, shot.id, selectedKind, () => token === scopeGeneration.current && account === identityRef.current)
       if (token !== scopeGeneration.current || account !== identityRef.current) return
-      const input = { ...target, model: model.id, prompt: buildShotPrompt(project, shot, selectedKind, direction), references, ratio: project.ratio, quality, surface: 'drama' as const, clientRequestId: newClientRequestId(`creative-${selectedKind}`) }
+      const input = { ...target, model: model.id, prompt: buildShotPrompt(project, shot, selectedKind, direction), references, ratio: project.ratio, ...(selectedKind === 'image' ? { resolution: resolution || '1K' } : {}), quality, surface: 'drama' as const, clientRequestId: newClientRequestId(`creative-${selectedKind}`) }
       const task: GenerationTaskView = selectedKind === 'image' ? await generation.createImage({ ...input, count: 1 }) : await generation.createVideo({ ...input, seconds: shot.duration })
       if (token !== scopeGeneration.current || account !== identityRef.current) return
       if (task.unconfirmed) throw new Error('提交结果尚未确认，请到任务中心恢复原请求，避免重复提交。')

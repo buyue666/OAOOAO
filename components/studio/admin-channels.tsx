@@ -8,6 +8,7 @@ import type { AdminGenerationChannel, AdminSettings, ChannelModelConfig, Logical
 import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import { ModelIcon } from './model-icon'
+import { LobeIconPicker } from './lobe-icon-picker'
 import {
   AdminCell,
   AdminDataPanel,
@@ -708,7 +709,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     <AdminInput className="w-44" value={binding.upstreamModel} placeholder="上游模型 ID" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, upstreamModel: event.target.value, id: `${item.channelId}:${event.target.value}` } : item) })} />
                     <AdminInput className="w-44" value={binding.requestAlias || ''} placeholder="对外别名（可选）" aria-label={`${model.id} 渠道${index + 1} 对外别名`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, requestAlias: event.target.value.trim() || undefined } : item) })} />
                     <AdminInput className="w-24" type="number" min="0" step="0.01" value={routeCost} aria-label={`${model.id} 渠道${index + 1} 单价`} title={binding.requestAlias ? `别名 ${binding.requestAlias} 的单次积分` : '该上游模型的单次积分'} onChange={(event) => setCosts((current) => ({ ...current, [requestKey]: Number(event.target.value) || 0 }))} />
-                    <AdminInput className="w-44" value={binding.iconUrl || ''} placeholder="入口图标 URL" aria-label={`${model.id} 渠道${index + 1} 图标`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, iconUrl: event.target.value.trim() || undefined } : item) })} />
+                    <LobeIconPicker className="w-48" compact value={binding.iconUrl} aria-label={`${model.id} 渠道${index + 1} 图标`} onChange={(value) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, iconUrl: value } : item) })} />
                     <AdminInput className="w-20" type="number" min="1" value={binding.priority} aria-label="优先级" title="优先级：数字越小越先被选中" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, priority: Number(event.target.value) || 1 } : item) })} />
                     <AdminInput className="w-20" type="number" min="1" max="1000" value={binding.weight ?? 1} aria-label="权重" title="权重：同级渠道之间的流量分配比例" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, weight: Number(event.target.value) || 1 } : item) })} />
                     <AdminInput
@@ -782,7 +783,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
             <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
               <p className="text-xs font-semibold text-foreground sm:col-span-2">4 · 用户显示信息<span className="ml-2 font-normal text-muted-foreground">只影响界面展示，不参与请求路由</span></p>
               <AdminField label="显示名称" hint="只影响界面展示，不能用于请求"><AdminInput aria-label={`${model.id} 显示名称`} value={model.name} onChange={(event) => patchModel(model.id, { name: event.target.value })} /></AdminField>
-              <AdminField label="默认模型图标" hint="支持站内路径或 HTTPS 图片地址；绑定可单独覆盖"><AdminInput aria-label={`${model.id} 默认模型图标`} value={model.iconUrl || ''} placeholder="/media/models/nano.png 或 https://…" onChange={(event) => patchModel(model.id, { iconUrl: event.target.value.trim() || undefined })} /></AdminField>
+              <AdminField label="默认模型图标" hint="可搜索 LobeHub 图标并单选，也可以粘贴站内路径或 HTTPS 地址；渠道绑定可单独覆盖"><LobeIconPicker value={model.iconUrl} aria-label={`${model.id} 默认模型图标`} onChange={(value) => patchModel(model.id, { iconUrl: value })} /></AdminField>
             </div>
             <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
               <p className="text-xs font-semibold text-foreground sm:col-span-2">5 · 价格<span className="ml-2 font-normal text-muted-foreground">各渠道单价在上方绑定中设置；此处是未设置渠道单价时的默认单次积分</span></p>

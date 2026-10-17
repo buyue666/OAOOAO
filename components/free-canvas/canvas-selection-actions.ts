@@ -117,7 +117,7 @@ export function selectionDocument(nodes: readonly FreeCanvasNode[], edges: reado
       position: node.parentId && map.has(node.parentId) ? node.position : positions.get(node.id),
       ...(node.parentId && map.has(node.parentId) ? { parentId: map.get(node.parentId) } : {}),
       data: { kind: node.data.kind, title: clean(node.data.title),
-        ...(node.type === 'generation' ? { prompt: clean(node.data.prompt), text: clean(node.data.text), model: clean(node.data.model), ratio: clean(node.data.ratio), quality: clean(node.data.quality), seconds: node.data.seconds, count: node.data.count, voice: clean(node.data.voice), format: clean(node.data.format) } : {}),
+        ...(node.type === 'generation' ? { prompt: clean(node.data.prompt), text: clean(node.data.text), model: clean(node.data.model), ratio: clean(node.data.ratio), resolution: clean(node.data.resolution), quality: clean(node.data.quality), seconds: node.data.seconds, count: node.data.count, voice: clean(node.data.voice), format: clean(node.data.format) } : {}),
         ...(node.type === 'agent' ? { prompt: clean(node.data.prompt) } : {}),
         ...(node.type === 'media' && node.data.media ? { mediaKind: node.data.media.mediaKind } : {}) } })),
     connections: edges.filter(edge => map.has(edge.source) && map.has(edge.target)).map((edge, index) => ({ id: `edge-${index + 1}`, source: map.get(edge.source), target: map.get(edge.target) })) }

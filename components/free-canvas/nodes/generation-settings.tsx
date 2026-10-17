@@ -3,21 +3,15 @@
 import type { CSSProperties, PointerEvent } from 'react'
 import { ImageIcon, Plus, Save, Video, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { defaultFormats, defaultVoices, filterModelsByCapability } from '@/lib/studio/studio-models'
+import { defaultFormats, defaultVoices, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioLabel } from '@/lib/studio/studio-models'
 import { useStudio } from '@/lib/studio/store'
 import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
 import type { GenerationKind, NodeReference, NodeSkill, SettingsPlacement } from '../types'
 import { COUNTER_SCALE, SETTINGS_POPOVER_WIDTH } from './node-kit'
 
-const RATIO_FALLBACK = ['1:1', '4:5', '16:9', '9:16']
+const RATIO_FALLBACK = ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '21:9']
 const VIDEO_RATIO_FALLBACK = ['16:9', '9:16', '1:1']
-const IMAGE_QUALITY_FALLBACK = [
-  { value: 'auto', label: '自动' },
-  { value: 'low', label: '低' },
-  { value: 'medium', label: '中' },
-  { value: 'high', label: '高清' },
-]
 const VIDEO_QUALITY_FALLBACK = [
   { value: '480', label: '480p' },
   { value: '720', label: '720p' },
@@ -54,9 +48,10 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
   const selectedModel = models.find((model) => model.id === data.model)
   const caps = selectedModel?.capabilities
   const ratios = caps?.ratios.length ? caps.ratios : data.kind === 'video' ? VIDEO_RATIO_FALLBACK : RATIO_FALLBACK
-  const qualities = caps?.qualities.length
-    ? caps.qualities.map((value) => ({ value, label: value }))
-    : data.kind === 'video' ? VIDEO_QUALITY_FALLBACK : IMAGE_QUALITY_FALLBACK
+  const resolutions = data.kind === 'image' ? (caps?.resolutions?.length ? caps.resolutions : ['1K']) : []
+  const qualities = data.kind === 'image'
+    ? imageQualityOptions(caps ? { capabilities: caps } : undefined, data.resolution).map((value) => ({ value, label: `${value} · ${qualityLabel(value)}` }))
+    : caps?.qualities.length ? caps.qualities.map((value) => ({ value, label: value })) : VIDEO_QUALITY_FALLBACK
   const durations = caps?.durations.length ? caps.durations : VIDEO_SECONDS_FALLBACK
   const maxReferences = caps?.maxReferences && caps.maxReferences > 0 ? caps.maxReferences : 4
   const estimate = actions.estimateNode(data)
@@ -106,11 +101,15 @@ export function GenerationSettings({ nodeId, placement }: { nodeId: string; plac
       </label>
 
       {data.kind === 'image' || data.kind === 'video' ? (
-        <Segmented label="比例" value={data.ratio} options={ratios.map((value) => ({ value, label: value }))} onChange={(value) => updateNodeData(nodeId, { ratio: value }, { history: true })} />
+        <Segmented label="比例" value={data.ratio} options={ratios.map((value) => ({ value, label: ratioLabel(value, caps?.outputDimensions, data.resolution, caps?.outputDimensionsByResolution) }))} onChange={(value) => updateNodeData(nodeId, { ratio: value }, { history: true })} />
+      ) : null}
+
+      {data.kind === 'image' ? (
+        <Segmented label="清晰度" value={data.resolution} options={resolutions.map((value) => ({ value, label: value }))} onChange={(value) => updateNodeData(nodeId, { resolution: value, quality: value === '1K' ? 'auto' : data.quality }, { history: true })} />
       ) : null}
 
       {data.kind === 'image' || data.kind === 'video' ? (
-        <Segmented label="清晰度" value={data.quality} options={qualities} onChange={(value) => updateNodeData(nodeId, { quality: value }, { history: true })} />
+        <Segmented label={data.kind === 'image' ? '图片质量' : '清晰度'} value={data.quality} options={qualities} onChange={(value) => updateNodeData(nodeId, { quality: value }, { history: true })} />
       ) : null}
 
       {data.kind === 'video' ? (

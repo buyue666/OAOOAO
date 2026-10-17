@@ -4,6 +4,9 @@ import type { DramaProject, DramaSourceAsset } from './drama-types'
 import type { SiteSettings } from './admin-types'
 import type { CommercePolicy, PurchaseReadiness } from './commerce-policy'
 
+/** 模型能力中比例与实际尺寸的扁平/嵌套兼容结构。 */
+type CapabilitySizeMap = Record<string, string | Record<string, string>>
+
 export type BackendUser = {
   id: string
   accountId?: string
@@ -69,7 +72,12 @@ export type SessionSettings = {
         supportsReferenceImage?: boolean
         maxReferenceImages?: number
         aspectRatios?: string[]
+        outputResolutions?: string[]
         resolutions?: string[]
+        imageQualities?: string[]
+        outputDimensions?: CapabilitySizeMap
+        sizeMap?: CapabilitySizeMap
+        qualities?: string[]
         durationSeconds?: number[]
         maxBatchSize?: number
         supportsAsync?: boolean

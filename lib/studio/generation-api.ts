@@ -160,6 +160,7 @@ export function createImageTask(input: ImageGenerationInput) {
       config: {
         ...(input.model ? { model: input.model } : {}),
         ...(input.ratio ? { size: input.ratio } : {}),
+        ...(input.resolution ? { resolution: input.resolution } : {}),
         ...(input.quality ? { quality: input.quality } : {}),
       },
       ...(input.title ? { title: input.title } : {}),

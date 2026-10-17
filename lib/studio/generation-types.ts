@@ -120,6 +120,8 @@ export type ImageGenerationInput = {
   prompt: string
   model?: string
   ratio?: string
+  /** 输出分辨率档位，例如 1K、2K、4K；与图片质量参数分开。 */
+  resolution?: string
   quality?: string
   count?: number
   /** �ο�ͼ��ʹ�ÿ�ֱ�ӷ��ʵ� URL �� data URL�� */
@@ -246,7 +248,19 @@ export type SessionLogicalModel = {
       supportsReferenceImage?: boolean
       maxReferenceImages?: number
       aspectRatios?: string[]
+      /** 新字段：清晰度档位（1K/2K/4K）；保留 resolutions 兼容旧配置。 */
+      outputResolutions?: string[]
       resolutions?: string[]
+      /** 新字段：图片质量（auto/low/medium/high）；保留 qualities 兼容旧配置。 */
+      imageQualities?: string[]
+      /**
+       * 比例对应的输出尺寸。支持旧的扁平格式（{ '1:1': '1024x1024' }），
+       * 也支持按清晰度分组（{ '1K': { '1:1': '1024x1024' } }）。
+       */
+      outputDimensions?: CapabilitySizeMap
+      /** 后台编辑器使用的同义字段；提交时两者均可兼容。 */
+      sizeMap?: CapabilitySizeMap
+      qualities?: string[]
       durationSeconds?: number[]
       maxBatchSize?: number
       supportsAsync?: boolean
@@ -254,6 +268,9 @@ export type SessionLogicalModel = {
     }
   }>
 }
+
+/** 模型能力中比例与实际尺寸的扁平/嵌套兼容结构。 */
+export type CapabilitySizeMap = Record<string, string | Record<string, string>>
 
 export type SessionSystemChannel = {
   id: string

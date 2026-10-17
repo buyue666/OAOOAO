@@ -50,7 +50,7 @@ import {
 import { useStudio } from '@/lib/studio/store'
 import { useGeneration } from '@/lib/studio/generation-store'
 import { GenerationErrorNotice, GenerationNotice, LiveTaskList, LocalPreviewNotice } from './live-generation'
-import { defaultModelFor, filterModelsByCapability, qualityLabel } from '@/lib/studio/studio-models'
+import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioDimension } from '@/lib/studio/studio-models'
 import { accountDataEpoch } from '@/lib/studio/account-data-sync'
 import { useServerWorks, useLibraryAssets } from '@/lib/studio/use-account-data'
 import { useVideoReferenceLibrary } from '@/lib/studio/use-video-reference-library'
@@ -517,7 +517,9 @@ export function ImageWorkspace() {
   const serverLibrary = useLibraryAssets({ pageSize: 60, kind: 'image', keyword: libraryKeyword })
   const [modelId, setModelId] = useState(() => imageModelList[0]?.id ?? '')
   const [ratio, setRatio] = useState(defaultModels.imageSize || '16:9')
-  const [quality, setQuality] = useState(defaultModels.imageQuality || '高清')
+  const [resolution, setResolution] = useState('1K')
+  // 1K 只接受 auto；保持首屏状态与清晰度约束一致，避免先渲染一个旧的中文质量值。
+  const [quality, setQuality] = useState('auto')
   const [count, setCount] = useState(String(defaultModels.imageCount || 4))
   const [view, setView] = useState('grid')
   const [advanced, setAdvanced] = useState(false)
@@ -579,6 +581,14 @@ export function ImageWorkspace() {
   const reused = useWorkReuseParams({ kind: 'image', accountId: state.user.id, connected: state.backendStatus === 'connected', models: imageModelList, prompt, protectDraft: intentDraft, setPrompt, setModelId, setNotice })
 
   const model = imageModelList.find((item) => item.id === modelId) ?? imageModelList[0]
+  const ratioOptions = model?.capabilities.ratios.length ? model.capabilities.ratios : ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '21:9']
+  const resolutionOptions = model?.capabilities.resolutions?.length ? model.capabilities.resolutions : ['1K']
+  const qualityOptions = useMemo(() => imageQualityOptions(model, resolution), [model, resolution])
+  const ratioCards = useMemo(() => ratioOptions.map((item) => ({
+    value: item,
+    label: item,
+    hint: ratioDimension(item, model?.capabilities.outputDimensions, resolution, model?.capabilities.outputDimensionsByResolution),
+  })), [model, ratioOptions, resolution])
   const credits = model ? estimateCredits(model.id, { ratio, quality, count: Number(count) }) : 0
   const submitBlock = generationBlockReason(state.backendStatus, Boolean(model), credits, state.credits)
   /**
@@ -593,9 +603,12 @@ export function ImageWorkspace() {
   }, [maxBatch])
   useEffect(() => {
     if (!model) return
-    setRatio((current) => supportedChoice(current, model.capabilities.ratios.length ? model.capabilities.ratios : ['1:1', '16:9', '9:16']))
-    setQuality((current) => supportedChoice(current, model.capabilities.qualities.length ? model.capabilities.qualities : ['auto']))
+    setRatio((current) => supportedChoice(current, model.capabilities.ratios.length ? model.capabilities.ratios : ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '21:9']))
+    setResolution((current) => supportedChoice(current, model.capabilities.resolutions?.length ? model.capabilities.resolutions : ['1K']))
   }, [model])
+  useEffect(() => {
+    setQuality((current) => supportedChoice(current, qualityOptions))
+  }, [qualityOptions])
 
   /**
    * 高级参数只列出后端确实支持、并且会真实提交的参数。
@@ -1050,6 +1063,7 @@ export function ImageWorkspace() {
           prompt: prompt.trim(),
           model: model?.id,
           ratio,
+          resolution,
           quality,
           count: 1,
           references,
@@ -1112,9 +1126,14 @@ export function ImageWorkspace() {
       </ParamSection>
 
       <ParamSection title="输出">
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField label="比例" value={ratio} onChange={setRatio} options={(model?.capabilities.ratios.length ? model.capabilities.ratios : ['1:1', '16:9', '9:16']).map((item) => ({ value: item, label: item }))} />
-          <SelectField label="清晰度" value={quality} onChange={setQuality} options={(model?.capabilities.qualities.length ? model.capabilities.qualities : ['auto']).map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} />
+        <div className="space-y-3">
+          <div>
+            <p className="mb-2 text-xs font-medium text-foreground">比例</p>
+            <OptionGrid value={ratio} onChange={setRatio} options={ratioCards} columns={3} label="图片比例" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+          <SelectField label="清晰度" value={resolution} onChange={setResolution} options={resolutionOptions.map((item) => ({ value: item, label: item }))} />
+          <SelectField label="图片质量" value={quality} onChange={setQuality} options={qualityOptions.map((item) => ({ value: item, label: `${item} · ${qualityLabel(item)}` }))} />
           {maxBatch > 1 ? (
             <SelectField label="生成数量" value={count} onChange={setCount} options={countOptions.map((item) => ({ value: item, label: `${item} 张` }))} className="col-span-2" hint={`当前模型最多 ${maxBatch} 张，超出部分会按批次分多次提交。`} />
           ) : (
@@ -1123,6 +1142,7 @@ export function ImageWorkspace() {
               <p className="mt-1 text-[11px] leading-5 text-muted-foreground">当前模型每次只产出一张结果，需要多张请更换支持批量的模型。</p>
             </div>
           )}
+          </div>
         </div>
       </ParamSection>
 

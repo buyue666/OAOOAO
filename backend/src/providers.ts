@@ -35,7 +35,31 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   const defaults=settings.generationDefaults||{};const profile=binding.capabilityProfile||{};
   const pricedOption=(value:unknown,baseline:unknown,prices:Json|undefined,label:string)=>{if(value!==undefined&&String(value)!==String(baseline)&&prices?.[String(value)]===undefined)throw httpError(400,`${label} is not configured with a price`);};
   if(kind==='image'){
-    pricedOption(input.config?.quality,defaults.imageQuality,multipliers.imageQuality,'Image quality');
+    /**
+     * `quality` is the provider's image-quality/reasoning option (auto/low/medium/high).
+     * Resolution tiers such as 1K/2K/4K are carried separately in `config.resolution`.
+     * A declared profile is authoritative: this prevents a UI from offering a value
+     * the binding cannot actually submit. Declared options default to a 1x multiplier
+     * when no per-option price multiplier is configured, which is useful for fixed-
+     * price model aliases such as the 1K endpoint.
+     */
+    // `qualities` is accepted as the legacy/editor spelling; new configs use
+    // `imageQualities` to make the distinction from output resolution explicit.
+    const qualityList=Array.isArray(profile.imageQualities)?profile.imageQualities:profile.qualities;
+    const declaredQualities=Array.isArray(qualityList)?qualityList.map((value:any)=>String(value)):[];
+    if(input.config?.quality!==undefined&&declaredQualities.length&&!declaredQualities.includes(String(input.config.quality)))throw httpError(400,'Image quality is not supported by this model');
+    const qualityIsDeclared=declaredQualities.includes(String(input.config?.quality));
+    if(qualityIsDeclared) {
+      // Skip the legacy "every non-default option must have a multiplier" rule:
+      // model capability declarations are also valid fixed-price options.
+    } else {
+      pricedOption(input.config?.quality,defaults.imageQuality,multipliers.imageQuality,'Image quality');
+    }
+    // Older profiles used `resolutions` for this list. Keep accepting it while
+    // preferring the explicit outputResolutions field for new configurations.
+    const resolutionList=Array.isArray(profile.outputResolutions)?profile.outputResolutions:profile.resolutions;
+    const declaredResolutions=Array.isArray(resolutionList)?resolutionList.map((value:any)=>String(value)):[];
+    if(input.config?.resolution!==undefined&&declaredResolutions.length&&!declaredResolutions.includes(String(input.config.resolution)))throw httpError(400,'Image resolution is not supported by this model');
     if(input.config?.size&&profile.aspectRatios?.length&&!profile.aspectRatios.includes(input.config.size)&&!profile.resolutions?.includes(input.config.size))throw httpError(400,'Image size is not supported by this model');
   }
   if(kind==='video'){
@@ -55,7 +79,10 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   if(kind==='image' && input.edit?.operation && !['inpaint','remove-background','erase','outpaint','enhance','layers'].includes(String(input.edit.operation)))throw httpError(400,'Unsupported image edit operation');
   if(kind==='image' && input.edit?.mask && profile.supportsMask===false)throw httpError(400,'Selected image model does not support edit masks');
   if(kind==='audio'&&!['mp3','wav','opus','flac','aac'].includes(input.config?.format||'mp3'))throw httpError(400,'Unsupported audio output format');
-  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey},cost:creditDecimal(cost)};
+  // Persist the selected capability snapshot with the job.  Queued jobs must
+  // keep using the exact size map that was validated at submission time even
+  // if an administrator edits the model binding before the worker runs.
+  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey,capabilityProfile:profile},cost:creditDecimal(cost)};
 }
 function multipart(fields:Record<string,string>,files:Array<{name:string;data:Buffer;mime:string}>){
   const boundary='oaooao'+randomUUID().replaceAll('-','');const chunks:Buffer[]=[];
@@ -63,7 +90,34 @@ function multipart(fields:Record<string,string>,files:Array<{name:string;data:Bu
   for(const file of files){chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${file.name}"; filename="reference.bin"\r\nContent-Type: ${file.mime}\r\n\r\n`),file.data,Buffer.from('\r\n'));}
   chunks.push(Buffer.from(`--${boundary}--\r\n`));return{body:Buffer.concat(chunks),contentType:`multipart/form-data; boundary=${boundary}`};
 }
-function imageSize(value:unknown){const v=String(value||'auto');return ({'1:1':'1024x1024','16:9':'1536x1024','9:16':'1024x1536'} as Record<string,string>)[v]||v;}
+/**
+ * Resolve a UI ratio plus an optional resolution tier to the provider's concrete
+ * `size` value.  New model bindings can declare either `sizeMap` or
+ * `outputDimensions`; both accept `{ resolution: { ratio: "WIDTHxHEIGHT" } }`.
+ * The inverse `{ ratio: { resolution: "WIDTHxHEIGHT" } }` and a flat
+ * `"resolution:ratio"` key are accepted as a migration convenience.  Without
+ * a map we preserve the legacy GPT-image ratio mapping.
+ */
+export function imageSize(value:unknown,resolution:unknown,profile:Json){
+  const ratio=String(value||'auto');
+  const tier=String(resolution||profile?.outputResolutions?.[0]||profile?.resolutions?.[0]||'');
+  const maps=[profile?.sizeMap,profile?.outputDimensions].filter((item:any)=>item&&typeof item==='object');
+  for(const map of maps){
+    const nestedByTier=map?.[tier]?.[ratio];
+    const nestedByRatio=map?.[ratio]?.[tier];
+    const flat=map?.[`${tier}:${ratio}`]??map?.[`${ratio}:${tier}`]??map?.[ratio];
+    const candidate=nestedByTier??nestedByRatio??flat;
+    if(typeof candidate==='string'&&/^(?:auto|\d+x\d+)$/i.test(candidate.trim()))return candidate.trim();
+  }
+  // GPT Image 2/2.5 accepts custom dimensions in multiples of 16. These
+  // defaults keep the eight UI ratios valid even for older bindings that do
+  // not yet have an explicit sizeMap configured in the admin panel.
+  return ({
+    '1:1':'1024x1024', '3:2':'1536x1024', '2:3':'1024x1536',
+    '16:9':'1536x864', '9:16':'864x1536', '4:3':'1152x864',
+    '3:4':'864x1152', '21:9':'1536x656',
+  } as Record<string,string>)[ratio]||ratio;
+}
 function videoSize(value:unknown){const v=String(value||'720x1280');return ({'1:1':'720x1280','16:9':'1280x720','9:16':'720x1280'} as Record<string,string>)[v]||v;}
 export type ProviderResult={type:'complete';result:Json}|{type:'pending';upstreamId:string};
 async function providerTextMessages(ctx:Context,userId:string,input:Json){
@@ -87,7 +141,7 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   if(job.kind==='render'){const result=await renderShots(ctx,job.user_id,job.input.shots,job.input.ratio);return{type:'complete',result:{url:result.url}};}
   const settings=await getSettings(ctx);const channel=settings.systemChannels?.find((c:Json)=>c.id===job.channel_id&&c.enabled&&c.apiKey);
   if(!channel&&!poll)throw new ProviderFailure('Provider channel is no longer available',true);
-  const key=ctx.decrypt(job.provider_config.apiKey);const base=String(job.provider_config.baseUrl).replace(/\/$/,'');
+  const key=ctx.decrypt(job.provider_config.apiKey);const base=String(job.provider_config.baseUrl).replace(/\/$/,'');const profile=job.provider_config.capabilityProfile||{};
   const request=async(path:string,body?:string|Buffer,contentType='application/json',method=body===undefined?'GET':'POST')=>{
     let response:Response;
     try{if(method==='POST')onSubmit();response=await transport(base+path,{method,headers:{authorization:`Bearer ${key}`,...(body===undefined?{}:{'content-type':contentType})},body,timeoutMs:120000,maxBytes:MAX_MEDIA_BYTES*2});}
@@ -112,13 +166,14 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   }
   if(job.kind==='image'){
     let response:Response;
+    const outputSize=imageSize(config.size,config.resolution,profile);
     if(input.references?.length){
       const files=[];
       for(const reference of input.references){const data=await readReference(ctx,job.user_id,reference);if(!data.mimeType.startsWith('image/'))throw new ProviderFailure('Image references must be images',true);files.push({name:'image[]',data:data.bytes,mime:data.mimeType});}
       if(input.edit?.mask){const mask=await readReference(ctx,job.user_id,input.edit.mask);if(!mask.mimeType.startsWith('image/'))throw new ProviderFailure('Image edit masks must be images',true);files.push({name:'mask',data:mask.bytes,mime:mask.mimeType});}
-      const multi=multipart({model,prompt:input.prompt,size:imageSize(config.size),n:'1',...(config.quality?{quality:config.quality}:{})},files);
+      const multi=multipart({model,prompt:input.prompt,size:outputSize,n:'1',...(config.quality?{quality:config.quality}:{})},files);
       response=await request('/images/edits',multi.body,multi.contentType);
-    }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:imageSize(config.size),n:1,...(config.quality?{quality:config.quality}:{})}));
+    }else response=await request('/images/generations',JSON.stringify({model,prompt:input.prompt,size:outputSize,n:1,...(config.quality?{quality:config.quality}:{})}));
     const data=await response.json() as Json;const results=[];
     if(!Array.isArray(data.data)||!data.data.length)throw new ProviderFailure('Provider returned no usable image output');
     for(const item of data.data){

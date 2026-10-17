@@ -62,6 +62,7 @@ export type GenerationNodeData = {
   prompt: string
   model: string
   ratio: string
+  resolution: string
   quality: string
   seconds: number
   count: number

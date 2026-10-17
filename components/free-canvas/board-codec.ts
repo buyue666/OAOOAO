@@ -211,6 +211,7 @@ function readGeneration(kind: GenerationKind, raw: Raw, meta: Raw): GenerationNo
     prompt: textOf(raw.prompt),
     model: textOf(raw.model),
     ratio: textOf(raw.ratio),
+    resolution: textOf(raw.resolution, kind === 'image' ? '1K' : ''),
     quality: textOf(raw.quality),
     seconds: numberOf(raw.seconds, 0),
     count: 1,

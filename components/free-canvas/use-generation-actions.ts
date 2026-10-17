@@ -157,7 +157,7 @@ export function useGenerationActions() {
         const common = { prompt, model: modelId, clientRequestId }
         const context = { projectId: state.projectId, surface: 'canvas' as const }
         submission = data.kind === 'image'
-          ? { kind: 'image', input: { ...common, ...context, ratio: data.ratio, quality: data.quality, count: 1, references, title: data.title } }
+          ? { kind: 'image', input: { ...common, ...context, ratio: data.ratio, resolution: data.resolution, quality: data.quality, count: 1, references, title: data.title } }
           : data.kind === 'video'
             ? { kind: 'video', input: { ...common, ...context, ratio: data.ratio, quality: data.quality, seconds: data.seconds, references } }
             : data.kind === 'audio'

@@ -77,6 +77,25 @@ export function settingsPermission(key:string) {
   throw httpError(400,`Unknown setting: ${key}`);
 }
 function validNumber(value:any,name:string,min=0,max=1000000000) {if(typeof value!=='number'||!Number.isFinite(value)||value<min||value>max)throw httpError(400,`Invalid ${name}`);}
+function validCapabilityList(value:unknown,name:string,max=32) {
+  if(!Array.isArray(value)||value.length>max||value.some(item=>typeof item!=='string'||!item.trim()||item.length>100))throw httpError(400,`Invalid ${name}`);
+}
+function validCapabilitySizeMap(value:unknown,name:string) {
+  const map=object(value);const entries=Object.entries(map);
+  if(entries.length>128)throw httpError(400,`Invalid ${name}`);
+  for(const [key,nested] of entries){
+    if(!key.trim()||key.length>100)throw httpError(400,`Invalid ${name}`);
+    if(typeof nested==='string'){
+      if(!/^(?:auto|\d+x\d+)$/i.test(nested.trim()))throw httpError(400,`Invalid ${name}`);
+      continue;
+    }
+    const row=object(nested);
+    if(Object.keys(row).length>64)throw httpError(400,`Invalid ${name}`);
+    for(const [child,value] of Object.entries(row)){
+      if(!child.trim()||child.length>100||typeof value!=='string'||!/^(?:auto|\d+x\d+)$/i.test(value.trim()))throw httpError(400,`Invalid ${name}`);
+    }
+  }
+}
 function validUrl(value:unknown,name:string,allowRelative=false) {if(value===undefined||value==='')return;if(typeof value!=='string')throw httpError(400,`Invalid ${name}`);if(allowRelative&&value.startsWith('/')&&!value.startsWith('//'))return;let url:URL;try{url=new URL(value);}catch{throw httpError(400,`Invalid ${name}`);}if(!['https:','http:'].includes(url.protocol)||url.username||url.password)throw httpError(400,`Invalid ${name}`);}
 function preserveSecret(ctx:Context,next:any,old:any,field:string,clear:string) { if(next[clear]===true)return '';if(next[field]===undefined||next[field]==='')return old?.[field] || '';if(typeof next[field]!=='string'||next[field].length>16384||next[field].startsWith('enc:'))throw httpError(400,`Invalid ${field}`);return ctx.encrypt(next[field]); }
 export function validateSettingsPatch(ctx:Context,current:Settings,patch:Settings):Settings {
@@ -132,7 +151,16 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
     if(!['text','image','video','audio'].includes(model.capability)||typeof model.enabled!=='boolean'||!Array.isArray(model.bindings))throw httpError(400,'Invalid logical model');
     for(const name of [model.id,...(model.aliases||[])]){string(name,'model alias',200);if(modelNames.has(name))throw httpError(400,'Duplicate model name or alias');modelNames.add(name);}
     const bindingIds=new Set<string>();
-    for(const binding of model.bindings){string(binding.id,'binding ID');string(binding.upstreamModel,'upstream model');if(bindingIds.has(binding.id))throw httpError(400,'Duplicate binding ID');bindingIds.add(binding.id);if(!next.systemChannels.some((c:any)=>c.id===binding.channelId))throw httpError(400,'Binding channel does not exist');if(typeof binding.enabled!=='boolean')throw httpError(400,'Invalid binding enabled');validNumber(binding.priority,'binding priority',0,100000);}
+    for(const binding of model.bindings){string(binding.id,'binding ID');string(binding.upstreamModel,'upstream model');if(bindingIds.has(binding.id))throw httpError(400,'Duplicate binding ID');bindingIds.add(binding.id);if(!next.systemChannels.some((c:any)=>c.id===binding.channelId))throw httpError(400,'Binding channel does not exist');if(typeof binding.enabled!=='boolean')throw httpError(400,'Invalid binding enabled');validNumber(binding.priority,'binding priority',0,100000);
+      if(binding.capabilityProfile!==undefined&&binding.capabilityProfile!==null){
+        const profile=object(binding.capabilityProfile);
+        if(profile.outputResolutions!==undefined)validCapabilityList(profile.outputResolutions,'output resolutions');
+        if(profile.imageQualities!==undefined)validCapabilityList(profile.imageQualities,'image qualities');
+        if(profile.qualities!==undefined)validCapabilityList(profile.qualities,'image qualities');
+        if(profile.sizeMap!==undefined)validCapabilitySizeMap(profile.sizeMap,'capability size map');
+        if(profile.outputDimensions!==undefined)validCapabilitySizeMap(profile.outputDimensions,'capability output dimensions');
+      }
+    }
   }
   for(const capability of ['text','image','video','audio']){const id=next.defaultModels[`${capability}Model`];if(id&&!next.logicalModels.some((m:any)=>m.id===id&&m.capability===capability&&m.enabled))throw httpError(400,'Default model must be an enabled model of matching capability');}
   if(typeof next.entitlements.enabled!=='boolean'||!Array.isArray(next.entitlements.plans))throw httpError(400,'Invalid entitlement plans');
