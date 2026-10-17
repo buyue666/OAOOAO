@@ -28,6 +28,7 @@ export const lobeIconCatalog: LobeIconEntry[] = [
   { slug: 'deepseek', label: 'DeepSeek', aliases: ['深度求索'], group: '模型' },
   { slug: 'qwen', label: 'Qwen', aliases: ['通义千问', '阿里云'], group: '模型' },
   { slug: 'doubao', label: '豆包', aliases: ['Doubao', '火山引擎'], group: '模型' },
+  { slug: 'jimeng', label: '即梦', aliases: ['Jimeng', '剪映', '字节跳动'], group: '模型' },
   { slug: 'zhipu', label: '智谱', aliases: ['GLM', 'ChatGLM'], group: '模型' },
   { slug: 'moonshot', label: 'Moonshot', aliases: ['Kimi', '月之暗面'], group: '模型' },
   { slug: 'minimax', label: 'MiniMax', aliases: ['海螺'], group: '模型' },
@@ -102,7 +103,7 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
 
       {open && <div className="absolute left-0 top-[calc(100%+6px)] z-40 w-[min(430px,calc(100vw-2rem))] rounded-lg border border-border bg-card p-3 shadow-2xl">
         <div className="flex items-center gap-2">
-          <div className="studio-field flex h-9 min-w-0 flex-1 items-center gap-2 border border-border bg-background px-2.5 text-muted-foreground">
+          <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 text-muted-foreground">
             <Search className="size-3.5 shrink-0" aria-hidden="true" />
             <input autoFocus aria-label="搜索图标" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 OpenAI、GPT、Claude…" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/70" />
           </div>

@@ -42,6 +42,20 @@ const protocols = [
   ['azure', 'Azure OpenAI'], ['responses', 'OpenAI Responses'],
 ] as const
 
+/** 图片模型的能力选项。绑定级配置会随 capabilityProfile 一起提交给后端。 */
+const imageProfileRatios = [
+  ['1:1', '1:1 · 1254×1254'],
+  ['3:2', '3:2 · 1536×1024'],
+  ['2:3', '2:3 · 1024×1536'],
+  ['16:9', '16:9 · 1672×941'],
+  ['9:16', '9:16 · 941×1672'],
+  ['4:3', '4:3 · 1448×1086'],
+  ['3:4', '3:4 · 1086×1448'],
+  ['21:9', '21:9 · 1923×817'],
+] as const
+const imageProfileResolutions = [['1K', '1K'], ['2K', '2K'], ['4K', '4K']] as const
+const imageProfileQualities = [['auto', '自动'], ['low', '低'], ['medium', '中'], ['high', '高']] as const
+
 export function AdminChannelsPanel() {
   const session = useAdminSession()
   const { reloadKey } = useAdminReload()
@@ -720,6 +734,24 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={binding.enabled} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, enabled: event.target.checked } : item) })} />启用</label>
                     <ControlButton variant="ghost" size="sm" aria-label="移除绑定" onClick={() => patchModel(model.id, { bindings: model.bindings.filter((_, position) => position !== index) })}><Trash2 className="size-3.5" /></ControlButton>
                     {channelModels.has(binding.channelId) && !channelModels.get(binding.channelId)?.includes(binding.upstreamModel) && <StatusBadge tone="warning">渠道未列出该模型</StatusBadge>}
+                    {model.capability === 'image' && (
+                      <ImageBindingCapabilityEditor
+                        profile={binding.capabilityProfile}
+                        onChange={(patch) => patchModel(model.id, {
+                          bindings: model.bindings.map((item, position) => position === index
+                            ? { ...item, capabilityProfile: { ...(item.capabilityProfile || {}), ...patch } }
+                            : item),
+                        })}
+                        onReset={() => patchModel(model.id, {
+                          bindings: model.bindings.map((item, position) => {
+                            if (position !== index) return item
+                            const profile = { ...(item.capabilityProfile || {}) }
+                            for (const key of ['aspectRatios', 'outputResolutions', 'resolutions', 'imageQualities', 'qualities', 'outputDimensions', 'sizeMap']) delete profile[key]
+                            return { ...item, capabilityProfile: profile }
+                          }),
+                        })}
+                      />
+                    )}
                   </div>
                 )
               })}
@@ -798,6 +830,103 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       </div>
     </AdminDrawer>
+  )
+}
+
+type BindingCapabilityProfile = Record<string, unknown>
+
+function profileList(profile: BindingCapabilityProfile | undefined, key: string, fallback: readonly string[], legacyKey?: string) {
+  const value = profile?.[key]
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string') && value.length) return value as string[]
+  if (legacyKey) {
+    const legacy = profile?.[legacyKey]
+    if (Array.isArray(legacy) && legacy.every((item) => typeof item === 'string') && legacy.length) return legacy as string[]
+  }
+  return [...fallback]
+}
+
+function ImageBindingCapabilityEditor({ profile, onChange, onReset }: { profile?: BindingCapabilityProfile; onChange: (patch: BindingCapabilityProfile) => void; onReset: () => void }) {
+  const ratios = profileList(profile, 'aspectRatios', imageProfileRatios.map(([value]) => value))
+  const resolutions = profileList(profile, 'outputResolutions', imageProfileResolutions.map(([value]) => value), 'resolutions')
+  const qualities = profileList(profile, 'imageQualities', imageProfileQualities.map(([value]) => value), 'qualities')
+
+  const toggle = (key: string, current: string[], value: string) => {
+    const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+    onChange({ [key]: next })
+  }
+
+  return (
+    <div className="basis-full rounded-md border border-border/80 bg-muted/20 px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold text-foreground">图片能力</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">控制这个渠道入口可提供的画幅、清晰度和图片质量；未配置时使用默认值。</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <ControlButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onChange({ aspectRatios: imageProfileRatios.map(([value]) => value) })}
+          >GPT 八比例</ControlButton>
+          <ControlButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onReset}
+          >恢复默认</ControlButton>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        <CapabilityOptionGroup
+          title="支持画幅"
+          options={imageProfileRatios}
+          selected={ratios}
+          onToggle={(value) => toggle('aspectRatios', ratios, value)}
+        />
+        <CapabilityOptionGroup
+          title="支持清晰度"
+          options={imageProfileResolutions}
+          selected={resolutions}
+          onToggle={(value) => toggle('outputResolutions', resolutions, value)}
+        />
+        <CapabilityOptionGroup
+          title="支持图片质量"
+          options={imageProfileQualities}
+          selected={qualities}
+          onToggle={(value) => toggle('imageQualities', qualities, value)}
+        />
+      </div>
+    </div>
+  )
+}
+
+function CapabilityOptionGroup({
+  title,
+  options,
+  selected,
+  onToggle,
+}: {
+  title: string
+  options: readonly (readonly [string, string])[]
+  selected: string[]
+  onToggle: (value: string) => void
+}) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-1.5 text-[11px] font-medium text-muted-foreground">{title}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(([value, label]) => {
+          const checked = selected.includes(value)
+          return (
+            <label key={value} className={cn('inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] transition-colors', checked ? 'border-studio-accent/60 bg-studio-accent/10 text-foreground' : 'border-border bg-background text-muted-foreground hover:bg-muted')}>
+              <input type="checkbox" className="size-3 accent-studio-accent" checked={checked} onChange={() => onToggle(value)} />
+              <span>{label}</span>
+            </label>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }
 
