@@ -67,13 +67,15 @@ import { writeReuseParams } from '@/lib/studio/reuse-params'
 import type { AssetCategory, AssetKind, Asset, Task, TaskStatus } from '@/lib/studio/types'
 import { assetCategoryLabels, assetCategoryOf } from '@/lib/studio/reference-assets'
 
-const assetFilters: Array<{ value: string; label: string; kind?: AssetKind }> = [
+const assetFilters: Array<{ value: string; label: string; kind?: AssetKind | AssetCategory }> = [
   { value: '全部', label: '全部' },
   { value: 'image', label: '图片', kind: 'image' },
   { value: 'video', label: '视频', kind: 'video' },
   { value: 'audio', label: '音频', kind: 'audio' },
   { value: 'character', label: '角色', kind: 'character' },
   { value: 'scene', label: '场景', kind: 'scene' },
+  { value: 'prop', label: '道具', kind: 'prop' },
+  { value: 'style', label: '风格', kind: 'style' },
 ]
 
 function assetIcon(kind: AssetKind) {
@@ -173,7 +175,7 @@ export function AssetsPage() {
   }, [libraryAssets, serverAssets, state.backendStatus, state.assets])
   const visible = useMemo(() => mergedAssets.filter((asset) => {
     const definition = assetFilters.find((item) => item.value === filter)
-    const categoryMatch = definition?.kind === 'character' || definition?.kind === 'scene'
+    const categoryMatch = definition?.kind === 'character' || definition?.kind === 'scene' || definition?.kind === 'prop' || definition?.kind === 'style'
       ? (asset.category ?? asset.kind) === definition.kind
       : !definition?.kind || asset.kind === definition.kind
     return categoryMatch
@@ -359,7 +361,7 @@ export function AssetsPage() {
       await renameLibraryAsset(renameId, renameTitle, renameCategory)
       bumpAccountData()
       setRenameId(null)
-      setNotice('素材名称已更新。')
+      setNotice('素材名称和分类已更新。')
     } catch (reason) {
       setNotice(`重命名失败：${reason instanceof Error ? reason.message : '未知错误'}`)
     } finally {
@@ -488,12 +490,12 @@ export function AssetsPage() {
       <Modal
         open={Boolean(renameId)}
         onClose={() => { if (!renaming) setRenameId(null) }}
-        title="重命名素材"
-        description="只修改素材在创作资产中的显示名称。"
+        title="编辑素材"
+        description="修改素材名称和分类，媒体文件本身保持不变。"
         footer={(
           <>
             <ControlButton variant="ghost" disabled={renaming} onClick={() => setRenameId(null)}>取消</ControlButton>
-            <ControlButton variant="primary" disabled={renaming || !renameTitle.trim()} onClick={() => void renameAsset()}>{renaming ? '保存中…' : '保存名称'}</ControlButton>
+            <ControlButton variant="primary" disabled={renaming || !renameTitle.trim()} onClick={() => void renameAsset()}>{renaming ? '保存中…' : '保存修改'}</ControlButton>
           </>
         )}
       >
