@@ -71,7 +71,7 @@ export interface ImageEditorPanelProps {
 
 type Point = { x: number; y: number }
 type Rect = { x: number; y: number; width: number; height: number }
-type MaskRegion = { id: number; x: number; y: number }
+type MaskRegion = { id: number; x: number; y: number; prompt?: string }
 type MaskSnapshot = { dataUrl: string; regions: MaskRegion[] }
 type PanPoint = { x: number; y: number }
 type OutpaintRatio = 'original' | '1:1' | '4:3' | '16:9' | '9:16'
@@ -212,6 +212,7 @@ export function ImageEditorPanel({
   const toolbarDraggingRef = useRef(false)
   const toolbarDragStartRef = useRef<Point | null>(null)
   const toolbarOriginRef = useRef<PanPoint>({ x: 0, y: 0 })
+  const regionCloseTimerRef = useRef<number | null>(null)
   const nextRegionIdRef = useRef(1)
   const maskRegionsRef = useRef<MaskRegion[]>([])
   const [operation, setOperation] = useState<ImageEditOperation>(initialOperation)
@@ -226,6 +227,10 @@ export function ImageEditorPanel({
   const [pan, setPan] = useState<PanPoint>({ x: 0, y: 0 })
   const [toolbarOffset, setToolbarOffset] = useState<PanPoint>({ x: 0, y: 0 })
   const [showMarkers, setShowMarkers] = useState(true)
+  const [editingRegionId, setEditingRegionId] = useState<number | null>(null)
+  const [editingRegionPrompt, setEditingRegionPrompt] = useState('')
+  const [closingRegionId, setClosingRegionId] = useState<number | null>(null)
+  const [toolbarDragging, setToolbarDragging] = useState(false)
   const [hiddenSubmitConfirm, setHiddenSubmitConfirm] = useState(false)
   const [draftRect, setDraftRect] = useState<Rect | null>(null)
   const [status, setStatus] = useState(operationMeta[initialOperation].status)
@@ -260,6 +265,31 @@ export function ImageEditorPanel({
     setMaskRegions(next)
   }, [])
 
+  const closeRegionEditor = useCallback((animated = true) => {
+    if (regionCloseTimerRef.current !== null) {
+      window.clearTimeout(regionCloseTimerRef.current)
+      regionCloseTimerRef.current = null
+    }
+    const regionId = editingRegionId
+    if (regionId === null || !animated) {
+      setClosingRegionId(null)
+      setEditingRegionId(null)
+      setEditingRegionPrompt('')
+      return
+    }
+    setClosingRegionId(regionId)
+    regionCloseTimerRef.current = window.setTimeout(() => {
+      setClosingRegionId(null)
+      setEditingRegionId(null)
+      setEditingRegionPrompt('')
+      regionCloseTimerRef.current = null
+    }, 170)
+  }, [editingRegionId])
+
+  useEffect(() => () => {
+    if (regionCloseTimerRef.current !== null) window.clearTimeout(regionCloseTimerRef.current)
+  }, [])
+
   const initializeMask = useCallback(() => {
     const image = imageRef.current
     const canvas = maskRef.current
@@ -273,10 +303,17 @@ export function ImageEditorPanel({
     historyIndexRef.current = 0
     nextRegionIdRef.current = 1
     updateMaskRegions([])
+    if (regionCloseTimerRef.current !== null) {
+      window.clearTimeout(regionCloseTimerRef.current)
+      regionCloseTimerRef.current = null
+    }
     setZoom(1)
     setPan({ x: 0, y: 0 })
     setToolbarOffset({ x: 0, y: 0 })
     setShowMarkers(true)
+    setClosingRegionId(null)
+    setEditingRegionId(null)
+    setEditingRegionPrompt('')
     setMaskRevision((revision) => revision + 1)
     setDraftRect(null)
   }, [updateMaskRegions])
@@ -325,6 +362,7 @@ export function ImageEditorPanel({
 
   const undo = useCallback(() => {
     if (!canUndo) return
+    closeRegionEditor(false)
     historyIndexRef.current -= 1
     const snapshot = historyRef.current[historyIndexRef.current]
     const canvas = maskRef.current
@@ -334,10 +372,11 @@ export function ImageEditorPanel({
       nextRegionIdRef.current = Math.max(0, ...snapshot.regions.map((region) => region.id)) + 1
     }
     setMaskRevision((revision) => revision + 1)
-  }, [canUndo, updateMaskRegions])
+  }, [canUndo, closeRegionEditor, updateMaskRegions])
 
   const redo = useCallback(() => {
     if (!canRedo) return
+    closeRegionEditor(false)
     historyIndexRef.current += 1
     const snapshot = historyRef.current[historyIndexRef.current]
     const canvas = maskRef.current
@@ -347,7 +386,7 @@ export function ImageEditorPanel({
       nextRegionIdRef.current = Math.max(0, ...snapshot.regions.map((region) => region.id)) + 1
     }
     setMaskRevision((revision) => revision + 1)
-  }, [canRedo, updateMaskRegions])
+  }, [canRedo, closeRegionEditor, updateMaskRegions])
 
   const clearMask = useCallback(() => {
     const canvas = maskRef.current
@@ -358,9 +397,26 @@ export function ImageEditorPanel({
     historyIndexRef.current = 0
     nextRegionIdRef.current = 1
     updateMaskRegions([])
+    closeRegionEditor(false)
     setMaskRevision((revision) => revision + 1)
     setStatus('已清空标记')
-  }, [updateMaskRegions])
+  }, [closeRegionEditor, updateMaskRegions])
+
+  const confirmRegionPrompt = useCallback((animated = true) => {
+    if (editingRegionId === null) return
+    const promptValue = editingRegionPrompt.trim()
+    const nextRegions = maskRegionsRef.current.map((region) => (
+      region.id === editingRegionId ? { ...region, prompt: promptValue || undefined } : region
+    ))
+    updateMaskRegions(nextRegions)
+    if (historyIndexRef.current >= 0 && historyRef.current[historyIndexRef.current]) {
+      historyRef.current[historyIndexRef.current] = {
+        ...historyRef.current[historyIndexRef.current],
+        regions: nextRegions.map((region) => ({ ...region })),
+      }
+    }
+    closeRegionEditor(animated)
+  }, [closeRegionEditor, editingRegionId, editingRegionPrompt, updateMaskRegions])
 
   const pointFromEvent = useCallback((event: ReactPointerEvent<HTMLCanvasElement>): Point | null => {
     const canvas = maskRef.current
@@ -406,6 +462,7 @@ export function ImageEditorPanel({
     event.stopPropagation()
     event.currentTarget.setPointerCapture(event.pointerId)
     toolbarDraggingRef.current = true
+    setToolbarDragging(true)
     toolbarDragStartRef.current = { x: event.clientX, y: event.clientY }
     toolbarOriginRef.current = toolbarOffset
   }
@@ -423,6 +480,7 @@ export function ImageEditorPanel({
   const handleToolbarPointerUp = (event: ReactPointerEvent<HTMLSpanElement>) => {
     if (!toolbarDraggingRef.current) return
     toolbarDraggingRef.current = false
+    setToolbarDragging(false)
     toolbarDragStartRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
@@ -460,6 +518,7 @@ export function ImageEditorPanel({
     const point = pointFromEvent(event)
     if (!point) return
     event.currentTarget.setPointerCapture(event.pointerId)
+    if (tool === 'brush' && editingRegionId !== null) confirmRegionPrompt(false)
     drawingRef.current = true
     startPointRef.current = point
     const canvas = maskRef.current
@@ -468,6 +527,8 @@ export function ImageEditorPanel({
     if (tool === 'brush') {
       const region = { id: nextRegionIdRef.current++, x: point.x, y: point.y }
       updateMaskRegions([...maskRegionsRef.current, region])
+      setEditingRegionId(null)
+      setEditingRegionPrompt('')
     } else if (tool === 'eraser') {
       const clearRadius = Math.max(brushSize * 1.5, 28)
       updateMaskRegions(maskRegionsRef.current.filter((region) => Math.hypot(region.x - point.x, region.y - point.y) > clearRadius))
@@ -536,6 +597,13 @@ export function ImageEditorPanel({
     }
     startPointRef.current = null
     snapshotMask()
+    if (tool === 'brush' && point && start) {
+      const nearestRegion = maskRegionsRef.current[maskRegionsRef.current.length - 1]
+      if (nearestRegion) {
+        setEditingRegionId(nearestRegion.id)
+        setEditingRegionPrompt(nearestRegion.prompt ?? '')
+      }
+    }
   }
 
   const selectOperation = (next: ImageEditOperation) => {
@@ -546,6 +614,7 @@ export function ImageEditorPanel({
       setPrompt(operationMeta[next].defaultPrompt)
     }
     setStatus(operationMeta[next].status)
+    closeRegionEditor(false)
     if (next === 'erase') setTool('eraser')
     if (next === 'outpaint') setTool('move')
     if (next === 'inpaint' || next === 'remove-background') setTool('brush')
@@ -561,7 +630,7 @@ export function ImageEditorPanel({
     const canvas = maskRef.current
     const basePrompt = prompt.trim() || selectedMeta.defaultPrompt
     const regionPrompt = operation !== 'outpaint' && maskRegions.length > 0
-      ? `请按照画面上的标注编号处理：${maskRegions.map((region) => `区域 ${region.id}`).join('、')}。提示词中的“区域 N”对应画面上同编号位置。`
+      ? `请按照画面上的标注编号处理：${maskRegions.map((region) => region.prompt?.trim() ? `区域 ${region.id}：${region.prompt.trim()}` : `区域 ${region.id}`).join('；')}。提示词中的“区域 N”对应画面上同编号位置。`
       : ''
     const request: ImageEditRequest = {
       operation,
@@ -670,19 +739,51 @@ export function ImageEditorPanel({
               />
               {operation !== 'outpaint' && showMarkers && maskRegions.length > 0 && <div className={styles.regionMarkers} aria-label="标记区域编号">
                 {maskRegions.map((region) => (
-                  <span
-                    key={region.id}
-                    className={styles.regionMarker}
-                    style={{ left: `${(region.x / Math.max(1, maskRef.current?.width || 1)) * 100}%`, top: `${(region.y / Math.max(1, maskRef.current?.height || 1)) * 100}%` }}
-                  >
-                    {region.id}
+                  <span key={region.id} className={styles.regionMarkerGroup} style={{ left: `${(region.x / Math.max(1, maskRef.current?.width || 1)) * 100}%`, top: `${(region.y / Math.max(1, maskRef.current?.height || 1)) * 100}%` }}>
+                    <button
+                      type="button"
+                      className={styles.regionMarker}
+                      onClick={() => {
+                        closeRegionEditor(false)
+                        if (regionCloseTimerRef.current !== null) {
+                          window.clearTimeout(regionCloseTimerRef.current)
+                          regionCloseTimerRef.current = null
+                        }
+                        setClosingRegionId(null)
+                        setEditingRegionId(region.id)
+                        setEditingRegionPrompt(region.prompt ?? '')
+                      }}
+                      aria-label={`编辑区域 ${region.id}`}
+                      title={region.prompt ? `区域 ${region.id}：${region.prompt}` : `编辑区域 ${region.id}`}
+                    >{region.id}</button>
+                    {editingRegionId === region.id && <span className={`${styles.regionComposer} ${closingRegionId === region.id ? styles.regionComposerClosing : ''}`} role="group" aria-label={`编辑区域 ${region.id}`}>
+                      <span className={styles.regionComposerPrefix} aria-hidden="true">＋</span>
+                      <input
+                        autoFocus
+                        value={editingRegionPrompt}
+                        onChange={(event) => setEditingRegionPrompt(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            confirmRegionPrompt()
+                          }
+                          if (event.key === 'Escape') {
+                            event.preventDefault()
+                            closeRegionEditor(true)
+                          }
+                        }}
+                        placeholder="添加标记..."
+                        aria-label={`区域 ${region.id} 的修改说明`}
+                      />
+                      <button type="button" onClick={() => confirmRegionPrompt()} aria-label={`确认区域 ${region.id}`} title="确认"><span aria-hidden="true">✓</span></button>
+                    </span>}
                   </span>
                 ))}
               </div>}
               {operation !== 'outpaint' && maskStyle && <span className={styles.draftRect} style={maskStyle} aria-hidden="true" />}
             </div>
           )}
-          <div ref={toolbarRef} className={styles.floatingTools} style={toolbarStyle} role="toolbar" aria-label="编辑工具">
+          <div ref={toolbarRef} className={`${styles.floatingTools} ${toolbarDragging ? styles.floatingToolsDragging : ''}`} style={toolbarStyle} role="toolbar" aria-label="编辑工具">
             <span
               className={styles.toolbarHandle}
               role="button"
@@ -694,13 +795,13 @@ export function ImageEditorPanel({
               onPointerUp={handleToolbarPointerUp}
               onPointerCancel={handleToolbarPointerUp}
             ><GripVertical aria-hidden="true" /></span>
-            <button type="button" className={`${styles.toolButton} ${tool === 'brush' ? styles.toolButtonActive : ''}`} onClick={() => setTool('brush')} aria-pressed={tool === 'brush'} title="画笔"><Paintbrush aria-hidden="true" /><span>画笔</span></button>
-            <button type="button" className={`${styles.toolButton} ${tool === 'eraser' ? styles.toolButtonActive : ''}`} onClick={() => setTool('eraser')} aria-pressed={tool === 'eraser'} title="橡皮擦"><Eraser aria-hidden="true" /><span>橡皮</span></button>
-            <button type="button" className={`${styles.toolButton} ${tool === 'move' ? styles.toolButtonActive : ''}`} onClick={() => setTool('move')} aria-pressed={tool === 'move'} title="移动预览"><MousePointer2 aria-hidden="true" /><span>移动</span></button>
+            <button type="button" className={`${styles.toolButton} ${tool === 'brush' ? styles.toolButtonActive : ''}`} onClick={() => setTool('brush')} aria-pressed={tool === 'brush'} aria-label="画笔" title="画笔"><Paintbrush aria-hidden="true" /></button>
+            <button type="button" className={`${styles.toolButton} ${tool === 'eraser' ? styles.toolButtonActive : ''}`} onClick={() => setTool('eraser')} aria-pressed={tool === 'eraser'} aria-label="橡皮擦" title="橡皮擦"><Eraser aria-hidden="true" /></button>
+            <button type="button" className={`${styles.toolButton} ${tool === 'move' ? styles.toolButtonActive : ''}`} onClick={() => setTool('move')} aria-pressed={tool === 'move'} aria-label="移动预览" title="移动预览"><MousePointer2 aria-hidden="true" /></button>
             <span className={styles.toolDivider} aria-hidden="true" />
             <button type="button" className={styles.iconButton} onClick={undo} disabled={!canUndo} aria-label="撤销" title="撤销"><Undo2 aria-hidden="true" /></button>
             <button type="button" className={styles.iconButton} onClick={redo} disabled={!canRedo} aria-label="重做" title="重做"><Redo2 aria-hidden="true" /></button>
-            {operation !== 'outpaint' && <button type="button" className={styles.iconButton} onClick={clearMask} disabled={!hasMask} aria-label="清空标记" title="清空标记"><Trash2 aria-hidden="true" /></button>}
+            {operation !== 'outpaint' && <button type="button" className={`${styles.cancelDrawButton} ${styles.iconButton}`} onClick={clearMask} disabled={!hasMask} aria-label="取消绘制" title="取消绘制"><X aria-hidden="true" /><span>取消绘制</span></button>}
             <span className={styles.toolDivider} aria-hidden="true" />
             <label className={styles.sizeControl} title="画笔大小"><Minus aria-hidden="true" /><input type="range" min="4" max="160" value={brushSize} onChange={(event) => setBrushSize(Number(event.target.value))} aria-label="画笔大小" /><span>{brushSize}px</span></label>
             <input type="color" className={styles.colorControl} value={brushColor} onChange={(event) => setBrushColor(event.target.value)} aria-label="标记颜色" title="标记颜色" />

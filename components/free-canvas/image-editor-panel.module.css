@@ -141,22 +141,79 @@
 .maskCanvasHidden { opacity: 0; }
 .draftRect { position: absolute; border: 1px dashed #8fe9d5; background: rgb(199 243 232 / 16%); pointer-events: none; }
 .regionMarkers { position: absolute; inset: 0; pointer-events: none; }
+.regionMarkerGroup { position: absolute; display: inline-flex; align-items: center; justify-content: center; transform: translate(-50%, -50%); pointer-events: none; }
 .regionMarker {
-  position: absolute;
   display: inline-flex;
-  min-width: 24px;
-  height: 24px;
+  min-width: 25px;
+  height: 23px;
   align-items: center;
   justify-content: center;
-  transform: translate(-50%, -50%);
   border: 2px solid #fff;
-  border-radius: 999px;
-  background: #157d73;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+  border-radius: 7px;
+  background: #1f73f1;
+  box-shadow: 0 2px 9px rgb(0 0 0 / 45%);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: inherit;
+  user-select: none;
+  animation: regionMarkerIn 180ms cubic-bezier(.22, .8, .3, 1) both;
+}
+.regionComposer {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 8px);
+  left: 11px;
+  display: flex;
+  width: min(310px, 38vw);
+  min-width: 190px;
+  height: 42px;
+  align-items: center;
+  gap: 4px;
+  transform: translateX(-8px);
+  border: 1px solid rgb(20 30 38 / 12%);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 9px 26px rgb(20 30 38 / 25%);
+  color: #182029;
+  pointer-events: auto;
+  padding: 4px 5px 4px 9px;
+  transform-origin: left center;
+  animation: regionComposerIn 170ms cubic-bezier(.22, .8, .3, 1) both;
+}
+.regionComposerClosing { animation: regionComposerOut 160ms ease both; pointer-events: none; }
+.regionComposerPrefix { flex: 0 0 auto; color: #182029; font-size: 22px; line-height: 1; }
+.regionComposer input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #182029;
+  font: inherit;
+  font-size: 13px;
+}
+.regionComposer input::placeholder { color: rgb(24 32 41 / 47%); }
+.regionComposer button {
+  display: inline-flex;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: #1f73f1;
+  color: #fff;
+  cursor: pointer;
+  font-size: 17px;
+}
+.regionComposer button:hover { background: #155bc6; }
+.cancelDrawButton { width: auto; min-width: 32px; padding-inline: 8px; }
+.cancelDrawButton span { font-size: 10px; }
 }
 
 .floatingTools {
@@ -329,7 +386,9 @@
   padding: 5px;
   background: rgb(25 28 30 / 96%);
   box-shadow: 0 10px 30px rgb(0 0 0 / 48%);
+  transition: box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease;
 }
+.floatingToolsDragging { border-color: var(--editor-border-strong); box-shadow: 0 14px 36px rgb(0 0 0 / 56%); }
 .toolbarHandle {
   display: inline-flex;
   width: 18px;
@@ -391,6 +450,29 @@
 .panel[data-editor-theme='light'] .primaryAction { background: #111820; border-color: #111820; color: #fff; }
 .panel[data-editor-theme='light'] .primaryAction:hover { background: #27323c; border-color: #27323c; color: #fff; }
 
+@keyframes regionMarkerIn {
+  from { opacity: 0; transform: scale(.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes regionComposerIn {
+  from { opacity: 0; transform: translate(-8px, 5px) scale(.96); }
+  to { opacity: 1; transform: translate(-8px, 0) scale(1); }
+}
+@keyframes regionComposerOut {
+  from { opacity: 1; transform: translate(-8px, 0) scale(1); }
+  to { opacity: 0; transform: translate(-8px, 5px) scale(.96); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .regionMarker,
+  .regionComposer,
+  .floatingTools,
+  .iconButton,
+  .toolButton,
+  .operationButton,
+  .actionButton { animation: none !important; transition: none !important; }
+}
+
 @media (max-width: 720px) {
   .panel { min-width: 0; width: 100%; }
   .operations { padding-inline: 9px; }
@@ -405,4 +487,5 @@
   .image { max-height: min(420px, calc(100vh - 470px)); }
   .floatingTools { top: 10px; bottom: auto; max-width: calc(100% - 20px); }
   .panHint { display: none; }
+  .regionComposer { width: min(280px, calc(100vw - 72px)); }
 }
