@@ -51,6 +51,7 @@ import {
   createLibraryAsset,
   deleteLibraryAsset,
   listAllWorks,
+  renameGenerationLog,
   renameLibraryAsset,
   readImageSize,
   uploadPersistentAsset,
@@ -148,6 +149,7 @@ export function AssetsPage() {
   const [notice, setNotice] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [renameId, setRenameId] = useState<string | null>(null)
+  const [renameSource, setRenameSource] = useState<'library' | 'generation'>('library')
   const [renameTitle, setRenameTitle] = useState('')
   const [renameCategory, setRenameCategory] = useState<AssetCategory>('general')
   const [renaming, setRenaming] = useState(false)
@@ -358,7 +360,15 @@ export function AssetsPage() {
     if (!renameId || !renameTitle.trim()) return
     setRenaming(true)
     try {
-      await renameLibraryAsset(renameId, renameTitle, renameCategory)
+      if (renameSource === 'generation') {
+        const rawId = renameId.startsWith('generated-') ? renameId.slice('generated-'.length) : renameId
+        const separator = rawId.lastIndexOf('-')
+        await renameGenerationLog(separator > 0 ? rawId.slice(0, separator) : rawId, renameTitle)
+        await serverWorks.reload()
+      } else {
+        await renameLibraryAsset(renameId, renameTitle, renameCategory)
+        await serverLibrary.reload()
+      }
       bumpAccountData()
       setRenameId(null)
       setNotice('素材名称和分类已更新。')
@@ -371,6 +381,7 @@ export function AssetsPage() {
 
   function openRename(asset: Asset) {
     setRenameId(asset.id)
+    setRenameSource(serverLibrary.assets.some((item) => item.id === asset.id) ? 'library' : 'generation')
     setRenameTitle(asset.title)
     setRenameCategory(asset.category ?? 'general')
   }
@@ -453,7 +464,7 @@ export function AssetsPage() {
         />
       ) : view === 'grid' ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visible.map((asset) => <AssetCard key={asset.id} asset={asset} selected={selected.includes(asset.id)} onToggle={() => toggle(asset.id)} onDelete={() => setDeleteId(asset.id)} onRename={serverLibrary.assets.some((item) => item.id === asset.id) ? () => openRename(asset) : undefined} />)}
+          {visible.map((asset) => <AssetCard key={asset.id} asset={asset} selected={selected.includes(asset.id)} onToggle={() => toggle(asset.id)} onDelete={() => setDeleteId(asset.id)} onRename={() => openRename(asset)} />)}
         </div>
       ) : (
         <div className="flex flex-col studio-surface">
@@ -461,10 +472,10 @@ export function AssetsPage() {
             <div key={asset.id} className="flex min-w-0 items-center gap-3 border-b border-border p-3 last:border-b-0">
               <input type="checkbox" checked={selected.includes(asset.id)} onChange={() => toggle(asset.id)} className="size-4 shrink-0 accent-studio-accent" aria-label={`选择 ${asset.title}`} />
               <span className="flex size-10 shrink-0 items-center justify-center bg-muted text-muted-foreground">{assetIcon(asset.kind)}</span>
-              <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1"><p className="truncate text-sm font-medium text-foreground">{asset.title}</p>{serverLibrary.assets.some((item) => item.id === asset.id) && <button type="button" onClick={() => openRename(asset)} aria-label={`重命名 ${asset.title}`} title="重命名" className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil className="size-3.5" aria-hidden="true" /></button>}</div><p className="mt-1 truncate text-xs text-muted-foreground">{asset.tags.join(' · ')}</p></div>
+              <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1"><p className="truncate text-sm font-medium text-foreground">{asset.title}</p><button type="button" onClick={() => openRename(asset)} aria-label={`编辑 ${asset.title}`} title="编辑素材" className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil className="size-3.5" aria-hidden="true" /></button></div><p className="mt-1 truncate text-xs text-muted-foreground">{asset.tags.join(' · ')}</p></div>
               <span className="hidden text-xs text-muted-foreground sm:block">{asset.size}</span>
               <StatusBadge tone={asset.status === '处理中' ? 'accent' : 'neutral'}>{asset.status}</StatusBadge>
-              <AssetMenu title={asset.title} onDelete={() => setDeleteId(asset.id)} onRename={serverLibrary.assets.some((item) => item.id === asset.id) ? () => openRename(asset) : undefined} />
+              <AssetMenu title={asset.title} onDelete={() => setDeleteId(asset.id)} onRename={() => openRename(asset)} />
             </div>
           ))}
         </div>
@@ -490,8 +501,8 @@ export function AssetsPage() {
       <Modal
         open={Boolean(renameId)}
         onClose={() => { if (!renaming) setRenameId(null) }}
-        title="编辑素材"
-        description="修改素材名称和分类，媒体文件本身保持不变。"
+        title={renameSource === 'generation' ? '编辑生成资产' : '编辑素材'}
+        description={renameSource === 'generation' ? '修改生成结果的显示名称，结果媒体与任务参数保持不变。' : '修改素材名称和分类，媒体文件本身保持不变。'}
         footer={(
           <>
             <ControlButton variant="ghost" disabled={renaming} onClick={() => setRenameId(null)}>取消</ControlButton>
@@ -503,12 +514,12 @@ export function AssetsPage() {
           名称
           <input autoFocus value={renameTitle} maxLength={250} onChange={(event) => setRenameTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void renameAsset() } }} className="studio-field w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
         </label>
-        <label className="mt-3 flex flex-col gap-1.5 text-xs text-muted-foreground">
+        {renameSource === 'library' && <label className="mt-3 flex flex-col gap-1.5 text-xs text-muted-foreground">
           素材分类
           <select value={renameCategory} onChange={(event) => setRenameCategory(event.target.value as AssetCategory)} className="studio-field w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15">
             {Object.entries(assetCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-        </label>
+        </label>}
       </Modal>
     </div>
   )

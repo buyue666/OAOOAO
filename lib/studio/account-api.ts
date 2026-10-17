@@ -508,6 +508,15 @@ export async function renameLibraryAsset(id: string, title: string, category?: A
   return asset
 }
 
+/** 修改生成记录的显示名称，结果媒体与任务参数保持不变。 */
+export async function renameGenerationLog(id: string, title: string): Promise<void> {
+  const payload = await request<{ code?: number; msg?: string }>(`/api/generation-logs/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ title: title.trim() }),
+  })
+  if (typeof payload.code === 'number' && payload.code !== 0) throw new StudioApiError(payload.msg || '生成记录重命名失败', payload.code)
+}
+
 export async function deleteLibraryAsset(id: string) {
   return request<{ code?: number; msg?: string }>(`/api/library-assets/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
