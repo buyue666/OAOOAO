@@ -45,9 +45,9 @@ const protocols = [
 function localizeChannelError(reason: unknown, fallback: string) {
   const message = reason instanceof Error ? reason.message : String(reason || '')
   const translations: Array<[string, string]> = [
-    ['Changing a channel origin requires a new API key or clearing the saved key', '更换渠道地址后，必须填写新的 API Key，或勾选“清空已保存的 API Key”。留空仅表示沿用旧密钥。'],
-    ['Changing a channel origin requires a new webhook secret or clearing the saved secret', '更换渠道地址后，必须填写新的 Webhook 密钥，或清空已保存的密钥。'],
-    ['A saved API key cannot be used with a different provider origin', '保存的 API Key 不能用于不同的渠道地址，请填写新密钥或清空旧密钥。'],
+    ['Changing a channel origin requires a new API key or clearing the saved key', '留空表示不修改已保存的 API Key；如需移除旧密钥，请勾选“清空已保存的 API Key”。'],
+    ['Changing a channel origin requires a new webhook secret or clearing the saved secret', '留空表示不修改已保存的 Webhook 密钥；如需移除旧密钥，请清空已保存的密钥。'],
+    ['A saved API key cannot be used with a different provider origin', '留空表示不修改已保存的 API Key；如需移除旧密钥，请勾选“清空已保存的 API Key”。'],
     ['Changing the storage origin requires a new access key ID or clearing the saved key', '更换存储地址后，必须填写新的 Access Key ID，或清空已保存的密钥。'],
   ]
   return translations.find(([english]) => message.includes(english))?.[1] || message || fallback
@@ -454,7 +454,7 @@ function ChannelEditor({ channel, existingChannels, onClose, onSaved }: { channe
           <AdminField label="渠道标识" hint="唯一标识，创建后不可修改。"><AdminInput name="id" required={isNew} disabled={!isNew} defaultValue={channel?.id} maxLength={60} pattern="[A-Za-z0-9._-]+" /></AdminField>
           <AdminField label="渠道名称"><AdminInput name="name" defaultValue={channel?.name} maxLength={80} /></AdminField>
           <AdminField label="Base URL" className="sm:col-span-2"><AdminInput name="baseUrl" required value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" /></AdminField>
-          <AdminField label="API Key" hint={channel?.hasApiKey ? '已保存密钥。留空表示不修改（仅当 Base URL 不变时沿用）；更换地址请填新密钥或勾选清空。' : '尚未保存密钥。'}>
+          <AdminField label="API Key" hint={channel?.hasApiKey ? '已保存密钥。留空表示不修改；如需移除旧密钥，请勾选清空。' : '尚未保存密钥。'}>
             <AdminInput name="apiKey" type="password" autoComplete="new-password" placeholder={channel?.hasApiKey ? '留空表示不修改' : '请输入 API Key'} disabled={clearApiKey} />
           </AdminField>
           <AdminField label="Webhook 密钥" hint={channel?.hasWebhookSecret ? '已保存。留空表示不修改。' : '仅异步回调渠道需要。'}>

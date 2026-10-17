@@ -136,8 +136,6 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
       if(!Array.isArray(channel.models)||channel.models.length>2000||channel.models.some((m:any)=>typeof m!=='string'||m.length>200))throw httpError(400,'Invalid channel models');
       if(typeof channel.enabled!=='boolean')throw httpError(400,'Invalid channel enabled state');
       const old=current.systemChannels.find((c:any)=>c.id===channel.id);
-      if(old?.apiKey&&new URL(old.baseUrl).origin!==new URL(channel.baseUrl).origin&&!channel.apiKey&&channel.clearApiKey!==true)throw httpError(400,'Changing a channel origin requires a new API key or clearing the saved key');
-      if(old?.webhookSecret&&new URL(old.baseUrl).origin!==new URL(channel.baseUrl).origin&&!channel.webhookSecret&&channel.clearWebhookSecret!==true)throw httpError(400,'Changing a channel origin requires a new webhook secret or clearing the saved secret');
       const advanced=channel.advancedConfig || {};
       if(/password|api.?key|secret|authorization/i.test(JSON.stringify(Object.keys(advanced))))throw httpError(400,'Credentials must use designated secret fields');
       return {id:channel.id,name:channel.name,baseUrl:channel.baseUrl,models:channel.models,enabled:channel.enabled,apiFormat:channel.apiFormat||'openai',advancedConfig:advanced,
@@ -228,7 +226,6 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
   app.post('/api/admin/models',async request=>{
     await ctx.requireUser(request,'upstream.manage');const body=object(request.body),settings=await getSettings(ctx);const saved=settings.systemChannels.find((c:any)=>c.id===body.channelId);
     const baseUrl=string(body.baseUrl||saved?.baseUrl,'base URL',2000);validUrl(baseUrl,'base URL');
-    if(saved?.apiKey&&!body.apiKey&&new URL(baseUrl).origin!==new URL(saved.baseUrl).origin)throw httpError(400,'A saved API key cannot be used with a different provider origin');
     const key=body.apiKey?string(body.apiKey,'API key',16384):ctx.decrypt(saved?.apiKey||'');
     const format=body.apiFormat||saved?.apiFormat||'openai';if(!['openai','openai-compatible','ciyuan-async'].includes(format))throw httpError(501,'Model catalog discovery is unavailable for this protocol');
     const base=new URL(baseUrl);base.pathname=`${base.pathname.replace(/\/$/,'')}/models`;
