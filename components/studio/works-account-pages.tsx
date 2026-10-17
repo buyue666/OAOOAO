@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, Check, CircleDollarSign, Clock3, Copy, CreditCard, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
+import { ArrowUpRight, Check, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Copy, CreditCard, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
 import { ControlButton, KeyValue, MediaThumb, Modal, Notice, PageHeader, SectionHeading, SegmentedControl, StatusBadge } from './ui'
 import { useStudio } from '@/lib/studio/store'
 import { moneyLabel, StudioApiError } from '@/lib/studio/api'
@@ -21,7 +21,7 @@ import {
   type PointRecord,
 } from '@/lib/studio/account-api'
 import { useLedgerSummary, useReferralCenter, useServerOrders, useServerWorks } from '@/lib/studio/use-account-data'
-import type { StudioWork } from '@/lib/studio/account-api'
+import type { GenerationAsset, StudioWork } from '@/lib/studio/account-api'
 import { cn } from '@/lib/utils'
 import { addMediaToProject } from '@/lib/studio/project-media'
 import { MediaDownloadButton } from './media-download-button'
@@ -45,6 +45,15 @@ export function WorksPage() {
   const [filter, setFilter] = useState('全部')
   const [loading, setLoading] = useState(false)
   const visible = useMemo(() => (filter === '全部' ? works : works.filter((work) => work.kind === filter)), [filter, works])
+  const groupedVisible = useMemo(() => {
+    const seen = new Set<string>()
+    return visible.filter((work) => {
+      const key = work.groupId ?? work.id
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [visible])
 
   if (state === 'unauthenticated') {
     return (
@@ -78,7 +87,7 @@ export function WorksPage() {
       {truncated && <Notice tone="neutral">记录较多，当前只读取了最近一批结果。继续翻页会加载更多。</Notice>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} />
-        <span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visible.length} 件作品`}</span>
+        <span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${groupedVisible.length} 件作品`}</span>
       </div>
       {state === 'loading' && !works.length ? (
         <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status">
@@ -89,7 +98,7 @@ export function WorksPage() {
           <span className="min-w-0 flex-1">作品暂时无法读取：{message}</span>
           <button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button>
         </Notice>
-      ) : visible.length === 0 ? (
+      ) : groupedVisible.length === 0 ? (
         <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center">
           <p className="text-sm font-medium">还没有生成成功的作品</p>
           <p className="max-w-sm text-xs leading-5 text-muted-foreground">在图片或视频工作台提交生成后，成功的结果会自动出现在这里。当前记录共 {total} 条。</p>
@@ -97,7 +106,7 @@ export function WorksPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {visible.map((work) => <WorkCard key={work.id} work={work} />)}
+          {groupedVisible.map((work) => <WorkCard key={work.groupId ?? work.id} work={work} />)}
         </div>
       )}
     </div>
@@ -108,12 +117,20 @@ export function WorksPage() {
 function WorkCard({ work }: { work: StudioWork }) {
   const { state } = useStudio()
   const [preview, setPreview] = useState(false)
+  const [activeAssetIndex, setActiveAssetIndex] = useState(0)
   const [notice, setNotice] = useState('')
   const [projectBusy, setProjectBusy] = useState(false)
   const projectLock = useRef(false)
   const ratio = work.kind === 'video' ? '16:9' : '1:1'
   const openPreview = useCallback(() => setPreview(true), [])
   const closePreview = useCallback(() => setPreview(false), [])
+  const resultAssets: GenerationAsset[] = work.assets?.length ? work.assets : [{ url: work.src, poster: work.poster }]
+  const activeAsset = resultAssets[Math.min(activeAssetIndex, resultAssets.length - 1)] ?? resultAssets[0]
+  const workTitle = work.groupTitle ?? work.title
+
+  useEffect(() => {
+    setActiveAssetIndex(0)
+  }, [work.groupId, work.id])
 
   /** 复用参数：把结果带回工作台，由工作台继续用同一组参数创作。 */
   function reuseParams(event: React.MouseEvent<HTMLAnchorElement>) {
@@ -161,20 +178,20 @@ function WorkCard({ work }: { work: StudioWork }) {
   return (
     <article className="studio-surface studio-surface-interactive group overflow-hidden">
       {work.kind === 'audio' ? <div className="flex aspect-[4/3] items-center justify-center bg-muted p-4"><audio src={work.src} controls preload="none" aria-label={work.title} className="w-full" /></div> : <MediaThumb
-        src={work.src}
-        poster={work.poster}
+        src={resultAssets[0].url}
+        poster={resultAssets[0].poster}
         kind={work.kind === 'video' ? 'video' : 'image'}
-        alt={work.title}
+        alt={workTitle}
         fallback={work.fallback}
         className="aspect-[4/3]"
-        overlay={<div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-studio-ink/80 to-transparent px-3 pb-2.5 pt-8"><StatusBadge solid tone="success">已完成</StatusBadge><span className="text-[10px] text-studio-ink-muted">{ratio}</span></div>}
+        overlay={<div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-studio-ink/80 to-transparent px-3 pb-2.5 pt-8"><StatusBadge solid tone="success">已完成</StatusBadge><span className="text-[10px] text-studio-ink-muted">{ratio}{resultAssets.length > 1 ? ` · ${resultAssets.length} 张` : ''}</span></div>}
       />}
       <div className="p-3">
-        <p className="truncate text-sm font-semibold text-foreground" title={work.title}>{work.title}</p>
+        <p className="truncate text-sm font-semibold text-foreground" title={workTitle}>{workTitle}</p>
         <p className="mt-1 truncate text-xs text-muted-foreground">{work.model || '未记录模型'}{work.createdAt ? ` · ${new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <ControlButton variant="secondary" size="sm" onClick={openPreview} aria-haspopup="dialog"><ExternalLink className="size-3.5" />预览</ControlButton>
-          <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
+          <MediaDownloadButton media={{ url: resultAssets[0].url, kind: work.kind }} title={workTitle} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
           {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link> : null}
           <ControlButton variant="ghost" size="sm" onClick={sendToCanvas}><WandSparkles className="size-3.5" />发到画布</ControlButton>
           <ControlButton variant="ghost" size="sm" onClick={() => void addToProject()} disabled={projectBusy}><FolderPlus className="size-3.5" />{projectBusy ? '保存中…' : '加入项目'}</ControlButton>
@@ -184,18 +201,25 @@ function WorkCard({ work }: { work: StudioWork }) {
       <Modal
         open={preview}
         onClose={closePreview}
-        title={work.title}
-        description={`生成于 ${work.createdAt ? new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false }) : '未知时间'}${work.durationMs ? ` · 耗时 ${Math.round(work.durationMs / 1000)} 秒` : ''}`}
+        title={workTitle}
+        description={`生成于 ${work.createdAt ? new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false }) : '未知时间'}${work.durationMs ? ` · 耗时 ${Math.round(work.durationMs / 1000)} 秒` : ''}${resultAssets.length > 1 ? ` · ${resultAssets.length} 张结果` : ''}`}
         footer={(
           <>
             <ControlButton variant="ghost" onClick={closePreview}>关闭</ControlButton>
-            <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} label="下载作品" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted disabled:opacity-50" />
+            <MediaDownloadButton media={{ url: activeAsset.url, kind: work.kind }} title={`${workTitle} · ${activeAssetIndex + 1}`} prompt={work.prompt} taskId={work.taskId ?? work.id} label="下载作品" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted disabled:opacity-50" />
             {work.kind !== 'audio' ? <Link href={work.kind === 'video' ? '/video' : '/image'} onClick={reuseParams} className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Copy className="size-4" />复用这组参数</Link> : null}
           </>
         )}
       >
         <div className="flex flex-col gap-3">
-          {work.kind === 'audio' ? <audio src={work.src} controls preload="none" aria-label={work.title} className="w-full" /> : <MediaThumb src={work.src} poster={work.poster} kind={work.kind === 'video' ? 'video' : 'image'} alt={work.title} fallback={work.fallback} className="aspect-video" />}
+          {work.kind === 'audio' ? <audio src={activeAsset.url} controls preload="none" aria-label={workTitle} className="w-full" /> : <MediaThumb src={activeAsset.url} poster={activeAsset.poster} kind={work.kind === 'video' ? 'video' : 'image'} alt={`${workTitle} 结果 ${activeAssetIndex + 1}`} fallback={work.fallback} className="aspect-video" />}
+          {resultAssets.length > 1 && <div className="flex items-center gap-2" aria-label="生成结果浏览">
+            <button type="button" onClick={() => setActiveAssetIndex((index) => (index - 1 + resultAssets.length) % resultAssets.length)} className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted" aria-label="上一个结果"><ChevronLeft className="size-4" /></button>
+            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-0.5">
+              {resultAssets.map((asset, index) => <button key={`${asset.url}-${index}`} type="button" onClick={() => setActiveAssetIndex(index)} aria-label={`查看第 ${index + 1} 个结果`} aria-pressed={activeAssetIndex === index} className={cn('relative size-12 shrink-0 overflow-hidden rounded-md border bg-muted', activeAssetIndex === index ? 'border-studio-accent ring-2 ring-studio-accent/25' : 'border-border')}><img src={asset.url} alt="" className="size-full object-cover" /></button>)}
+            </div>
+            <button type="button" onClick={() => setActiveAssetIndex((index) => (index + 1) % resultAssets.length)} className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted" aria-label="下一个结果"><ChevronRight className="size-4" /></button>
+          </div>}
           {work.prompt && <div><p className="text-xs font-medium text-muted-foreground">创作提示词</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">{work.prompt}</p></div>}
           <div className="border-y border-border">
             <KeyValue label="模型" value={work.model || '未记录'} />

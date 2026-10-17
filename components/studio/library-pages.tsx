@@ -620,7 +620,7 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
       </header>
       {item.assets.length > 0 && (
         <div className={cn('grid gap-2', item.assets.length > 1 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:max-w-xs')}>
-          {item.assets.slice(0, 4).map((asset, index) => (
+          {item.assets.map((asset, index) => (
             <MediaThumb key={`${asset.url}-${index}`} src={asset.url} poster={asset.poster} alt={`${item.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="h-28 rounded-md" />
           ))}
         </div>

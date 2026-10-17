@@ -93,6 +93,11 @@ export type StudioWork = {
   prompt: string
   durationMs?: number
   taskStatus: string
+  /** All outputs from the same generation record; `src` remains the selected/first output for compatibility. */
+  assets?: GenerationAsset[]
+  groupId?: string
+  groupTitle?: string
+  assetIndex?: number
 }
 
 function normalizeAsset(raw: Record<string, unknown>): GenerationAsset | null {
@@ -164,6 +169,10 @@ export function historyToWorks(items: GenerationHistoryItem[]): StudioWork[] {
         prompt: item.prompt,
         durationMs: item.durationMs,
         taskStatus: item.status,
+        assets: item.assets,
+        groupId: item.id,
+        groupTitle: item.title,
+        assetIndex: index,
       })
     })
   }
