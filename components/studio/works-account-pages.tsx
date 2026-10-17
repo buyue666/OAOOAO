@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, Check, ChevronLeft, ChevronRight, CircleDollarSign, Clock3, Copy, CreditCard, ExternalLink, FolderPlus, Image as ImageIcon, KeyRound, Link2, Loader2, LockKeyhole, Mail, Package, Pencil, RefreshCw, Send, Sparkles, UserRound, Users, Video, WandSparkles } from 'lucide-react'
-import { ControlButton, KeyValue, MediaThumb, Modal, Notice, PageHeader, SectionHeading, SegmentedControl, StatusBadge } from './ui'
+import { ControlButton, KeyValue, MediaThumb, Modal, Notice, PageHeader, SearchField, SectionHeading, SegmentedControl, StatusBadge } from './ui'
 import { useStudio } from '@/lib/studio/store'
 import { moneyLabel, StudioApiError } from '@/lib/studio/api'
 import {
@@ -29,7 +29,7 @@ import { AccountWechat } from './account-wechat'
 import { writeReuseParams } from '@/lib/studio/reuse-params'
 import { writeWorkHandoff } from '@/lib/studio/work-handoff'
 import { formatPointsExpiry } from '@/lib/studio/check-in-rules'
-import { pointRecordBreakdown } from '@/lib/studio/ledger'
+import { ledgerDescription, pointRecordBreakdown } from '@/lib/studio/ledger'
 
 /* ------------------------------- 我的作品 ------------------------------- */
 
@@ -40,75 +40,83 @@ import { pointRecordBreakdown } from '@/lib/studio/ledger'
  * 「我的作品」仍然显示 0。现在作品直接来自后端生成记录里带结果资产的条目，
  * 刷新、重新登录、换浏览器都能恢复；本地缓存只用于加速，不作为索引。
  */
+function dayKey(value?: string) {
+  if (!value) return 'unknown'
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return 'unknown'
+  return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+}
+
+function dayLabel(value?: string) {
+  if (!value) return '日期未知'
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return '日期未知'
+  const currentKey = dayKey(value)
+  const todayKey = dayKey(new Date().toISOString())
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (currentKey === todayKey) return '今天'
+  if (currentKey === dayKey(yesterday.toISOString())) return '昨天'
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(date).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+  return `${parts.year ?? ''}年${parts.month ?? ''}月${parts.day ?? ''}日`
+}
+
+function withinTimeRange(value: string | undefined, range: string) {
+  if (range === 'all') return true
+  if (!value) return false
+  const timestamp = new Date(value).getTime()
+  if (!Number.isFinite(timestamp)) return false
+  if (range === 'today') return dayKey(value) === dayKey(new Date().toISOString())
+  const now = Date.now()
+  if (range === '7d') return timestamp >= now - 7 * 86400000
+  if (range === '30d') return timestamp >= now - 30 * 86400000
+  return true
+}
+
+/** 作品页。结果按日期分组，支持搜索、模型和时间筛选。 */
 export function WorksPage() {
   const { works, total, truncated, state, message, reload } = useServerWorks()
   const [filter, setFilter] = useState('全部')
+  const [search, setSearch] = useState('')
+  const [modelFilter, setModelFilter] = useState('all')
+  const [timeFilter, setTimeFilter] = useState('all')
   const [loading, setLoading] = useState(false)
-  const visible = useMemo(() => (filter === '全部' ? works : works.filter((work) => work.kind === filter)), [filter, works])
+  const models = useMemo(() => Array.from(new Set(works.map((work) => work.model).filter((model): model is string => Boolean(model)))).sort(), [works])
   const groupedVisible = useMemo(() => {
     const seen = new Set<string>()
-    return visible.filter((work) => {
+    const query = search.trim().toLowerCase()
+    const visible = works.filter((work) => {
+      if (filter !== '全部' && work.kind !== filter) return false
+      if (modelFilter !== 'all' && work.model !== modelFilter) return false
+      if (!withinTimeRange(work.createdAt, timeFilter)) return false
+      if (query && !`${work.title} ${work.prompt} ${work.model ?? ''}`.toLowerCase().includes(query)) return false
       const key = work.groupId ?? work.id
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
-  }, [visible])
+    const groups = new Map<string, { label: string; items: StudioWork[]; sort: number }>()
+    visible.forEach((work) => {
+      const key = dayKey(work.createdAt)
+      const group = groups.get(key) ?? { label: dayLabel(work.createdAt), items: [], sort: work.createdAt ? new Date(work.createdAt).getTime() : 0 }
+      group.items.push(work)
+      groups.set(key, group)
+    })
+    return Array.from(groups.values()).sort((a, b) => b.sort - a.sort)
+  }, [filter, modelFilter, search, timeFilter, works])
+  const visibleCount = groupedVisible.reduce((count, group) => count + group.items.length, 0)
 
   if (state === 'unauthenticated') {
-    return (
-      <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-        <PageHeader eyebrow="作品" title="我的作品" description="生成结果、项目关系和发布状态都在这里继续管理。" />
-        <Notice tone="warning">
-          <LockKeyhole className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1">登录后才会显示属于你的作品。</span>
-          <Link href="/login?next=/works" className="shrink-0 text-[11px] underline">前往登录</Link>
-        </Notice>
-      </div>
-    )
+    return (<div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10"><PageHeader eyebrow="作品" title="我的作品" description="生成结果、项目关系和发布状态都在这里继续管理。" /><Notice tone="warning"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" /><span className="min-w-0 flex-1">登录后才会显示属于你的作品。</span><Link href="/login?next=/works" className="shrink-0 text-[11px] underline">前往登录</Link></Notice></div>)
   }
 
   return (
     <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader
-        eyebrow="作品"
-        title="我的作品"
-        description="这里集中管理已经生成并保存结果的作品。"
-        actions={(
-          <>
-            <ControlButton variant="secondary" onClick={() => { setLoading(true); void reload().finally(() => setLoading(false)) }} disabled={loading || state === 'loading'}>
-              <RefreshCw className={cn('size-4', (loading || state === 'loading') && 'animate-spin')} />刷新
-            </ControlButton>
-            <Link href="/image" className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Sparkles className="size-4" />开始新创作</Link>
-          </>
-        )}
-      />
+      <PageHeader eyebrow="作品" title="我的作品" description="生成结果按日期归档，可按模型、时间或关键词快速查找。" actions={(<><ControlButton variant="secondary" onClick={() => { setLoading(true); void reload().finally(() => setLoading(false)) }} disabled={loading || state === 'loading'}><RefreshCw className={cn('size-4', (loading || state === 'loading') && 'animate-spin')} />刷新</ControlButton><Link href="/image" className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Sparkles className="size-4" />开始新创作</Link></>)} />
       {message && <Notice tone="warning">{message}</Notice>}
       {truncated && <Notice tone="neutral">记录较多，当前只读取了最近一批结果。继续翻页会加载更多。</Notice>}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} />
-        <span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${groupedVisible.length} 件作品`}</span>
-      </div>
-      {state === 'loading' && !works.length ? (
-        <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status">
-          <Loader2 className="size-4 animate-spin" />正在读取生成结果
-        </div>
-      ) : state === 'error' && !works.length ? (
-        <Notice tone="warning">
-          <span className="min-w-0 flex-1">作品暂时无法读取：{message}</span>
-          <button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button>
-        </Notice>
-      ) : groupedVisible.length === 0 ? (
-        <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center">
-          <p className="text-sm font-medium">还没有生成成功的作品</p>
-          <p className="max-w-sm text-xs leading-5 text-muted-foreground">在图片或视频工作台提交生成后，成功的结果会自动出现在这里。当前记录共 {total} 条。</p>
-          <Link href="/image" className="mt-2 text-xs text-studio-accent underline">前往图片工作台</Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {groupedVisible.map((work) => <WorkCard key={work.groupId ?? work.id} work={work} />)}
-        </div>
-      )}
+      <div className="flex flex-col gap-3 border-b border-border pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} /><span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visibleCount} 件作品`}</span></div><div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_150px]"><SearchField value={search} onChange={setSearch} placeholder="搜索标题、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部时间</option><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option></select></div></div>
+      {state === 'loading' && !works.length ? <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取生成结果</div> : state === 'error' && !works.length ? <Notice tone="warning"><span className="min-w-0 flex-1">作品暂时无法读取：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice> : !visibleCount ? <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center"><p className="text-sm font-medium">没有符合条件的作品</p><p className="max-w-sm text-xs leading-5 text-muted-foreground">尝试清空搜索词或调整模型、时间筛选。</p></div> : <div className="flex flex-col gap-7">{groupedVisible.map((group) => <section key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3"><h2 className="text-sm font-semibold text-foreground">{group.label}</h2><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div><div className="grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 lg:grid-cols-4">{group.items.map((work) => <WorkCard key={work.groupId ?? work.id} work={work} />)}</div></section>)}</div>}
     </div>
   )
 }
@@ -580,7 +588,7 @@ function CreditsPanel({ state, rechargeEnabled }: { state: ReturnType<typeof use
                 const expiry = formatPointsExpiry(record.expiresAt)
                 return (
                   <tr key={record.id} className="border-b border-border/60 last:border-b-0">
-                    <td className="max-w-[280px] py-3 text-sm text-foreground"><p className="truncate" title={record.description}>{record.description || record.model || record.id}</p>{expiry && <p className="mt-1 text-[11px] text-muted-foreground">有效期至 {expiry}（北京时间）</p>}{Number(record.expiredRefundPoints) > 0 && <p className="mt-1 text-[11px] text-muted-foreground">另有 {record.expiredRefundPoints?.toLocaleString('zh-CN')} 限时积分已到期，未恢复</p>}</td>
+                    <td className="max-w-[280px] py-3 text-sm text-foreground"><p className="truncate" title={ledgerDescription(record)}>{ledgerDescription(record)}</p>{expiry && <p className="mt-1 text-[11px] text-muted-foreground">有效期至 {expiry}（北京时间）</p>}{Number(record.expiredRefundPoints) > 0 && <p className="mt-1 text-[11px] text-muted-foreground">另有 {record.expiredRefundPoints?.toLocaleString('zh-CN')} 限时积分已到期，未恢复</p>}</td>
                     <td className="py-3 text-xs text-muted-foreground">{ledgerCategoryLabels[category]}</td>
                     <td className={cn('py-3 text-xs', Number(record.amount) < 0 ? 'text-foreground' : 'text-studio-accent')}><span>{Number(record.amount) > 0 ? '+' : ''}{Number(record.amount).toLocaleString()}</span>{breakdown && <p className="mt-1 max-w-60 text-[11px] text-muted-foreground">{breakdown}</p>}</td>
                     <td className="py-3 text-xs text-muted-foreground">{record.createdAt ? new Date(record.createdAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td>

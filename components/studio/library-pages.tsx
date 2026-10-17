@@ -597,6 +597,33 @@ function formatTaskDate(timestamp: number) {
   return taskDateFormatter.format(timestamp)
 }
 
+function taskDateKey(value: number | string | undefined) {
+  const date = new Date(value ?? '')
+  if (!Number.isFinite(date.getTime())) return 'unknown'
+  return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+}
+
+function taskDateLabel(value: number | string | undefined) {
+  const date = new Date(value ?? '')
+  if (!Number.isFinite(date.getTime())) return '日期未知'
+  const today = taskDateKey(Date.now())
+  const yesterday = new Date(Date.now() - 86400000)
+  const key = taskDateKey(value)
+  if (key === today) return '今天'
+  if (key === taskDateKey(yesterday.getTime())) return '昨天'
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(date).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+  return `${parts.year ?? ''}年${parts.month ?? ''}月${parts.day ?? ''}日`
+}
+
+function taskWithinTimeRange(value: number | string | undefined, range: string) {
+  if (range === 'all') return true
+  const timestamp = new Date(value ?? '').getTime()
+  if (!Number.isFinite(timestamp)) return false
+  if (range === 'today') return taskDateKey(timestamp) === taskDateKey(Date.now())
+  const age = range === '7d' ? 7 : range === '30d' ? 30 : 0
+  return age === 0 || timestamp >= Date.now() - age * 86400000
+}
+
 function TaskTypeIcon({ task }: { task: Task }) {
   if (task.type === 'video') return <Video className="size-5" />
   if (task.type === 'image') return <ImageIcon className="size-5" />
@@ -610,25 +637,38 @@ export function TasksPage() {
   const [filter, setFilter] = useState('全部')
   const [search, setSearch] = useState('')
   const [liveFilter, setLiveFilter] = useState<'all' | 'active' | 'success' | 'error'>('all')
+  const [modelFilter, setModelFilter] = useState('all')
+  const [timeFilter, setTimeFilter] = useState('all')
   // 历史任务从服务端分页读取；本地只保留最近任务的轮询状态用于实时进度。
   const history = useServerHistory({ pageSize: 24 })
 
   // 后端可用时任务列表来自真实接口，只保留本页的筛选与搜索。
   if (liveReady) {
+    const query = search.trim().toLowerCase()
+    const matches = (title: string, prompt: string, model: string | undefined, createdAt: number | string | undefined) => {
+      if (modelFilter !== 'all' && model !== modelFilter) return false
+      if (!taskWithinTimeRange(createdAt, timeFilter)) return false
+      return !query || `${title} ${prompt} ${model ?? ''}`.toLowerCase().includes(query)
+    }
     const filtered = generation.tasks.filter((task) => {
       if (liveFilter === 'active' && !['pending', 'running', 'paused'].includes(task.status)) return false
       if (liveFilter === 'success' && task.status !== 'success') return false
       if (liveFilter === 'error' && !['error', 'cancelled'].includes(task.status)) return false
-      if (!search.trim()) return true
-      return `${task.title} ${task.prompt} ${task.model}`.toLowerCase().includes(search.trim().toLowerCase())
+      return matches(task.title, task.prompt, task.model, task.createdAt)
     })
     const historyFiltered = history.items.filter((item) => {
       if (liveFilter === 'active') return false
       if (liveFilter === 'success' && item.status !== 'success') return false
       if (liveFilter === 'error' && !['error', 'cancelled', 'failed'].includes(item.status)) return false
-      if (!search.trim()) return true
-      return `${item.title} ${item.prompt} ${item.model ?? ''}`.toLowerCase().includes(search.trim().toLowerCase())
+      return matches(item.title, item.prompt, item.model, item.createdAt)
     })
+    const models = Array.from(new Set([...generation.tasks.map((task) => task.model), ...history.items.map((item) => item.model)].filter((model): model is string => Boolean(model)))).sort()
+    const groupedHistory = new Map<string, { label: string; items: GenerationHistoryItem[]; sort: number }>()
+    historyFiltered.forEach((item) => { const key = taskDateKey(item.createdAt); const group = groupedHistory.get(key) ?? { label: taskDateLabel(item.createdAt), items: [], sort: item.createdAt ? new Date(item.createdAt).getTime() : 0 }; group.items.push(item); groupedHistory.set(key, group) })
+    const historyGroups = Array.from(groupedHistory.values()).sort((a, b) => b.sort - a.sort)
+    const groupedLive = new Map<string, { label: string; items: typeof filtered; sort: number }>()
+    filtered.forEach((task) => { const key = taskDateKey(task.createdAt); const group = groupedLive.get(key) ?? { label: taskDateLabel(task.createdAt), items: [], sort: task.createdAt || 0 }; group.items.push(task); groupedLive.set(key, group) })
+    const liveGroups = Array.from(groupedLive.values()).sort((a, b) => b.sort - a.sort)
     const refreshAll = () => {
       void generation.refresh()
       void history.reload()
@@ -656,7 +696,7 @@ export function TasksPage() {
               ['error', '失败或取消', generation.tasks.filter((task) => ['error', 'cancelled'].includes(task.status)).length],
             ] as const).map(([value, label, count]) => ({ value, label, count }))}
           />
-          <div className="w-full md:max-w-xs"><SearchField value={search} onChange={setSearch} placeholder="搜索任务" /></div>
+          <div className="grid w-full gap-2 md:max-w-2xl md:grid-cols-[minmax(0,1fr)_170px_140px]"><SearchField value={search} onChange={setSearch} placeholder="搜索任务、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部时间</option><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option></select></div>
         </div>
 
         <GenerationErrorNotice />
@@ -671,13 +711,13 @@ export function TasksPage() {
             {filtered.length > 0 && (
               <section className="flex flex-col gap-3">
                 <h2 className="text-sm font-semibold text-foreground">进行中的任务</h2>
-                {filtered.map((task) => <GenerationTaskCard key={task.id} task={task} />)}
+                {liveGroups.map((group) => <div key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3 pt-2"><h3 className="text-xs font-semibold text-foreground">{group.label}</h3><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div>{group.items.map((task) => <GenerationTaskCard key={task.id} task={task} />)}</div>)}
               </section>
             )}
             {historyFiltered.length > 0 && (
               <section className="flex flex-col gap-3">
                 <h2 className="text-sm font-semibold text-foreground">历史记录（共 {history.total} 条）</h2>
-                {historyFiltered.map((item) => <HistoryTaskCard key={item.id} item={item} />)}
+                {historyGroups.map((group) => <div key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3 pt-2"><h3 className="text-xs font-semibold text-foreground">{group.label}</h3><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div>{group.items.map((item) => <HistoryTaskCard key={item.id} item={item} />)}</div>)}
                 {history.hasMore && (
                   <ControlButton variant="secondary" onClick={() => void history.loadMore()} disabled={history.loadingMore}>
                     {history.loadingMore ? '正在加载…' : `加载更多（已显示 ${history.items.length}/${history.total}）`}
@@ -735,7 +775,7 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
       {item.assets.length > 0 && (
         <div className={cn('grid gap-2', item.assets.length > 1 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:max-w-xs')}>
           {item.assets.map((asset, index) => (
-            <MediaThumb key={`${asset.url}-${index}`} src={asset.url} poster={asset.poster} alt={`${item.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full rounded-md [&_img]:object-contain [&_video]:object-contain" />
+            <MediaThumb key={`${asset.url}-${index}`} src={asset.url} poster={asset.poster} alt={`${item.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain" />
           ))}
         </div>
       )}

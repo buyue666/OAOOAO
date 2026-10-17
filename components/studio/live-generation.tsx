@@ -268,7 +268,7 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
       {task.media.length > 0 && (
         <div className={cn('grid gap-2', task.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
           {task.media.slice(0, compact ? 2 : 4).map((item, index) => (
-            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full rounded-md [&_img]:object-contain [&_video]:object-contain" />
+            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain" />
           ))}
         </div>
       )}

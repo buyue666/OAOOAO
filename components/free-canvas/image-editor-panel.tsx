@@ -1205,10 +1205,10 @@ export function ImageEditorPanel({
             <button type="button" className={styles.iconButton} onClick={() => setHiddenSubmitConfirm(false)} aria-label="取消提交"><X aria-hidden="true" /></button>
           </div>
           <img className={styles.confirmThumbnail} src={imageSrc} alt="当前图片预览" />
-          <p className={styles.confirmMessage}>已隐藏标记，但标记会一并提交。</p>
+          <p className={styles.confirmMessage}>已隐藏标记，但标记会一并提交。{estimatedCredits > 0 ? ` 本次预计消耗 ${estimatedCredits} 积分。` : ' 预计消耗以任务账单为准。'}</p>
           <div className={styles.confirmActions}>
             <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={() => setHiddenSubmitConfirm(false)}>取消</button>
-            <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit(true)}>确认提交</button>
+            <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit(true)}>确认提交{estimatedCredits > 0 ? ` · ${estimatedCredits} 积分` : ''}</button>
           </div>
         </div>
       </div>}
