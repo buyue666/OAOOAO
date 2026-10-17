@@ -312,13 +312,11 @@ export function ImageEditorPanel({
   const openRegionEditor = useCallback((regionId: number, regionPrompt = '') => {
     closeRegionEditor(false)
     setClosingRegionId(null)
-    // Let the opaque number badge render for one frame before mounting the
-    // composer, matching the two-step feedback in Doubao's editor.
-    regionOpenFrameRef.current = window.requestAnimationFrame(() => {
-      regionOpenFrameRef.current = null
-      setEditingRegionId(regionId)
-      setEditingRegionPrompt(regionPrompt)
-    })
+    // Mount immediately after the marker is committed. The marker and composer
+    // have separate CSS entry animations, so the badge appears first while the
+    // input still reliably opens even when pointer capture ends outside canvas.
+    setEditingRegionId(regionId)
+    setEditingRegionPrompt(regionPrompt)
   }, [closeRegionEditor])
 
   const initializeMask = useCallback(() => {
