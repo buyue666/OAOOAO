@@ -606,7 +606,11 @@ export function ImageEditorPanel({
     if (!canvas || !context) return
     if (tool === 'brush') {
       const region = { id: nextRegionIdRef.current++, x: point.x, y: point.y }
-      updateMaskRegions([...maskRegionsRef.current, region])
+      const nextRegions = [...maskRegionsRef.current, region]
+      updateMaskRegions(nextRegions)
+      // Put the new region token into the parent prompt immediately. The
+      // floating composer then fills in its description as the user confirms it.
+      publishRegionPrompt(nextRegions)
       setEditingRegionId(null)
       setEditingRegionPrompt('')
     } else if (tool === 'eraser') {

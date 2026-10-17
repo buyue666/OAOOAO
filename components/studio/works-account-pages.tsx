@@ -212,7 +212,7 @@ function WorkCard({ work }: { work: StudioWork }) {
         )}
       >
         <div className="flex flex-col gap-3">
-          {work.kind === 'audio' ? <audio src={activeAsset.url} controls preload="none" aria-label={workTitle} className="w-full" /> : <MediaThumb src={activeAsset.url} poster={activeAsset.poster} kind={work.kind === 'video' ? 'video' : 'image'} alt={`${workTitle} 结果 ${activeAssetIndex + 1}`} fallback={work.fallback} className="aspect-video" />}
+          {work.kind === 'audio' ? <audio src={activeAsset.url} controls preload="none" aria-label={workTitle} className="w-full" /> : work.kind === 'video' ? <video src={activeAsset.url} poster={activeAsset.poster} controls playsInline className="max-h-[70vh] w-full rounded-lg bg-black object-contain" aria-label={`${workTitle} 结果 ${activeAssetIndex + 1}`} /> : <div className="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-lg bg-muted"><img src={activeAsset.url} alt={`${workTitle} 结果 ${activeAssetIndex + 1}`} className="max-h-[70vh] max-w-full object-contain" /></div>}
           {resultAssets.length > 1 && <div className="flex items-center gap-2" aria-label="生成结果浏览">
             <button type="button" onClick={() => setActiveAssetIndex((index) => (index - 1 + resultAssets.length) % resultAssets.length)} className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted" aria-label="上一个结果"><ChevronLeft className="size-4" /></button>
             <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-0.5">

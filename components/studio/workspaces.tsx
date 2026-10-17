@@ -1045,8 +1045,7 @@ export function ImageWorkspace() {
   const syncEditorRegionPrompt = useCallback((regions: ImageEditorRegion[]) => {
     const marker = '\n\n【区域标记】'
     const summary = regions
-      .filter((region) => region.prompt?.trim() || region.referenceImageDataUrl)
-      .map((region) => `区域 ${region.id}${region.prompt?.trim() ? `：${region.prompt.trim()}` : ''}${region.referenceImageDataUrl ? '（附参考图）' : ''}`)
+      .map((region) => `区域 ${region.id}${region.prompt?.trim() ? `：${region.prompt.trim()}` : '：'}${region.referenceImageDataUrl ? '（附参考图）' : ''}`)
       .join('；')
     setPrompt((current) => {
       const markerIndex = current.indexOf(marker)
