@@ -615,13 +615,19 @@ function taskDateLabel(value: number | string | undefined) {
   return `${parts.year ?? ''}年${parts.month ?? ''}月${parts.day ?? ''}日`
 }
 
-function taskWithinTimeRange(value: number | string | undefined, range: string) {
-  if (range === 'all') return true
+function taskWithinTimeRange(value: number | string | undefined, from: string, to: string) {
   const timestamp = new Date(value ?? '').getTime()
   if (!Number.isFinite(timestamp)) return false
-  if (range === 'today') return taskDateKey(timestamp) === taskDateKey(Date.now())
-  const age = range === '7d' ? 7 : range === '30d' ? 30 : 0
-  return age === 0 || timestamp >= Date.now() - age * 86400000
+  // 日期输入按北京时间解释，结束日期包含当天 23:59:59.999。
+  if (from) {
+    const start = new Date(`${from}T00:00:00+08:00`).getTime()
+    if (Number.isFinite(start) && timestamp < start) return false
+  }
+  if (to) {
+    const end = new Date(`${to}T23:59:59.999+08:00`).getTime()
+    if (Number.isFinite(end) && timestamp > end) return false
+  }
+  return true
 }
 
 function TaskTypeIcon({ task }: { task: Task }) {
@@ -638,7 +644,8 @@ export function TasksPage() {
   const [search, setSearch] = useState('')
   const [liveFilter, setLiveFilter] = useState<'all' | 'active' | 'success' | 'error'>('all')
   const [modelFilter, setModelFilter] = useState('all')
-  const [timeFilter, setTimeFilter] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   // 历史任务从服务端分页读取；本地只保留最近任务的轮询状态用于实时进度。
   const history = useServerHistory({ pageSize: 24 })
 
@@ -647,7 +654,7 @@ export function TasksPage() {
     const query = search.trim().toLowerCase()
     const matches = (title: string, prompt: string, model: string | undefined, createdAt: number | string | undefined) => {
       if (modelFilter !== 'all' && model !== modelFilter) return false
-      if (!taskWithinTimeRange(createdAt, timeFilter)) return false
+      if (!taskWithinTimeRange(createdAt, dateFrom, dateTo)) return false
       return !query || `${title} ${prompt} ${model ?? ''}`.toLowerCase().includes(query)
     }
     const filtered = generation.tasks.filter((task) => {
@@ -696,7 +703,12 @@ export function TasksPage() {
               ['error', '失败或取消', generation.tasks.filter((task) => ['error', 'cancelled'].includes(task.status)).length],
             ] as const).map(([value, label, count]) => ({ value, label, count }))}
           />
-          <div className="grid w-full gap-2 md:max-w-2xl md:grid-cols-[minmax(0,1fr)_170px_140px]"><SearchField value={search} onChange={setSearch} placeholder="搜索任务、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部时间</option><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option></select></div>
+          <div className="grid w-full gap-2 md:max-w-4xl md:grid-cols-[minmax(0,1fr)_170px_150px_150px]">
+            <SearchField value={search} onChange={setSearch} placeholder="搜索任务、提示词或模型" />
+            <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select>
+            <label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">开始</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} aria-label="开始日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label>
+            <label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">结束</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} aria-label="结束日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label>
+          </div>
         </div>
 
         <GenerationErrorNotice />
@@ -711,13 +723,13 @@ export function TasksPage() {
             {filtered.length > 0 && (
               <section className="flex flex-col gap-3">
                 <h2 className="text-sm font-semibold text-foreground">进行中的任务</h2>
-                {liveGroups.map((group) => <div key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3 pt-2"><h3 className="text-xs font-semibold text-foreground">{group.label}</h3><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div>{group.items.map((task) => <GenerationTaskCard key={task.id} task={task} />)}</div>)}
+                {liveGroups.map((group) => <div key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3 pt-2"><h3 className="text-xs font-semibold text-foreground">{group.label}</h3><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{group.items.map((task) => <GenerationTaskCard key={task.id} task={task} compact />)}</div></div>)}
               </section>
             )}
             {historyFiltered.length > 0 && (
               <section className="flex flex-col gap-3">
                 <h2 className="text-sm font-semibold text-foreground">历史记录（共 {history.total} 条）</h2>
-                {historyGroups.map((group) => <div key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3 pt-2"><h3 className="text-xs font-semibold text-foreground">{group.label}</h3><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div>{group.items.map((item) => <HistoryTaskCard key={item.id} item={item} />)}</div>)}
+                {historyGroups.map((group) => <div key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3 pt-2"><h3 className="text-xs font-semibold text-foreground">{group.label}</h3><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{group.items.map((item) => <HistoryTaskCard key={item.id} item={item} compact />)}</div></div>)}
                 {history.hasMore && (
                   <ControlButton variant="secondary" onClick={() => void history.loadMore()} disabled={history.loadingMore}>
                     {history.loadingMore ? '正在加载…' : `加载更多（已显示 ${history.items.length}/${history.total}）`}
@@ -740,7 +752,7 @@ export function TasksPage() {
 }
 
 /** 服务端历史任务卡片：展示状态、模型、耗时、结果与失败原因。 */
-function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
+function HistoryTaskCard({ item, compact = false }: { item: GenerationHistoryItem; compact?: boolean }) {
   const router = useRouter()
   const { state } = useStudio()
   const [reuseError, setReuseError] = useState('')
@@ -762,7 +774,7 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
   }
 
   return (
-    <article className="studio-surface flex flex-col gap-3 p-3">
+    <article className={cn('studio-surface flex flex-col gap-3 p-3', compact && 'min-w-0 gap-2 p-2')}>
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
@@ -774,14 +786,14 @@ function HistoryTaskCard({ item }: { item: GenerationHistoryItem }) {
       </header>
       {item.assets.length > 0 && (
         <div className={cn('grid gap-2', item.assets.length > 1 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:max-w-xs')}>
-          {item.assets.map((asset, index) => (
-            <MediaThumb key={`${asset.url}-${index}`} src={asset.url} poster={asset.poster} alt={`${item.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain" />
+            {item.assets.slice(0, compact ? 2 : item.assets.length).map((asset, index) => (
+            <MediaThumb key={`${asset.url}-${index}`} src={asset.url} poster={asset.poster} alt={`${item.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className={cn('aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain', compact && 'max-w-none')} />
           ))}
         </div>
       )}
-      {item.error && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] leading-5 text-destructive" role="alert">失败原因：{item.error}</p>}
+      {item.error && !compact && <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] leading-5 text-destructive" role="alert">失败原因：{item.error}</p>}
       {reuseError && <p role="alert" className="text-xs text-destructive">{reuseError}</p>}
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+      <div className={cn('flex flex-wrap items-center gap-1.5 border-t border-border pt-2', compact && 'mt-auto gap-1 pt-1.5')}>
         {firstAsset?.url && <MediaDownloadButton media={{ url: firstAsset.url, kind: item.kind === 'video' ? 'video' : item.kind === 'audio' ? 'audio' : 'image', mimeType: firstAsset.mimeType, poster: firstAsset.poster, width: firstAsset.width, height: firstAsset.height }} title={item.title} prompt={item.prompt} taskId={item.taskId ?? item.id} label="下载结果" className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50" />}
         {(item.kind === 'image' || item.kind === 'video') && (item.prompt || item.model) && <Link href={item.kind === 'video' ? '/video' : '/image'} onClick={reuse} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-3.5" />复用参数</Link>}
         <ControlButton variant="ghost" size="sm" onClick={() => router.push('/works')}>在我的作品中查看</ControlButton>

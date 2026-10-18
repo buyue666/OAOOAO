@@ -250,7 +250,7 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
     || /无法查询任务状态|无法确认状态|查询失败|重新检查上游/.test(task.error ?? '')
   )
   return (
-    <article className="studio-surface flex flex-col gap-3 p-3" data-unconfirmed={unconfirmed ? 'true' : undefined}>
+    <article className={cn('studio-surface flex flex-col gap-3 p-3', compact && 'min-w-0 gap-2 p-2')} data-unconfirmed={unconfirmed ? 'true' : undefined}>
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           {onSelect ? (
@@ -266,16 +266,16 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
       </header>
 
       {task.media.length > 0 && (
-        <div className={cn('grid gap-2', task.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
+        <div className={cn('grid gap-2', task.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1', compact && 'gap-1.5')}>
           {task.media.slice(0, compact ? 2 : 4).map((item, index) => (
-            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className="aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain" />
+            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className={cn('aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain', compact && 'max-w-none')} />
           ))}
         </div>
       )}
 
-      {task.text && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-2 text-[11px] leading-5">{task.text}</p>}
+      {task.text && !compact && <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-2 text-[11px] leading-5">{task.text}</p>}
 
-      {task.error && (
+      {task.error && !compact && (
         /**
          * 三种情况必须用不同措辞与配色，否则会把「没问到状态」误导成「生成失败」：
          *  1. 未确认提交 → 中性提示（请求可能已生效，不是失败）；
@@ -291,7 +291,7 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
             : <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] leading-5 text-destructive" role="alert">失败原因：{task.error}</p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-[11px] text-muted-foreground">
+      <div className={cn('flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-[11px] text-muted-foreground', compact && 'mt-auto gap-1 pt-1.5 text-[10px]')}>
         <span className="inline-flex items-center gap-1" data-testid="task-points">
           <Coins className="size-3 text-studio-warn" aria-hidden="true" />
           {/**
@@ -306,9 +306,9 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
         <span>{formatTime(task.createdAt)}</span>
       </div>
 
-      {task.executionPhase && <p className="text-[10px] text-muted-foreground">执行阶段：{task.executionPhase}</p>}
+      {task.executionPhase && !compact && <p className="text-[10px] text-muted-foreground">执行阶段：{task.executionPhase}</p>}
 
-      <TaskActions task={task} compact={compact} />
+      {!compact && <TaskActions task={task} compact={compact} />}
     </article>
   )
 }
