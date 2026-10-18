@@ -61,16 +61,16 @@ function dayLabel(value?: string) {
   return `${parts.year ?? ''}年${parts.month ?? ''}月${parts.day ?? ''}日`
 }
 
-function withinTimeRange(value: string | undefined, range: string) {
-  if (range === 'all') return true
+function withinDateRange(value: string | undefined, startDate: string, endDate: string) {
+  if (!startDate && !endDate) return true
   if (!value) return false
   const timestamp = new Date(value).getTime()
   if (!Number.isFinite(timestamp)) return false
-  if (range === 'today') return dayKey(value) === dayKey(new Date().toISOString())
-  const now = Date.now()
-  if (range === '7d') return timestamp >= now - 7 * 86400000
-  if (range === '30d') return timestamp >= now - 30 * 86400000
-  return true
+  // Date inputs represent calendar dates. Use the product's business timezone
+  // so the end date includes the complete day for users in Asia/Shanghai.
+  const start = startDate ? new Date(`${startDate}T00:00:00+08:00`).getTime() : Number.NEGATIVE_INFINITY
+  const end = endDate ? new Date(`${endDate}T23:59:59.999+08:00`).getTime() : Number.POSITIVE_INFINITY
+  return timestamp >= start && timestamp <= end
 }
 
 /** 作品页。结果按日期分组，支持搜索、模型和时间筛选。 */
@@ -79,7 +79,8 @@ export function WorksPage() {
   const [filter, setFilter] = useState('全部')
   const [search, setSearch] = useState('')
   const [modelFilter, setModelFilter] = useState('all')
-  const [timeFilter, setTimeFilter] = useState('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [loading, setLoading] = useState(false)
   const models = useMemo(() => Array.from(new Set(works.map((work) => work.model).filter((model): model is string => Boolean(model)))).sort(), [works])
   const groupedVisible = useMemo(() => {
@@ -88,7 +89,7 @@ export function WorksPage() {
     const visible = works.filter((work) => {
       if (filter !== '全部' && work.kind !== filter) return false
       if (modelFilter !== 'all' && work.model !== modelFilter) return false
-      if (!withinTimeRange(work.createdAt, timeFilter)) return false
+      if (!withinDateRange(work.createdAt, startDate, endDate)) return false
       if (query && !`${work.title} ${work.prompt} ${work.model ?? ''}`.toLowerCase().includes(query)) return false
       const key = work.groupId ?? work.id
       if (seen.has(key)) return false
@@ -103,7 +104,7 @@ export function WorksPage() {
       groups.set(key, group)
     })
     return Array.from(groups.values()).sort((a, b) => b.sort - a.sort)
-  }, [filter, modelFilter, search, timeFilter, works])
+  }, [endDate, filter, modelFilter, search, startDate, works])
   const visibleCount = groupedVisible.reduce((count, group) => count + group.items.length, 0)
 
   if (state === 'unauthenticated') {
@@ -115,7 +116,7 @@ export function WorksPage() {
       <PageHeader eyebrow="作品" title="我的作品" description="生成结果按日期归档，可按模型、时间或关键词快速查找。" actions={(<><ControlButton variant="secondary" onClick={() => { setLoading(true); void reload().finally(() => setLoading(false)) }} disabled={loading || state === 'loading'}><RefreshCw className={cn('size-4', (loading || state === 'loading') && 'animate-spin')} />刷新</ControlButton><Link href="/image" className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Sparkles className="size-4" />开始新创作</Link></>)} />
       {message && <Notice tone="warning">{message}</Notice>}
       {truncated && <Notice tone="neutral">记录较多，当前只读取了最近一批结果。继续翻页会加载更多。</Notice>}
-      <div className="flex flex-col gap-3 border-b border-border pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} /><span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visibleCount} 件作品`}</span></div><div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_150px]"><SearchField value={search} onChange={setSearch} placeholder="搜索标题、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><select value={timeFilter} onChange={(event) => setTimeFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部时间</option><option value="today">今天</option><option value="7d">最近 7 天</option><option value="30d">最近 30 天</option></select></div></div>
+      <div className="flex flex-col gap-3 border-b border-border pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} /><span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visibleCount} 件作品`}</span></div><div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_150px] lg:grid-cols-[minmax(0,1fr)_180px_150px_150px]"><SearchField value={search} onChange={setSearch} placeholder="搜索标题、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><label className="relative"><span className="sr-only">开始日期</span><input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} aria-label="开始日期" className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs text-foreground" /></label><label className="relative"><span className="sr-only">结束日期</span><input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} aria-label="结束日期" className="h-9 w-full rounded-lg border border-border bg-background px-3 text-xs text-foreground" /></label></div><p className="text-[11px] text-muted-foreground">按开始日期至结束日期筛选，包含两端当天。</p></div>
       {state === 'loading' && !works.length ? <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取生成结果</div> : state === 'error' && !works.length ? <Notice tone="warning"><span className="min-w-0 flex-1">作品暂时无法读取：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice> : !visibleCount ? <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center"><p className="text-sm font-medium">没有符合条件的作品</p><p className="max-w-sm text-xs leading-5 text-muted-foreground">尝试清空搜索词或调整模型、时间筛选。</p></div> : <div className="flex flex-col gap-7">{groupedVisible.map((group) => <section key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3"><h2 className="text-sm font-semibold text-foreground">{group.label}</h2><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div><div className="grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 lg:grid-cols-4">{group.items.map((work) => <WorkCard key={work.groupId ?? work.id} work={work} />)}</div></section>)}</div>}
     </div>
   )
