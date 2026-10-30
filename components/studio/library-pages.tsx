@@ -77,6 +77,7 @@ const assetFilters: Array<{ value: string; label: string; kind?: AssetKind | Ass
   { value: 'scene', label: '场景', kind: 'scene' },
   { value: 'prop', label: '道具', kind: 'prop' },
   { value: 'style', label: '风格', kind: 'style' },
+  { value: 'garment', label: '服装', kind: 'garment' },
 ]
 
 function assetIcon(kind: AssetKind) {
@@ -177,7 +178,7 @@ export function AssetsPage() {
   }, [libraryAssets, serverAssets, state.backendStatus, state.assets])
   const visible = useMemo(() => mergedAssets.filter((asset) => {
     const definition = assetFilters.find((item) => item.value === filter)
-    const categoryMatch = definition?.kind === 'character' || definition?.kind === 'scene' || definition?.kind === 'prop' || definition?.kind === 'style'
+    const categoryMatch = definition?.kind === 'character' || definition?.kind === 'scene' || definition?.kind === 'prop' || definition?.kind === 'style' || definition?.kind === 'garment'
       ? (asset.category ?? asset.kind) === definition.kind
       : !definition?.kind || asset.kind === definition.kind
     return categoryMatch

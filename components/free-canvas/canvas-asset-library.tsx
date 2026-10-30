@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { ASSET_DRAG_TYPE, categoryOf, referenceOf } from './asset-reference'
 import { errorMessageOf } from './use-generation-actions'
 
-type TabId = 'all' | 'character' | 'scene' | 'prop' | 'style' | 'image' | 'video' | 'upload' | 'favorite'
+type TabId = 'all' | 'character' | 'scene' | 'prop' | 'style' | 'garment' | 'image' | 'video' | 'upload' | 'favorite'
 
 const TABS: { id: TabId; label: string; match: (asset: LibraryAssetView) => boolean }[] = [
   { id: 'all', label: '全部', match: () => true },
@@ -17,6 +17,7 @@ const TABS: { id: TabId; label: string; match: (asset: LibraryAssetView) => bool
   { id: 'scene', label: '场景', match: (asset) => categoryOf(asset) === 'scene' },
   { id: 'prop', label: '道具', match: (asset) => categoryOf(asset) === 'prop' },
   { id: 'style', label: '风格', match: (asset) => categoryOf(asset) === 'style' },
+  { id: 'garment', label: '服装', match: (asset) => categoryOf(asset) === 'garment' },
   { id: 'image', label: '参考图片', match: (asset) => asset.kind === 'image' },
   { id: 'video', label: '参考视频', match: (asset) => asset.kind === 'video' },
   { id: 'upload', label: '用户上传文件', match: (asset) => asset.source === 'user-upload' },

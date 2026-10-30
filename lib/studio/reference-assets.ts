@@ -31,18 +31,20 @@ export const assetCategoryLabels: Record<AssetCategory, string> = {
   scene: '场景',
   prop: '道具',
   style: '风格',
+  garment: '服装',
 }
 
 /** 资产分类存放在素材库 data 中，媒体 kind 仍由后端按图片/视频校验。 */
 export function assetCategoryOf(value: { kind?: string; tags?: string[]; data?: Record<string, unknown> }): AssetCategory {
   const raw = value.data?.assetRole ?? value.data?.category
-  if (raw === 'character' || raw === 'scene' || raw === 'prop' || raw === 'style') return raw
+  if (raw === 'character' || raw === 'scene' || raw === 'prop' || raw === 'style' || raw === 'garment' || raw === 'clothing' || raw === 'outfit') return raw === 'clothing' || raw === 'outfit' ? 'garment' : raw
   if (value.kind === 'character' || value.kind === 'scene') return value.kind
   const tags = value.tags ?? []
   if (tags.includes('角色')) return 'character'
   if (tags.includes('场景')) return 'scene'
   if (tags.includes('道具')) return 'prop'
   if (tags.includes('风格')) return 'style'
+  if (tags.includes('服装') || tags.includes('衣服') || tags.includes('穿搭')) return 'garment'
   return 'general'
 }
 

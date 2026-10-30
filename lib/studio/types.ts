@@ -44,7 +44,7 @@ export type ProjectType = '短剧' | '广告片' | '品牌视觉' | '个人作�
 export type ProjectStatus = '进行中' | '已完成' | '已归档'
 export type AssetKind = 'image' | 'video' | 'audio' | 'character' | 'scene'
 /** 用户素材在创作库里的用途分类；媒体类型仍由 `kind` 表示。 */
-export type AssetCategory = 'general' | 'character' | 'scene' | 'prop' | 'style'
+export type AssetCategory = 'general' | 'character' | 'scene' | 'prop' | 'style' | 'garment'
 export type AssetStatus = '可用' | '处理中' | '已归档'
 export type TaskStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled'
 export type TaskType = 'image' | 'video' | 'storyboard' | 'upscale' | 'export'

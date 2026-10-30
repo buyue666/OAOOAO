@@ -25,6 +25,26 @@ test('image remix source uses private uploads and the existing task pipeline', a
   assert.match(component, /references:/)
 })
 
+test('creative tools expose an AI try-on workflow with library sources', async () => {
+  const [component, references, backend] = await Promise.all([read('components/studio/tools-page.tsx'), read('lib/studio/reference-assets.ts'), read('backend/src/creative.ts')])
+  assert.match(component, /data-testid="ai-tryon-tool"/)
+  assert.match(component, /data-testid="creative-tools-collapse"/)
+  assert.match(component, /data-testid="tool-ai-tryon"/)
+  assert.match(component, /useLibraryAssets\(\{ kind: 'image'/)
+  assert.match(component, /createLibraryAsset\(/)
+  assert.match(component, /title: 'AI换装'/)
+  assert.match(component, /Reference 1 is the person/)
+  assert.match(component, /role: 'reference'/)
+  assert.match(component, /生成模特/)
+  assert.match(component, /assetRole: role === 'person' \? 'character' : 'garment'/)
+  assert.match(component, /personSources/)
+  assert.match(component, /garmentSources/)
+  assert.match(component, /estimateCredits\(imageModel/)
+  assert.match(component, /预计消耗/)
+  assert.match(references, /garment: '服装'/)
+  assert.match(backend, /'garment'/)
+})
+
 test('vision messages accept only owned media paths server side', async () => {
   const creative = await read('backend/src/creative.ts')
   const providers = await read('backend/src/providers.ts')

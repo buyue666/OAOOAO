@@ -153,7 +153,7 @@ function toHistoryItem(raw: Record<string, unknown>): GenerationHistoryItem | nu
     ratio: typeof raw.ratio === 'string' ? raw.ratio : typeof settings?.ratio === 'string' ? settings.ratio : undefined,
     resolution: typeof raw.resolution === 'string' ? raw.resolution : typeof settings?.resolution === 'string' ? settings.resolution : undefined,
     quality: typeof raw.quality === 'string' ? raw.quality : typeof settings?.quality === 'string' ? settings.quality : undefined,
-    category: raw.category === 'character' || raw.category === 'scene' || raw.category === 'prop' || raw.category === 'style' ? raw.category : 'general',
+    category: raw.category === 'character' || raw.category === 'scene' || raw.category === 'prop' || raw.category === 'style' || raw.category === 'garment' ? raw.category : 'general',
     source: raw.source ? String(raw.source) : undefined,
     durationMs: Number(raw.durationMs) || undefined,
     pointsCost: Number(raw.pointsCost) || Number(billing?.pointsCost) || undefined,

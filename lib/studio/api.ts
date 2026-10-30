@@ -515,7 +515,7 @@ export function canvasProjectToBoard(project: CanvasBackendProject): CanvasBoard
       ...(typeof rawData.quality === 'string' ? { quality: rawData.quality } : {}),
       ...(Number.isFinite(Number(rawData.seconds)) ? { seconds: Number(rawData.seconds) } : {}),
       ...(Array.isArray(rawData.referenceUrls) ? { referenceUrls: rawData.referenceUrls.filter((item): item is string => typeof item === 'string') } : {}),
-      ...(rawData.assetCategory === 'general' || rawData.assetCategory === 'character' || rawData.assetCategory === 'scene' || rawData.assetCategory === 'prop' || rawData.assetCategory === 'style' ? { assetCategory: rawData.assetCategory } : {}),
+      ...(rawData.assetCategory === 'general' || rawData.assetCategory === 'character' || rawData.assetCategory === 'scene' || rawData.assetCategory === 'prop' || rawData.assetCategory === 'style' || rawData.assetCategory === 'garment' ? { assetCategory: rawData.assetCategory } : {}),
       ...(typeof rawData.content === 'string' ? { content: rawData.content } : {}),
     }
     return {
