@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Suspense, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
-import { StudioNavLink, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
+import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 
 function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname()
@@ -50,6 +50,7 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
             {studioSecondaryNav.map((item) => (
               <StudioNavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
             ))}
+            <StudioToolsNav pathname={pathname} onNavigate={onClose} idSuffix="mobile" />
           </nav>
           {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} onNavigate={onClose} />}
           <StudioNavLink item={studioSettingsNav} pathname={pathname} onNavigate={onClose} />

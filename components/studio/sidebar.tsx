@@ -7,7 +7,7 @@ import { Suspense } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { cn } from '@/lib/utils'
-import { StudioNavLink, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
+import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 
 function SidebarContent() {
   const pathname = usePathname()
@@ -57,6 +57,7 @@ function SidebarContent() {
           {studioSecondaryNav.map((item) => (
             <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
           ))}
+          <StudioToolsNav pathname={pathname} collapsed={collapsed} idSuffix="desktop" />
         </nav>
         {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} collapsed={collapsed} />}
         <StudioNavLink item={studioSettingsNav} pathname={pathname} collapsed={collapsed} />

@@ -1,5 +1,9 @@
+'use client'
+
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import {
+  ChevronDown,
   FolderOpen,
   History,
   LayoutGrid,
@@ -7,9 +11,11 @@ import {
   Puzzle,
   WandSparkles,
   Settings,
+  Shirt,
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Tooltip } from './ui'
 
@@ -21,6 +27,10 @@ export interface StudioNavItem {
   matches: readonly string[]
 }
 
+export interface StudioToolNavItem extends StudioNavItem {
+  key: 'remix' | 'tryon'
+}
+
 export const studioPrimaryNav: readonly StudioNavItem[] = [
   { label: '开始创作', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent', '/image', '/video'] },
   { label: '我的项目', href: '/projects', icon: FolderOpen, matches: ['/projects', '/drama', '/canvas'] },
@@ -30,7 +40,13 @@ export const studioPrimaryNav: readonly StudioNavItem[] = [
 export const studioSecondaryNav: readonly StudioNavItem[] = [
   { label: '生成记录', href: '/works', icon: History, matches: ['/works', '/gallery'] },
   { label: '技能库', href: '/skills', icon: Puzzle, matches: ['/skills'] },
-  { label: '创作工具', href: '/tools', icon: WandSparkles, matches: ['/tools'] },
+]
+
+export const studioToolsNav: StudioNavItem = { label: '创作工具', href: '/tools', icon: WandSparkles, matches: ['/tools'] }
+
+export const studioToolItems: readonly StudioToolNavItem[] = [
+  { key: 'remix', label: '图片复刻', href: '/tools/remix', icon: WandSparkles, matches: ['/tools/remix'] },
+  { key: 'tryon', label: 'AI 换装', href: '/tools/tryon', icon: Shirt, matches: ['/tools/tryon'] },
 ]
 
 export const studioAdminNav: StudioNavItem = { label: '管理员后台', href: '/admin', icon: ShieldCheck, matches: ['/admin'] }
@@ -80,6 +96,7 @@ export function studioPageTitle(pathname: string, projectTitle?: string) {
     if (!section) return name
     return `${name} · ${sectionTitles[section] ?? section}`
   }
+  if (root === 'tools' && id) return id === 'tryon' ? 'AI 换装' : '图片复刻'
   return rootTitles[root] ?? 'OAO'
 }
 
@@ -115,5 +132,82 @@ export function StudioNavLink({
   )
 
   return collapsed ? <Tooltip label={item.label} side="right" className="flex w-full justify-center">{link}</Tooltip> : link
+}
+
+export function StudioToolsNav({
+  pathname,
+  collapsed = false,
+  onNavigate,
+  idSuffix = 'desktop',
+}: {
+  pathname: string
+  collapsed?: boolean
+  onNavigate?: () => void
+  idSuffix?: string
+}) {
+  const router = useRouter()
+  const active = isNavItemActive(pathname, studioToolsNav)
+  const [open, setOpen] = useState(active)
+  const submenuId = `studio-tools-subnav-${idSuffix}`
+
+  useEffect(() => {
+    if (active) setOpen(true)
+  }, [active])
+
+  const Icon = studioToolsNav.icon
+  const parent = (
+    <button
+      type="button"
+      aria-expanded={collapsed ? undefined : open}
+      aria-controls={collapsed ? undefined : submenuId}
+      aria-label={collapsed ? studioToolsNav.label : undefined}
+      data-active={active ? 'true' : 'false'}
+      onClick={() => {
+        if (collapsed) {
+          router.push(studioToolItems[0].href)
+          return
+        }
+        setOpen((value) => !value)
+      }}
+      className={cn(
+        'studio-nav-item flex h-10 items-center rounded-lg text-sm font-medium',
+        collapsed ? 'mx-auto w-10 justify-center' : 'w-full gap-3 px-3',
+        active ? 'text-studio-accent' : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      <Icon className="size-[18px] shrink-0" aria-hidden="true" />
+      {!collapsed && <><span className="min-w-0 flex-1 truncate text-left">{studioToolsNav.label}</span><ChevronDown className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden="true" /></>}
+    </button>
+  )
+
+  return (
+    <div className="flex flex-col gap-1">
+      {collapsed ? <Tooltip label={studioToolsNav.label} side="right" className="flex w-full justify-center">{parent}</Tooltip> : parent}
+      {!collapsed && open && (
+        <div id={submenuId} className="ml-3 flex flex-col gap-1 border-l border-sidebar-border pl-3" aria-label="创作工具子菜单">
+          {studioToolItems.map((item) => {
+            const ItemIcon = item.icon
+            const itemActive = isNavItemActive(pathname, item)
+            return (
+              <Link
+                key={item.key}
+                href={item.href}
+                onClick={onNavigate}
+                aria-current={itemActive ? 'page' : undefined}
+                data-active={itemActive ? 'true' : 'false'}
+                className={cn(
+                  'flex h-9 items-center gap-2 rounded-md px-2.5 text-xs font-medium transition-colors',
+                  itemActive ? 'bg-studio-accent/10 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <ItemIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{item.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 

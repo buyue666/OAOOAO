@@ -29,6 +29,7 @@ function isProtectedStudioRoute(pathname: string) {
     || pathname === '/works'
     || pathname === '/skills'
     || pathname === '/tools'
+    || pathname.startsWith('/tools/')
     || pathname === '/account'
     || pathname === '/settings'
 }

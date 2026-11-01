@@ -226,13 +226,11 @@ function AiTryOnTool() {
   </div>
 }
 
-export function ToolsPage() {
-  const [expanded, setExpanded] = useState(true)
-  const [activeTool, setActiveTool] = useState<'remix' | 'tryon'>('remix')
-  return <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-8 md:py-8">
-    <div><p className="text-xs font-medium uppercase tracking-[0.18em] text-studio-accent">创作工具</p><h1 className="mt-2 text-2xl font-semibold tracking-tight">选择一个创作工具</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">把参考图分析、图片复刻和 AI 换装放在同一个入口，生成结果统一进入任务记录。</p></div>
-    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"><button type="button" data-testid="creative-tools-collapse" onClick={() => setExpanded((value) => !value)} className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left hover:bg-muted/30"><span className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-studio-accent/12 text-studio-accent"><WandSparkles className="size-5" /></span><span><span className="block text-sm font-semibold">创作工具</span><span className="mt-1 block text-xs text-muted-foreground">图片复刻与 AI 换装</span></span></span><ChevronDown className={cn('size-5 text-muted-foreground transition-transform', expanded && 'rotate-180')} /></button>{expanded && <div className="grid gap-2 border-t border-border p-3 sm:grid-cols-2"><button type="button" data-testid="tool-image-remix" onClick={() => setActiveTool('remix')} className={cn('rounded-xl border p-4 text-left transition', activeTool === 'remix' ? 'border-studio-accent/50 bg-studio-accent/8' : 'border-border hover:bg-muted/40')}><div className="flex items-center gap-2 text-sm font-semibold"><WandSparkles className="size-4 text-studio-accent" />图片复刻</div><p className="mt-1 text-xs leading-5 text-muted-foreground">分析参考图，编辑提示词后重新生成。</p></button><button type="button" data-testid="tool-ai-tryon" onClick={() => setActiveTool('tryon')} className={cn('rounded-xl border p-4 text-left transition', activeTool === 'tryon' ? 'border-studio-accent/50 bg-studio-accent/8' : 'border-border hover:bg-muted/40')}><div className="flex items-center gap-2 text-sm font-semibold"><Shirt className="size-4 text-studio-accent" />AI 换装</div><p className="mt-1 text-xs leading-5 text-muted-foreground">选择模特与服装素材，生成虚拟试穿效果。</p></button></div>}</section>
-    {activeTool === 'remix' ? <ImageRemixTool /> : <AiTryOnTool />}
+export type CreativeTool = 'remix' | 'tryon'
+
+export function ToolsPage({ tool = 'remix' }: { tool?: CreativeTool }) {
+  return <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-8 md:py-8" data-testid="creative-tools-collapse">
+    {tool === 'remix' ? <ImageRemixTool /> : <div data-testid="tool-ai-tryon"><AiTryOnTool /></div>}
   </div>
 }
 
