@@ -12,23 +12,24 @@ export function mergeVideoReferenceEvidence(ids: readonly string[], sources: rea
   return scopedEvidence(ids, ids.filter((id) => found.has(id)))
 }
 
-export function useVideoReferenceLibrary(mode: string, keyword: string) {
+export function useVideoReferenceLibrary(mode: string, keyword: string, includeAudio = false) {
   // Keep both hooks mounted and their kind stable when switching modes. Their
   // unfiltered verification queries can still prove either kind exists.
   const images = useLibraryAssets({ kind: 'image', pageSize: 60, keyword })
   const videos = useLibraryAssets({ kind: 'video', pageSize: 60, keyword })
-  const sources = mode === 'edit' ? [videos] : mode === 'references' ? [images, videos] : [images]
+  const audio = useLibraryAssets({ kind: includeAudio ? 'audio' : 'image', pageSize: 60, keyword, enabled: includeAudio })
+  const sources = mode === 'edit' ? [videos] : mode === 'references' || mode === 'mixed' ? [images, videos, ...(includeAudio ? [audio] : [])] : [images]
   const pending = useRef(false)
   const verify = async (ids: readonly string[]) => {
     if (!ids.length) return scopedEvidence([], [])
     try {
-      return mergeVideoReferenceEvidence(ids, await Promise.all([images.verifyLibraryIds(ids), videos.verifyLibraryIds(ids)]))
+      return mergeVideoReferenceEvidence(ids, await Promise.all([images.verifyLibraryIds(ids), videos.verifyLibraryIds(ids), ...(includeAudio ? [audio.verifyLibraryIds(ids)] : [])]))
     } catch { return unavailableEvidence() }
   }
   return {
     ...mediaLibrarySummary(sources),
     remaining: sources.reduce((sum, source) => sum + Math.max(0, source.total - source.assets.length), 0),
-    liveVerifyTick: images.liveVerifyTick + videos.liveVerifyTick,
+    liveVerifyTick: images.liveVerifyTick + videos.liveVerifyTick + (includeAudio ? audio.liveVerifyTick : 0),
     verifyLibraryIds: verify,
     reloadForLiveness: verify,
     reload: () => Promise.all(sources.map((source) => source.reload())),

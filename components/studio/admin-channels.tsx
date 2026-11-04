@@ -1,5 +1,6 @@
 'use client'
 
+import { VideoProfileEditor } from './video-profile-editor'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Download, Layers3, Pencil, Plus, RefreshCw, Search, ServerCog, Trash2, Zap } from 'lucide-react'
 import { fetchChannelModels, getAdminSettings, listGenerationOperations, saveChannels, saveRouting } from '@/lib/studio/admin-api'
@@ -99,7 +100,7 @@ export function AdminChannelsPanel() {
   useEffect(() => { void load() }, [load])
 
   const channels = settings?.systemChannels ?? []
-  const models = settings?.logicalModels ?? []
+  const models = (settings?.logicalModels ?? []).filter(model => model.bindings.some(binding => channels.some(channel => channel.id === binding.channelId)))
   const enabledChannels = channels.filter((channel) => channel.enabled)
   const missingKey = channels.filter((channel) => !channel.hasApiKey).length
   /** 运行时健康信息来自生成运维接口，按渠道汇总失败次数与冷却状态。 */
@@ -314,7 +315,10 @@ export function AdminChannelsPanel() {
 
 function SettingsSummary({ settings, onEdit }: { settings: AdminSettings; onEdit?: () => void }) {
   const defaults = settings.defaultModels
-  const costs = Object.entries(settings.modelPointCosts || {})
+  const costs = settings.logicalModels.filter(model => model.bindings.some(binding => settings.systemChannels.some(channel => channel.id === binding.channelId))).map(model => {
+    const binding = model.bindings[0], unit = binding?.capabilityProfile?.videoBillingUnit
+    return { id: model.id, name: model.name, unit, cost: (binding?.requestAlias ? settings.modelPointCosts?.[binding.requestAlias] : undefined) ?? settings.modelPointCosts?.[binding?.upstreamModel] ?? settings.modelPointCosts?.[model.id] }
+  })
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-2 text-xs sm:grid-cols-4">
@@ -323,11 +327,11 @@ function SettingsSummary({ settings, onEdit }: { settings: AdminSettings; onEdit
       {costs.length ? (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[420px] text-left text-xs">
-            <thead className="text-muted-foreground"><tr><th className="py-2 pr-3 font-medium">模型</th><th className="py-2 font-medium">单次积分</th></tr></thead>
-            <tbody>{costs.map(([model, cost]) => <tr key={model} className="border-t border-border"><td className="py-2 pr-3 font-mono text-[11px]">{model}</td><td className="py-2">{formatAdminNumber(cost)}</td></tr>)}</tbody>
+            <thead className="text-muted-foreground"><tr><th className="py-2 pr-3 font-medium">模型</th><th className="py-2 font-medium">基础价格</th></tr></thead>
+            <tbody>{costs.map(model => <tr key={model.id} className="border-t border-border"><td className="py-2 pr-3 text-[11px]">{model.name || model.id}</td><td className="py-2">{model.unit === 'duration' ? '按清晰度与时长定价' : model.cost === undefined ? '未配置' : `${formatAdminNumber(model.cost)} 积分/${model.unit === 'second' ? '秒' : '次'}`}</td></tr>)}</tbody>
           </table>
         </div>
-      ) : <p className="text-xs text-muted-foreground">未配置模型积分价格，将使用生成倍率计算。</p>}
+      ) : <p className="text-xs text-muted-foreground">暂无有渠道绑定的模型，请先配置渠道。</p>}
       {onEdit && <ControlButton variant="secondary" size="sm" className="self-start" onClick={onEdit}><Zap className="size-3.5" />修改默认模型与价格</ControlButton>}
     </div>
   )
@@ -335,6 +339,12 @@ function SettingsSummary({ settings, onEdit }: { settings: AdminSettings; onEdit
 
 function capabilityLabel(value: Capability | string) {
   return capabilities.find(([id]) => id === value)?.[1] ?? value
+}
+
+function modelPriceLabel(model: LogicalModel, costs: Record<string, number>) {
+  const binding = model.bindings[0], unit = binding?.capabilityProfile?.videoBillingUnit
+  const cost = (binding?.requestAlias ? costs[binding.requestAlias] : undefined) ?? costs[binding?.upstreamModel] ?? costs[model.id]
+  return unit === 'duration' ? '按时长定价' : cost === undefined ? '未配置单价' : `${cost} 积分/${unit === 'second' ? '秒' : '次'}`
 }
 
 /* -------------------------------- 渠道编辑 -------------------------------- */
@@ -424,7 +434,7 @@ function ChannelEditor({ channel, existingChannels, onClose, onSaved }: { channe
         apiFormat: channel?.apiFormat || 'openai',
         protocol: String(data.get('protocol') ?? '') || undefined,
       })
-      setMessage(`连通正常，识别到 ${result.discoveredCount ?? result.models?.length ?? 0} 个模型。`)
+      setMessage(result.catalogSupported === false ? result.warning || '已读取文档模型清单；此渠道没有可验证连通性的模型列表接口。' : `连通正常，识别到 ${result.discoveredCount ?? result.models?.length ?? 0} 个模型。`)
     } catch (reason) {
       setError(localizeChannelError(reason, '连通性测试失败'))
     } finally {
@@ -542,14 +552,15 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
 
   const channelIds = useMemo(() => settings.systemChannels.map((channel) => channel.id), [settings.systemChannels])
   const channelModels = useMemo(() => new Map(settings.systemChannels.map((channel) => [channel.id, channel.models])), [settings.systemChannels])
+  const canEnableModel = (model: LogicalModel) => model.bindings.some(binding => binding.enabled && settings.systemChannels.some(channel => channel.id === binding.channelId && channel.enabled && (channel.hasApiKey || channel.advancedConfig?.authMode === 'none')))
   const filteredModels = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return models.filter((model) => {
       const matchesQuery = !normalized || [model.id, model.name, ...(model.aliases || [])].some((value) => value.toLowerCase().includes(normalized))
       const matchesCapability = capabilityFilter === 'all' || model.capability === capabilityFilter
-      return matchesQuery && matchesCapability && (!enabledOnly || model.enabled)
+      return model.bindings.some(binding => channelIds.includes(binding.channelId)) && matchesQuery && matchesCapability && (!enabledOnly || model.enabled)
     })
-  }, [capabilityFilter, enabledOnly, models, query])
+  }, [capabilityFilter, enabledOnly, models, query, channelIds])
   const selectedModel = filteredModels.find((model) => model.id === selectedModelId) || filteredModels[0]
 
   const toggleModelSelection = (id: string) => {
@@ -562,7 +573,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
 
   /* 启用/停用只作用于明确勾选的模型，避免“停用当前结果”误伤整个目录。 */
   const setFilteredEnabled = (enabled: boolean) => {
-    const ids = new Set([...selectedModelIds].filter((id) => models.some((model) => model.id === id)))
+    const ids = new Set([...selectedModelIds].filter((id) => models.some((model) => model.id === id && (!enabled || canEnableModel(model)))))
     if (!ids.size) return
     const apply = () => {
       setModels((current) => current.map((model) => (ids.has(model.id) ? { ...model, enabled } : model)))
@@ -695,7 +706,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
           <div className="grid gap-3 sm:grid-cols-2">
             {capabilities.map(([value, label]) => {
               const key = value === 'text' ? 'textModel' : value === 'image' ? 'imageModel' : value === 'video' ? 'videoModel' : 'audioModel'
-              const candidates = models.filter((model) => model.capability === value).map((model) => model.id)
+              const candidates = models.filter((model) => model.capability === value && model.enabled && canEnableModel(model)).map((model) => model.id)
               return (
                 <AdminField key={value} label={`默认${label}模型`}>
                   <AdminSelect value={defaults[key as keyof typeof defaults] || ''} onChange={(event) => setDefaults((current) => ({ ...current, [key]: event.target.value }))}>
@@ -726,7 +737,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               <ControlButton variant="secondary" size="sm" disabled={!selectedModelIds.size} onClick={() => setFilteredEnabled(false)}>停用所选模型</ControlButton>
               {selectedModelIds.size > 0 && <ControlButton variant="ghost" size="sm" onClick={() => setSelectedModelIds(new Set())}>清除选择</ControlButton>}
             </div>
-            <span className="ml-auto text-xs tabular-nums text-muted-foreground">显示 {filteredModels.length} / {models.length} · 已选 {selectedModelIds.size}</span>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">显示 {filteredModels.length} / {models.filter(model => model.bindings.some(binding => channelIds.includes(binding.channelId))).length} · 已选 {selectedModelIds.size}</span>
           </div>
           <div className="mt-3 grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
             {filteredModels.map((model) => (
@@ -758,7 +769,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                   <StatusBadge tone={model.enabled ? 'success' : 'muted'}>{model.enabled ? '启用' : '停用'}</StatusBadge>
                 </span>
                 <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">{model.id}</span>
-                <span className="mt-1 block text-[11px] text-muted-foreground">{capabilityLabel(model.capability)} · {model.bindings.length} 个渠道绑定 · {formatAdminNumber(costs[model.id] ?? 0)} 积分/次</span>
+                <span className="mt-1 block text-[11px] text-muted-foreground">{capabilityLabel(model.capability)} · {model.bindings.length} 个渠道绑定 · {modelPriceLabel(model, costs)}</span>
               </div>
             ))}
           </div>
@@ -792,19 +803,19 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               <p className="text-xs font-semibold text-foreground">1 · 渠道绑定<span className="ml-2 font-normal text-muted-foreground">优先级数字越小越先选中；权重决定同级流量分配；并发上限 0 表示沿用渠道默认</span></p>
               {model.bindings.map((binding, index) => {
                 const requestKey = binding.requestAlias?.trim() || binding.upstreamModel
-                const routeCost = costs[requestKey] ?? costs[model.id] ?? 0
+                const routeCost = costs[requestKey] ?? costs[model.id] ?? ''
                 return (
-                  <div key={binding.id || index} className="flex flex-wrap items-center gap-2">
-                    <AdminSelect className="w-40" value={binding.channelId} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, channelId: event.target.value, id: `${event.target.value}:${item.upstreamModel}` } : item) })}>
+                  <div key={index} className="flex w-full flex-wrap items-start gap-3 rounded-xl border border-border p-3">
+                    <AdminField label="使用渠道"><AdminSelect className="w-40" value={binding.channelId} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, channelId: event.target.value, id: `${event.target.value}:${item.upstreamModel}` } : item) })}>
                       <option value="">选择渠道</option>
                       {channelIds.map((id) => <option key={id} value={id}>{id}</option>)}
-                    </AdminSelect>
-                    <AdminInput className="w-44" value={binding.upstreamModel} placeholder="上游模型 ID" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, upstreamModel: event.target.value, id: `${item.channelId}:${event.target.value}` } : item) })} />
-                    <AdminInput className="w-44" value={binding.requestAlias || ''} placeholder="对外别名（可选）" aria-label={`${model.id} 渠道${index + 1} 对外别名`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, requestAlias: event.target.value.trim() || undefined } : item) })} />
-                    <AdminInput className="w-24" type="number" min="0" step="0.01" value={routeCost} aria-label={`${model.id} 渠道${index + 1} 单价`} title={binding.requestAlias ? `别名 ${binding.requestAlias} 的单次积分` : '该上游模型的单次积分'} onChange={(event) => setCosts((current) => ({ ...current, [requestKey]: Number(event.target.value) || 0 }))} />
-                    <LobeIconPicker className="w-48" compact value={binding.iconUrl} aria-label={`${model.id} 渠道${index + 1} 图标`} onChange={(value) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, iconUrl: value } : item) })} />
-                    <AdminInput className="w-20" type="number" min="1" value={binding.priority} aria-label="优先级" title="优先级：数字越小越先被选中" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, priority: Number(event.target.value) || 1 } : item) })} />
-                    <AdminInput className="w-20" type="number" min="1" max="1000" value={binding.weight ?? 1} aria-label="权重" title="权重：同级渠道之间的流量分配比例" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, weight: Number(event.target.value) || 1 } : item) })} />
+                    </AdminSelect></AdminField>
+                    <AdminField label="上游模型名称" hint="发给上游 API 的 model；例如 video-model。"><AdminInput className="w-44" value={binding.upstreamModel} placeholder="上游模型 ID" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, upstreamModel: event.target.value, id: `${item.channelId}:${event.target.value}` } : item) })} /></AdminField>
+                    <AdminField label="渠道入口请求名（可选）" hint="客户端指定此名字时固定使用这条渠道绑定，例如 video-primary。"><AdminInput className="w-44" value={binding.requestAlias || ''} placeholder="对外别名（可选）" aria-label={`${model.id} 渠道${index + 1} 对外别名`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, requestAlias: event.target.value.trim() || undefined } : item) })} /></AdminField>
+                    <AdminField label="渠道入口基础单价" hint="视频单位由下方计费方式决定；0 表示免费。"><AdminInput className="w-24" type="number" min="0" step="0.01" value={routeCost} aria-label={`${model.id} 渠道${index + 1} ${model.capability === 'video' && binding.capabilityProfile?.videoBillingUnit === 'second' ? '每秒积分' : '单价'}`} placeholder={model.capability === 'video' && binding.capabilityProfile?.videoBillingUnit === 'second' ? '积分/秒' : '积分/次'} title={binding.requestAlias ? `别名 ${binding.requestAlias} 的单次积分` : '该上游模型的单次积分'} onChange={(event) => setCosts((current) => { const next = {...current}; if (event.target.value.trim()) next[requestKey] = Number(event.target.value); else delete next[requestKey]; return next })} /></AdminField>
+                    <AdminField label="入口图标" hint=""><LobeIconPicker className="w-48" compact value={binding.iconUrl} aria-label={`${model.id} 渠道${index + 1} 图标`} onChange={(value) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, iconUrl: value } : item) })} /></AdminField>
+                    <AdminField label="路由优先级" hint="数字越小越优先。"><AdminInput className="w-20" type="number" min="1" value={binding.priority} aria-label="优先级" title="优先级：数字越小越先被选中" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, priority: Number(event.target.value) || 1 } : item) })} /></AdminField>
+                    <AdminField label="同级权重" hint="同优先级渠道的流量分配权重。"><AdminInput className="w-20" type="number" min="1" max="1000" value={binding.weight ?? 1} aria-label="权重" title="权重：同级渠道之间的流量分配比例" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, weight: Number(event.target.value) || 1 } : item) })} /></AdminField>
                     <AdminInput
                       className="w-24" type="number" min="0" max="1000" aria-label="并发上限" title="该绑定的并发上限，0 表示沿用渠道默认"
                       value={Number((binding.capabilityProfile as Record<string, unknown> | undefined)?.concurrencyLimit ?? 0)}
@@ -813,6 +824,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={binding.enabled} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, enabled: event.target.checked } : item) })} />启用</label>
                     <ControlButton variant="ghost" size="sm" aria-label="移除绑定" onClick={() => patchModel(model.id, { bindings: model.bindings.filter((_, position) => position !== index) })}><Trash2 className="size-3.5" /></ControlButton>
                     {channelModels.has(binding.channelId) && !channelModels.get(binding.channelId)?.includes(binding.upstreamModel) && <StatusBadge tone="warning">渠道未列出该模型</StatusBadge>}
+                    {model.capability === 'video' && <VideoProfileEditor profile={binding.capabilityProfile} onChange={patch => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, capabilityProfile: { ...(item.capabilityProfile || {}), ...patch } } : item) })} />}
                     {model.capability === 'image' && (
                       <ImageBindingCapabilityEditor
                         profile={binding.capabilityProfile}
@@ -847,7 +859,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                   {capabilities.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </AdminSelect>
               </AdminField>
-              <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={model.enabled} onChange={(event) => patchModel(model.id, { enabled: event.target.checked })} />启用该模型</label>
+              <label className="flex items-center gap-2 self-end text-sm" title={canEnableModel(model) ? '启用后对用户展示' : '需要已启用、已配置凭据的渠道绑定'}><input type="checkbox" checked={model.enabled} disabled={!canEnableModel(model)} onChange={(event) => patchModel(model.id, { enabled: event.target.checked })} />启用该模型</label>
             </div>
 
             {/**
@@ -858,7 +870,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               * 这里即时校验冲突，避免保存后「同一个名字解析到两个模型」。
               */}
             <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3" data-testid={`model-alias-editor-${model.id}`}>
-              <p className="text-xs font-semibold text-foreground">3 · 请求别名<span className="ml-2 font-normal text-muted-foreground">客户端用别名或标识请求都会解析到该模型；计费与日志仍记在标识上</span></p>
+              <p className="text-xs font-semibold text-foreground">3 · 模型请求别名<span className="ml-2 font-normal text-muted-foreground">客户端请求这些名字会进入同一逻辑模型，再按绑定优先级选择渠道；不会改变上游模型名称。</span></p>
               <div className="flex flex-wrap items-center gap-2">
                 <AdminInput
                   aria-label={`${model.id} 别名`}
@@ -893,12 +905,12 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
             </div>
             <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
               <p className="text-xs font-semibold text-foreground sm:col-span-2">4 · 用户显示信息<span className="ml-2 font-normal text-muted-foreground">只影响界面展示，不参与请求路由</span></p>
-              <AdminField label="显示名称" hint="只影响界面展示，不能用于请求"><AdminInput aria-label={`${model.id} 显示名称`} value={model.name} onChange={(event) => patchModel(model.id, { name: event.target.value })} /></AdminField>
+              <AdminField label="显示名称" hint="例如“视频模型”，只控制页面文字，不是 API 请求名。"><AdminInput aria-label={`${model.id} 显示名称`} value={model.name} onChange={(event) => patchModel(model.id, { name: event.target.value })} /></AdminField>
               <AdminField label="默认模型图标" hint="可搜索 LobeHub 图标并单选，也可以粘贴站内路径或 HTTPS 地址；渠道绑定可单独覆盖"><LobeIconPicker value={model.iconUrl} aria-label={`${model.id} 默认模型图标`} onChange={(value) => patchModel(model.id, { iconUrl: value })} /></AdminField>
             </div>
             <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
-              <p className="text-xs font-semibold text-foreground sm:col-span-2">5 · 价格<span className="ml-2 font-normal text-muted-foreground">各渠道单价在上方绑定中设置；此处是未设置渠道单价时的默认单次积分</span></p>
-              <AdminField label="单次积分" hint="0 表示按倍率与上游价格计算"><AdminInput aria-label={`${model.id} 单次积分`} type="number" min="0" step="1" value={costs[model.id] ?? 0} onChange={(event) => setCosts((current) => ({ ...current, [model.id]: Number(event.target.value) || 0 }))} /></AdminField>
+              <p className="text-xs font-semibold text-foreground sm:col-span-2">5 · 默认基础价格<span className="ml-2 font-normal text-muted-foreground">渠道入口未设置单价时采用此价格；视频按所选的按秒、按次或时长定价方式计算。</span></p>
+              <AdminField label="单次积分" hint="0 表示免费；不会自动向上游读取价格"><AdminInput aria-label={`${model.id} 单次积分`} type="number" min="0" step="1" value={costs[model.id] ?? ''} placeholder="未配置单价" onChange={(event) => setCosts((current) => { const next = {...current}; if (event.target.value.trim()) next[model.id] = Number(event.target.value); else delete next[model.id]; return next })} /></AdminField>
             </div>
               </AdminSectionCard>
             </div>

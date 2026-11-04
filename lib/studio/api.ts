@@ -69,7 +69,28 @@ export type SessionSettings = {
       enabled: boolean
       priority: number
       capabilityProfile?: {
-        supportsReferenceImage?: boolean
+        supportsTextToMedia?: boolean
+      supportsFirstFrame?: boolean
+      supportsLastFrame?: boolean
+      supportsVideoEditing?: boolean
+      supportsVideoReference?: boolean
+      supportsAudioReference?: boolean
+      supportsFastMode?: boolean
+      supportsContextIr?: boolean
+      supportsVideoRegeneration?: boolean
+      supportsVideoExtension?: boolean
+      maxReferences?: number
+      videoQualities?: string[]
+      maxDurationByResolution?: Record<string, number>
+      videoProtocol?: string
+      supportsMultiReference?: boolean
+      maxReferenceVideos?: number
+      maxReferenceAudios?: number
+      durationsByMode?: Record<string, number[]>
+      videoDurationRules?: Record<string, {mode: string; min?: number; max?: number; step?: number; values?: number[]}>
+      videoReferenceRules?: Record<string, {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number}>
+      videoBillingUnit?: string
+      supportsReferenceImage?: boolean
         maxReferenceImages?: number
         aspectRatios?: string[]
         /** 可编辑的画幅及实际输出尺寸绑定；value 是上游比例参数。 */

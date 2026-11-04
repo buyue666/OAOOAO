@@ -1,3 +1,5 @@
+import {normalizeModelCatalog,modelReady} from './model-catalog.js';
+import {validateVideoPolicySettings} from './video-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
@@ -52,7 +54,8 @@ function merge(base: Record<string, any>, patch: Record<string, any>): Record<st
 }
 export async function getSettings(ctx: Context, client?: PoolClient): Promise<Settings> {
   const {rows}=await (client || ctx.db).query('SELECT value FROM oaooao_settings WHERE id=$1',['global']);
-  const settings=merge(structuredClone(DEFAULT_SETTINGS),rows[0]?.value || {});settings.site=publicSite(settings.site);settings.checkIn=normalizeCheckInSettings(settings.checkIn);return settings;
+  const settings=merge(structuredClone(DEFAULT_SETTINGS),rows[0]?.value || {});settings.site=publicSite(settings.site);settings.checkIn=normalizeCheckInSettings(settings.checkIn);
+  return normalizeModelCatalog(settings);
 }
 export function sanitizedSettings(settings: Settings,origin=''): Settings {
   return {...settings,wechatOfficial:publicWechatConfig(settings.wechatOfficial,origin),site:publicSite(settings.site),checkIn:normalizeCheckInSettings(settings.checkIn),commercePolicy:resolveCommercePolicy(settings),mail:{...settings.mail,password:'',hasPassword:Boolean(settings.mail?.password)},
@@ -65,7 +68,7 @@ export function publicSettings(settings: Settings): Settings {
   result.checkIn=normalizeCheckInSettings(settings.checkIn);
   result.wechatLoginEnabled=wechatConfig(settings.wechatOfficial).enabled&&wechatConfigured(settings.wechatOfficial);
   result.wechatRegistrationEnabled=result.wechatLoginEnabled&&wechatConfig(settings.wechatOfficial).autoRegister&&settings.registrationEnabled===true&&!settings.emailRegistrationEnabled;
-  result.logicalModels=(settings.logicalModels || []).filter((m:any)=>m.enabled).map((m:any)=>({id:m.id,name:m.name,capability:m.capability,enabled:m.enabled,iconUrl:m.iconUrl,aliases:m.aliases,bindings:(m.bindings || []).filter((b:any)=>b.enabled).map((b:any)=>({id:b.id,channelId:b.channelId,upstreamModel:b.upstreamModel,enabled:b.enabled,priority:b.priority,capabilityProfile:b.capabilityProfile,requestAlias:b.requestAlias,iconUrl:b.iconUrl}))}));
+  result.logicalModels=(settings.logicalModels || []).filter((m:any)=>m.enabled&&modelReady(m,settings.systemChannels||[])).map((m:any)=>({id:m.id,name:m.name,capability:m.capability,enabled:m.enabled,iconUrl:m.iconUrl,aliases:m.aliases,bindings:(m.bindings || []).filter((b:any)=>b.enabled&&(settings.systemChannels||[]).some((c:any)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none'))).map((b:any)=>({id:b.id,channelId:b.channelId,upstreamModel:b.upstreamModel,enabled:b.enabled,priority:b.priority,capabilityProfile:b.capabilityProfile,requestAlias:b.requestAlias,iconUrl:b.iconUrl}))}));
   result.systemChannels=(settings.systemChannels || []).filter((c:any)=>c.enabled).map((c:any)=>{let baseUrl='';try{const url=new URL(c.baseUrl);baseUrl=`${url.origin}${url.pathname}`;}catch{}return {id:c.id,name:c.name,baseUrl,apiFormat:c.apiFormat,models:c.models,enabled:c.enabled,hasApiKey:Boolean(c.apiKey)};});
   return result;
 }
@@ -124,7 +127,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
   if(JSON.stringify(patch).length>512000)throw httpError(413,'Settings payload too large');
   const flatPolicy=Object.hasOwn(patch,'commercePolicy'),sitePolicy=hasSiteCommercePolicy(patch);
   if(flatPolicy&&sitePolicy)throw httpError(400,'Send commercePolicy in only one location');
-  const next=merge(current,patch);
+  let next=merge(current,patch);
   if(patch.wechatOfficial!==undefined)next.wechatOfficial=validateWechatConfig(ctx,current.wechatOfficial,patch.wechatOfficial);
   if(flatPolicy||sitePolicy){
     const policy=flatPolicy?patch.commercePolicy:patch.site.commercePolicy;
@@ -156,6 +159,10 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
       if(!Array.isArray(channel.models)||channel.models.length>2000||channel.models.some((m:any)=>typeof m!=='string'||m.length>200))throw httpError(400,'Invalid channel models');
       if(typeof channel.enabled!=='boolean')throw httpError(400,'Invalid channel enabled state');
       const old=current.systemChannels.find((c:any)=>c.id===channel.id);
+      if(old&&new URL(channel.baseUrl).origin!==new URL(old.baseUrl).origin){
+        if(old.apiKey&&!channel.apiKey&&channel.clearApiKey!==true)throw httpError(400,'切换渠道域名需要填写新的 API Key，或勾选清空旧密钥。');
+        if(old.webhookSecret&&!channel.webhookSecret&&channel.clearWebhookSecret!==true)throw httpError(400,'切换渠道域名需要填写新的 Webhook 密钥，或清空旧密钥。');
+      }
       const advanced=channel.advancedConfig || {};
       if(/password|api.?key|secret|authorization/i.test(JSON.stringify(Object.keys(advanced))))throw httpError(400,'Credentials must use designated secret fields');
       return {id:channel.id,name:channel.name,baseUrl:channel.baseUrl,models:channel.models,enabled:channel.enabled,apiFormat:channel.apiFormat||'openai',advancedConfig:advanced,
@@ -163,15 +170,26 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
     });
   }
   if(!Array.isArray(next.logicalModels)||next.logicalModels.length>2000)throw httpError(400,'Invalid logical models');
+  // Channel-only saves inherit routing from the locked current settings. Remove
+  // bindings to channels deleted in this write, without mutating the old snapshot.
+  // Explicit routing writes still have to supply valid channel references.
+  if(Array.isArray(patch.systemChannels)&&!Object.hasOwn(patch,'logicalModels')){
+    const remainingIds=new Set(next.systemChannels.map((channel:any)=>channel.id));
+    const removedIds=new Set(current.systemChannels.filter((channel:any)=>!remainingIds.has(channel.id)).map((channel:any)=>channel.id));
+    if(removedIds.size)next.logicalModels=next.logicalModels.map((model:any)=>({...model,bindings:Array.isArray(model.bindings)?model.bindings.filter((binding:any)=>!removedIds.has(binding.channelId)):model.bindings}));
+  }
   const modelNames=new Set<string>();
   for(const model of next.logicalModels){
     string(model.id,'model ID',200);string(model.name,'model name',200);
     if(!['text','image','video','audio'].includes(model.capability)||typeof model.enabled!=='boolean'||!Array.isArray(model.bindings))throw httpError(400,'Invalid logical model');
     for(const name of [model.id,...(model.aliases||[])]){string(name,'model alias',200);if(modelNames.has(name))throw httpError(400,'Duplicate model name or alias');modelNames.add(name);}
     const bindingIds=new Set<string>();
-    for(const binding of model.bindings){string(binding.id,'binding ID');string(binding.upstreamModel,'upstream model');if(bindingIds.has(binding.id))throw httpError(400,'Duplicate binding ID');bindingIds.add(binding.id);if(!next.systemChannels.some((c:any)=>c.id===binding.channelId))throw httpError(400,'Binding channel does not exist');if(typeof binding.enabled!=='boolean')throw httpError(400,'Invalid binding enabled');validNumber(binding.priority,'binding priority',0,100000);
+    for(const binding of model.bindings){string(binding.id,'binding ID');string(binding.upstreamModel,'upstream model');if(bindingIds.has(binding.id))throw httpError(400,'Duplicate binding ID');bindingIds.add(binding.id);if(!next.systemChannels.some((c:any)=>c.id===binding.channelId))throw httpError(400,'模型绑定引用的渠道不存在，请刷新渠道配置后重试。');if(typeof binding.enabled!=='boolean')throw httpError(400,'Invalid binding enabled');validNumber(binding.priority,'binding priority',0,100000);
       if(binding.capabilityProfile!==undefined&&binding.capabilityProfile!==null){
         const profile=object(binding.capabilityProfile);
+        if(model.capability==='video'){
+          validateVideoPolicySettings(profile);
+        }
         if(profile.maxBatchSize!==undefined&&(!Number.isInteger(profile.maxBatchSize)||profile.maxBatchSize<1||profile.maxBatchSize>20))throw httpError(400,'Invalid max batch size');
         if(profile.aspectRatios!==undefined)validCapabilityList(profile.aspectRatios,'aspect ratios');
         if(profile.aspectRatioOptions!==undefined){
@@ -199,6 +217,16 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
         if(profile.outputDimensions!==undefined)validCapabilitySizeMap(profile.outputDimensions,'capability output dimensions');
       }
     }
+  }
+  next=normalizeModelCatalog(next);
+  const requestOwners=new Map<string,string>();
+  for(const model of next.logicalModels)for(const name of [model.id,...(model.aliases||[])])requestOwners.set(String(name).trim().toLowerCase(),model.id);
+  const routeNames=new Set<string>();
+  for(const model of next.logicalModels)for(const binding of model.bindings){
+    if(binding.requestAlias===undefined||binding.requestAlias==='')continue;
+    const alias=string(binding.requestAlias,'渠道入口请求名',200).trim(),key=alias.toLowerCase();
+    if(!alias||(requestOwners.has(key)&&requestOwners.get(key)!==model.id)||routeNames.has(key))throw httpError(400,'渠道入口请求名与其他模型或渠道入口重名，请使用唯一名称');
+    routeNames.add(key);binding.requestAlias=alias;
   }
   for(const capability of ['text','image','video','audio']){const id=next.defaultModels[`${capability}Model`];if(id&&!next.logicalModels.some((m:any)=>m.id===id&&m.capability===capability&&m.enabled))throw httpError(400,'Default model must be an enabled model of matching capability');}
   if(typeof next.entitlements.enabled!=='boolean'||!Array.isArray(next.entitlements.plans))throw httpError(400,'Invalid entitlement plans');
@@ -266,7 +294,9 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
     await ctx.requireUser(request,'upstream.manage');const body=object(request.body),settings=await getSettings(ctx);const saved=settings.systemChannels.find((c:any)=>c.id===body.channelId);
     const baseUrl=string(body.baseUrl||saved?.baseUrl,'base URL',2000);validUrl(baseUrl,'base URL');
     const key=body.apiKey?string(body.apiKey,'API key',16384):ctx.decrypt(saved?.apiKey||'');
-    const format=body.apiFormat||saved?.apiFormat||'openai';if(!['openai','openai-compatible','ciyuan-async'].includes(format))throw httpError(501,'Model catalog discovery is unavailable for this protocol');
+    const format=body.protocol||saved?.advancedConfig?.protocol||body.apiFormat||saved?.apiFormat||'openai';
+    if(!body.apiKey&&saved?.apiKey&&new URL(baseUrl).origin!==new URL(saved.baseUrl).origin)throw httpError(400,'A saved API key cannot be used with a different provider origin');
+    if(!['openai','openai-compatible','ciyuan-async'].includes(format))throw httpError(501,'Model catalog discovery is unavailable for this protocol');
     const base=new URL(baseUrl);base.pathname=`${base.pathname.replace(/\/$/,'')}/models`;
     const response=await safeFetch(base,{headers:key?{authorization:`Bearer ${key}`}:{},maxBytes:2*1024*1024});
     if(!response.ok)throw httpError(502,`Upstream model catalog returned HTTP ${response.status}`);

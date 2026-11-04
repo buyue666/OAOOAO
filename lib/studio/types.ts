@@ -102,6 +102,7 @@ export interface Asset {
 }
 
 export interface ModelCapability {
+  videoPolicy?: { supportsVideoReference?: boolean; supportsAudioReference?: boolean; maxDurationByResolution?: Record<string, number>; billingUnit?: string; durationsByMode?: Record<string, number[]>; durationRules?: Record<string, {mode: string; min?: number; max?: number; step?: number; values?: number[]}>; referenceRules?: Record<string, {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number}>; referenceLimits?: Record<string, number> }
   /** 文生图/文生视频等纯文本驱动。 */
   textToMedia: boolean
   firstFrame: boolean

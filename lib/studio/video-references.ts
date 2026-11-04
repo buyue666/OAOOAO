@@ -16,6 +16,12 @@ export function buildVideoReferences(input: VideoReferencesInput): GenerationRef
     }
     return { ...items[0], role }
   }
+  if (input.mode === 'mixed') {
+    const refs = [...(input.first.length ? [frame(input.first, 'first_frame')] : []), ...(input.last.length ? [frame(input.last, 'last_frame')] : []), ...input.references.map(item => ({ ...item, role: 'reference' as const }))]
+    if (input.last.length && !input.first.length) throw new Error('请先选择首帧，再添加尾帧')
+    if (refs.length > input.maxReferences) throw new Error(`参考素材最多 ${input.maxReferences} 个`)
+    return refs
+  }
   if (input.mode === 'first') return [frame(input.first, 'first_frame')]
   if (input.mode === 'ends') return [frame(input.first, 'first_frame'), frame(input.last, 'last_frame')]
   if (input.mode === 'edit') {

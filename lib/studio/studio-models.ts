@@ -119,10 +119,11 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
   const outputDimensions = normalizeOutputDimensions(profile, configuredResolutions)
   const capability: ModelCapability = {
     ...defaultCapability,
-    firstFrame: supportsReference,
-    lastFrame: supportsReference,
-    multiReference: supportsReference && (profile?.maxReferenceImages ?? 0) > 1,
-    editing: supportsReference,
+    textToMedia: profile?.supportsTextToMedia ?? defaultCapability.textToMedia,
+    firstFrame: profile?.supportsFirstFrame ?? (model.capability === 'video' ? false : supportsReference),
+    lastFrame: profile?.supportsLastFrame ?? (model.capability === 'video' ? false : supportsReference),
+    multiReference: supportsReference && profile?.supportsMultiReference !== false && (profile?.maxReferenceImages ?? 0) > 1,
+    editing: profile?.supportsVideoEditing ?? (model.capability === 'video' ? false : supportsReference),
     durations: (profile?.durationSeconds ?? []).map((value) => `${value} 秒`),
     ratios: (Array.isArray(profile?.aspectRatios) || configuredRatioOptions.length) ? configuredRatios : defaultRatiosFor(model.capability),
     resolutions: configuredResolutions?.length
@@ -130,7 +131,8 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
       : defaultResolutionsFor(model.capability),
     outputDimensions: model.capability === 'image' ? outputDimensions.selected : defaultOutputDimensionsFor(model.capability),
     outputDimensionsByResolution: model.capability === 'image' ? outputDimensions.byResolution : {},
-    qualities: qualityCandidates(model.capability, settings, configuredQualities),
+    qualities: qualityCandidates(model.capability, settings, model.capability === 'video' ? profile?.videoQualities : configuredQualities),
+    videoPolicy: model.capability === 'video' && profile?.videoBillingUnit ? { supportsVideoReference: profile.supportsVideoReference, supportsAudioReference: profile.supportsAudioReference, maxDurationByResolution: profile.maxDurationByResolution, billingUnit: profile.videoBillingUnit, durationsByMode: profile.durationsByMode, durationRules: profile.videoDurationRules, referenceRules: profile.videoReferenceRules, referenceLimits: {image: profile.maxReferenceImages || 0, video: profile.maxReferenceVideos || 0, audio: profile.maxReferenceAudios || 0} } : undefined,
     qualityLabels: Object.keys(qualityLabels).length ? qualityLabels : undefined,
     /**
      * 未配置上限时用保守默认值，**不能**给 0。
@@ -140,7 +142,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
      * （实测 `e2e-image` 无 profile，带 references 提交返回 200 且 `kind:"edit"`）。
      * 给 0 会把一个真实可用的能力从界面上抹掉——用户报的「选不到上传素材」会变成「根本没有入口」。
      */
-    maxReferences: explicitlyUnsupported ? 0 : Math.max(1, Number(profile?.maxReferenceImages) || UNCONFIGURED_REFERENCE_LIMIT),
+    maxReferences: explicitlyUnsupported ? 0 : Math.max(1, Number(profile?.maxReferences ?? profile?.maxReferenceImages) || UNCONFIGURED_REFERENCE_LIMIT),
     // 后端 maxBatchSize 决定能否一次提交多张/多条；缺省按 1 处理，避免发出后端不支持的批量。
     maxBatchSize: Math.max(1, Number(profile?.maxBatchSize) || 1),
   }

@@ -146,6 +146,9 @@ test('official protocol adapter serializes real requests and persists returned m
 test('词元异步图片协议 submits with Prefer and polls generation tasks',async()=>{
   const f=await fixture();try{
     const owner=f.users[0];
+    const settings=(await f.ctx.db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0].value;
+    settings.logicalModels.find((model:any)=>model.id==='synthetic-image').bindings[0].capabilityProfile={outputResolutions:['1K'],imageQualities:['auto'],aspectRatios:['1:1']};
+    await f.ctx.db.query("UPDATE oaooao_settings SET value=$1 WHERE id='global'",[settings]);
     const imageJob=await createJob(f.ctx,owner.id,'image',{...input,config:{model:'synthetic-image',size:'1:1',resolution:'1K',quality:'auto'}},'ciyuan-async-submit');
     const asyncJob={...imageJob,provider_config:{...imageJob.provider_config,protocol:'ciyuan-async'}};
     let submittedOptions:any;

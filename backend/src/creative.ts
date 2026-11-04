@@ -106,7 +106,7 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
       if(!plan)throw httpError(403,'û�п��õĴ���Ȩ�淽��������ϵ����Ա');
       assertPlanGenerationAllowed(plan,kind);
     }
-    const provider=await resolveProvider(ctx,kind,input,client);
+    const provider=await resolveProvider(ctx,kind,input,client,userId);
     if(input.context?.approvedCost!==undefined&&creditUnits(provider.cost)>creditUnits(input.context.approvedCost))throw httpError(409,'Model pricing increased after plan approval; create a new plan before continuing');
     const totalLimit=settings.generationCostControl?.dailyTotalPointSpend;
     if(Number(totalLimit)>0){await client.query("SELECT pg_advisory_xact_lock(hashtextextended('generation:global-budget',0))");const total=(await client.query("SELECT coalesce(sum(cost),0)::text amount FROM oaooao_generation_jobs WHERE created_at>=date_trunc('day',now()) AND status NOT IN ('error','cancelled')")).rows[0].amount;if(creditUnits(total)+creditUnits(provider.cost)>creditUnits(totalLimit))throw httpError(429,'Global daily generation spending limit reached');}
@@ -230,6 +230,10 @@ async function registerRenderAndVersions(app:FastifyInstance,ctx:Context){
   app.post('/api/drama/projects/:id/export-jianying',async request=>{const user=await ctx.requireUser(request);const found=await ctx.db.query("SELECT id FROM oaooao_projects WHERE id=$1 AND user_id=$2 AND kind='drama'",[(request.params as any).id,user.id]);if(!found.rowCount)throw httpError(404,'Project not found');throw httpError(503,'Jianying export format is not configured in this independent backend');});
 }
 export async function registerCreative(app:FastifyInstance,ctx:Context){
+  app.post('/api/video-generation-tasks/quote',{bodyLimit:34*1024*1024},async request=>{
+    const user=await ctx.requireUser(request),input=generationInput('video',request.body);
+    return transaction(ctx.db,async client=>{await verifyContext(ctx,client,user.id,input);const selected=await resolveProvider(ctx,'video',input,client,user.id);return {points:Number(selected.cost),estimated:true};});
+  });
   await registerMedia(app,ctx);await registerProjects(app,ctx);await registerLibrary(app,ctx);await registerAgents(app,ctx);await registerAdmin(app,ctx);await registerRenderAndVersions(app,ctx);
   for(const kind of ['text','image','video','audio'] as GenerationKind[]){
     const prefix=kind==='video'?'video-tasks':`${kind}-tasks`;

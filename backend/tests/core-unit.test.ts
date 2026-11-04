@@ -36,7 +36,7 @@ test('settings cannot persist credits that wallet precision rejects or ambiguous
 test('channel origin change never forwards a retained saved secret to a new provider',()=>{
   const channel={id:'origin-channel',name:'Synthetic',baseUrl:'https://original.example.invalid/v1',apiKey:'synthetic-secret',models:[],enabled:true};
   const saved=validateSettingsPatch(ctx,structuredClone(DEFAULT_SETTINGS),{systemChannels:[channel]});
-  assert.throws(()=>validateSettingsPatch(ctx,saved,{systemChannels:[{...channel,baseUrl:'https://different.example.invalid/v1',apiKey:''}]}),/new API key/);
+  assert.throws(()=>validateSettingsPatch(ctx,saved,{systemChannels:[{...channel,baseUrl:'https://different.example.invalid/v1',apiKey:''}]}),/新的 API Key/);
   const cleared=validateSettingsPatch(ctx,saved,{systemChannels:[{...channel,baseUrl:'https://different.example.invalid/v1',apiKey:'',clearApiKey:true}]});assert.equal(cleared.systemChannels[0].apiKey,'');
 });
 test('forwarded client IPs are honored only through explicitly trusted proxies',async()=>{

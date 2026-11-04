@@ -183,12 +183,12 @@ export interface UploadItem {
   preview: string
   progress: number
   status: 'uploading' | 'done' | 'failed' | 'cancelled'
-  kind?: 'image' | 'video'
+  kind?: 'image' | 'video' | 'audio'
   dataUrl?: string
   error?: string
 }
 
-type UploadKind = 'image' | 'video'
+type UploadKind = 'image' | 'video' | 'audio'
 
 const IMAGE_ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const VIDEO_ACCEPTED_TYPES = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v']
@@ -224,20 +224,22 @@ export function ReferenceUploader({
   emptyText,
   selectLabel = '选择文件',
   hint,
+  maxFileBytes,
 }: {
   items: UploadItem[]
   onItemsChange: (items: UploadItem[]) => void
   maxFiles?: number
   kind?: UploadKind
+  maxFileBytes?: number
   label?: string
   emptyText?: string
   selectLabel?: string
   hint?: string
 }) {
   const [dragging, setDragging] = useState(false)
-  const acceptedTypes = kind === 'video' ? VIDEO_ACCEPTED_TYPES : IMAGE_ACCEPTED_TYPES
-  const maxFileSize = kind === 'video' ? VIDEO_MAX_FILE_SIZE : IMAGE_MAX_FILE_SIZE
-  const uploadHint = hint ?? (kind === 'video' ? 'MP4 / MOV / WEBM，单个不超过 200 MB' : 'PNG / JPG / WEBP，单个不超过 12 MB')
+  const acceptedTypes = kind === 'audio' ? ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/ogg', 'audio/flac', 'audio/aac'] : kind === 'video' ? VIDEO_ACCEPTED_TYPES : IMAGE_ACCEPTED_TYPES
+  const maxFileSize = maxFileBytes ?? (kind === 'audio' ? 24 * 1024 * 1024 : kind === 'video' ? VIDEO_MAX_FILE_SIZE : IMAGE_MAX_FILE_SIZE)
+  const uploadHint = hint ?? (kind === 'audio' ? 'MP3 / WAV / M4A / OGG / FLAC / AAC，单个不超过 24 MB' : kind === 'video' ? 'MP4 / MOV / WEBM，单个不超过 200 MB' : 'PNG / JPG / WEBP，单个不超过 12 MB')
   const uploadEmptyText = emptyText ?? (kind === 'video' ? '拖拽视频到此处，或点击选择' : '拖拽文件到此处，或点击选择')
   const [message, setMessage] = useState<{ tone: 'warning' | 'accent'; text: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -283,7 +285,7 @@ export function ReferenceUploader({
         continue
       }
       if (file.size > maxFileSize) {
-        problems.push(`${file.name} 超过 ${kind === 'video' ? '200 MB' : '12 MB'}`)
+        problems.push(`${file.name} 超过 ${Math.ceil(maxFileSize / 1024 / 1024)} MB`)
         continue
       }
       if (itemsRef.current.length + accepted.length >= maxFiles) {
@@ -341,7 +343,7 @@ export function ReferenceUploader({
       {label && (
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-medium text-foreground">{label}</p>
-          <span className="text-[10px] text-muted-foreground">{kind === 'video' ? '视频文件' : '图片文件'}</span>
+          <span className="text-[10px] text-muted-foreground">{kind === 'audio' ? '音频文件' : kind === 'video' ? '视频文件' : '图片文件'}</span>
         </div>
       )}
       <div
@@ -412,7 +414,7 @@ export function ReferenceUploader({
             >
               <div className="relative overflow-hidden rounded-md border border-border bg-muted">
                 {/* 保持原始比例，不做强制裁切变形 */}
-                {item.kind === 'video' ? (
+                {item.kind === 'audio' ? <audio src={item.preview} controls preload="metadata" aria-label={item.name} className="w-full" /> : item.kind === 'video' ? (
                   <video
                     src={item.preview}
                     muted
@@ -633,7 +635,7 @@ export function ReferencePicker({
                     : 'border-border hover:-translate-y-0.5 hover:border-studio-accent/50 hover:shadow-[var(--lg-shadow-2)]',
                 )}
               >
-                <MediaThumb loading="lazy" onLoadError={() => setBrokenIds((current) => (current.includes(asset.id) ? current : [...current, asset.id]))} src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="size-full" />
+                {asset.kind === 'audio' ? <span className="flex size-full items-center justify-center p-2 text-xs text-muted-foreground">音频 · {asset.title}</span> : <MediaThumb loading="lazy" onLoadError={() => setBrokenIds((current) => (current.includes(asset.id) ? current : [...current, asset.id]))} src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="size-full" />}
                 {selected && (
                   <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-studio-accent text-studio-accent-foreground">
                     <Check className="size-2.5" aria-hidden="true" />

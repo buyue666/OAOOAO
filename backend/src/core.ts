@@ -124,7 +124,7 @@ export async function publicAddress(hostname: string) {
   if (!records.length || records.some(record => !isPublicAddress(record.address))) throw httpError(400,'Private or reserved network destinations are prohibited');
   return records[0];
 }
-export async function safeFetch(input: string | URL, init: {method?: string;headers?: Record<string,string>;body?: string | Buffer;timeoutMs?: number;maxBytes?: number} = {}): Promise<Response> {
+export async function safeFetch(input: string | URL, init: {method?: string;headers?: Record<string,string>;body?: string | Buffer;timeoutMs?: number;maxBytes?: number;publicRedirects?:number} = {}): Promise<Response> {
   let url: URL;
   try { url = new URL(input); } catch { throw httpError(400,'Invalid upstream URL'); }
   if (!['https:','http:'].includes(url.protocol) || url.username || url.password) throw httpError(400,'Invalid upstream URL');
@@ -135,7 +135,16 @@ export async function safeFetch(input: string | URL, init: {method?: string;head
       lookup:((_hostname: unknown, options: any, callback: any) => options?.all ? callback(null,[address]) : callback(null,address.address,address.family)) as any,
     },response => {
       const status = response.statusCode || 502;
-      if (status>=300 && status<400) { response.resume(); reject(httpError(502,'Upstream redirects are not allowed')); return; }
+      if (status>=300 && status<400) {
+        response.resume();
+        if(init.publicRedirects&&response.headers.location&&(init.method||'GET')==='GET'){
+          const destination=new URL(response.headers.location,url);
+          if(destination.protocol!=='https:'){reject(httpError(502,'Media redirect requires HTTPS'));return;}
+          // Each hop repeats DNS/IP validation and never forwards provider credentials.
+          resolve(safeFetch(destination,{method:'GET',maxBytes:init.maxBytes,timeoutMs:init.timeoutMs,publicRedirects:init.publicRedirects-1}));return;
+        }
+        reject(httpError(502,'Upstream redirects are not allowed')); return;
+      }
       const chunks: Buffer[]=[]; let length=0;
       response.on('data',(chunk:Buffer) => {length+=chunk.length;if(length>(init.maxBytes || 10*1024*1024)){request.destroy();reject(httpError(502,'Upstream response too large'));}else chunks.push(chunk);});
       response.on('end',() => { const headers=new Headers(); for(const [name,value] of Object.entries(response.headers)) if(value) headers.set(name,Array.isArray(value)?value.join(','):value); resolve(new Response(status===204 || status===304 ? null : Buffer.concat(chunks),{status,headers})); });

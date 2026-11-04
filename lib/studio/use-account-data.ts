@@ -346,9 +346,9 @@ export function useServerOrders() {
  * 同时暴露**服务端分页**（`loadMore` / `hasMore`）：素材库超过一页时，
  * 调用方可以继续读取下一页，而不是只看到第一页就以为「素材就这么多」。
  */
-export function useLibraryAssets(options: { pageSize?: number; kind?: string; keyword?: string } = {}) {
+export function useLibraryAssets(options: { pageSize?: number; kind?: string; keyword?: string; enabled?: boolean } = {}) {
   const { state } = useStudio()
-  const connected = state.backendStatus === 'connected'
+  const connected = state.backendStatus === 'connected' && options.enabled !== false
   const userId = state.user.id
   const revision = useAccountDataRevision()
   const [assets, setAssets] = useState<LibraryAssetView[]>([])

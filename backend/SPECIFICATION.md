@@ -1,5 +1,7 @@
 # Independent implementation requirements
 
+Video capability, quote, reference and pricing contracts are documented in [VIDEO_CAPABILITIES.md](VIDEO_CAPABILITIES.md).
+
 ## Goal
 
 Replace the derivative business backend while preserving the OAOOAO frontend's

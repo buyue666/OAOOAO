@@ -29,7 +29,7 @@ test('isolated PostgreSQL: 012 preserves old permanent claims and old eleven che
   await f.db.query('INSERT INTO oaooao_wallets(user_id,permanent_balance) VALUES($1,110)',[id]);
   await f.db.query("INSERT INTO oaooao_wallet_operations(operation_id,user_id,requested_delta,permanent_delta,daily_delta,permanent_after,daily_after,metadata) VALUES($1,$2,10,10,0,110,0,'{\"kind\":\"check_in\"}')",[id,id]);
   await f.db.query("INSERT INTO oaooao_check_ins(user_id,claim_date,reward_points,operation_id) VALUES($1,'2020-01-01',10,$1)",[id]);
-  const before=(await f.db.query('SELECT name,checksum FROM oaooao_migrations ORDER BY name')).rows;assert.equal(before.length,11);
+  const before=(await f.db.query("SELECT name,checksum FROM oaooao_migrations WHERE name<'012' ORDER BY name")).rows;assert.equal(before.length,11);
   const oldClaim=(await f.db.query('SELECT to_jsonb(c) AS row FROM oaooao_check_ins c WHERE user_id=$1',[id])).rows[0].row;
   await migrate(f.db);await migrate(f.db);
   assert.deepEqual((await f.db.query("SELECT name,checksum FROM oaooao_migrations WHERE name<'012' ORDER BY name")).rows,before);

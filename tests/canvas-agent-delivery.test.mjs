@@ -176,7 +176,7 @@ test('real video settings turn suffixed capability labels into numeric seconds s
   const patches = [], node = { id: 'video', type: 'generation', data: { kind: 'video', model: 'video-model', seconds: 5, references: [], skills: [], prompt: 'Synthetic' } }
   const store = { nodes: [node], edges: [], updateNodeData: (_, patch) => { patches.push(patch); Object.assign(node.data, patch) }, openSettings() {}, setAssetPanel() {} }
   const settings = sourceModule('../components/free-canvas/nodes/generation-settings.tsx', {
-    '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') }, '@/lib/studio/studio-models': { filterModelsByCapability: value => value },
+    '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') }, '@/lib/studio/studio-models': { filterModelsByCapability: value => value, ratioLabel: value => value },
     '@/lib/studio/store': { useStudio: () => ({ state: { models: [{ id: 'video-model', capabilities: { durations: ['5 秒', '8 秒'], ratios: [], qualities: [], maxReferences: 0 } }] } }) },
     '../canvas-context': { useCanvasActions: () => ({ estimateNode: () => 1 }) }, '../canvas-store': { useCanvasStore: selector => selector(store) }, './node-kit': { COUNTER_SCALE: '', SETTINGS_POPOVER_WIDTH: 300 },
   })

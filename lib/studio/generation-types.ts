@@ -245,6 +245,22 @@ export type SessionLogicalModel = {
     enabled: boolean
     priority: number
     capabilityProfile?: {
+      supportsTextToMedia?: boolean
+      supportsFirstFrame?: boolean
+      supportsLastFrame?: boolean
+      supportsVideoEditing?: boolean
+      supportsVideoReference?: boolean
+      supportsAudioReference?: boolean
+      maxReferences?: number
+      videoQualities?: string[]
+      maxDurationByResolution?: Record<string, number>
+      supportsMultiReference?: boolean
+      maxReferenceVideos?: number
+      maxReferenceAudios?: number
+      durationsByMode?: Record<string, number[]>
+      videoDurationRules?: Record<string, {mode: string; min?: number; max?: number; step?: number; values?: number[]}>
+      videoReferenceRules?: Record<string, {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number}>
+      videoBillingUnit?: string
       supportsReferenceImage?: boolean
       maxReferenceImages?: number
       aspectRatios?: string[]

@@ -8,6 +8,7 @@ import type { PoolClient } from 'pg';
 import { httpError, safeFetch, type Context } from './core.js';
 
 export const MAX_MEDIA_BYTES = 24 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 export function mediaPath(root: string, id: string): string {
   if (!/^[a-f0-9-]{36}$/i.test(id)) throw httpError(400, 'Invalid media identifier');
@@ -20,6 +21,7 @@ export function sniffMedia(data: Buffer): string {
   if (data[0]===255 && data[1]===216 && data[2]===255) return 'image/jpeg';
   if (/^GIF8[79]a/.test(data.subarray(0,6).toString())) return 'image/gif';
   if (data.subarray(0,4).toString()==='RIFF' && data.subarray(8,12).toString()==='WEBP') return 'image/webp';
+  if (data.subarray(4,8).toString()==='ftyp' && /^M4[AB] /.test(data.subarray(8,12).toString())) return 'audio/mp4';
   if (data.subarray(4,8).toString()==='ftyp') return 'video/mp4';
   if (data.subarray(0,4).equals(Buffer.from([26,69,223,163]))) return 'video/webm';
   if (data.subarray(0,4).toString()==='RIFF' && data.subarray(8,12).toString()==='WAVE') return 'audio/wav';
@@ -39,8 +41,8 @@ export function decodeDataUrl(value: string): Buffer {
 export async function saveMedia(ctx: Context, userId: string, bytes: Buffer, persistent = true) {
   const storage=(await ctx.db.query("SELECT value FROM oaooao_settings WHERE id='object-storage'")).rows[0]?.value;
   if(storage?.enabled)throw httpError(503,'Configured object storage is not supported by the creative media adapter');
-  if (!bytes.length || bytes.length > MAX_MEDIA_BYTES) throw httpError(413, 'Media exceeds storage limit');
-  const mimeType = sniffMedia(bytes); const id = randomUUID(); const token = randomBytes(32).toString('base64url');
+  const mimeType = sniffMedia(bytes);
+  if (!bytes.length || bytes.length > (mimeType.startsWith('video/')?MAX_VIDEO_BYTES:MAX_MEDIA_BYTES)) throw httpError(413, 'Media exceeds storage limit'); const id = randomUUID(); const token = randomBytes(32).toString('base64url');
   await mkdir(ctx.config.mediaRoot, { recursive: true });
   const target = mediaPath(ctx.config.mediaRoot,id); const temp = target + '.tmp';
   await writeFile(temp, bytes, { flag: 'wx' }); await rename(temp,target);
@@ -89,6 +91,20 @@ async function inspectTool(binary:string,args:string[],cwd?:string):Promise<stri
   return new Promise((done,reject)=>{const child=spawn(binary,args,{windowsHide:true,stdio:['ignore','pipe','ignore'],shell:false,cwd});const chunks:Buffer[]=[];let size=0;const timer=setTimeout(()=>{child.kill();reject(httpError(503,'Media inspection timed out'));},10000);child.stdout.on('data',(part:Buffer)=>{size+=part.length;if(size>1024*1024){child.kill();reject(httpError(503,'Media inspection output exceeded limit'));}else chunks.push(part);});child.once('error',()=>{clearTimeout(timer);reject(httpError(503,'Required media tool is unavailable'));});child.once('exit',code=>{clearTimeout(timer);if(code===0)done(Buffer.concat(chunks).toString('utf8'));else reject(httpError(422,'Media could not be inspected'));});});
 }
 const ffprobePath=()=>process.env.FFPROBE_PATH||(process.env.FFMPEG_PATH?join(dirname(process.env.FFMPEG_PATH),process.platform==='win32'?'ffprobe.exe':'ffprobe'):'ffprobe');
+export async function probeReference(bytes:Buffer){
+  const directory=await mkdtemp(join(tmpdir(),'oaooao-reference-'));
+  try{
+    await writeFile(join(directory,'reference.media'),bytes);
+    const metadata=JSON.parse(await inspectTool(ffprobePath(),['-v','error','-protocol_whitelist','file,pipe','-show_streams','-show_format','-of','json','reference.media'],directory));
+    const duration=Number(metadata.format?.duration);
+    if(!Number.isFinite(duration)||duration<=0)throw httpError(422,'无法确定参考视频或音频时长');
+    return {duration,streams:metadata.streams||[]};
+  }finally{
+    const root=resolve(tmpdir()),target=resolve(directory);
+    if(!target.startsWith(root+(process.platform==='win32'?'\\':'/'))||!target.includes('oaooao-reference-'))throw Error('Unsafe reference temporary path');
+    await rm(target,{recursive:true,force:true});
+  }
+}
 export async function encoderAvailable(){
   const ffmpeg=process.env.FFMPEG_PATH||'ffmpeg';const filters=await inspectTool(ffmpeg,['-hide_banner','-filters']);if(!/\bsubtitles\b/.test(filters))throw httpError(503,'FFmpeg subtitle filter is unavailable');const encoders=await inspectTool(ffmpeg,['-hide_banner','-encoders']);if(!/\blibx264\b/.test(encoders)||!/\baac\b/.test(encoders))throw httpError(503,'FFmpeg H.264/AAC encoders are unavailable');await inspectTool(ffprobePath(),['-version']);
 }
@@ -128,7 +144,7 @@ export async function registerMedia(app: FastifyInstance, ctx: Context) {
     const user=await ctx.requireUser(request); let bytes:Buffer; let persistent=false; let expected='';
     if(request.isMultipart()){
       let file:Buffer|undefined;
-      for await(const part of request.parts({limits:{fileSize:MAX_MEDIA_BYTES,files:1,fields:3}})){
+      for await(const part of request.parts({limits:{fileSize:MAX_VIDEO_BYTES,files:1,fields:3}})){
         if(part.type==='file') file=await part.toBuffer();
         else if(part.fieldname==='persistent')persistent=part.value==='true';
         else if(part.fieldname==='type')expected=String(part.value);

@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomBytes} from 'node:crypto';
+import {buildApp} from '../src/app.js';
+import {hashToken} from '../src/core.js';
+import {createTestDatabase} from './core-helpers.js';
+
+test('video quotes enforce saved rules and authentication without creating paid jobs',async t=>{
+  const fixture=await createTestDatabase(),app=await buildApp({db:fixture.db,config:fixture.config});
+  t.after(async()=>{await app.close();await fixture.cleanup();});
+  const token=randomBytes(32).toString('base64url');
+  await fixture.db.query("INSERT INTO oaooao_users(id,username,password_hash,role,admin_permissions) VALUES('video-admin','video-admin','synthetic-unused','admin',$1)",[JSON.stringify(['upstream.manage'])]);
+  await fixture.db.query("INSERT INTO oaooao_sessions(token_hash,user_id,expires_at) VALUES($1,'video-admin',now()+interval '1 hour')",[hashToken(token)]);
+  const headers={cookie:`oaooao_session=${token}`,origin:fixture.config.origin};
+  const patch=(payload:any)=>app.inject({method:'PATCH',url:'/api/admin/settings',headers,payload});
+  const profile={videoBillingUnit:'duration',supportsFirstFrame:false,supportsLastFrame:false,videoQualities:['720p'],durationSeconds:[4,6,8],videoDurationRules:{'720p':{mode:'list',values:[4,6]}},videoPricing:{durationRates:{'720p':{'4':7,'6':9}}}};
+  const model={id:'video',name:'Video',capability:'video',enabled:true,bindings:[{id:'video-route',channelId:'video-provider',upstreamModel:'video-upstream',enabled:true,priority:1,capabilityProfile:profile}]};
+  const saved=await patch({systemChannels:[{id:'video-provider',name:'合成渠道',baseUrl:'https://video.example.invalid/v1',models:['video-upstream'],apiFormat:'openai-video',enabled:true,apiKey:'synthetic-key'}],logicalModels:[model]});
+  assert.equal(saved.statusCode,200,saved.body);
+  assert.equal(saved.json().settings.modelPointCosts.video,undefined);
+  const quote=(seconds:number)=>app.inject({method:'POST',url:'/api/video-generation-tasks/quote',headers,payload:{prompt:'Synthetic quote only',config:{model:'video',vquality:'720p',videoSeconds:seconds,size:'16:9'}}});
+  const result=await quote(6);
+  assert.equal(result.statusCode,200,result.body);assert.equal(result.json().points,9);
+  assert.equal((await quote(8)).statusCode,400);
+  assert.equal((await app.inject({method:'POST',url:'/api/video-generation-tasks/quote',headers:{origin:fixture.config.origin},payload:{prompt:'quote',config:{model:'video',videoSeconds:6}}})).statusCode,401);
+  const before=(await fixture.db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0].value;
+  const invalid=await patch({logicalModels:[{...model,bindings:[{...model.bindings[0],capabilityProfile:{...profile,videoPricing:{extraVideo:-1}}}]}]});
+  assert.equal(invalid.statusCode,400,invalid.body);
+  assert.deepEqual((await fixture.db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0].value,before);
+  assert.equal((await fixture.db.query('SELECT count(*) FROM oaooao_generation_jobs')).rows[0].count,'0');
+  assert.equal((await fixture.db.query('SELECT count(*) FROM oaooao_wallet_operations')).rows[0].count,'0');
+});

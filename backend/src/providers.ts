@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { prepareVideoPolicy, validateVideoInput } from './video-policy.js';
 import type { PoolClient } from 'pg';
 import { httpError, safeFetch, type Context } from './core.js';
 import { getSettings } from './settings.js';
@@ -19,26 +20,35 @@ export type ProviderSelection={model:string;channelId:string;upstreamModel:strin
  */
 const protocols=new Set(['openai','openai-compatible','openai-chat','openai-images','openai-audio','openai-video','ciyuan-async']);
 function moneyProduct(a:bigint,b:unknown){return a*creditUnits(typeof b==='number'||typeof b==='string'?b:1)/10000n;}
-export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json,client?:PoolClient):Promise<ProviderSelection>{
+export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json,client?:PoolClient,userId?:string):Promise<ProviderSelection>{
   if(kind!=='text'){
     const storage=(await (client||ctx.db).query("SELECT value FROM oaooao_settings WHERE id='object-storage'")).rows[0]?.value;
     if(storage?.enabled)throw httpError(503,'Configured object storage is not supported by the creative media adapter');
   }
   if(kind==='render')return {model:'ffmpeg',channelId:'local',upstreamModel:'ffmpeg',config:{protocol:'ffmpeg'},cost:'0.0000'};
   const settings=await getSettings(ctx,client);const wanted=String(input.config?.model||settings.defaultModels?.[kind+'Model']||'');
-  const model=(settings.logicalModels||[]).find((m:Json)=>m.enabled&&m.capability===kind&&(m.id===wanted||(m.aliases||[]).includes(wanted)));
+  const model=(settings.logicalModels||[]).find((m:Json)=>m.enabled&&m.capability===kind&&(m.id===wanted||(m.aliases||[]).includes(wanted)||(m.bindings||[]).some((b:Json)=>b.requestAlias===wanted)));
   if(!model)throw httpError(503,`No enabled ${kind} model is configured`);
-  const binding=[...(model.bindings||[])].filter((b:Json)=>b.enabled).sort((a:Json,b:Json)=>a.priority-b.priority).find((b:Json)=>settings.systemChannels?.some((c:Json)=>c.id===b.channelId&&c.enabled&&c.apiKey));
+  const routeAlias=(model.bindings||[]).some((b:Json)=>b.requestAlias===wanted);
+  const binding=[...(model.bindings||[])].filter((b:Json)=>b.enabled&&(!routeAlias||b.requestAlias===wanted)).sort((a:Json,b:Json)=>a.priority-b.priority).find((b:Json)=>settings.systemChannels?.some((c:Json)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none')));
   if(!binding)throw httpError(503,'No authenticated provider channel is available');
   const channel=settings.systemChannels.find((c:Json)=>c.id===binding.channelId);
   const protocol=channel.advancedConfig?.protocol||channel.apiFormat||'openai';
+
   if(!protocols.has(protocol))throw httpError(503,`Configured protocol ${protocol} is not supported by this backend`);
   const base=new URL(channel.baseUrl);
   if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash)throw httpError(503,'Provider requires a valid HTTPS base URL');
-  const price=settings.modelPointCosts?.[model.id];
-  if(price===undefined)throw httpError(503,'Model price must be configured before generation');
-  let cost=creditUnits(price);const multipliers=settings.generationPointMultipliers||{};
+  const price=(binding.requestAlias?settings.modelPointCosts?.[binding.requestAlias]:undefined)??settings.modelPointCosts?.[binding.upstreamModel]??settings.modelPointCosts?.[model.id];
   const defaults=settings.generationDefaults||{};const profile=binding.capabilityProfile||{};
+  const resolution=String(input.config?.vquality||profile.videoQualities?.[0]||'');
+  const videoRate=kind==='video'&&profile.videoBillingUnit&&(profile.videoBillingUnit==='duration'||profile.videoPricing?.resolutionRates?.[resolution]!==undefined);
+  if(price===undefined&&!videoRate)throw httpError(503,'Model price must be configured before generation');
+  let cost=creditUnits(price??0);const multipliers=settings.generationPointMultipliers||{};
+  if(kind==='video')for(const ref of input.references||[]){
+    const key=ref.role==='last_frame'?'last_frame':ref.role==='first_frame'?'first_frame':ref.type||'image';
+    if(!['first_frame','image'].includes(key)&&!profile.videoReferenceFieldMap?.[key])throw httpError(400,'请先按上游文档配置尾帧、视频或音频的 API 字段名');
+  }
+  let videoSnapshot:Json={};
   const pricedOption=(value:unknown,baseline:unknown,prices:Json|undefined,label:string)=>{if(value!==undefined&&String(value)!==String(baseline)&&prices?.[String(value)]===undefined)throw httpError(400,`${label} is not configured with a price`);};
   if(kind==='image'){
     /**
@@ -85,17 +95,17 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
     if(input.config?.size&&profile.aspectRatios?.length&&!profile.aspectRatios.includes(input.config.size)&&!profile.resolutions?.includes(input.config.size))throw httpError(400,'Image size is not supported by this model');
   }
   if(kind==='video'){
-    pricedOption(input.config?.vquality,defaults.videoQuality,multipliers.videoQuality,'Video quality');
-    pricedOption(input.config?.videoSeconds,defaults.videoSeconds,multipliers.videoSeconds,'Video duration');
-    if(input.config?.videoSeconds&&!['4','8','12'].includes(String(input.config.videoSeconds)))throw httpError(400,'OpenAI video duration must be 4, 8 or 12 seconds');
+    if(!profile.videoBillingUnit){pricedOption(input.config?.vquality,defaults.videoQuality,multipliers.videoQuality,'Video quality');pricedOption(input.config?.videoSeconds,defaults.videoSeconds,multipliers.videoSeconds,'Video duration');}
+    if(!profile.videoBillingUnit&&input.config?.videoSeconds&&!['4','8','12'].includes(String(input.config.videoSeconds)))throw httpError(400,'OpenAI video duration must be 4, 8 or 12 seconds');
     if(input.config?.videoSeconds&&profile.durationSeconds?.length&&!profile.durationSeconds.includes(Number(input.config.videoSeconds)))throw httpError(400,'Video duration is not supported by this model');
     if(input.config?.size&&profile.aspectRatios?.length&&!profile.aspectRatios.includes(input.config.size)&&!profile.resolutions?.includes(input.config.size))throw httpError(400,'Video size is not supported by this model');
   }
   if(kind==='image')cost=moneyProduct(cost,multipliers.imageQuality?.[input.config?.quality]);
-  if(kind==='video'){cost=moneyProduct(cost,multipliers.videoQuality?.[input.config?.vquality]);cost=moneyProduct(cost,multipliers.videoSeconds?.[String(input.config?.videoSeconds)]);}
+  if(kind==='video'&&!profile.videoBillingUnit){cost=moneyProduct(cost,multipliers.videoQuality?.[input.config?.vquality]);cost=moneyProduct(cost,multipliers.videoSeconds?.[String(input.config?.videoSeconds)]);}
+  if(kind==='video'){validateVideoInput(input,profile);if(profile.videoBillingUnit){const prepared=await prepareVideoPolicy(ctx,input,profile,cost,userId);cost=creditUnits(prepared.cost);videoSnapshot=prepared.snapshot;}}
   const max=settings.generationCostControl?.maxPointsPerTask;
   if(cost<0n||(Number(max)>0&&cost>creditUnits(max)))throw httpError(400,'Generation cost exceeds the configured limit');
-  if((input.references||[]).length>(kind==='video'?1:16))throw httpError(400,'Too many reference images for this protocol');
+  if((input.references||[]).length>(kind==='video'?(profile.videoBillingUnit?profile.maxReferences??16:1):16))throw httpError(400,'Too many reference images for this protocol');
   if(kind==='image' && input.kind==='edit' && !(input.references||[]).length)throw httpError(400,'Image editing requires a reference image');
   if(kind==='image' && input.edit?.mask && !(input.references||[]).length)throw httpError(400,'An edit mask requires a reference image');
   if(kind==='image' && input.edit?.operation && !['inpaint','remove-background','erase','outpaint','enhance','layers'].includes(String(input.edit.operation)))throw httpError(400,'Unsupported image edit operation');
@@ -104,7 +114,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   // Persist the selected capability snapshot with the job.  Queued jobs must
   // keep using the exact size map that was validated at submission time even
   // if an administrator edits the model binding before the worker runs.
-  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey,capabilityProfile:profile},cost:creditDecimal(cost)};
+  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey,capabilityProfile:profile,...videoSnapshot},cost:creditDecimal(cost)};
 }
 function multipart(fields:Record<string,string>,files:Array<{name:string;data:Buffer;mime:string}>){
   const boundary='oaooao'+randomUUID().replaceAll('-','');const chunks:Buffer[]=[];
@@ -265,7 +275,14 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     if(poll){const response=await request(`/videos/${encodeURIComponent(job.upstream_id)}`);data=await response.json() as Json;}
     else{
       const files=[];
-      if(input.references?.length){const ref=await readReference(ctx,job.user_id,input.references[0]);if(!ref.mimeType.startsWith('image/'))throw new ProviderFailure('Video reference must be an image',true);files.push({name:'input_reference',data:ref.bytes,mime:ref.mimeType});}
+      for(const reference of input.references||[]){
+        const ref=await readReference(ctx,job.user_id,reference),type=ref.mimeType.split('/')[0];
+        if(type!==(reference.type||'image'))throw new ProviderFailure('参考素材类型与实际文件不一致',true);
+        const key=reference.role==='last_frame'?'last_frame':reference.role==='first_frame'?'first_frame':type;
+        const field=profile.videoReferenceFieldMap?.[key]||(['first_frame','image'].includes(key)?'input_reference':undefined);
+        if(!field)throw new ProviderFailure('未配置此参考素材的上游 API 字段名',true);
+        files.push({name:field,data:ref.bytes,mime:ref.mimeType});
+      }
       const multi=multipart({model,prompt:input.prompt,size:videoSize(config.size),seconds:String(config.videoSeconds||'4')},files);
       const response=await request('/videos',multi.body,multi.contentType);data=await response.json() as Json;
     }

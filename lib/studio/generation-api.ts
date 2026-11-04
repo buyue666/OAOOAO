@@ -51,7 +51,7 @@ function errorMessage(payload: unknown, status: number) {
     const record = payload as Record<string, unknown>
     for (const key of ['error', 'msg', 'message']) {
       const value = record[key]
-      if (typeof value === 'string' && value.trim()) return value.trim()
+      if (typeof value === 'string' && value.trim()) return value.trim() === 'Model price must be configured before generation' ? '请先在后台配置该视频模型的积分单价，再开始生成。' : value.trim()
     }
   }
   return `����ʧ�ܣ�${status}��`
@@ -199,6 +199,18 @@ function projectTaskContext(input: { projectId?: string; episodeId?: string; sho
   }).filter(([, value]) => value !== undefined && value !== ''))
 }
 
+export async function quoteVideoGeneration(input: Pick<VideoGenerationInput, 'model' | 'ratio' | 'quality' | 'seconds' | 'references'>) {
+  const result = await generate<{ points: number; estimated: boolean }>('/api/video-generation-tasks/quote', {
+    method: 'POST',
+    body: JSON.stringify({
+      prompt: '费用预估',
+      config: { model: input.model, size: input.ratio, vquality: input.quality, videoSeconds: String(input.seconds || 4) },
+      references: input.references || [],
+    }),
+  })
+  return result.data
+}
+
 export function createVideoTask(input: VideoGenerationInput) {
   const references = input.references?.filter((reference) => reference.url || reference.dataUrl) ?? []
   return generate<{ task: GenerationTask; warning?: string }>('/api/video-generation-tasks', {
@@ -220,9 +232,9 @@ export function createVideoTask(input: VideoGenerationInput) {
 }
 
 /** ��������ڵĲο��زĽ��������Ȩ��У�����ʱ����������� blob: URL ֱ�Ӵ������Ρ� */
-export async function publishReferenceAsset(type: 'image' | 'video', dataUrl: string) {
+export async function publishReferenceAsset(type: 'image' | 'video' | 'audio', dataUrl: string) {
   if (!dataUrl) throw new StudioApiError('�ο��زĶ�ȡʧ�ܣ��������ϴ�', 400)
-  if (dataUrl.length > 24 * 1024 * 1024) throw new StudioApiError('�ο��زĳ�����ǰֱ�����ƣ���ѹ��������', 413)
+  if (dataUrl.length > 32 * 1024 * 1024) throw new StudioApiError('�ο��زĳ�����ǰֱ�����ƣ���ѹ��������', 413)
   const result = await generate<{ upstreamUrl?: string; error?: string; data?: { upstreamUrl?: string; error?: string } }>('/api/reference-assets', {
     method: 'POST',
     body: JSON.stringify({ type, dataUrl, persistent: false }),
