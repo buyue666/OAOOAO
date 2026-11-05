@@ -1225,7 +1225,7 @@ export function ImageWorkspace() {
   const params = (
     <div className="flex flex-col gap-4">
       {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
-      <ParamSection title="提示词">
+      <ParamSection title="提示词" layout="prompt">
         <label htmlFor="image-prompt" className="sr-only">画面描述</label>
         <textarea
           id="image-prompt"
@@ -2060,12 +2060,12 @@ export function VideoWorkspace() {
   const params = (
     <div className="flex flex-col gap-4">
       {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
-      <ParamSection title="生成模式">
+      <ParamSection title="生成模式" layout="mode">
         <OptionGrid value={mode} onChange={setMode} options={modeOptions} label="生成模式" />
         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">当前模型不支持的模式不会显示，也不会留下空白区域。</p>
       </ParamSection>
 
-      <ParamSection title="镜头描述">
+      <ParamSection title="镜头描述" layout="prompt">
         <label htmlFor="video-prompt" className="sr-only">镜头描述</label>
         <PromptReferenceInput id="video-prompt" value={prompt} onChange={setPrompt} references={promptReferences} placeholder="描述镜头运动、主体动作与氛围，输入 @ 引用已上传素材" />
       </ParamSection>

@@ -36,6 +36,16 @@ test('legacy price tables remain compatible and input duration uses wallet preci
   assert.equal(videoBaseCost(undefined,{videoBillingUnit:'duration',videoPricing:{resolutionPricing:{'480p':{generationDurationRates:{'6':7}}}}},'480p',6),70000n);
 });
 
+test('verified billable duration can include input seconds while rate selection keeps output seconds',()=>{
+  const profile={videoBillingUnit:'second',videoPricing:{resolutionPricing:{'480p':{generationRate:3}}}};
+  assert.equal(videoBaseCost(undefined,profile,'480p',15,{billableSeconds:25}),750000n);
+  assert.equal(videoBaseCost(undefined,profile,'480p',15,{billableSeconds:25.125}),753750n);
+  assert.equal(videoBaseCost(undefined,{videoPricing:{resolutionPricing:{'480p':{generationRate:0.0001}}}},'480p',15,{billableSeconds:15.001}),16n);
+  assert.equal(videoBaseCost(undefined,{videoBillingUnit:'duration',videoPricing:{resolutionPricing:{'480p':{generationDurationRates:{'15':7}}}}},'480p',15,{billableSeconds:25}),70000n);
+  assert.equal(videoBaseCost(undefined,{videoBillingUnit:'request',videoPricing:{resolutionPricing:{'480p':{generationRate:4}}}},'480p',15,{billableSeconds:25}),40000n);
+  for(const duration of [NaN,Infinity,-1])assert.throws(()=>videoBaseCost(undefined,profile,'480p',15,{billableSeconds:duration}),/计费时长/);
+});
+
 test('invalid resolution, price and tier structures are rejected before persistence',()=>{
   validateVideoPolicySettings({videoPricing:prices});
   for(const value of [null,0,'invalid',[]])assert.throws(()=>validateVideoPolicySettings({videoPricing:value}),/视频价格配置无效/);

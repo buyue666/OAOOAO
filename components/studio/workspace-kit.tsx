@@ -104,7 +104,7 @@ export function WorkspaceShell({
                 <Tooltip label={minimized ? '展开参数面板' : '缩小参数面板'}><button type="button" aria-label={minimized ? '展开参数面板' : '缩小参数面板'} aria-expanded={!minimized} aria-controls={`${paramsId}-body`} onClick={() => setMinimized(value => !value)} className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">{minimized ? <Plus className="size-4" /> : <Minus className="size-4" />}</button></Tooltip>
               </div>
             </div>
-            <div id={`${paramsId}-body`} className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4" hidden={minimized}>{params}</div>
+            <div id={`${paramsId}-body`} className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4" hidden={minimized}><div className="workspace-params-content">{params}</div></div>
             <div className={cn('workspace-desktop-submit hidden shrink-0 border-t border-border px-4 py-3 xl:block', minimized && 'workspace-submit-hidden')}>
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-muted-foreground">预计消耗</span>
@@ -142,9 +142,9 @@ export function WorkspaceShell({
 }
 
 /** 参数分组：统一 4/8px 间距与分割线，避免每个页面各写一套。 */
-export function ParamSection({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
+export function ParamSection({ title, hint, action, children, layout }: { title: string; hint?: string; action?: ReactNode; children: ReactNode; layout?: 'prompt' | 'mode' }) {
   return (
-    <section className="border-t border-border pt-4 first:border-t-0 first:pt-0">
+    <section data-param-layout={layout} className="workspace-param-section min-w-0 border-t border-border pt-4 first:border-t-0 first:pt-0">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-xs font-semibold text-foreground">
           {title}
@@ -267,6 +267,11 @@ export function ReferenceUploader({
   const uploadHint = hint ?? (kind === 'audio' ? 'MP3 / WAV / M4A / OGG / FLAC / AAC，单个不超过 24 MB' : kind === 'video' ? 'MP4 / MOV / WEBM，单个不超过 200 MB' : 'PNG / JPG / WEBP，单个不超过 12 MB')
   const uploadEmptyText = emptyText ?? (kind === 'video' ? '拖拽视频到此处，或点击选择' : '拖拽文件到此处，或点击选择')
   const [message, setMessage] = useState<{ tone: 'warning' | 'accent'; text: string } | null>(null)
+  useEffect(() => {
+    if (message?.tone !== 'accent') return
+    const timer = window.setTimeout(() => setMessage(null), 3000)
+    return () => window.clearTimeout(timer)
+  }, [message])
   const inputRef = useRef<HTMLInputElement>(null)
   const filesRef = useRef(new Map<string, File>())
   const dragIndex = useRef<number | null>(null)

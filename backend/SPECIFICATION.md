@@ -142,3 +142,8 @@ Video resolution pricing
   `referenceVideoGenerationDurationRates`. Missing or cleared conditional prices
   block quotes, while explicit zero is free. Older input-video rates are read as
   the conditional output rate without rewriting saved settings.
+- Provider adapters may pass a server-verified `billableSeconds` to the shared
+  per-second calculator. Output seconds still select duration prices, output
+  limits and duration bands; billable seconds only multiply the selected rate.
+  Fractional seconds use milliseconds, rounding the final debit up to the
+  wallet's four-decimal precision. Request/duration billing stays unchanged.

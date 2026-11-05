@@ -16,6 +16,7 @@ type Props = {
   fallbackGenerationRate?: number
   defaultFreeCounts?: Record<string, number>
   longDurationMultiplier?: number
+  includeReferenceVideoDuration?: boolean
   extraPriceFields?: ExtraVideoPriceField[]
   showReferenceFieldMap?: boolean
   defaultPricingTemplate?: string
@@ -23,7 +24,7 @@ type Props = {
   featureSwitches?: Array<{key: string; label: string; hint?: string}>
 }
 
-export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRate, defaultFreeCounts = {}, longDurationMultiplier = 1, extraPriceFields = [], showReferenceFieldMap = true, defaultPricingTemplate = 'standard', pricingTemplates = [{value: 'standard', label: '通用'}, {value: 'reference-video-output', label: '按参考视频区分输出价'}], featureSwitches = []}: Props) {
+export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRate, defaultFreeCounts = {}, longDurationMultiplier = 1, includeReferenceVideoDuration = false, extraPriceFields = [], showReferenceFieldMap = true, defaultPricingTemplate = 'standard', pricingTemplates = [{value: 'standard', label: '通用'}, {value: 'reference-video-output', label: '按参考视频区分输出价'}], featureSwitches = []}: Props) {
   const template = String(profile.videoPricingTemplate || defaultPricingTemplate)
   const conditional = template === 'reference-video-output'
   profile = {...profile, videoPricingTemplate: template}
@@ -109,7 +110,7 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
             }} /></AdminField>
             {rule.mode === 'range' && <AdminField label="步长（秒）"><AdminInput aria-label={`${quality} 时长步长`} type="number" min="1" value={rule.step || 1} onChange={event => setDuration(quality, {...rule, step: Number(event.target.value)})} /></AdminField>}
           </div>
-          <div className="space-y-3 border-t border-border pt-3"><p className="text-xs font-semibold">生成视频价格</p><VideoGenerationPrices quality={quality} row={row} unit={unit} allowed={allowed} conditional={conditional} longMultiplier={longDurationMultiplier} onChange={patch => setRow(quality, patch)} /></div>
+          <div className="space-y-3 border-t border-border pt-3"><p className="text-xs font-semibold">生成视频价格</p><VideoGenerationPrices quality={quality} row={row} unit={unit} allowed={allowed} conditional={conditional} longMultiplier={longDurationMultiplier} includeReferenceVideoDuration={includeReferenceVideoDuration} onChange={patch => setRow(quality, patch)} /></div>
           {inputPriceFields.length > 0 && <div className="space-y-3 border-t border-border pt-3"><div><p className="text-xs font-semibold">输入素材价格 · {qualityLabel(quality)} 输出</p><p className="mt-1 text-xs leading-5 text-muted-foreground">按生成结果的清晰度计价。免费数量与素材上限在下方统一设置。</p></div>
             <label className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" aria-label={`${quality} 按生成时长分段设置输入素材价格`} checked={Boolean(tiers)} onChange={event => {
               if (!event.target.checked) {setRow(quality, {referenceDurationTiers: undefined}); return}

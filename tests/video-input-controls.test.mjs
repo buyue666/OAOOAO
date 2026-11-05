@@ -13,6 +13,64 @@ function load(path, imports = {}) {
 const mentions = load('../lib/studio/prompt-references.ts')
 const build = load('../lib/studio/video-references.ts').buildVideoReferences
 
+function workspaceHarness(name, props) {
+  const slots=[], effects=[]; let cursor=0
+  const react={useId:()=>{cursor++;return 'params'},useRef:value=>{const i=cursor++;return slots[i] ||= {current:value}},useState:value=>{const i=cursor++;if(!(i in slots))slots[i]=value;return[slots[i],next=>slots[i]=typeof next==='function'?next(slots[i]):next]},useEffect:(callback,deps)=>{const i=cursor++;const previous=slots[i];if(!previous||deps.some((value,index)=>!Object.is(value,previous.deps[index])))effects.push(()=>{previous?.cleanup?.();slots[i]={deps,cleanup:callback()}})}}
+  const jsx=(type,props)=>({type,props})
+  const api=load('../components/studio/workspace-kit.tsx',{react,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,key)=>key}),'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},'./ui':Object.fromEntries(['ControlButton','IconAction','MediaThumb','Notice','SegmentedControl','StatusBadge','Tooltip'].map(name=>[name,name]))})
+  const nodes=node=>node&&typeof node==='object'?[node,...[node.props?.children].flat(Infinity).flatMap(nodes)]:[]
+  return {render:()=>{cursor=0;const tree=api[name](props);effects.splice(0).forEach(effect=>effect());return nodes(tree)},cleanup:()=>slots.forEach(slot=>slot?.cleanup?.())}
+}
+
+test('fullscreen restores the previous dock and preserves the same parameter subtree through minimize',()=>{
+  const previous=globalThis.window
+  globalThis.window={localStorage:{getItem:()=>null,setItem(){}}}
+  const params={type:'input',props:{defaultValue:'保留提示词'}}
+  const h=workspaceHarness('WorkspaceShell',{params,stage:'结果',onSubmit(){},submitLabel:'生成',credits:1})
+  const render=()=>h.render(),move=value=>render().find(node=>node.type==='select').props.onChange({target:{value}})
+  try{
+    move('right');move('fullscreen')
+    assert.equal(render()[0].props['data-panel-position'],'fullscreen')
+    assert.ok(render().includes(params))
+    assert.equal(render().find(node=>node.type==='section').props.inert,true)
+    render().find(node=>node.props?.['aria-label']==='缩小参数面板').props.onClick()
+    assert.equal(render()[0].props['data-panel-minimized'],true)
+    assert.equal(render().find(node=>node.type==='section').props.inert,false)
+    assert.ok(render().includes(params))
+    render().find(node=>node.props?.['aria-label']==='展开参数面板').props.onClick()
+    const event={key:'Escape',defaultPrevented:false,preventDefault(){this.defaultPrevented=true}}
+    render()[0].props.onKeyDown(event)
+    assert.equal(event.defaultPrevented,true)
+    assert.equal(render()[0].props['data-panel-position'],'right')
+    assert.ok(render().includes(params))
+  }finally{h.cleanup();globalThis.window=previous}
+})
+
+test('upload success expires after three seconds while warnings remain and replacement cancels the old timer',async()=>{
+  const previousWindow=globalThis.window,previousReader=globalThis.FileReader
+  const timers=new Map();let sequence=0,items=[]
+  globalThis.window={setTimeout:(callback,ms)=>{const id=++sequence;timers.set(id,{callback,ms});return id},clearTimeout:id=>timers.delete(id)}
+  globalThis.FileReader=class{readAsDataURL(){this.result='data:image/png;base64,AA==';this.onload?.()}}
+  const props={items,onItemsChange:next=>{items=next;props.items=next},maxFiles:6}
+  const h=workspaceHarness('ReferenceUploader',props)
+  const add=async(name,type)=>{h.render().find(node=>node.type==='input'&&node.props.type==='file').props.onChange({target:{files:[new File(['synthetic'],name,{type})],value:name}});await Promise.resolve();return h.render()}
+  const notice=()=>h.render().find(node=>node.type==='Notice')
+  try{
+    await add('one.png','image/png')
+    assert.equal(notice().props.tone,'accent');assert.equal(timers.size,1)
+    assert.equal([...timers.values()][0].ms,3000)
+    const first=[...timers.keys()][0]
+    await add('two.png','image/png')
+    assert.equal(timers.has(first),false);assert.equal(timers.size,1)
+    ;[...timers.values()][0].callback()
+    assert.equal(notice(),undefined);assert.equal(timers.size,0)
+    await add('three.png','image/png')
+    await add('invalid.txt','text/plain')
+    assert.equal(notice().props.tone,'warning');assert.equal(timers.size,0)
+    assert.equal(items.length,3)
+  }finally{h.cleanup();items.forEach(item=>URL.revokeObjectURL(item.preview));globalThis.window=previousWindow;globalThis.FileReader=previousReader}
+})
+
 test('mention lookup and insertion preserve Chinese text on both sides of the caret', () => {
   assert.deepEqual(mentions.referenceMentionQuery('让 @人物 保持微笑', 5), {start: 2, query: '人物'})
   const result = mentions.insertReferenceMention('让 @人物 保持微笑', 2, 5, 1)

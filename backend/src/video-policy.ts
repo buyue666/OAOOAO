@@ -127,7 +127,7 @@ export function videoResolutionPrices(profile:Json,quality:string):Json{
   const pricing=profile.videoPricing||{};
   return {...pricing,...pricing.resolutionPricing?.[quality]?.additionalPrices};
 }
-export function videoBaseCost(base:bigint|undefined,profile:Json,quality:string,seconds:number,context:{hasReferenceVideo?:boolean}={}):bigint{
+export function videoBaseCost(base:bigint|undefined,profile:Json,quality:string,seconds:number,context:{hasReferenceVideo?:boolean;billableSeconds?:number}={}):bigint{
   const prices=profile.videoPricing||{},mode=profile.videoBillingUnit||'second';
   const row=prices.resolutionPricing?.[quality]||{};
   const withVideo=profile.videoPricingTemplate==='reference-video-output'&&context.hasReferenceVideo;
@@ -136,7 +136,12 @@ export function videoBaseCost(base:bigint|undefined,profile:Json,quality:string,
   if(mode==='duration'&&price===undefined)throw httpError(503,'请先配置此清晰度和时长的视频积分价格');
   if(price===null||(price===undefined&&(base===undefined||withVideo)))throw httpError(503,`请先配置 ${quality||'当前清晰度'} 的${withVideo?'参考视频生成':'视频生成'}价格`);
   const rate=price===undefined?base:creditUnits(price);
-  return mode==='second'?rate!*BigInt(seconds):rate!;
+  if(mode!=='second')return rate!;
+  // Select the rate using output seconds; adapters may include verified input time
+  // in the charged duration without changing generation parameters or limits.
+  const billableSeconds=context.billableSeconds??seconds,milliseconds=Math.ceil(billableSeconds*1000);
+  if(!Number.isFinite(billableSeconds)||billableSeconds<0||!Number.isSafeInteger(milliseconds))fail('视频计费时长无效');
+  return (rate!*BigInt(milliseconds)+999n)/1000n;
 }
 export function videoReferenceCost(metadata:Json[],profile:Json,context:{quality?:string;seconds?:number;multiplier?:number;defaultFreeCounts?:Record<string,number>}={}):bigint{
   const pricing=profile.videoPricing||{},row=pricing.resolutionPricing?.[context.quality||'']||{};

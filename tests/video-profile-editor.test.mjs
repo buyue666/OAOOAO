@@ -94,3 +94,10 @@ test('extra feature switches require an explicit administrator selection',()=>{
   h.field('开启附加功能').props.onChange({target:{checked:false}})
   assert.equal(h.profile().syntheticFeatureEnabled,false)
 })
+
+test('adapters can explain combined billable time without changing the output duration band',()=>{
+  const h=harness({...initial(),videoPricingTemplate:'reference-video-output'},{longDurationMultiplier:2,includeReferenceVideoDuration:true})
+  assert.match(text(h.render()),/输出时长＋全部参考视频时长/)
+  assert.match(text(h.render()),/10 秒参考＋15 秒输出.*15 秒档单价 ×25 秒/)
+  assert.match(text(h.render()),/单价档位只按输出时长判断/)
+})
