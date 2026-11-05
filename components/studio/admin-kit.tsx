@@ -257,13 +257,13 @@ export function AdminDrawer({ open, title, description, onClose, children, foote
 
 export const adminFieldClass = 'studio-field h-9 w-full min-w-0 border border-border bg-card px-3 text-sm text-foreground outline-none transition-colors duration-150 focus:border-studio-accent/60'
 
-export function AdminField({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
+export function AdminField({ label, hint, children, className, as: Container = 'label' }: { label: string; hint?: string; children: ReactNode; className?: string; as?: 'label' | 'div' }) {
   return (
-    <label className={cn('flex min-w-0 flex-col gap-1.5 text-sm', className)}>
+    <Container className={cn('flex min-w-0 flex-col gap-1.5 text-sm', className)}>
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
       {hint && <span className="text-[11px] leading-4 text-muted-foreground">{hint}</span>}
-    </label>
+    </Container>
   )
 }
 

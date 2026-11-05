@@ -23,7 +23,7 @@ import {
 import {PromptReferenceInput} from './prompt-reference-input'
 import {VideoDurationSlider} from './video-duration-slider'
 import {orderedPromptReferences, serializePromptReferences, type PromptReference} from '@/lib/studio/prompt-references'
-import {selectableVideoDurations,videoReferenceLimit,videoReferenceUploadLimit} from '@/lib/studio/video-policy'
+import {selectableVideoDurations,videoReferenceLimit,videoReferenceUploadLimit,videoLibrarySelectionLimit} from '@/lib/studio/video-policy'
 import { quoteVideoGeneration } from '@/lib/studio/generation-api'
 import { useRouter } from 'next/navigation'
 import { DirectorAgent } from './director-agent'
@@ -43,6 +43,7 @@ import {
   OptionGrid,
   ParamSection,
   ReferencePicker,
+  ReferenceLibraryDialog,
   ReferenceUploader,
   ResultActions,
   ResultStage,
@@ -83,7 +84,7 @@ import {
 } from '@/lib/studio/reference-selection'
 import type { Asset, GenerationSettings, ModelConfig, Work } from '@/lib/studio/types'
 import { publishReferenceAsset } from '@/lib/studio/generation-api'
-import { buildVideoReferences } from '@/lib/studio/video-references'
+import { buildVideoReferences, isVideoFrameMode, videoPickerKind } from '@/lib/studio/video-references'
 import { ImageEditorPanel, type ImageEditRequest, type ImageEditorVersion } from '@/components/free-canvas/image-editor-panel'
 import type { GenerationReference } from '@/lib/studio/generation-types'
 import { hasDeliverable } from '@/lib/studio/result-delivery'
@@ -1585,7 +1586,8 @@ export function VideoWorkspace() {
   const serverWorksResult = useServerWorks({ pageSize: 24, kind: 'video' })
   /** 素材库搜索词（服务端 keyword 参数）：素材超过一页时用户仍能找到目标素材。 */
   const [libraryKeyword, setLibraryKeyword] = useState('')
-  const serverLibrary = useVideoReferenceLibrary(mode, libraryKeyword, Boolean(videoModelList.find(item => item.id === modelId)?.capabilities.videoPolicy?.supportsAudioReference))
+  const [libraryTarget, setLibraryTarget] = useState<'first' | 'last' | 'source' | 'image' | 'video' | 'audio' | null>(null)
+  const serverLibrary = useVideoReferenceLibrary(videoPickerKind(libraryTarget), libraryKeyword, Boolean(videoModelList.find(item => item.id === modelId)?.capabilities.videoPolicy?.supportsAudioReference))
 
   useEffect(() => {
     if (!videoModelList.length) return
@@ -1613,20 +1615,37 @@ export function VideoWorkspace() {
   const model = videoModelList.find((item) => item.id === modelId) ?? videoModelList[0]
   const videoPolicy = model?.capabilities.videoPolicy
   const capabilities = model?.capabilities ?? { textToMedia: true, firstFrame: false, lastFrame: false, multiReference: false, editing: false, durations: [], ratios: [], qualities: [], maxReferences: 0 }
+  const frameMode = isVideoFrameMode(mode)
+  const frameReferenceTypes = videoPolicy?.frameReferenceTypes || []
+  const acceptsImageReferences = !frameMode || frameReferenceTypes.includes('image')
+  const acceptsVideoReferences = !frameMode && Boolean(videoPolicy?.supportsVideoReference)
+  const acceptsAudioReferences = Boolean(videoPolicy?.supportsAudioReference) && (!frameMode || frameReferenceTypes.includes('audio'))
+  const referenceKind = (item: {kind: string}) => item.kind === 'video' ? 'video' : item.kind === 'audio' ? 'audio' : 'image'
+  const activeSelectedRefs = selectedRefs.filter(item => referenceKind(item) === 'video' ? acceptsVideoReferences : referenceKind(item) === 'audio' ? acceptsAudioReferences : acceptsImageReferences)
+  const frameCount = frameMode ? firstFrameUploads.length + firstFrameRef.length + (capabilities.lastFrame ? lastFrameUploads.length + lastFrameRef.length : 0) : 0
+  const reservedFrameCount = frameMode ? frameCount + (firstFrameUploads.length + firstFrameRef.length ? 0 : 1) : 0
+  const referenceUploadCounts = {image: acceptsImageReferences ? uploads.length : 0, video: acceptsVideoReferences ? videoRefUploads.length : 0, audio: acceptsAudioReferences ? audioRefUploads.length : 0}
+  const referenceUploadTotal = Object.values(referenceUploadCounts).reduce((total, count) => total + count, 0)
+  const frameSlotLimit = (role: 'first' | 'last') => {
+    const current = role === 'first' ? firstFrameUploads.length + firstFrameRef.length : lastFrameUploads.length + lastFrameRef.length
+    const reserveFirst = role === 'last' && firstFrameUploads.length + firstFrameRef.length === 0 ? 1 : 0
+    const images = activeSelectedRefs.filter(item => referenceKind(item) === 'image').length + referenceUploadCounts.image + frameCount
+    return Math.max(0, Math.min(1, capabilities.maxReferences - frameCount - activeSelectedRefs.length - referenceUploadTotal + current - reserveFirst, videoReferenceLimit(model, 'image') - images + current - reserveFirst))
+  }
+  const durationMode = frameMode ? (capabilities.lastFrame && lastFrameUploads.length + lastFrameRef.length > 0 ? 'ends' : 'first') : mode
   useEffect(() => {
     if (!model) return
     setRatio((current) => supportedChoice(current, model.capabilities.ratios))
     setQuality((current) => supportedChoice(current, model.capabilities.qualities))
     setDuration((current) => supportedChoice(current, model.capabilities.durations))
   }, [model])
-  const allowedDurations = useMemo(() => selectableVideoDurations(model,quality,mode), [model,quality,mode])
+  const allowedDurations = useMemo(() => selectableVideoDurations(model,quality,durationMode), [model,quality,durationMode])
   useEffect(() => { setDuration(current => supportedChoice(current, allowedDurations)) }, [allowedDurations,mode])
   const modeOptions = useMemo(
     () =>
       [
         { value: 'text', label: '文生视频', supported: capabilities.textToMedia },
-        { value: 'first', label: '首帧', supported: capabilities.firstFrame },
-        { value: 'ends', label: '首尾帧', supported: capabilities.firstFrame && capabilities.lastFrame },
+        { value: 'frames', label: '首尾帧', supported: capabilities.firstFrame },
         { value: 'references', label: '多参考', supported: capabilities.multiReference },
         { value: 'edit', label: '视频编辑', supported: capabilities.editing },
       ].filter((option) => option.supported && (selectableVideoDurations(model,quality,option.value).length > 0 || !videoPolicy)),
@@ -1656,13 +1675,13 @@ export function VideoWorkspace() {
      */
     const libraryUsable = serverLibrary.state !== 'unauthenticated'
     const pool = libraryUsable ? serverReferenceAssets : []
-    if (mode === 'edit') return pool.filter((asset) => asset.kind === 'video')
-    if (mode === 'references') return pool.filter((asset) => ['image', 'scene', ...(videoPolicy?.supportsVideoReference ? ['video'] : []), ...(videoPolicy?.supportsAudioReference ? ['audio'] : [])].includes(asset.kind))
-    return pool.filter((asset) => ['image', 'scene'].includes(asset.kind))
-  }, [mode, serverLibrary.state, serverReferenceAssets, videoPolicy])
-  const referenceSelectionLimit = mode === 'first' || mode === 'edit' ? 1 : mode === 'ends' ? 2 : capabilities.maxReferences
+    const kind = videoPickerKind(libraryTarget)
+    return pool.filter(asset => kind === 'image' ? ['image', 'scene'].includes(asset.kind) : asset.kind === kind)
+  }, [libraryTarget, serverLibrary.state, serverReferenceAssets])
+  const referenceSelectionLimit = mode === 'edit' ? 1 : capabilities.maxReferences
 
   useEffect(() => {
+    if (['first', 'ends', 'mixed'].includes(mode) && capabilities.firstFrame) {setMode('frames'); return}
     if (!modeOptions.some((option) => option.value === mode)) setMode(modeOptions[0]?.value ?? 'text')
   }, [mode, modeOptions])
 
@@ -1887,11 +1906,11 @@ export function VideoWorkspace() {
   const uploadMention = (item: UploadItem): PromptReference => ({id: item.id, name: item.name, type: item.kind || 'image', preview: item.preview, ready: item.status === 'done' && Boolean(item.dataUrl)})
   const promptReferences = orderedPromptReferences(mode, {
     first: [...firstFrameRef.map(selectedMention), ...firstFrameUploads.map(uploadMention)],
-    last: [...lastFrameRef.map(selectedMention), ...lastFrameUploads.map(uploadMention)],
+    last: capabilities.lastFrame ? [...lastFrameRef.map(selectedMention), ...lastFrameUploads.map(uploadMention)] : [],
     source: [...sourceVideoRef.map(selectedMention), ...sourceVideoUploads.map(uploadMention)],
-    references: [...selectedRefs.map(selectedMention), ...uploads.map(uploadMention), ...(videoPolicy?.supportsVideoReference ? videoRefUploads.map(uploadMention) : []), ...(videoPolicy?.supportsAudioReference ? audioRefUploads.map(uploadMention) : [])],
+    references: [...activeSelectedRefs.map(selectedMention), ...(acceptsImageReferences ? uploads.map(uploadMention) : []), ...(acceptsVideoReferences ? videoRefUploads.map(uploadMention) : []), ...(acceptsAudioReferences ? audioRefUploads.map(uploadMention) : [])],
   })
-  const referenceLabel = mode === 'first' ? '首帧输入' : mode === 'ends' ? '首尾帧输入' : mode === 'references' ? '多参考素材' : mode === 'edit' ? '编辑源视频' : '参考素材'
+  const referenceLabel = frameMode ? '首尾帧与参考素材' : mode === 'references' ? '多参考素材' : mode === 'edit' ? '编辑源视频' : '参考素材'
 
   async function publishUploads(items: UploadItem[], type: 'image' | 'video' | 'audio', role: GenerationReference['role'] = 'reference'): Promise<GenerationReference[]> {
     if (items.some((item) => item.status !== 'done')) throw new Error('参考素材仍在读取，请稍候再生成')
@@ -1904,14 +1923,13 @@ export function VideoWorkspace() {
   }
 
   async function resolveVideoReferences(): Promise<GenerationReference[]> {
-    if (['text','references'].includes(mode)) for (const type of ['image','video','audio'] as const) {
-      const selected=selectedRefs.filter(item=>type==='image'?['image','scene'].includes(item.kind):item.kind===type).length
-      const count=selected+(type==='image'?uploads.length:type==='video'?videoRefUploads.length:audioRefUploads.length)
-      const limit=videoReferenceLimit(model,type)
-      if (limit>0&&count>limit) throw new Error(`参考${type==='image'?'图片':type==='video'?'视频':'音频'}最多 ${limit} 个`)
-    }
-    if ((mode === 'text' || mode === 'references') && selectedRefs.length + uploads.length + videoRefUploads.length + audioRefUploads.length > capabilities.maxReferences) {
-      throw new Error(`参考素材最多 ${capabilities.maxReferences} 个，请减少上传或选择的素材`)
+    if (['text', 'references', 'frames'].includes(mode)) {
+      for (const type of ['image', 'video', 'audio'] as const) {
+        const count = activeSelectedRefs.filter(item => referenceKind(item) === type).length + referenceUploadCounts[type] + (type === 'image' ? frameCount : 0)
+        const limit = videoReferenceLimit(model, type)
+        if (count > limit) throw new Error(`参考${type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'}最多 ${limit} 个，包含首尾帧`)
+      }
+      if (frameCount + activeSelectedRefs.length + referenceUploadTotal > capabilities.maxReferences) throw new Error(`参考素材合计最多 ${capabilities.maxReferences} 个，包含首尾帧`)
     }
     /**
      * 已选素材直接由**快照**解析，不再回候选池按 id 反查。
@@ -1931,10 +1949,11 @@ export function VideoWorkspace() {
     })
     return buildVideoReferences({
       mode,
-      first: mode === 'first' || mode === 'ends' ? [...firstFrameRef.map((item) => asReference(item, 'reference')), ...await publishUploads(firstFrameUploads, 'image')] : [],
-      last: mode === 'ends' ? [...lastFrameRef.map((item) => asReference(item, 'reference')), ...await publishUploads(lastFrameUploads, 'image')] : [],
+      first: frameMode ? [...firstFrameRef.map((item) => asReference(item, 'reference')), ...await publishUploads(firstFrameUploads, 'image')] : [],
+      last: frameMode && capabilities.lastFrame ? [...lastFrameRef.map((item) => asReference(item, 'reference')), ...await publishUploads(lastFrameUploads, 'image')] : [],
       source: mode === 'edit' ? [...sourceVideoRef.map((item) => asReference(item, 'reference')), ...await publishUploads(sourceVideoUploads, 'video')] : [],
-      references: mode === 'text' || mode === 'references' ? [...selectedRefs.map((item) => asReference(item, 'reference')), ...await publishUploads(uploads, 'image'), ...(videoPolicy?.supportsVideoReference ? await publishUploads(videoRefUploads, 'video') : []), ...(videoPolicy?.supportsAudioReference ? await publishUploads(audioRefUploads, 'audio') : [])] : [],
+      references: ['text', 'references', 'frames'].includes(mode) ? [...activeSelectedRefs.map((item) => asReference(item, 'reference')), ...(acceptsImageReferences ? await publishUploads(uploads, 'image') : []), ...(acceptsVideoReferences ? await publishUploads(videoRefUploads, 'video') : []), ...(acceptsAudioReferences ? await publishUploads(audioRefUploads, 'audio') : [])] : [],
+      frameReferenceTypes,
       maxReferences: capabilities.maxReferences,
     })
   }
@@ -2045,23 +2064,24 @@ export function VideoWorkspace() {
     setter((current) => (current.some((item) => item.id === asset.id) ? [] : toggleSelection(current, asset, 1)))
   }
 
-  const referenceUploadCounts = {image: uploads.length, video: videoPolicy?.supportsVideoReference ? videoRefUploads.length : 0, audio: videoPolicy?.supportsAudioReference ? audioRefUploads.length : 0}
-  const referenceUploadTotal = Object.values(referenceUploadCounts).reduce((total, count) => total + count, 0)
-  const referenceHint = mode === 'ends'
-    ? `${firstFrameUploads.length + firstFrameRef.length}/1 首帧 · ${lastFrameUploads.length + lastFrameRef.length}/1 尾帧`
-    : mode === 'first' ? `${firstFrameUploads.length + firstFrameRef.length}/1`
-      : mode === 'edit' ? `${sourceVideoUploads.length + sourceVideoRef.length}/1`
-        : `${selectedRefs.length + referenceUploadTotal}/${referenceSelectionLimit} · 合计`
-
-  /** 切换已选（视频工作台的多参考模式）：同样按快照保存，不依赖当前搜索结果。 */
-  function toggleReference(asset: Asset) {
-    const type = asset.kind === 'video' ? 'video' : asset.kind === 'audio' ? 'audio' : 'image'
-    if (!selectedRefs.some(item => item.id === asset.id)) {
-      const count = selectedRefs.filter(item => (item.kind === 'scene' ? 'image' : item.kind) === type).length + referenceUploadCounts[type]
-      const limit = videoReferenceLimit(model, type)
-      if (count >= limit) {setNotice({tone: 'warning', text: `参考${type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'}最多 ${limit} 个，包含上传和素材库选择。`}); return}
-    }
-    setSelectedRefs((current) => toggleSelection(current, asset, Math.max(0, referenceSelectionLimit - referenceUploadTotal)))
+  const referenceHint = mode === 'edit' ? `${sourceVideoUploads.length + sourceVideoRef.length}/1` : `${frameCount + activeSelectedRefs.length + referenceUploadTotal}/${referenceSelectionLimit} · 合计`
+  const pickerKind = videoPickerKind(libraryTarget)
+  const isFramePicker = libraryTarget === 'first' || libraryTarget === 'last'
+  const pickerSelected = libraryTarget === 'first' ? firstFrameRef : libraryTarget === 'last' ? lastFrameRef : libraryTarget === 'source' ? sourceVideoRef : activeSelectedRefs.filter(item => referenceKind(item) === pickerKind)
+  const pickerLimit = isFramePicker ? frameSlotLimit(libraryTarget as 'first' | 'last') : libraryTarget === 'source' ? 1 : videoLibrarySelectionLimit(model, pickerKind, activeSelectedRefs, referenceUploadCounts, reservedFrameCount)
+  const openReferenceLibrary = (target: typeof libraryTarget) => {setLibraryKeyword(''); setLibraryTarget(target)}
+  function pickLibraryReference(asset: Asset) {
+    if (referenceKind(asset) !== pickerKind) return
+    if (libraryTarget === 'first') {pickSingle(setFirstFrameRef, asset); setFirstFrameUploads([]); setLibraryTarget(null); return}
+    if (libraryTarget === 'last') {pickSingle(setLastFrameRef, asset); setLastFrameUploads([]); setLibraryTarget(null); return}
+    if (libraryTarget === 'source') {pickSingle(setSourceVideoRef, asset); setSourceVideoUploads([]); setLibraryTarget(null); return}
+    setSelectedRefs(current => {
+      const sameKind = current.filter(item => referenceKind(item) === pickerKind)
+      const next = toggleSelection(sameKind, asset, pickerLimit)
+      const added = next.find(item => item.id === asset.id)
+      if (current.some(item => item.id === asset.id)) return current.filter(item => item.id !== asset.id)
+      return added ? [...current, added] : current
+    })
   }
 
   const params = (
@@ -2091,76 +2111,22 @@ export function VideoWorkspace() {
 
 
       {<ParamSection title={referenceLabel} layout="references" hint={referenceHint}>
-        {mode === 'first' && (
-          <div className="workspace-reference-grid flex flex-col gap-3">
-            <ReferenceUploader
-              items={firstFrameUploads}
-              onItemsChange={(items) => { setFirstFrameUploads(items); if (items.length) setFirstFrameRef([]) }}
-              maxFiles={1}
-              kind="image"
-              label="首帧图片"
-              emptyText="上传首帧图片"
-              selectLabel="选择首帧"
-              hint="PNG / JPG / WEBP，单个不超过 12 MB"
-            />
-            <ReferencePicker assets={referencePool} selectedIds={firstFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setFirstFrameRef, asset as Asset); setFirstFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
+        <div className="workspace-reference-grid flex flex-col gap-3">
+          {frameMode && <p className="text-[11px] leading-5 text-muted-foreground">首帧必选，尾帧可选。{frameReferenceTypes.length ? `可附加${frameReferenceTypes.includes('image') ? '图片' : ''}${frameReferenceTypes.length > 1 ? '、' : ''}${frameReferenceTypes.includes('audio') ? '音频' : ''}参考；首尾帧模式不接受参考视频。` : '当前模型仅接受帧图片。'}</p>}
+          <p className="text-[11px] leading-5 text-muted-foreground">合计最多 {referenceSelectionLimit} 个，包含首尾帧；上传文件与素材库选择共用额度。</p>
+          <div className="workspace-reference-uploaders">
+            {frameMode && <ReferenceUploader items={firstFrameUploads} onItemsChange={items => {setFirstFrameUploads(items); if (items.length) setFirstFrameRef([])}} maxFiles={frameSlotLimit('first')} kind="image" label="首帧图片" emptyText="上传首帧图片" selectLabel="上传图片" onPickFromLibrary={() => openReferenceLibrary('first')} libraryItems={firstFrameRef} onRemoveLibraryItem={() => setFirstFrameRef([])} />}
+            {frameMode && capabilities.lastFrame && <ReferenceUploader items={lastFrameUploads} onItemsChange={items => {setLastFrameUploads(items); if (items.length) setLastFrameRef([])}} maxFiles={frameSlotLimit('last')} kind="image" label="尾帧图片（可选）" emptyText="上传尾帧图片" selectLabel="上传图片" onPickFromLibrary={() => openReferenceLibrary('last')} libraryItems={lastFrameRef} onRemoveLibraryItem={() => setLastFrameRef([])} />}
+            {mode === 'edit' && <ReferenceUploader items={sourceVideoUploads} onItemsChange={items => {setSourceVideoUploads(items); if (items.length) setSourceVideoRef([])}} maxFiles={1} kind="video" label="待编辑视频" emptyText="上传待编辑视频" selectLabel="上传视频" onPickFromLibrary={() => openReferenceLibrary('source')} libraryItems={sourceVideoRef} onRemoveLibraryItem={() => setSourceVideoRef([])} />}
+            {mode !== 'edit' && capabilities.maxReferences > 0 && <>
+              {acceptsImageReferences && <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={videoReferenceUploadLimit(model, 'image', activeSelectedRefs, referenceUploadCounts, reservedFrameCount)} label={frameMode ? '参考图片（可选）' : '参考图片'} selectLabel="上传图片" onPickFromLibrary={() => openReferenceLibrary('image')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'image')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
+              {acceptsVideoReferences && <ReferenceUploader items={videoRefUploads} onItemsChange={setVideoRefUploads} kind="video" maxFiles={videoReferenceUploadLimit(model, 'video', activeSelectedRefs, referenceUploadCounts)} maxFileBytes={24 * 1024 * 1024} label="参考视频" selectLabel="上传视频" hint="单个不超过 24 MiB；时长按模型规则校验" onPickFromLibrary={() => openReferenceLibrary('video')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'video')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
+              {acceptsAudioReferences && <ReferenceUploader items={audioRefUploads} onItemsChange={setAudioRefUploads} kind="audio" maxFiles={videoReferenceUploadLimit(model, 'audio', activeSelectedRefs, referenceUploadCounts, reservedFrameCount)} label={frameMode ? '参考音频（可选）' : '参考音频'} selectLabel="上传音频" hint="单个不超过 24 MiB；时长按模型规则校验" onPickFromLibrary={() => openReferenceLibrary('audio')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'audio')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
+            </>}
           </div>
-        )}
-        {(mode === 'ends') && (
-          <div className="workspace-reference-grid flex flex-col gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ReferenceUploader
-                items={firstFrameUploads}
-                onItemsChange={(items) => { setFirstFrameUploads(items); if (items.length) setFirstFrameRef([]) }}
-                maxFiles={1}
-                kind="image"
-                label="首帧图片"
-                emptyText="上传首帧"
-                selectLabel="选择首帧"
-                hint="PNG / JPG / WEBP，单个不超过 12 MB"
-              />
-              <ReferenceUploader
-                items={lastFrameUploads}
-                onItemsChange={(items) => { setLastFrameUploads(items); if (items.length) setLastFrameRef([]) }}
-                maxFiles={1}
-                kind="image"
-                label="尾帧图片"
-                emptyText="上传尾帧"
-                selectLabel="选择尾帧"
-                hint="PNG / JPG / WEBP，单个不超过 12 MB"
-              />
-            </div>
-            <div><p className="mb-2 text-xs font-medium">首帧素材</p><ReferencePicker assets={referencePool} selectedIds={firstFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setFirstFrameRef, asset as Asset); setFirstFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></div>
-            <div><p className="mb-2 text-xs font-medium">尾帧素材</p><ReferencePicker assets={referencePool} selectedIds={lastFrameRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setLastFrameRef, asset as Asset); setLastFrameUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></div>
-          </div>
-        )}
-        {mode === 'edit' && (
-          <div className="workspace-reference-grid flex flex-col gap-3">
-            <ReferenceUploader
-              items={sourceVideoUploads}
-              onItemsChange={(items) => { setSourceVideoUploads(items); if (items.length) setSourceVideoRef([]) }}
-              maxFiles={1}
-              kind="video"
-              label="待编辑视频"
-              emptyText="上传待编辑视频"
-              selectLabel="选择视频"
-              hint="MP4 / MOV / WEBM，单个不超过 200 MB"
-            />
-            <ReferencePicker assets={referencePool} selectedIds={sourceVideoRef.map((item) => item.id)} onToggle={(_, asset) => { pickSingle(setSourceVideoRef, asset as Asset); setSourceVideoUploads([]) }} maxReferences={1} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
-          </div>
-        )}
-        {(mode === 'text' || mode === 'references') && (
-          <div className="workspace-reference-grid flex flex-col gap-3">
-            {capabilities.maxReferences > 0 ? <>
-            <p className="text-[11px] leading-5 text-muted-foreground">图片、视频、音频合计最多 {referenceSelectionLimit} 个；上传文件与素材库选择共用额度。</p>
-            <div className="workspace-reference-uploaders">
-            <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={videoReferenceUploadLimit(model, 'image', selectedRefs, referenceUploadCounts)} hint="PNG / JPG / WEBP，单个不超过 12 MB" />
-            {videoPolicy?.supportsVideoReference && <ReferenceUploader items={videoRefUploads} onItemsChange={setVideoRefUploads} kind="video" maxFiles={videoReferenceUploadLimit(model, 'video', selectedRefs, referenceUploadCounts)} maxFileBytes={24 * 1024 * 1024} label="参考视频" emptyText="上传参考视频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
-            {videoPolicy?.supportsAudioReference && <ReferenceUploader items={audioRefUploads} onItemsChange={setAudioRefUploads} kind="audio" maxFiles={videoReferenceUploadLimit(model, 'audio', selectedRefs, referenceUploadCounts)} label="参考音频" emptyText="上传参考音频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
-            </div>
-            <ReferencePicker assets={referencePool} selectedIds={selectedRefs.map((item) => item.id)} onToggle={(_, asset) => toggleReference(asset as Asset)} maxReferences={Math.max(0, referenceSelectionLimit - referenceUploadTotal)} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></> : <p className="text-xs leading-5 text-muted-foreground">当前模型使用文字描述生成视频，不支持参考素材。</p>}
-          </div>
-        )}
+          {capabilities.maxReferences <= 0 && <p className="text-xs text-muted-foreground">当前模型不支持参考素材。</p>}
+          <ReferenceLibraryDialog open={libraryTarget !== null} title={libraryTarget === 'first' ? '选择首帧图片' : libraryTarget === 'last' ? '选择尾帧图片' : libraryTarget === 'source' ? '选择待编辑视频' : pickerKind === 'audio' ? '选择参考音频' : pickerKind === 'video' ? '选择参考视频' : '选择参考图片'} onClose={() => setLibraryTarget(null)} assets={referencePool} selectedIds={pickerSelected.map(item => item.id)} onToggle={(_, asset) => pickLibraryReference(asset as Asset)} maxReferences={pickerLimit} replaceSelection={isFramePicker || libraryTarget === 'source'} emptyText={`素材库暂时没有${pickerKind === 'image' ? '图片' : pickerKind === 'video' ? '视频' : '音频'}素材，可关闭窗口直接上传。`} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => {void refreshSources()}} onLoadMore={serverLibrary.hasMore ? () => {void serverLibrary.loadMore()} : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
+        </div>
       </ParamSection>}
 
       {videoPolicy && <p role="status" className="workspace-param-feedback text-xs leading-5 text-muted-foreground">{quoteBlock || `预计消耗 ${credits} 积分`}</p>}

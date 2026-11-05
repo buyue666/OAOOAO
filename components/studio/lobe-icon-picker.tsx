@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AdminInput } from './admin-kit'
@@ -81,6 +82,24 @@ export function filterLobeIcons(query: string) {
   return lobeIconCatalog.filter((item) => normalize([item.slug, item.label, ...item.aliases].join(' ')).includes(needle))
 }
 
+type PickerRect = {left: number; right: number; top: number; bottom: number}
+
+/** Keep the floating surface within the drawer and the visible viewport. */
+export function iconPickerPosition(trigger: PickerRect, bounds: PickerRect) {
+  const gap = 6, padding = 12
+  const width = Math.max(0, Math.min(430, bounds.right - bounds.left - padding * 2))
+  const below = Math.max(0, bounds.bottom - trigger.bottom - gap - padding)
+  const above = Math.max(0, trigger.top - bounds.top - gap - padding)
+  const placeAbove = below < 340 && above > below
+  const maxHeight = Math.min(460, placeAbove ? above : below)
+  return {
+    left: Math.max(bounds.left + padding, Math.min(trigger.right - width, bounds.right - padding - width)),
+    top: placeAbove ? trigger.top - gap - maxHeight : trigger.bottom + gap,
+    width,
+    maxHeight,
+  }
+}
+
 type LobeIconPickerProps = {
   value?: string
   onChange: (value?: string) => void
@@ -90,15 +109,63 @@ type LobeIconPickerProps = {
 }
 
 export function LobeIconPicker({ value, onChange, className, compact = false, 'aria-label': ariaLabel = '选择模型图标' }: LobeIconPickerProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const panelId = useId()
   const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState({top: 12, left: 12, width: 430, maxHeight: 460})
   const [query, setQuery] = useState('')
   const [remoteResults, setRemoteResults] = useState<LobeIconEntry[] | null>(null)
   const [remoteTotal, setRemoteTotal] = useState(0)
   const [searching, setSearching] = useState(false)
   const localResults = useMemo(() => filterLobeIcons(query), [query])
   const results = remoteResults ?? localResults
-  const selected = [...lobeIconCatalog, ...(remoteResults || [])].find((item) => value === lobeIconUrl(item.slug) || value === lobeIconPlainUrl(item.slug) || value === item.url)
+  const selected = value ? [...lobeIconCatalog, ...(remoteResults || [])].find((item) => value === lobeIconUrl(item.slug) || value === lobeIconPlainUrl(item.slug) || value === item.url) : undefined
   const selectedIconUrl = selected?.url || (selected ? lobeIconUrl(selected.slug) : value)
+
+  const closeAndFocus = () => {
+    setOpen(false)
+    triggerRef.current?.focus({preventScroll: true})
+  }
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const trigger = triggerRef.current
+    if (!trigger) return
+    const dialog = trigger.closest<HTMLElement>('[role="dialog"]')
+    const place = () => {
+      const rect = trigger.getBoundingClientRect(), surface = dialog?.getBoundingClientRect()
+      const bounds = {left: Math.max(0, surface?.left || 0), right: Math.min(window.innerWidth, surface?.right ?? window.innerWidth), top: Math.max(0, surface?.top || 0), bottom: Math.min(window.innerHeight, surface?.bottom ?? window.innerHeight)}
+      if (rect.bottom < bounds.top || rect.top > bounds.bottom) {setOpen(false); return}
+      setPosition(iconPickerPosition(rect, bounds))
+    }
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (target && !trigger.contains(target) && !panelRef.current?.contains(target)) setOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault(); event.stopPropagation()
+      setOpen(false); trigger.focus({preventScroll: true})
+    }
+    const scroll = (event: Event) => {if (!panelRef.current?.contains(event.target as Node)) place()}
+    place()
+    searchRef.current?.focus({preventScroll: true})
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(place)
+    observer?.observe(trigger); if (dialog) observer?.observe(dialog)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', scroll, true)
+    document.addEventListener('pointerdown', outside, true)
+    document.addEventListener('keydown', escape, true)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', scroll, true)
+      document.removeEventListener('pointerdown', outside, true)
+      document.removeEventListener('keydown', escape, true)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -108,11 +175,13 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
       void fetch(`/api/lobe-icons?q=${encodeURIComponent(query)}`, { signal: controller.signal, cache: 'no-store' })
         .then((response) => response.ok ? response.json() : Promise.reject(new Error('icon search failed')))
         .then((data: { items?: LobeIconEntry[]; total?: number }) => {
-          setRemoteResults(Array.isArray(data.items) ? data.items : [])
-          setRemoteTotal(Number(data.total) || 0)
+          if (!controller.signal.aborted) {
+            setRemoteResults(Array.isArray(data.items) ? data.items : [])
+            setRemoteTotal(Number(data.total) || 0)
+          }
         })
         .catch((error: unknown) => { if ((error as { name?: string })?.name !== 'AbortError') setRemoteResults(null) })
-        .finally(() => setSearching(false))
+        .finally(() => {if (!controller.signal.aborted) setSearching(false)})
     }, 140)
     return () => { window.clearTimeout(timer); controller.abort() }
   }, [open, query])
@@ -121,11 +190,14 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
     <div className={cn('relative min-w-0', className)}>
       <div className="flex min-w-0 items-center gap-2">
         <button
+          ref={triggerRef}
           type="button"
           aria-label={ariaLabel}
           aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-controls={open ? panelId : undefined}
           onClick={() => setOpen((current) => !current)}
-          className={cn('flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-2.5 text-left transition-colors hover:border-studio-accent/60', compact ? 'h-9' : 'h-10')}
+          className={cn('flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-2.5 text-left transition-colors hover:border-studio-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', compact ? 'h-9' : 'h-10')}
         >
           <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted p-1">
             {value ? <img src={selectedIconUrl || value} alt="" className="size-full object-contain" onError={(event) => { const target = event.currentTarget; if (selected && target.src !== lobeIconPlainUrl(selected.slug)) target.src = lobeIconPlainUrl(selected.slug) }} /> : <span className="text-xs text-muted-foreground">—</span>}
@@ -133,23 +205,23 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
           <span className="min-w-0 flex-1 truncate text-xs text-foreground">{selected?.label || (value ? '自定义图标' : '选择图标')}</span>
           <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
         </button>
-        {value && <button type="button" aria-label="清除模型图标" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => onChange(undefined)}><X className="size-3.5" /></button>}
+        {value && <button type="button" aria-label="清除模型图标" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60" onClick={() => {onChange(undefined); triggerRef.current?.focus({preventScroll: true})}}><X className="size-3.5" /></button>}
       </div>
 
-      {open && <div className="absolute left-0 top-[calc(100%+6px)] z-40 w-[min(430px,calc(100vw-2rem))] rounded-lg border border-border bg-card p-3 shadow-2xl">
+      {open && createPortal(<div ref={panelRef} id={panelId} role="dialog" aria-label={ariaLabel} data-lobe-icon-popover className="fixed z-[100] flex min-h-0 flex-col overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-3 text-foreground shadow-2xl" style={position} onBlur={event => {if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node) && !triggerRef.current?.contains(event.relatedTarget as Node)) setOpen(false)}}>
         <div className="flex items-center gap-2">
           <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-background px-2.5 text-muted-foreground">
             <Search className="size-3.5 shrink-0" aria-hidden="true" />
-            <input autoFocus aria-label="搜索图标" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 OpenAI、GPT、Claude…" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/70" />
+            <input ref={searchRef} aria-label="搜索图标" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 OpenAI、GPT、Claude…" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/70" />
           </div>
-          <button type="button" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="关闭图标选择器" onClick={() => setOpen(false)}><X className="size-4" /></button>
+          <button type="button" className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60" aria-label="关闭图标选择器" onClick={closeAndFocus}><X className="size-4" /></button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">实时搜索完整的 LobeHub Icons 图标索引，单选后立即写入模型设置。{remoteTotal > results.length ? ` 共 ${remoteTotal} 个匹配结果，显示前 ${results.length} 个。` : ''}</p>
-        <div className="mt-2 grid max-h-64 grid-cols-4 gap-1.5 overflow-y-auto pr-1" role="radiogroup" aria-label="模型图标结果">
+        <p className="mt-2 shrink-0 text-[11px] text-muted-foreground">搜索 LobeHub 图标，选择后更新当前草稿，保存路由配置后生效。{remoteTotal > results.length ? ` 共 ${remoteTotal} 个匹配结果，显示前 ${results.length} 个。` : ''}</p>
+        <div className="mt-2 grid min-h-20 max-h-64 shrink grid-cols-4 gap-1.5 overflow-y-auto overscroll-contain pr-1" role="group" aria-label="模型图标结果">
           {results.map((item) => {
             const iconUrl = item.url || lobeIconUrl(item.slug)
             const checked = value === iconUrl || value === lobeIconUrl(item.slug) || value === lobeIconPlainUrl(item.slug)
-            return <button key={item.slug} type="button" role="radio" aria-checked={checked} title={`${item.label} · ${item.group}`} onClick={() => { onChange(iconUrl); setOpen(false) }} className={cn('relative flex min-w-0 flex-col items-center gap-1 rounded-md border p-2 text-center transition-colors', checked ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-background hover:border-studio-accent/50 hover:bg-muted')}>
+            return <button key={item.slug} type="button" aria-pressed={checked} title={`${item.label} · ${item.group}`} onClick={() => { onChange(iconUrl); closeAndFocus() }} className={cn('relative flex min-w-0 flex-col items-center gap-1 rounded-md border p-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', checked ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-background hover:border-studio-accent/50 hover:bg-muted')}>
               <span className="flex size-8 items-center justify-center overflow-hidden rounded-md bg-muted p-1.5"><img src={iconUrl} alt="" loading="lazy" className="size-full object-contain" onError={(event) => { const target = event.currentTarget; const fallback = lobeIconPlainUrl(item.slug); if (target.src !== fallback) target.src = fallback }} /></span>
               <span className="w-full truncate text-[10px] text-foreground">{item.label}</span>
               {checked && <Check className="absolute right-1 top-1 size-3 text-studio-accent" />}
@@ -157,11 +229,11 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
           })}
           {!results.length && <p className="col-span-4 py-6 text-center text-xs text-muted-foreground">{searching ? '正在搜索图标…' : '没有匹配的图标'}</p>}
         </div>
-        <div className="mt-3 border-t border-border pt-3">
-          <div className="text-[11px] text-muted-foreground">或使用自定义图标地址</div>
-          <AdminInput className="mt-1 h-8 text-xs" value={value || ''} placeholder="https://… 或 /media/models/…" onChange={(event) => onChange(event.target.value.trim() || undefined)} />
+        <div className="mt-3 shrink-0 border-t border-border pt-3">
+          <label htmlFor={`${panelId}-url`} className="text-[11px] text-muted-foreground">或使用自定义图标地址</label>
+          <AdminInput id={`${panelId}-url`} className="mt-1 h-8 text-xs" value={value || ''} placeholder="https://… 或 /media/models/…" onChange={(event) => onChange(event.target.value.trim() || undefined)} />
         </div>
-      </div>}
+      </div>, document.body)}
     </div>
   )
 }

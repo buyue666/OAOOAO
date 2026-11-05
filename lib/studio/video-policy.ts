@@ -3,7 +3,7 @@ import type {ModelConfig} from './types'
 export function selectableVideoDurations(model:ModelConfig|undefined,quality:string,mode:string):string[]{
   if(!model)return []
   const feature=model.capabilities.videoPolicy,rule=feature?.durationRules?.[quality]
-  const byMode=feature?.durationsByMode?.[mode],max=feature?.maxDurationByResolution?.[quality]
+  const byMode=feature?.durationsByMode?.[mode === 'frames' ? 'first' : mode],max=feature?.maxDurationByResolution?.[quality]
   return model.capabilities.durations.filter(value=>{
     const seconds=Number.parseInt(value,10)
     return (!max||seconds<=max)&&(!byMode||byMode.includes(seconds))&&(!rule||(rule.mode==='list'?(rule.values||[]).includes(seconds):seconds>=(rule.min||1)&&seconds<=(rule.max||3600)&&(seconds-(rule.min||1))%(rule.step||1)===0))
@@ -15,8 +15,14 @@ export function videoReferenceLimit(model:ModelConfig|undefined,type:'image'|'vi
 }
 
 /** maxFiles includes existing uploads; library selections consume the same limits. */
-export function videoReferenceUploadLimit(model:ModelConfig|undefined,type:'image'|'video'|'audio',selected:readonly {kind:string}[],uploads:Record<'image'|'video'|'audio',number>):number{
-  const selectedOfType=selected.filter(item=>(item.kind==='scene'?'image':item.kind)===type).length
+export function videoReferenceUploadLimit(model:ModelConfig|undefined,type:'image'|'video'|'audio',selected:readonly {kind:string}[],uploads:Record<'image'|'video'|'audio',number>,frames=0):number{
+  const selectedOfType=selected.filter(item=>(item.kind==='scene'?'image':item.kind)===type).length+(type==='image'?frames:0)
   const otherUploads=Object.entries(uploads).reduce((total,[kind,count])=>total+(kind===type?0:count),0)
-  return Math.max(0,Math.min(videoReferenceLimit(model,type)-selectedOfType,(model?.capabilities.maxReferences||0)-selected.length-otherUploads))
+  return Math.max(0,Math.min(videoReferenceLimit(model,type)-selectedOfType,(model?.capabilities.maxReferences||0)-selected.length-otherUploads-frames))
+}
+
+export function videoLibrarySelectionLimit(model:ModelConfig|undefined,type:'image'|'video'|'audio',selected:readonly {kind:string}[],uploads:Record<'image'|'video'|'audio',number>,frames=0):number{
+  const otherSelected=selected.filter(item=>(item.kind==='scene'?'image':item.kind)!==type).length
+  const uploadCount=Object.values(uploads).reduce((sum,count)=>sum+count,0)
+  return Math.max(0,Math.min(videoReferenceLimit(model,type)-uploads[type]-(type==='image'?frames:0),(model?.capabilities.maxReferences||0)-otherSelected-uploadCount-frames))
 }

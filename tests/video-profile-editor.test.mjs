@@ -106,6 +106,17 @@ test('total reference limit is an explicit shared ceiling and zero keeps the ups
   assert.equal(h.profile().videoReferenceTotalLimit,0)
 })
 
+test('frame references are configured independently from multi-reference video support and pricing',()=>{
+  const h=harness({...initial(),supportsFirstFrame:true})
+  h.field('首尾帧允许参考图片').props.onChange({target:{checked:true}})
+  h.field('首尾帧允许参考音频').props.onChange({target:{checked:true}})
+  assert.deepEqual(h.profile().frameReferenceTypes,['image','audio'])
+  assert.equal(h.profile().supportsVideoReference,true)
+  h.field('首尾帧允许参考图片').props.onChange({target:{checked:false}})
+  assert.deepEqual(h.profile().frameReferenceTypes,['audio'])
+  assert.equal(h.profile().videoPricing.resolutionPricing['480p'].generationRate,2)
+})
+
 test('adapters can explain combined billable time without changing the output duration band',()=>{
   const h=harness({...initial(),videoPricingTemplate:'reference-video-output'},{longDurationMultiplier:2,includeReferenceVideoDuration:true})
   assert.match(text(h.render()),/输出时长＋全部参考视频时长/)

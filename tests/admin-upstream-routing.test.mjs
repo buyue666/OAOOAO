@@ -18,7 +18,7 @@ function harness(){
   let cursor=0;const slots=[],saved=[]
   const react={useState:initial=>{const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],value=>slots[i]=typeof value==='function'?value(slots[i]):value]},useMemo:fn=>fn()}
   const channels=['one','two'].map(id=>({id,name:`账号${id}`,baseUrl:'https://provider.example.invalid/v1',apiFormat:'openai',enabled:true,hasApiKey:true,models:['video-model']}))
-  const settings={systemChannels:channels,modelPointCosts:{},defaultModels:{},logicalModels:[{id:'video',name:'合成视频模型',capability:'video',enabled:true,bindings:channels.map((channel,index)=>({id:channel.id,channelId:channel.id,upstreamModel:'video-model',priority:index+1,enabled:true,capabilityProfile:{maxReferences:index+5,videoBillingUnit:'second',videoPricing:{resolutionPricing:{'720p':{generationRate:index+1}}}}}))}]}
+  const settings={systemChannels:channels,modelPointCosts:{},defaultModels:{},logicalModels:[{id:'video',name:'合成视频模型',capability:'video',enabled:true,iconUrl:'https://example.invalid/default.svg',bindings:channels.map((channel,index)=>({id:channel.id,channelId:channel.id,upstreamModel:'video-model',iconUrl:`https://example.invalid/${channel.id}.svg`,priority:index+1,enabled:true,capabilityProfile:{maxReferences:index+5,videoBillingUnit:'second',videoPricing:{resolutionPricing:{'720p':{generationRate:index+1}}}}}))}]}
   const component=compile(read('../components/studio/admin-channels.tsx')+'\nexport {RoutingEditor}',{
     react,'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'lucide-react':new Proxy({},{get:(_,key)=>key}),
     '@/lib/studio/upstream-pricing':pricing,'@/lib/studio/model-alias':aliases,'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},
@@ -33,6 +33,10 @@ function harness(){
 test('real routing editor keeps accounts collapsible, blocks conflicting prices and unifies from a chosen source',async()=>{
   const h=harness(),bindings=()=>h.render().filter(node=>node.type==='details'&&node.props.className.includes('admin-config-group rounded-xl'))
   assert.equal(bindings().length,2);assert.equal(bindings()[0].props.open,true);assert.equal(bindings()[1].props.open,false)
+  const icons=h.render().filter(node=>node.type==='IconPicker')
+  assert.equal(icons.length,1,'only the default model icon remains editable')
+  assert.equal(icons[0].props['aria-label'],'video 默认模型图标')
+  assert.equal(icons[0].props.value,h.settings.logicalModels[0].iconUrl)
   await h.save();assert.equal(h.saved.length,0)
   assert.ok(h.render().some(node=>text(node).includes('同上游渠道价格不一致')))
   const buttons=h.render().filter(node=>node.type==='Button'&&text(node)==='以此渠道价格统一')
@@ -42,6 +46,8 @@ test('real routing editor keeps accounts collapsible, blocks conflicting prices 
   assert.equal(one.capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate,2)
   assert.equal(two.capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate,2)
   assert.equal(one.capabilityProfile.maxReferences,5);assert.equal(two.capabilityProfile.maxReferences,6)
+  assert.equal(one.iconUrl,undefined);assert.equal(two.iconUrl,undefined,'saving removes obsolete binding icon overrides')
+  assert.ok(h.settings.logicalModels[0].bindings[0].iconUrl,'opening does not alter saved settings')
   assert.equal(h.settings.logicalModels[0].bindings[0].capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate,1,'opening and editing never mutates original settings')
 })
 

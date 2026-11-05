@@ -24,6 +24,7 @@ export function videoInputMode(input:Json):string{
 export function validateVideoPolicySettings(profile:Json){
   const integer=(value:any,min:number,max:number)=>Number.isInteger(value)&&value>=min&&value<=max;
   if(profile.videoReferenceTotalLimit!==undefined&&!integer(profile.videoReferenceTotalLimit,0,1000))fail('参考素材合计上限须为 0–1000 的整数');
+  if(profile.frameReferenceTypes!==undefined&&(!Array.isArray(profile.frameReferenceTypes)||profile.frameReferenceTypes.some((type:any)=>!['image','audio'].includes(type))))fail('首尾帧附加参考类型只能是图片或音频');
   if(profile.videoPricingTemplate!==undefined&&!['standard','reference-video-output'].includes(profile.videoPricingTemplate))fail('视频价格模板无效');
   if(profile.videoBillingUnit!==undefined&&!['second','request','duration'].includes(profile.videoBillingUnit))fail('视频计费方式无效');
   for(const flag of ['supportsFirstFrame','supportsLastFrame','supportsReferenceImage','supportsVideoReference','supportsAudioReference'])if(profile[flag]!==undefined&&typeof profile[flag]!=='boolean')fail('视频能力开关必须是布尔值');
@@ -108,6 +109,11 @@ export function validateVideoInput(input:Json,profile:Json){
   if(refs.some(ref=>ref.role==='last_frame')&&profile.supportsLastFrame===false)fail('当前渠道未开启尾帧功能');
   if(refs.some(ref=>ref.role==='last_frame')&&!refs.some(ref=>ref.role==='first_frame'))fail('尾帧必须同时提供首帧');
   for(const role of ['first_frame','last_frame'])if(refs.filter(ref=>ref.role===role).length>1||refs.some(ref=>ref.role===role&&(ref.type||'image')!=='image'))fail('首帧和尾帧各限一张图片');
+  if(refs.some(ref=>ref.role==='first_frame'||ref.role==='last_frame')){
+    const additional=refs.filter(ref=>ref.role!=='first_frame'&&ref.role!=='last_frame');
+    if(additional.some(ref=>ref.type==='video'))fail('首尾帧模式不支持参考视频，请切换到多参考模式');
+    if(additional.some(ref=>!(profile.frameReferenceTypes||[]).includes(ref.type||'image')))fail('当前模型不支持首尾帧搭配此类参考素材');
+  }
   for(const type of ['image','video','audio']){
     const count=refs.filter(ref=>(ref.type||'image')===type).length;
     const rule=profile.videoReferenceRules?.[type];

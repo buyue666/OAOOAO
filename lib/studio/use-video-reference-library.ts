@@ -18,7 +18,7 @@ export function useVideoReferenceLibrary(mode: string, keyword: string, includeA
   const images = useLibraryAssets({ kind: 'image', pageSize: 60, keyword })
   const videos = useLibraryAssets({ kind: 'video', pageSize: 60, keyword })
   const audio = useLibraryAssets({ kind: includeAudio ? 'audio' : 'image', pageSize: 60, keyword, enabled: includeAudio })
-  const sources = mode === 'edit' ? [videos] : mode === 'references' || mode === 'mixed' ? [images, videos, ...(includeAudio ? [audio] : [])] : [images]
+  const sources = mode === 'edit' || mode === 'video' ? [videos] : mode === 'audio' ? (includeAudio ? [audio] : []) : mode === 'references' || mode === 'mixed' ? [images, videos, ...(includeAudio ? [audio] : [])] : mode === 'frames' ? [images, ...(includeAudio ? [audio] : [])] : [images]
   const pending = useRef(false)
   const verify = async (ids: readonly string[]) => {
     if (!ids.length) return scopedEvidence([], [])

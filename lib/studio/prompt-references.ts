@@ -48,7 +48,7 @@ export function insertReferenceMention(value: string, start: number, end: number
 export function orderedPromptReferences(mode: string, groups: {first: PromptReference[]; last: PromptReference[]; source: PromptReference[]; references: PromptReference[]}, acceptTextReferences = true): PromptReference[] {
   if (mode === 'first') return groups.first
   if (mode === 'ends') return [...groups.first, ...groups.last]
-  if (mode === 'mixed') return [...groups.first, ...groups.last, ...groups.references]
+  if (mode === 'frames' || mode === 'mixed') return [...groups.first, ...groups.last, ...groups.references]
   if (mode === 'edit') return groups.source
   if (mode === 'references' || (mode === 'text' && acceptTextReferences)) return groups.references
   return []

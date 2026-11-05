@@ -538,7 +538,7 @@ function ManualModelAdd({ onAdd }: { onAdd: (model: string) => void }) {
 /* -------------------------------- 路由编辑 -------------------------------- */
 
 function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings; onClose: () => void; onSaved: (message: string) => void }) {
-  const [models, setModels] = useState<LogicalModel[]>(() => settings.logicalModels.map((model) => ({ ...model, bindings: model.bindings.map((binding) => ({ ...binding })) })))
+  const [models, setModels] = useState<LogicalModel[]>(() => settings.logicalModels.map((model) => ({ ...model, bindings: model.bindings.map(({iconUrl: _legacyIcon, ...binding}) => ({ ...binding })) })))
   const [defaults, setDefaults] = useState(settings.defaultModels)
   const [costs, setCosts] = useState<Record<string, number>>(settings.modelPointCosts || {})
   const [busy, setBusy] = useState(false)
@@ -818,6 +818,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                 </div>}
                 className="p-4"
               >
+                <AdminField as="div" className="mb-4 max-w-sm" label="默认模型图标" hint="统一显示在前台模型选择器中；保存路由配置后生效。"><LobeIconPicker value={model.iconUrl} aria-label={`${model.id} 默认模型图标`} onChange={(value) => patchModel(model.id, { iconUrl: value })} /></AdminField>
             <div className="flex flex-col gap-2">
               <p className="text-xs font-semibold text-foreground">1 · 渠道绑定<span className="ml-2 font-normal text-muted-foreground">优先级数字越小越先选中；权重决定同级流量分配；并发上限 0 表示沿用渠道默认</span></p>
               {model.bindings.map((binding, index) => {
@@ -847,7 +848,6 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     <AdminField label="上游模型名称" hint="发给上游 API 的 model；例如 video-model。"><AdminInput className="w-44" value={binding.upstreamModel} placeholder="上游模型 ID" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, upstreamModel: event.target.value, id: `${item.channelId}:${event.target.value}` } : item) })} /></AdminField>
                     <AdminField label="渠道入口请求名（可选）" hint="客户端指定此名字时固定使用这条渠道绑定，例如 video-primary。"><AdminInput className="w-44" value={binding.requestAlias || ''} placeholder="对外别名（可选）" aria-label={`${model.id} 渠道${index + 1} 对外别名`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, requestAlias: event.target.value.trim() || undefined } : item) })} /></AdminField>
                     {model.capability !== 'video' && <AdminField label="渠道入口基础单价" hint="视频单位由下方计费方式决定；0 表示免费。"><AdminInput className="w-24" type="number" min="0" step="0.01" value={routeCost} aria-label={`${model.id} 渠道${index + 1} ${'单价'}`} placeholder={'积分/次'} title={binding.requestAlias ? `别名 ${binding.requestAlias} 的单次积分` : '该上游模型的单次积分'} onChange={(event) => {const next = {...costs}; if (event.target.value.trim()) next[requestKey] = Number(event.target.value); else delete next[requestKey]; applyBindingPrices(model, binding.id, next)}} /></AdminField>}
-                    <AdminField label="入口图标" hint=""><LobeIconPicker className="w-48" compact value={binding.iconUrl} aria-label={`${model.id} 渠道${index + 1} 图标`} onChange={(value) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, iconUrl: value } : item) })} /></AdminField>
                     <AdminField label="路由优先级" hint="数字越小越优先。"><AdminInput className="w-20" type="number" min="1" value={binding.priority} aria-label="优先级" title="优先级：数字越小越先被选中" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, priority: Number(event.target.value) || 1 } : item) })} /></AdminField>
                     <AdminField label="同级权重" hint="同优先级渠道的流量分配权重。"><AdminInput className="w-20" type="number" min="1" max="1000" value={binding.weight ?? 1} aria-label="权重" title="权重：同级渠道之间的流量分配比例" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, weight: Number(event.target.value) || 1 } : item) })} /></AdminField>
                     <AdminField label="并发上限" hint="0 表示沿用渠道默认"><AdminInput
@@ -942,7 +942,6 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
             <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
               <p className="text-xs font-semibold text-foreground sm:col-span-2">4 · 用户显示信息<span className="ml-2 font-normal text-muted-foreground">只影响界面展示，不参与请求路由</span></p>
               <AdminField label="显示名称" hint="例如“视频模型”，只控制页面文字，不是 API 请求名。"><AdminInput aria-label={`${model.id} 显示名称`} value={model.name} onChange={(event) => patchModel(model.id, { name: event.target.value })} /></AdminField>
-              <AdminField label="默认模型图标" hint="可搜索 LobeHub 图标并单选，也可以粘贴站内路径或 HTTPS 地址；渠道绑定可单独覆盖"><LobeIconPicker value={model.iconUrl} aria-label={`${model.id} 默认模型图标`} onChange={(value) => patchModel(model.id, { iconUrl: value })} /></AdminField>
             </div>
             </div></details>
             {model.capability === 'video' ? <div className="mt-3 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">视频价格按清晰度、生成时长和输入素材计算，请在上方各清晰度卡片中设置。</div> : <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">

@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ControlButton, IconAction, MediaThumb, Notice, SegmentedControl, StatusBadge, Tooltip } from './ui'
+import { ControlButton, IconAction, MediaThumb, Modal, Notice, SegmentedControl, StatusBadge, Tooltip } from './ui'
 
 /**
  * 「从素材库选择」每次展示的素材数量。
@@ -141,19 +141,21 @@ export function WorkspaceShell({
   )
 }
 
-/** Stable content/settings columns: docking only changes CSS, never input mounts. */
+/** Stable groups keep references after all settings in every docking position. */
 export function WorkspaceParams({children}: {children: ReactNode}) {
-  const mode: ReactNode[] = [], content: ReactNode[] = [], settings: ReactNode[] = []
+  const mode: ReactNode[] = [], content: ReactNode[] = [], settings: ReactNode[] = [], references: ReactNode[] = []
   for (const child of Children.toArray(children)) {
     const layout = isValidElement<{layout?: string}>(child) ? child.props.layout : undefined
     if (layout === 'mode') mode.push(child)
-    else if (layout === 'prompt' || layout === 'references') content.push(child)
+    else if (layout === 'prompt') content.push(child)
+    else if (layout === 'references') references.push(child)
     else settings.push(child)
   }
   return <div className="workspace-param-columns flex flex-col gap-4">
     {mode.length > 0 && <div className="workspace-param-mode">{mode}</div>}
     <div className="workspace-param-primary flex min-w-0 flex-col gap-4">{content}</div>
     <div className="workspace-param-settings flex min-w-0 flex-col gap-4">{settings}</div>
+    {references.length > 0 && <div className="workspace-param-references flex min-w-0 flex-col gap-4">{references}</div>}
   </div>
 }
 
@@ -266,6 +268,9 @@ export function ReferenceUploader({
   selectLabel = '选择文件',
   hint,
   maxFileBytes,
+  onPickFromLibrary,
+  libraryItems = [],
+  onRemoveLibraryItem,
 }: {
   items: UploadItem[]
   onItemsChange: (items: UploadItem[]) => void
@@ -276,6 +281,9 @@ export function ReferenceUploader({
   emptyText?: string
   selectLabel?: string
   hint?: string
+  onPickFromLibrary?: () => void
+  libraryItems?: Array<{id: string; title: string; src: string; kind: string}>
+  onRemoveLibraryItem?: (id: string) => void
 }) {
   const [dragging, setDragging] = useState(false)
   const acceptedTypes = kind === 'audio' ? ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/ogg', 'audio/flac', 'audio/aac'] : kind === 'video' ? VIDEO_ACCEPTED_TYPES : IMAGE_ACCEPTED_TYPES
@@ -386,7 +394,7 @@ export function ReferenceUploader({
   }
 
   return (
-    <div className="workspace-reference-upload flex flex-col gap-3" data-has-uploads={items.length > 0}>
+    <div className="workspace-reference-upload flex flex-col gap-3" data-has-uploads={items.length + libraryItems.length > 0}>
       {(
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-medium text-foreground">{uploadLabel}</p>
@@ -428,13 +436,17 @@ export function ReferenceUploader({
             event.target.value = ''
           }}
         />
-        <ControlButton className="workspace-reference-select" type="button" variant="secondary" size="sm" aria-label={`${selectLabel} · ${uploadLabel}`} disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
+        <div className="workspace-reference-select flex flex-wrap justify-center gap-2">
+        <ControlButton type="button" variant="secondary" size="sm" aria-label={`${selectLabel} · ${uploadLabel}`} disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
           <Plus className="size-3.5" aria-hidden="true" />
           {selectLabel}
         </ControlButton>
+        {onPickFromLibrary && <ControlButton type="button" variant="secondary" size="sm" aria-label={`从素材库选择 · ${uploadLabel}`} onClick={onPickFromLibrary}><ImageIcon className="size-3.5" aria-hidden="true" />从素材库选择</ControlButton>}
+        </div>
       </div>
 
       <div className="workspace-reference-files flex min-w-0 flex-col gap-3">
+      {libraryItems.length > 0 && <ul className="grid grid-cols-3 gap-2" aria-label={`${uploadLabel} · 已选素材库文件`}>{libraryItems.map(item => <li key={item.id} className="relative min-w-0 rounded-md border border-border bg-muted p-1">{item.kind === 'audio' ? <span className="flex h-14 items-center justify-center text-xs text-muted-foreground">音频</span> : <MediaThumb src={item.src} alt={item.title} fallback={item.title} kind={item.kind === 'video' ? 'video' : 'image'} className="h-14 w-full rounded" />}<p className="mt-1 truncate pr-4 text-[10px]" title={item.title}>{item.title}</p>{onRemoveLibraryItem && <IconAction label={`移除 ${item.title}`} className="absolute right-0 top-0 size-6 bg-card/90" onClick={() => onRemoveLibraryItem(item.id)}><X className="size-3" /></IconAction>}</li>)}</ul>}
       {message && (
         <Notice tone={message.tone}>
           {message.tone === 'warning' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> : <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />}
@@ -531,6 +543,10 @@ export function ReferenceUploader({
   )
 }
 
+export function ReferenceLibraryDialog({open, title, onClose, ...picker}: Parameters<typeof ReferencePicker>[0] & {open: boolean; title: string; onClose: () => void}) {
+  return <Modal open={open} title={title} description="选择素材后保留在上传区，可继续添加或移除。" onClose={onClose} className="sm:max-w-3xl" footer={<ControlButton onClick={onClose}>完成选择</ControlButton>}><ReferencePicker {...picker} /></Modal>
+}
+
 /** 素材库选择：与上传区共用同一份选中状态，支持搜索与分页，缩略图网格不出现原生横向滚动条。 */
 export function ReferencePicker({
   assets,
@@ -545,6 +561,8 @@ export function ReferencePicker({
   loadingMore,
   onSearch,
   serverSearch,
+  replaceSelection = false,
+  emptyText,
 }: {
   assets: Array<{ id: string; title: string; src: string; poster?: string; kind: string; fallback: string; tags?: string[] }>
   selectedIds: string[]
@@ -570,6 +588,8 @@ export function ReferencePicker({
   onSearch?: (keyword: string) => void
   /** 为 true 时按下回车把关键词交给服务端搜索。 */
   serverSearch?: boolean
+  replaceSelection?: boolean
+  emptyText?: string
 }) {
   const [keyword, setKeyword] = useState('')
   const [visible, setVisible] = useState(REFERENCE_PAGE_SIZE)
@@ -670,6 +690,7 @@ export function ReferencePicker({
               <button
                 key={asset.id}
                 type="button"
+                disabled={!selected && (maxReferences <= 0 || (!replaceSelection && selectedIds.length >= maxReferences))}
                 onClick={() => onToggle(asset.id, { id: asset.id, title: asset.title, src: asset.src, kind: asset.kind })}
                 aria-pressed={selected}
                 aria-label={`${selected ? '取消选择' : '选择'} ${asset.title}`}
@@ -704,7 +725,7 @@ export function ReferencePicker({
                 ? '未登录：登录后可使用已上传的素材。'
                 : keyword.trim()
                   ? `没有匹配「${keyword.trim()}」的素材。`
-                  : '素材库里还没有图片素材。可先到「素材库」上传，或换用支持参考图的模型。'}
+                  : emptyText || '素材库里还没有图片素材。可先到「素材库」上传，或换用支持参考图的模型。'}
         </p>
       )}
       {shown.length < matched.length && (

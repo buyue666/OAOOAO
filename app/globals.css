@@ -2300,13 +2300,14 @@
   .prompt-reference-mirror { visibility: hidden; }
 }
 .workspace-submit-hidden { display: none !important; }
-.workspace-reference-uploaders { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: .75rem; }
+.workspace-reference-uploaders { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); align-items: stretch; gap: .75rem; }
 .workspace-reference-uploaders > .workspace-reference-upload { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; align-content: start; gap: .5rem; }
 .workspace-reference-files { align-self: start; }
 @supports (grid-template-rows: subgrid) {
   .workspace-reference-uploaders > .workspace-reference-upload { grid-row: span 3; grid-template-rows: subgrid; }
 }
-.workspace-reference-uploaders .workspace-reference-dropzone { min-width: 0; min-height: 10rem; justify-content: flex-start; }
+.workspace-reference-uploaders .workspace-reference-dropzone { min-width: 0; min-height: 7.5rem; padding: .75rem; gap: .375rem; justify-content: flex-start; }
+.workspace-reference-uploaders .workspace-reference-dropzone > span { display: none; }
 .workspace-reference-uploaders .workspace-reference-select { margin-top: auto; }
 .admin-config-group > summary { list-style: none; }
 .admin-config-group > summary::-webkit-details-marker { display: none; }
@@ -2331,6 +2332,7 @@
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-mode { grid-column: 1 / -1; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-primary { grid-column: 1; gap: .75rem; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-settings { grid-column: 2; gap: .5rem; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-references { grid-column: 1 / -1; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-section { border-top: 0; padding-top: 0; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-content { margin-top: .5rem; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] [data-param-layout='mode'] [role='radiogroup'] { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }

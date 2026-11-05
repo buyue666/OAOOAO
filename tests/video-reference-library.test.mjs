@@ -36,7 +36,7 @@ function fixture(initial) {
   const dependencies = { react: { useRef: value => ({ current: value }) }, './use-account-data': { useLibraryAssets } }
   const media = sourceModule('../lib/studio/use-media-library.ts', dependencies)
   const api = sourceModule('../lib/studio/use-video-reference-library.ts', { ...dependencies, './use-media-library': media, './reference-selection': selection })
-  return { read: (mode, keyword = '') => api.useVideoReferenceLibrary(mode, keyword), api, queries, verified, more, unavailableKinds, remove: id => { records = records.filter(item => item.id !== id) } }
+  return { read: (mode, keyword = '', includeAudio = false) => api.useVideoReferenceLibrary(mode, keyword, includeAudio), api, queries, verified, more, unavailableKinds, remove: id => { records = records.filter(item => item.id !== id) } }
 }
 
 test('video modes use real media-only counts; two text skills never create phantom pages', () => {
@@ -58,6 +58,16 @@ test('mixed references paginate both media sources without losing kind-specific 
   assert.equal(result.assets.length, 123); assert.equal(result.remaining, 0); assert.equal(result.hasMore, false)
   assert.deepEqual(f.more.sort(), ['image', 'video'])
   assert.equal(f.read('edit').total, 61); assert.equal(f.read('first').total, 62)
+})
+
+test('kind-specific dialogs and combined frame mode exclude unrelated media while retaining liveness checks',async()=>{
+  const f=fixture([reference('image','image'),reference('video','video'),reference('audio','audio')])
+  assert.deepEqual(plain(f.read('image','',true).assets.map(item=>item.id)),['image'])
+  assert.deepEqual(plain(f.read('video','',true).assets.map(item=>item.id)),['video'])
+  assert.deepEqual(plain(f.read('audio','',true).assets.map(item=>item.id)),['audio'])
+  assert.deepEqual(plain(f.read('frames','',true).assets.map(item=>item.id)).sort(),['audio','image'])
+  const evidence=await f.read('frames','',true).verifyLibraryIds(['image','video','audio'])
+  assert.deepEqual([...evidence.ids].sort(),['audio','image','video'])
 })
 
 test('mode and search changes do not classify other selected media as deleted', async () => {

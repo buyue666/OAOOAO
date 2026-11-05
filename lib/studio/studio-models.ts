@@ -132,7 +132,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     outputDimensions: model.capability === 'image' ? outputDimensions.selected : defaultOutputDimensionsFor(model.capability),
     outputDimensionsByResolution: model.capability === 'image' ? outputDimensions.byResolution : {},
     qualities: qualityCandidates(model.capability, settings, model.capability === 'video' ? profile?.videoQualities : configuredQualities),
-    videoPolicy: model.capability === 'video' && profile?.videoBillingUnit ? { supportsVideoReference: profile.supportsVideoReference, supportsAudioReference: profile.supportsAudioReference, maxDurationByResolution: profile.maxDurationByResolution, billingUnit: profile.videoBillingUnit, durationsByMode: profile.durationsByMode, durationRules: profile.videoDurationRules, referenceRules: profile.videoReferenceRules, referenceLimits: {image: profile.maxReferenceImages || 0, video: profile.maxReferenceVideos || 0, audio: profile.maxReferenceAudios || 0} } : undefined,
+    videoPolicy: model.capability === 'video' && profile?.videoBillingUnit ? { frameReferenceTypes: profile.frameReferenceTypes, supportsVideoReference: profile.supportsVideoReference, supportsAudioReference: profile.supportsAudioReference, maxDurationByResolution: profile.maxDurationByResolution, billingUnit: profile.videoBillingUnit, durationsByMode: profile.durationsByMode, durationRules: profile.videoDurationRules, referenceRules: profile.videoReferenceRules, referenceLimits: {image: profile.maxReferenceImages || 0, video: profile.maxReferenceVideos || 0, audio: profile.maxReferenceAudios || 0} } : undefined,
     qualityLabels: Object.keys(qualityLabels).length ? qualityLabels : undefined,
     /**
      * 未配置上限时用保守默认值，**不能**给 0。
@@ -163,7 +163,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     creditCost: Number(cost) || 0,
     capabilities: capability,
     status: '可用',
-    iconUrl: selectedBinding?.iconUrl?.trim() || model.iconUrl?.trim() || undefined,
+    iconUrl: model.iconUrl?.trim() || undefined,
   }
 }
 

@@ -110,9 +110,10 @@ test('mention lookup and insertion preserve Chinese text on both sides of the ca
 test('picker numbering follows submitted files for every input mode', () => {
   const ref = (id, type = 'image') => ({id, name: id, type, url: `https://example.invalid/${id}`})
   const groups = {first: [ref('first')], last: [ref('last')], source: [ref('source', 'video')], references: [ref('library'), ref('upload'), ref('video', 'video'), ref('audio', 'audio')]}
-  for (const mode of ['text', 'first', 'ends', 'mixed', 'references', 'edit']) {
-    const expected = build({...groups, mode, maxReferences: 8}).map(item => item.id)
-    assert.deepEqual(mentions.orderedPromptReferences(mode, groups).map(item => item.id), expected, mode)
+  for (const mode of ['text', 'first', 'ends', 'mixed', 'frames', 'references', 'edit']) {
+    const active = mode === 'mixed' || mode === 'frames' ? {...groups,references:groups.references.filter(item=>item.type!=='video')} : groups
+    const expected = build({...active, mode, frameReferenceTypes:['image','audio'], maxReferences: 8}).map(item => item.id)
+    assert.deepEqual(mentions.orderedPromptReferences(mode, active).map(item => item.id), expected, mode)
   }
   assert.deepEqual(mentions.orderedPromptReferences('text', groups, false), [])
   assert.deepEqual(mentions.orderedPromptReferences('extend', groups), [])
@@ -162,12 +163,16 @@ test('image and video submit handlers serialize labels only after resolving the 
   }
 })
 
-test('fullscreen content and settings keep independent columns without rebuilding parameter elements',()=>{
+test('reference materials follow every parameter group and occupy an independent full-width section',()=>{
   const component=load('../components/studio/workspace-kit.tsx',{react:React,'react/jsx-runtime':jsxRuntime,'lucide-react':{},'@/lib/utils':{cn:(...items)=>items.filter(Boolean).join(' ')},'./ui':{}}).WorkspaceParams
   const section=(layout,label)=>React.createElement('section',{layout,'data-layout':layout,key:layout},label)
   const html=renderToStaticMarkup(React.createElement(component,null,section('mode','模式'),section('prompt','提示词'),section('model','模型'),section('output','输出'),section('references','素材'),section('advanced','高级')))
-  assert.match(html,/workspace-param-primary[^>]*><section[^>]*>提示词<\/section><section[^>]*>素材<\/section><\/div>/)
+  assert.match(html,/workspace-param-primary[^>]*><section[^>]*>提示词<\/section><\/div>/)
   assert.match(html,/workspace-param-settings[^>]*><section[^>]*>模型<\/section><section[^>]*>输出<\/section><section[^>]*>高级<\/section>/)
+  assert.match(html,/workspace-param-references[^>]*><section[^>]*>素材<\/section><\/div>/)
+  assert.ok(html.indexOf('workspace-param-references')>html.indexOf('>高级<'))
+  const styles=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8')
+  assert.match(styles,/\.workspace-param-references\s*\{ grid-column: 1 \/ -1;/)
 })
 
 test('duration slider submits only supported slots and cannot manufacture an in-between duration', () => {

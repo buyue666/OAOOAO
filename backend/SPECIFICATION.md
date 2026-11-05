@@ -158,3 +158,10 @@ Video resolution pricing
   synchronizes subsequent price edits. Account routing, concurrency, capability
   switches, enabled qualities, duration rules and reference limits stay local.
   Configuration reads and deployments never rewrite prices automatically.
+- `frameReferenceTypes` lists optional ordinary references allowed alongside
+  first/last frames: `image` and/or `audio`. Frame-role items must be images;
+  a tail requires a first frame. Video references are rejected with frame roles,
+  even when the provider supports video in ordinary multi-reference mode. Counts
+  and total ceilings include the frame images. An absent list permits only
+  frame-role images. UI mode `frames` combines first frame, optional last frame
+  and supported ordinary references; requests still use explicit frame roles.
