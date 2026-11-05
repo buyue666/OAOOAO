@@ -1,7 +1,7 @@
 'use client'
 
 import type { FormEvent, ReactNode } from 'react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { Children, isValidElement, useEffect, useId, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -141,8 +141,24 @@ export function WorkspaceShell({
   )
 }
 
+/** Stable content/settings columns: docking only changes CSS, never input mounts. */
+export function WorkspaceParams({children}: {children: ReactNode}) {
+  const mode: ReactNode[] = [], content: ReactNode[] = [], settings: ReactNode[] = []
+  for (const child of Children.toArray(children)) {
+    const layout = isValidElement<{layout?: string}>(child) ? child.props.layout : undefined
+    if (layout === 'mode') mode.push(child)
+    else if (layout === 'prompt' || layout === 'references') content.push(child)
+    else settings.push(child)
+  }
+  return <div className="workspace-param-columns flex flex-col gap-4">
+    {mode.length > 0 && <div className="workspace-param-mode">{mode}</div>}
+    <div className="workspace-param-primary flex min-w-0 flex-col gap-4">{content}</div>
+    <div className="workspace-param-settings flex min-w-0 flex-col gap-4">{settings}</div>
+  </div>
+}
+
 /** 参数分组：统一 4/8px 间距与分割线，避免每个页面各写一套。 */
-export function ParamSection({ title, hint, action, children, layout }: { title: string; hint?: string; action?: ReactNode; children: ReactNode; layout?: 'prompt' | 'mode' }) {
+export function ParamSection({ title, hint, action, children, layout }: { title: string; hint?: string; action?: ReactNode; children: ReactNode; layout?: 'prompt' | 'mode' | 'model' | 'output' | 'references' | 'advanced' }) {
   return (
     <section data-param-layout={layout} className="workspace-param-section min-w-0 border-t border-border pt-4 first:border-t-0 first:pt-0">
       <div className="flex items-center justify-between gap-3">
@@ -152,7 +168,7 @@ export function ParamSection({ title, hint, action, children, layout }: { title:
         </h3>
         {action}
       </div>
-      <div className="mt-3">{children}</div>
+      <div className="workspace-param-content mt-3">{children}</div>
     </section>
   )
 }
@@ -369,7 +385,7 @@ export function ReferenceUploader({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="workspace-reference-upload flex flex-col gap-3">
       {label && (
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-medium text-foreground">{label}</p>
@@ -391,7 +407,7 @@ export function ReferenceUploader({
           if (event.dataTransfer.files.length) addFiles(event.dataTransfer.files)
         }}
         className={cn(
-          'flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-5 text-center transition-colors duration-200',
+          'workspace-reference-dropzone flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-5 text-center transition-colors duration-200',
           dragging ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-muted/40',
         )}
       >
@@ -594,7 +610,7 @@ export function ReferencePicker({
   const hiddenOnServer = Math.max(0, total - assets.length)
 
   return (
-    <div className="flex flex-col gap-2" data-testid="reference-picker">
+    <div className="workspace-reference-picker flex flex-col gap-2" data-testid="reference-picker">
       <div className="flex items-center justify-between gap-2">
         <p className="min-w-0 flex-1 text-[11px] text-muted-foreground" data-testid="reference-picker-status">
           从素材库选择 · 已选 {selectedIds.length}/{maxReferences} · 可选 {shown.length}{total > shown.length ? `/${total}` : ''}
@@ -644,7 +660,7 @@ export function ReferencePicker({
       </div>
       {shown.length > 0 && (loading || failed) && <p role="status" className="text-[11px] leading-5 text-muted-foreground">{failed ? `素材更新失败：${libraryMessage || '请稍后刷新'}。下方保留上次结果。` : '正在更新素材…'}</p>}
       {shown.length ? (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="reference-picker-grid grid grid-cols-4 gap-2">
           {shown.map((asset) => {
             const selected = selectedIds.includes(asset.id)
             return (

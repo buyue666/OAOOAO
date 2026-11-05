@@ -101,3 +101,9 @@ test('adapters can explain combined billable time without changing the output du
   assert.match(text(h.render()),/10 秒参考＋15 秒输出.*15 秒档单价 ×25 秒/)
   assert.match(text(h.render()),/单价档位只按输出时长判断/)
 })
+
+test('configured reference duration rounding is shown next to the billing formula',()=>{
+  const h=harness({...initial(),videoPricingTemplate:'reference-video-output'},{includeReferenceVideoDuration:true,roundReferenceVideoDuration:true})
+  assert.match(text(h.render()),/每段参考视频分别向上取整到整秒后累加/)
+  assert.match(text(h.render()),/10.2 秒按 11 秒计费/)
+})

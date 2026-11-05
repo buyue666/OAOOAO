@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import {PromptReferenceInput} from './prompt-reference-input'
 import {VideoDurationSlider} from './video-duration-slider'
-import {orderedPromptReferences, type PromptReference} from '@/lib/studio/prompt-references'
+import {orderedPromptReferences, serializePromptReferences, type PromptReference} from '@/lib/studio/prompt-references'
 import {selectableVideoDurations,videoReferenceLimit} from '@/lib/studio/video-policy'
 import { quoteVideoGeneration } from '@/lib/studio/generation-api'
 import { useRouter } from 'next/navigation'
@@ -47,13 +47,14 @@ import {
   ResultActions,
   ResultStage,
   WorkspaceShell,
+  WorkspaceParams,
   ratioToCss,
   type UploadItem,
 } from './workspace-kit'
 import { useStudio } from '@/lib/studio/store'
 import { useGeneration } from '@/lib/studio/generation-store'
 import { GenerationErrorNotice, GenerationNotice, LiveTaskList, LocalPreviewNotice } from './live-generation'
-import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioLabel, ratioDimension } from '@/lib/studio/studio-models'
+import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioDimension } from '@/lib/studio/studio-models'
 import { accountDataEpoch } from '@/lib/studio/account-data-sync'
 import { useServerWorks, useLibraryAssets } from '@/lib/studio/use-account-data'
 import { useVideoReferenceLibrary } from '@/lib/studio/use-video-reference-library'
@@ -1178,7 +1179,7 @@ export function ImageWorkspace() {
         // 需要多张时按数量拆成多个批次任务，每个批次使用独立的幂等标识。
         const batch = Math.max(1, Math.min(Number(count) || 1, maxBatch))
         const results = await Promise.allSettled(Array.from({ length: batch }, (_, index) => generation.createImage({
-          prompt: prompt.trim(),
+          prompt: serializePromptReferences(prompt.trim(), references),
           model: model?.id,
           ratio,
           resolution,
@@ -1222,28 +1223,25 @@ export function ImageWorkspace() {
     setSelectedRefs((current) => toggleSelection(current, asset, Math.max(0, referenceSelectionLimit - uploads.length)))
   }
 
+  const imagePromptReferences: PromptReference[] = referenceSelectionLimit > 0 ? [
+    ...selectedRefs.map(item => ({id: item.id, name: item.title, type: 'image' as const, preview: item.src})),
+    ...uploads.map(item => ({id: item.id, name: item.name, type: 'image' as const, preview: item.preview, ready: item.status === 'done' && Boolean(item.dataUrl)})),
+  ] : []
   const params = (
-    <div className="flex flex-col gap-4">
+    <WorkspaceParams>
       {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
       <ParamSection title="提示词" layout="prompt">
         <label htmlFor="image-prompt" className="sr-only">画面描述</label>
-        <textarea
-          id="image-prompt"
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          rows={5}
-          placeholder="描述你想看到的画面"
-          className="studio-field w-full resize-none border border-border bg-background p-3 text-sm leading-6 text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15"
-        />
+        <PromptReferenceInput id="image-prompt" value={prompt} onChange={setPrompt} references={imagePromptReferences} placeholder="描述你想看到的画面，输入 @ 引用已上传素材" />
       </ParamSection>
 
-      <ParamSection title="模型">
+      <ParamSection title="模型" layout="model">
         <SelectField label="图像模型" value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
         {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">模型与计费以当前账户配置为准；实际扣费以任务结果为准。</p>}
       </ParamSection>
 
-      <ParamSection title="输出">
+      <ParamSection title="输出" layout="output">
         <div className="space-y-3">
           <div>
             <p className="mb-2 text-xs font-medium text-foreground">比例</p>
@@ -1264,8 +1262,8 @@ export function ImageWorkspace() {
         </div>
       </ParamSection>
 
-      <ParamSection title="参考素材" hint={`${selectedRefs.length}/${referenceSelectionLimit}`}>
-        <div className="flex flex-col gap-3">
+      <ParamSection title="参考素材" layout="references" hint={`${selectedRefs.length}/${referenceSelectionLimit}`}>
+        <div className="workspace-reference-grid flex flex-col gap-3">
           {referenceSelectionLimit > 0 && <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={Math.max(0, referenceSelectionLimit - selectedRefs.length)} />}
           {/*
            * 模型不接受参考图时不显示「从素材库选择」：
@@ -1294,6 +1292,7 @@ export function ImageWorkspace() {
 
       <ParamSection
         title="高级参数"
+        layout="advanced"
         action={
           <button
             type="button"
@@ -1323,7 +1322,7 @@ export function ImageWorkspace() {
           <p className="text-[11px] leading-5 text-muted-foreground">高级参数默认使用模型推荐值；展开后可覆盖当前会话的默认值。</p>
         )}
       </ParamSection>
-    </div>
+    </WorkspaceParams>
   )
 
   const stage = (
@@ -2014,7 +2013,7 @@ export function VideoWorkspace() {
       try {
         const references = await resolveVideoReferences()
         await generation.createVideo({
-          prompt: prompt.trim(),
+          prompt: serializePromptReferences(prompt.trim(), references),
           model: model?.id,
           ratio,
           quality,
@@ -2058,11 +2057,10 @@ export function VideoWorkspace() {
   }
 
   const params = (
-    <div className="flex flex-col gap-4">
+    <WorkspaceParams>
       {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
       <ParamSection title="生成模式" layout="mode">
         <OptionGrid value={mode} onChange={setMode} options={modeOptions} label="生成模式" />
-        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">当前模型不支持的模式不会显示，也不会留下空白区域。</p>
       </ParamSection>
 
       <ParamSection title="镜头描述" layout="prompt">
@@ -2070,23 +2068,23 @@ export function VideoWorkspace() {
         <PromptReferenceInput id="video-prompt" value={prompt} onChange={setPrompt} references={promptReferences} placeholder="描述镜头运动、主体动作与氛围，输入 @ 引用已上传素材" />
       </ParamSection>
 
-      <ParamSection title="模型">
+      <ParamSection title="模型" layout="model">
         <SelectField label="视频模型" value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · 按参数计价`, icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
       </ParamSection>
 
-      <ParamSection title="输出">
+      <ParamSection title="输出" layout="output">
         <div className="grid grid-cols-2 gap-3">
-          <SelectField label="比例" value={ratio} onChange={setRatio} options={capabilities.ratios.map((item) => ({ value: item, label: ratioLabel(item) }))} />
+          <SelectField label="比例" value={ratio} onChange={setRatio} options={capabilities.ratios.map((item) => ({ value: item, label: ['adaptive', 'auto'].includes(item) ? '自动适配' : item }))} />
           <SelectField label="清晰度" value={quality} onChange={setQuality} options={capabilities.qualities.map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
         </div>
         <div className="mt-3"><VideoDurationSlider value={duration} options={allowedDurations} onChange={setDuration} /></div>
       </ParamSection>
 
 
-      {<ParamSection title={referenceLabel} hint={referenceHint}>
+      {<ParamSection title={referenceLabel} layout="references" hint={referenceHint}>
         {mode === 'first' && (
-          <div className="flex flex-col gap-3">
+          <div className="workspace-reference-grid flex flex-col gap-3">
             <ReferenceUploader
               items={firstFrameUploads}
               onItemsChange={(items) => { setFirstFrameUploads(items); if (items.length) setFirstFrameRef([]) }}
@@ -2101,7 +2099,7 @@ export function VideoWorkspace() {
           </div>
         )}
         {(mode === 'ends') && (
-          <div className="flex flex-col gap-3">
+          <div className="workspace-reference-grid flex flex-col gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <ReferenceUploader
                 items={firstFrameUploads}
@@ -2129,7 +2127,7 @@ export function VideoWorkspace() {
           </div>
         )}
         {mode === 'edit' && (
-          <div className="flex flex-col gap-3">
+          <div className="workspace-reference-grid flex flex-col gap-3">
             <ReferenceUploader
               items={sourceVideoUploads}
               onItemsChange={(items) => { setSourceVideoUploads(items); if (items.length) setSourceVideoRef([]) }}
@@ -2144,7 +2142,7 @@ export function VideoWorkspace() {
           </div>
         )}
         {(mode === 'text' || mode === 'references') && (
-          <div className="flex flex-col gap-3">
+          <div className="workspace-reference-grid flex flex-col gap-3">
             {capabilities.maxReferences > 0 ? <><ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={Math.max(0, Math.min(capabilities.maxReferences - selectedRefs.length - videoRefUploads.length - audioRefUploads.length, videoReferenceLimit(model,'image') - selectedRefs.filter(item=>['image','scene'].includes(item.kind)).length))} hint="PNG / JPG / WEBP，单个不超过 12 MB" />
             {videoPolicy?.supportsVideoReference && <ReferenceUploader items={videoRefUploads} onItemsChange={setVideoRefUploads} kind="video" maxFiles={Math.min(videoReferenceLimit(model,'video'), Math.max(0, referenceSelectionLimit - selectedRefs.length - uploads.length - audioRefUploads.length))} maxFileBytes={24 * 1024 * 1024} label="参考视频" emptyText="上传参考视频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
             {videoPolicy?.supportsAudioReference && <ReferenceUploader items={audioRefUploads} onItemsChange={setAudioRefUploads} kind="audio" maxFiles={Math.min(videoReferenceLimit(model,'audio'), Math.max(0, referenceSelectionLimit - selectedRefs.length - uploads.length - videoRefUploads.length))} label="参考音频" emptyText="上传参考音频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
@@ -2153,9 +2151,10 @@ export function VideoWorkspace() {
         )}
       </ParamSection>}
 
-      {videoPolicy && <p role="status" className="text-xs leading-5 text-muted-foreground">{quoteBlock || `预计消耗 ${credits} 积分`}</p>}
+      {videoPolicy && <p role="status" className="workspace-param-feedback text-xs leading-5 text-muted-foreground">{quoteBlock || `预计消耗 ${credits} 积分`}</p>}
       <ParamSection
         title="高级参数"
+        layout="advanced"
         action={
           <button
             type="button"
@@ -2169,7 +2168,7 @@ export function VideoWorkspace() {
         }
       >
         {advanced ? (
-          <div className="flex flex-col gap-3">
+          <div className="workspace-reference-grid flex flex-col gap-3">
             {/* 只列出后端视频任务真实接受、并且会提交的参数。 */}
             <SelectField label="清晰度" value={quality} onChange={setQuality} options={(capabilities.qualities.length ? capabilities.qualities : ['480', '720', '1080']).map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
             <p className="text-[11px] leading-5 text-muted-foreground">运动强度、镜头稳定等参数后端当前不接受，因此不提供无效控件。</p>
@@ -2178,7 +2177,7 @@ export function VideoWorkspace() {
           <p className="text-[11px] leading-5 text-muted-foreground">高级参数默认使用模型推荐值，展开后可覆盖清晰度。</p>
         )}
       </ParamSection>
-    </div>
+    </WorkspaceParams>
   )
 
   const stage = (

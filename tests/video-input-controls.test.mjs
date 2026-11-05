@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import test from 'node:test'
 import ts from 'typescript'
+import React from 'react'
+import {renderToStaticMarkup} from 'react-dom/server'
+import * as jsxRuntime from 'react/jsx-runtime'
 
 function load(path, imports = {}) {
   const module = {exports: {}}
@@ -74,7 +77,7 @@ test('upload success expires after three seconds while warnings remain and repla
 test('mention lookup and insertion preserve Chinese text on both sides of the caret', () => {
   assert.deepEqual(mentions.referenceMentionQuery('让 @人物 保持微笑', 5), {start: 2, query: '人物'})
   const result = mentions.insertReferenceMention('让 @人物 保持微笑', 2, 5, 1)
-  assert.equal(result.value, '让 @2  保持微笑')
+  assert.equal(result.value, '让 @2 保持微笑')
   assert.equal(result.caret, 5)
   assert.equal(mentions.referenceMentionQuery('让 @1 保持微笑', 9), undefined)
   assert.deepEqual(mentions.referenceMentionQuery('@1 与 @', 6), {start: 5, query: ''})
@@ -89,6 +92,58 @@ test('picker numbering follows submitted files for every input mode', () => {
   }
   assert.deepEqual(mentions.orderedPromptReferences('text', groups, false), [])
   assert.deepEqual(mentions.orderedPromptReferences('extend', groups), [])
+})
+
+test('typed material labels map to the submitted reference order and preserve legacy mentions',()=>{
+  const references=[{type:'image'},{type:'video'},{type:'image'},{type:'audio'}]
+  assert.deepEqual(references.map((_,index)=>mentions.referenceMentionLabel(references,index)),['@图1','@视频1','@图2','@音频1'])
+  const value='让 @图2 参考 @视频1动作，用 @图1 背景和 @音频1，保留 @3。'
+  assert.equal(mentions.serializePromptReferences(value,references),'让 @3 参考 @2动作，用 @1 背景和 @4，保留 @3。')
+  assert.deepEqual(mentions.promptReferenceMentions('@图10 @图0 @1abc @视频2',references),[])
+  assert.equal(mentions.serializePromptReferences('@图片1',references),'@1')
+  assert.equal(mentions.serializePromptReferences('@图1',[{}]),'@1')
+  const inserted=mentions.insertReferenceMention('使用 @视 的动作',3,5,1,references)
+  assert.equal(inserted.value,'使用 @视频1 的动作')
+  assert.equal(inserted.caret,8)
+})
+
+test('native prompt input renders highlighted labels, escaped text and an accessible plain value',()=>{
+  const component=load('../components/studio/prompt-reference-input.tsx',{react:React,'react/jsx-runtime':jsxRuntime,'react-dom':{createPortal:node=>node},'lucide-react':{},'@/lib/studio/prompt-references':mentions}).PromptReferenceInput
+  const value='让 @图1 和 @2 一起 <script>test</script>\n保持动作'
+  const html=renderToStaticMarkup(React.createElement(component,{id:'image-prompt',value,onChange(){},references:[{id:'one',type:'image',name:'人物'},{id:'two',type:'image',name:'背景'}]}))
+  assert.match(html,/<mark[^>]*prompt-reference-mention[^>]*>@图1<\/mark>/)
+  assert.match(html,/<mark[^>]*prompt-reference-mention[^>]*>@2<\/mark>/)
+  assert.match(html,/aria-hidden="true"/)
+  assert.match(html,/<textarea[^>]*id="image-prompt"[^>]*role="combobox"/)
+  assert.ok(html.includes('&lt;script&gt;test&lt;/script&gt;'))
+  assert.ok(!html.includes('<script>test</script>'))
+})
+
+test('image and video submit handlers serialize labels only after resolving the actual references',async()=>{
+  const source=readFileSync(new URL('../components/studio/workspaces.tsx',import.meta.url),'utf8')
+  const parsed=ts.createSourceFile('workspace.tsx',source,ts.ScriptTarget.ES2022,true,ts.ScriptKind.TSX)
+  for(const name of ['ImageWorkspace','VideoWorkspace']){
+    const workspace=parsed.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text===name)
+    const submit=workspace.body.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='submit')
+    const references=name==='ImageWorkspace'?[{type:'image',url:'https://example.invalid/one'},{type:'image',url:'https://example.invalid/two'}]:[{type:'image',url:'https://example.invalid/one'},{type:'video',url:'https://example.invalid/video'},{type:'image',url:'https://example.invalid/two'}]
+    const payloads=[],notices=[]
+    const bindings={submitBlock:'',prompt:name==='ImageWorkspace'?'画 @图2 与 @图1':'让 @图2 使用 @视频1 的动作',liveReady:true,submitting:false,setSubmitting(){},resolveImageReferences:async()=>references,resolveVideoReferences:async()=>references,count:'1',maxBatch:1,generation:{createImage:async payload=>payloads.push(payload),createVideo:async payload=>payloads.push(payload)},model:{id:'synthetic'},ratio:'16:9',resolution:'1K',quality:'480p',duration:'15 秒',advancedValues:{},resolveGenerationKind:()=> 'edit',state:{selectedProjectId:null},setNotice:value=>notices.push(value),serializePromptReferences:mentions.serializePromptReferences,privateVideo:undefined,privateOptions:{}}
+    const code=ts.transpileModule(`export ${submit.getText(parsed)}`,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
+    const module={exports:{}}
+    new Function('module','exports',...Object.keys(bindings),code)(module,module.exports,...Object.values(bindings))
+    await module.exports.submit({preventDefault(){}})
+    assert.equal(payloads.length,1,JSON.stringify(notices))
+    assert.equal(payloads[0].prompt,name==='ImageWorkspace'?'画 @2 与 @1':'让 @3 使用 @2 的动作')
+    assert.equal(payloads[0].references,references)
+  }
+})
+
+test('fullscreen content and settings keep independent columns without rebuilding parameter elements',()=>{
+  const component=load('../components/studio/workspace-kit.tsx',{react:React,'react/jsx-runtime':jsxRuntime,'lucide-react':{},'@/lib/utils':{cn:(...items)=>items.filter(Boolean).join(' ')},'./ui':{}}).WorkspaceParams
+  const section=(layout,label)=>React.createElement('section',{layout,'data-layout':layout,key:layout},label)
+  const html=renderToStaticMarkup(React.createElement(component,null,section('mode','模式'),section('prompt','提示词'),section('model','模型'),section('output','输出'),section('references','素材'),section('advanced','高级')))
+  assert.match(html,/workspace-param-primary[^>]*><section[^>]*>提示词<\/section><section[^>]*>素材<\/section><\/div>/)
+  assert.match(html,/workspace-param-settings[^>]*><section[^>]*>模型<\/section><section[^>]*>输出<\/section><section[^>]*>高级<\/section>/)
 })
 
 test('duration slider submits only supported slots and cannot manufacture an in-between duration', () => {
@@ -115,11 +170,18 @@ test('mention keyboard completion consumes Enter and Escape while leaving IME in
   try {
     const render = () => {cursor = 0; return nodes(component({id: 'prompt', value, onChange: next => value = next, references: [{id: 'first', name: '首帧', type: 'image'}, {id: 'second', name: '人物', type: 'image'}]}))}
     const textarea = () => render().find(node => node.type === 'textarea')
+    const native=textarea(),mirror=render().find(node=>node.props?.['aria-hidden']==='true'&&node.props.ref)
+    native.props.ref.current={clientWidth:240,scrollTop:48,scrollLeft:6}
+    mirror.props.ref.current={style:{},scrollTop:0,scrollLeft:0}
+    native.props.onScroll()
+    assert.equal(mirror.props.ref.current.style.width,'240px')
+    assert.equal(mirror.props.ref.current.scrollTop,48)
+    assert.equal(mirror.props.ref.current.scrollLeft,6)
     textarea().props.onChange({target: {value: '@', selectionStart: 1}})
     const event = key => ({key, nativeEvent: {isComposing: false}, prevented: false, stopped: false, preventDefault() {this.prevented = true}, stopPropagation() {this.stopped = true}})
     textarea().props.onKeyDown(event('ArrowDown'))
     const enter = event('Enter'); textarea().props.onKeyDown(enter)
-    assert.equal(value, '@2 '); assert.equal(enter.prevented, true)
+    assert.equal(value, '@图2 '); assert.equal(enter.prevented, true)
     textarea().props.onChange({target: {value: '@', selectionStart: 1}})
     const ime = event('Enter'); ime.nativeEvent.isComposing = true; textarea().props.onKeyDown(ime)
     assert.equal(value, '@'); assert.equal(ime.prevented, false)
