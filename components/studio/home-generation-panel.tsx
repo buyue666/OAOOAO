@@ -7,6 +7,7 @@ import { ArrowRight, Check, ChevronDown, LoaderCircle } from 'lucide-react'
 import type { ModelConfig } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
 import { ModelIcon } from './model-icon'
+import { ModelNote } from './ui'
 
 type CreateMode = 'agent' | 'image' | 'video' | 'text'
 
@@ -145,6 +146,7 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
   const listId = useId()
   return (
     <div ref={pickerRef} className="relative">
+      <div className="flex min-w-0 items-center gap-1">
       <button
         type="button"
         onClick={onToggleDropdown}
@@ -159,7 +161,7 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
             requestAnimationFrame(() => pickerRef.current?.querySelector<HTMLButtonElement>('[role="option"]')?.focus())
           }
         }}
-        className="flex h-12 w-full min-w-0 items-center gap-2.5 rounded-md border border-border bg-background px-3 text-left transition-colors duration-150 hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40"
+        className="flex h-12 w-full min-w-0 flex-1 items-center gap-2.5 rounded-md border border-border bg-background px-3 text-left transition-colors duration-150 hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/40"
       >
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-studio-accent"><ModelIcon model={selectedModel} /></span>
         <span className="min-w-0 flex-1">
@@ -168,6 +170,8 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
         </span>
         <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', dropdownOpen && 'rotate-180')} aria-hidden="true" />
       </button>
+      {selectedModel?.note?.trim() && <ModelNote note={selectedModel.note} />}
+      </div>
 
       {dropdownOpen && (
         <div
@@ -196,6 +200,7 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
                     type="button"
                     role="option"
                     aria-selected={selected}
+                    aria-description={item.note?.trim() || undefined}
                     onClick={() => onSelectModel(item.id)}
                     className={cn('flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors duration-150 hover:bg-muted focus-visible:bg-muted focus-visible:outline-none', selected && 'bg-studio-accent/10')}
                   >
@@ -203,6 +208,7 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
+                        {item.note?.trim() && <ModelNote note={item.note} interactive={false} />}
                         {selected && <Check className="size-3.5 shrink-0 text-studio-accent" aria-hidden="true" />}
                       </span>
                       <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-muted-foreground">{item.description || tx('当前可用模型')}</span>

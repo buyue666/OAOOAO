@@ -1083,6 +1083,7 @@ export function ImageWorkspace() {
     return candidates.map((item) => ({
       id: item.id,
       label: `${item.shortName} · ${item.creditCost} 积分/次`,
+      note: item.note,
       capability: (item.capability === 'video' ? 'video' : 'image') as 'image' | 'video',
       icon: <ModelIcon model={item} />,
       ratios: item.capabilities.ratios,
@@ -1239,7 +1240,7 @@ export function ImageWorkspace() {
       </ParamSection>
 
       <ParamSection title={tx("模型")} layout="model">
-        <SelectField label={tx("图像模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, icon: <ModelIcon model={item} /> }))} />
+        <SelectField label={tx("图像模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, note: item.note, icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{tx(submitBlock)}</p>}
         {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{tx("模型与计费以当前账户配置为准；实际扣费以任务结果为准。")}</p>}
       </ParamSection>
@@ -2097,7 +2098,7 @@ export function VideoWorkspace() {
       </ParamSection>
 
       <ParamSection title={tx("模型")} layout="model">
-        <SelectField label={tx("视频模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · 按参数计价`, icon: <ModelIcon model={item} /> }))} />
+        <SelectField label={tx("视频模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: item.shortName, note: item.note, icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{tx(submitBlock)}</p>}
       </ParamSection>
 

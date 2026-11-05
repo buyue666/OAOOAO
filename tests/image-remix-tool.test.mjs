@@ -23,6 +23,7 @@ function tryOnHarness() {
   const requests = [], destinations = []
   const model = { id: 'fixture-image', shortName: 'Fixture', capabilities: { ratios: ['2:3'], resolutions: ['1K'], maxBatchSize: 1 } }
   const imports = {
+    './ui': { ModelNote: 'ModelNote' },
     'react': {
       useState(initial) {
         const index = cursor++

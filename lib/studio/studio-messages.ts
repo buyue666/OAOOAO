@@ -548,5 +548,6 @@ export const studioEnglish: Readonly<Record<string, string>> = {
   "继续编辑": "Continue editing",
   "{0} 更新": "{0} updated",
   "项目读取失败": "Could not load project",
-  "消耗 {0} 积分 · 已退回": "Used {0} credits · Refunded"
+  "消耗 {0} 积分 · 已退回": "Used {0} credits · Refunded",
+  "模型备注": "Model note"
 }

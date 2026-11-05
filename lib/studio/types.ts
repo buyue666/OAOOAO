@@ -149,6 +149,8 @@ export interface ModelConfig {
   status: '可用' | '演示配置' | '维护中'
   /** 管理员配置的模型图标；没有配置时由界面按能力显示默认图标。 */
   iconUrl?: string
+  /** 管理员填写的公开模型备注，按原文展示。 */
+  note?: string
 }
 
 export interface GenerationSettings {

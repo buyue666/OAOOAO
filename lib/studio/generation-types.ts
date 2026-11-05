@@ -234,6 +234,7 @@ export type SessionLogicalModel = {
   capability: 'text' | 'image' | 'video' | 'audio'
   enabled: boolean
   iconUrl?: string
+  note?: string
   /** �������������֣�`id` �����ȶ���ʶ��Ƽۼ��� */
   aliases?: string[]
   bindings: Array<{

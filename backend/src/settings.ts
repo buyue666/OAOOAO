@@ -69,7 +69,7 @@ export function publicSettings(settings: Settings): Settings {
   result.checkIn=normalizeCheckInSettings(settings.checkIn);
   result.wechatLoginEnabled=wechatConfig(settings.wechatOfficial).enabled&&wechatConfigured(settings.wechatOfficial);
   result.wechatRegistrationEnabled=result.wechatLoginEnabled&&wechatConfig(settings.wechatOfficial).autoRegister&&settings.registrationEnabled===true&&!settings.emailRegistrationEnabled;
-  result.logicalModels=(settings.logicalModels || []).filter((m:any)=>m.enabled&&modelReady(m,settings.systemChannels||[])).map((m:any)=>({id:m.id,name:m.name,capability:m.capability,enabled:m.enabled,iconUrl:m.iconUrl,aliases:m.aliases,bindings:(m.bindings || []).filter((b:any)=>b.enabled&&(settings.systemChannels||[]).some((c:any)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none'))).map((b:any)=>({id:b.id,channelId:b.channelId,upstreamModel:b.upstreamModel,enabled:b.enabled,priority:b.priority,capabilityProfile:b.capabilityProfile,requestAlias:b.requestAlias,iconUrl:b.iconUrl}))}));
+  result.logicalModels=(settings.logicalModels || []).filter((m:any)=>m.enabled&&modelReady(m,settings.systemChannels||[])).map((m:any)=>({id:m.id,name:m.name,capability:m.capability,enabled:m.enabled,iconUrl:m.iconUrl,note:typeof m.note==='string'?m.note.trim()||undefined:undefined,aliases:m.aliases,bindings:(m.bindings || []).filter((b:any)=>b.enabled&&(settings.systemChannels||[]).some((c:any)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none'))).map((b:any)=>({id:b.id,channelId:b.channelId,upstreamModel:b.upstreamModel,enabled:b.enabled,priority:b.priority,capabilityProfile:b.capabilityProfile,requestAlias:b.requestAlias,iconUrl:b.iconUrl}))}));
   result.systemChannels=(settings.systemChannels || []).filter((c:any)=>c.enabled).map((c:any)=>{let baseUrl='';try{const url=new URL(c.baseUrl);baseUrl=`${url.origin}${url.pathname}`;}catch{}return {id:c.id,name:c.name,baseUrl,apiFormat:c.apiFormat,models:c.models,enabled:c.enabled,hasApiKey:Boolean(c.apiKey)};});
   return result;
 }
@@ -182,6 +182,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
   const modelNames=new Set<string>();
   for(const model of next.logicalModels){
     string(model.id,'model ID',200);string(model.name,'model name',200);
+    if(model.note!==undefined){if(typeof model.note!=='string'||model.note.length>2000)throw httpError(400,'模型备注须为不超过 2000 字的文本');model.note=model.note.trim();if(!model.note)delete model.note;}
     if(!['text','image','video','audio'].includes(model.capability)||typeof model.enabled!=='boolean'||!Array.isArray(model.bindings))throw httpError(400,'Invalid logical model');
     for(const name of [model.id,...(model.aliases||[])]){string(name,'model alias',200);if(modelNames.has(name))throw httpError(400,'Duplicate model name or alias');modelNames.add(name);}
     const bindingIds=new Set<string>();

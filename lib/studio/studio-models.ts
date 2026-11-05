@@ -164,6 +164,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     capabilities: capability,
     status: '可用',
     iconUrl: model.iconUrl?.trim() || undefined,
+    note: model.note?.trim() || undefined,
   }
 }
 

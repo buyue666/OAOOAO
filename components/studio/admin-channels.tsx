@@ -29,6 +29,7 @@ import {
   AdminStat,
   AdminTable,
   AdminTabs,
+  AdminTextarea,
   TableMessageRow,
   formatAdminNumber,
   useConfirm,
@@ -819,6 +820,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                 className="p-4"
               >
                 <AdminField as="div" className="mb-4 max-w-sm" label="默认模型图标" hint="统一显示在前台模型选择器中；保存路由配置后生效。"><LobeIconPicker value={model.iconUrl} aria-label={`${model.id} 默认模型图标`} onChange={(value) => patchModel(model.id, { iconUrl: value })} /></AdminField>
+                <AdminField as="div" className="mb-4" label="模型备注" hint="选填，保存路由配置后在模型选择器的感叹号中展示；请填写可公开的使用说明。"><AdminTextarea aria-label={`${model.id} 模型备注`} value={model.note || ''} rows={3} maxLength={2000} placeholder="例如支持的用途、使用建议或注意事项" onChange={(event) => patchModel(model.id, { note: event.target.value })} /></AdminField>
             <div className="flex flex-col gap-2">
               <p className="text-xs font-semibold text-foreground">1 · 渠道绑定<span className="ml-2 font-normal text-muted-foreground">优先级数字越小越先选中；权重决定同级流量分配；并发上限 0 表示沿用渠道默认</span></p>
               {model.bindings.map((binding, index) => {

@@ -2950,7 +2950,7 @@ function StoryboardPanel({
                   disabled={!imageModels.length}
                   hint={imageModels.length ? undefined : "会话未返回可用的图片模型，无法提交真实生成。"}
                   options={imageModels.length
-                    ? imageModels.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次` }))
+                    ? imageModels.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, note: item.note }))
                     : [{ value: "", label: "无可用模型" }]}
                 />
                 <div className="grid grid-cols-2 gap-2">

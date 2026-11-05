@@ -4,7 +4,7 @@ import { useUiText } from '@/lib/studio/i18n'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, Image as ImageIcon, Search, X } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, Image as ImageIcon, Search, X } from 'lucide-react'
 import { Tooltip as RadixTooltip } from 'radix-ui'
 import { cn } from '@/lib/utils'
 
@@ -41,11 +41,11 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
  * 通过 Radix 的浮层定位渲染提示：自动翻转、避让视口边缘，并通过 portal
  * 脱离侧栏和缩略图容器的 overflow。顶部工具栏尤其需要这个碰撞处理。
  */
-export function Tooltip({ label, side = 'top', className, contentClassName, children }: { label: string; side?: 'top' | 'right'; className?: string; contentClassName?: string; children: ReactNode }) {
+export function Tooltip({ label, side = 'top', className, contentClassName, children, translateLabel = true, scrollable = false }: { label: string; side?: 'top' | 'right'; className?: string; contentClassName?: string; children: ReactNode; translateLabel?: boolean; scrollable?: boolean }) {
   const tx = useUiText()
   return (
     <RadixTooltip.Provider delayDuration={100} skipDelayDuration={100}>
-      <RadixTooltip.Root disableHoverableContent>
+      <RadixTooltip.Root disableHoverableContent={!scrollable}>
         <span className={cn('inline-flex', className)}>
           <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
         </span>
@@ -57,14 +57,27 @@ export function Tooltip({ label, side = 'top', className, contentClassName, chil
             sideOffset={8}
             collisionPadding={8}
             avoidCollisions
-            className={cn('lg-tooltip-surface lg-glass-overlay motion-fade pointer-events-none z-[60] max-w-[calc(100vw-16px)] whitespace-normal rounded-md border px-2 py-1 text-center text-xs font-medium shadow-md', contentClassName)}
+            className={cn('lg-tooltip-surface lg-glass-overlay motion-fade pointer-events-none z-[60] max-w-[calc(100vw-16px)] whitespace-normal rounded-md border px-2 py-1 text-center text-xs font-medium shadow-md', scrollable && 'pointer-events-auto max-h-[min(24rem,70dvh)] overflow-y-auto overscroll-contain', contentClassName)}
           >
-            {tx(label)}
+            {translateLabel ? tx(label) : label}
           </RadixTooltip.Content>
         </RadixTooltip.Portal>
       </RadixTooltip.Root>
     </RadixTooltip.Provider>
   )
+}
+
+/** Public model notes are plain text and retain the administrator's wording. */
+export function ModelNote({ note, interactive = true }: { note?: string; interactive?: boolean }) {
+  const tx = useUiText()
+  const content = note?.trim()
+  if (!content) return null
+  const style = 'inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60'
+  const stop = (event: React.MouseEvent) => {event.preventDefault(); event.stopPropagation()}
+  return <Tooltip label={content} translateLabel={false} scrollable contentClassName="z-[250] w-80 whitespace-pre-wrap break-words text-left font-normal leading-5">{interactive
+    ? <button type="button" data-model-note aria-label={tx('模型备注')} className={style} onClick={stop}><CircleAlert className="size-3.5" aria-hidden="true" /></button>
+    : <span data-model-note role="img" aria-label={tx('模型备注')} className={style} onClick={stop}><CircleAlert className="size-3.5" aria-hidden="true" /></span>}
+  </Tooltip>
 }
 
 export function IconAction({ label, className, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
@@ -171,7 +184,7 @@ export function SearchField({ value, onChange, placeholder = '搜索' }: { value
   )
 }
 
-export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode }>; className?: string; hint?: string; disabled?: boolean }) {
+export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode; note?: string }>; className?: string; hint?: string; disabled?: boolean }) {
   const tx = useUiText()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -231,14 +244,14 @@ export function SelectField({ label, value, onChange, options, className, hint, 
   }
 
   return (
-    <label className={cn('flex min-w-0 flex-col gap-1.5', className)}>
+    <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
       {label && <span className="text-xs font-medium text-muted-foreground">{tx(label)}</span>}
-      <span className="relative">
+      <span className="relative flex min-w-0 items-center gap-1">
         <button
           ref={triggerRef}
           type="button"
           disabled={disabled || !options.length}
-          className="studio-select-trigger studio-field flex h-10 w-full items-center justify-between gap-2 border border-border px-3 text-left text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 focus-visible:border-studio-accent/70 focus-visible:ring-2 focus-visible:ring-studio-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="studio-select-trigger studio-field flex h-10 min-w-0 w-full flex-1 items-center justify-between gap-2 border border-border px-3 text-left text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 focus-visible:border-studio-accent/70 focus-visible:ring-2 focus-visible:ring-studio-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-label={label ? tx(label) : undefined}
@@ -255,6 +268,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
           </span>
           <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-180 text-studio-accent')} aria-hidden="true" />
         </button>
+        <ModelNote note={selected?.note} />
         {open && menuStyle && createPortal(
           <div
             data-studio-select-menu
@@ -265,14 +279,14 @@ export function SelectField({ label, value, onChange, options, className, hint, 
           >
             {options.map((option) => {
               const active = option.value === value
-              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 flex-1 truncate whitespace-nowrap">{tx(option.label)}</span>{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
+              return <button key={option.value} type="button" role="option" aria-selected={active} aria-description={option.note?.trim() || undefined} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 flex-1 truncate whitespace-nowrap">{tx(option.label)}</span><ModelNote note={option.note} interactive={false} />{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
             })}
           </div>,
           document.body,
         )}
       </span>
       {hint && <span className="text-[11px] leading-4 text-muted-foreground">{tx(hint)}</span>}
-    </label>
+    </div>
   )
 }
 

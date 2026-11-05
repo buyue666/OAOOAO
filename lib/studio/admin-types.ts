@@ -315,6 +315,8 @@ export type LogicalModel = {
   enabled: boolean
   /** 逻辑模型的默认图标；绑定未设置图标时使用。 */
   iconUrl?: string
+  /** 在模型选择器中按需展示的公开备注。 */
+  note?: string
   bindings: LogicalModelBinding[]
   /**
    * 可请求别名。

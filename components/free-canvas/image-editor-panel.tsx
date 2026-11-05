@@ -28,6 +28,7 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import styles from './image-editor-panel.module.css'
+import { ModelNote } from '../studio/ui'
 
 export type ImageEditorTool = 'brush' | 'eraser' | 'rect' | 'move'
 export type ImageEditOperation = 'inpaint' | 'remove-background' | 'erase' | 'outpaint' | 'enhance' | 'layers' | 'to-video'
@@ -55,6 +56,7 @@ export type ImageEditorRegion = { id: number; prompt?: string; referenceImageDat
 export type ImageEditorModelOption = {
   id: string
   label: string
+  note?: string
   /** The operation family this model can serve. Omitted keeps backwards compatibility. */
   capability?: 'image' | 'video'
   /** Base credit price used when the parent does not provide a live estimator. */
@@ -1007,15 +1009,16 @@ export function ImageEditorPanel({
       </div>
 
       {editorModelChoices.length > 0 && <div className={styles.editorSettingsBar} aria-label="改图参数">
-        <label className={styles.editorSettingField}>
+        <div className={styles.editorSettingField}>
           <span>模型</span>
           <span className={styles.editorSettingControl}>
             {selectedEditorModel?.icon && <span className={styles.editorSettingIcon}>{selectedEditorModel.icon}</span>}
             <select value={selectedEditorModel?.id ?? selectedEditorModelId} onChange={(event) => editorCapability === 'video' ? setEditorVideoModelId(event.target.value) : setEditorModelId(event.target.value)} aria-label="改图模型">
               {editorModelChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
+            {selectedEditorModel?.note?.trim() && <ModelNote note={selectedEditorModel.note} />}
           </span>
-        </label>
+        </div>
         {(editorCapability === 'image' || selectedEditorModel?.resolutions?.length) && <label className={styles.editorSettingField}>
           <span>清晰度</span>
           <select value={editorResolution} onChange={(event) => setEditorResolution(event.target.value)} aria-label="改图清晰度">

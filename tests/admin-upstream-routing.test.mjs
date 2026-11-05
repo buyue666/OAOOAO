@@ -60,3 +60,14 @@ test('real profile callbacks synchronize price changes but keep reference ceilin
   assert.equal(editors()[1].props.profile.videoReferenceTotalLimit,undefined)
   await h.save();assert.equal(h.saved.length,1)
 })
+
+test('model notes are saved as a model field and preserve multiline input',async()=>{
+  const h=harness()
+  h.render().filter(node=>node.type==='Button'&&text(node)==='以此渠道价格统一')[0].props.onClick()
+  const field=()=>h.render().find(node=>node.props?.['aria-label']==='video 模型备注')
+  assert.equal(field().props.value,'');assert.equal(field().props.maxLength,2000)
+  field().props.onChange({target:{value:'使用说明\n参考图片'}})
+  assert.equal(field().props.value,'使用说明\n参考图片')
+  await h.save();assert.equal(h.saved[0].logicalModels[0].note,'使用说明\n参考图片')
+  assert.equal(h.settings.logicalModels[0].note,undefined,'editing only changes the draft')
+})
