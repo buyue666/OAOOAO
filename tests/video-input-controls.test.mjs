@@ -163,7 +163,7 @@ test('image and video submit handlers serialize labels only after resolving the 
   }
 })
 
-test('reference materials follow every parameter group and occupy an independent full-width section',()=>{
+test('fullscreen references sit directly below the prompt while docked controls retain their order',()=>{
   const component=load('../components/studio/workspace-kit.tsx',{react:React,'react/jsx-runtime':jsxRuntime,'lucide-react':{},'@/lib/utils':{cn:(...items)=>items.filter(Boolean).join(' ')},'./ui':{}}).WorkspaceParams
   const section=(layout,label)=>React.createElement('section',{layout,'data-layout':layout,key:layout},label)
   const html=renderToStaticMarkup(React.createElement(component,null,section('mode','模式'),section('prompt','提示词'),section('model','模型'),section('output','输出'),section('references','素材'),section('advanced','高级')))
@@ -171,8 +171,11 @@ test('reference materials follow every parameter group and occupy an independent
   assert.match(html,/workspace-param-settings[^>]*><section[^>]*>模型<\/section><section[^>]*>输出<\/section><section[^>]*>高级<\/section>/)
   assert.match(html,/workspace-param-references[^>]*><section[^>]*>素材<\/section><\/div>/)
   assert.ok(html.indexOf('workspace-param-references')>html.indexOf('>高级<'))
+  assert.ok(html.indexOf('>模式<')<html.indexOf('workspace-param-columns'))
   const styles=readFileSync(new URL('../app/globals.css',import.meta.url),'utf8')
-  assert.match(styles,/\.workspace-param-references\s*\{ grid-column: 1 \/ -1;/)
+  assert.match(styles,/\.workspace-param-columns\s*\{[^}]*grid-template-rows: min-content 1fr;/)
+  assert.match(styles,/\.workspace-param-settings\s*\{ grid-column: 2; grid-row: 1 \/ span 2;/)
+  assert.match(styles,/\.workspace-param-references\s*\{ grid-column: 1; grid-row: 2;/)
 })
 
 test('duration slider submits only supported slots and cannot manufacture an in-between duration', () => {

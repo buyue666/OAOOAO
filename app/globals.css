@@ -2328,11 +2328,11 @@
 @media (min-width: 1280px) {
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] { padding: 1rem 1.5rem; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-params-scroll { padding: .5rem 1rem; }
-  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-columns { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 1fr); align-items: start; gap: .75rem 1.25rem; }
-  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-mode { grid-column: 1 / -1; }
-  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-primary { grid-column: 1; gap: .75rem; }
-  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-settings { grid-column: 2; gap: .5rem; }
-  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-references { grid-column: 1 / -1; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-groups { gap: .75rem; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-columns { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 1fr); grid-template-rows: min-content 1fr; align-items: start; gap: .75rem 1.25rem; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-primary { grid-column: 1; grid-row: 1; gap: .75rem; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-settings { grid-column: 2; grid-row: 1 / span 2; gap: .5rem; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-references { grid-column: 1; grid-row: 2; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-section { border-top: 0; padding-top: 0; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-content { margin-top: .5rem; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] [data-param-layout='mode'] [role='radiogroup'] { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }

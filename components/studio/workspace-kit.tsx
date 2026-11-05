@@ -141,7 +141,7 @@ export function WorkspaceShell({
   )
 }
 
-/** Stable groups keep references after all settings in every docking position. */
+/** Keep one control tree: stacked when docked, references below the prompt in fullscreen. */
 export function WorkspaceParams({children}: {children: ReactNode}) {
   const mode: ReactNode[] = [], content: ReactNode[] = [], settings: ReactNode[] = [], references: ReactNode[] = []
   for (const child of Children.toArray(children)) {
@@ -151,11 +151,13 @@ export function WorkspaceParams({children}: {children: ReactNode}) {
     else if (layout === 'references') references.push(child)
     else settings.push(child)
   }
-  return <div className="workspace-param-columns flex flex-col gap-4">
+  return <div className="workspace-param-groups flex min-w-0 flex-col gap-4">
     {mode.length > 0 && <div className="workspace-param-mode">{mode}</div>}
-    <div className="workspace-param-primary flex min-w-0 flex-col gap-4">{content}</div>
-    <div className="workspace-param-settings flex min-w-0 flex-col gap-4">{settings}</div>
-    {references.length > 0 && <div className="workspace-param-references flex min-w-0 flex-col gap-4">{references}</div>}
+    <div className="workspace-param-columns flex min-w-0 flex-col gap-4">
+      <div className="workspace-param-primary flex min-w-0 flex-col gap-4">{content}</div>
+      <div className="workspace-param-settings flex min-w-0 flex-col gap-4">{settings}</div>
+      {references.length > 0 && <div className="workspace-param-references flex min-w-0 flex-col gap-4">{references}</div>}
+    </div>
   </div>
 }
 
