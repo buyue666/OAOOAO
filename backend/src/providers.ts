@@ -41,7 +41,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   const price=(binding.requestAlias?settings.modelPointCosts?.[binding.requestAlias]:undefined)??settings.modelPointCosts?.[binding.upstreamModel]??settings.modelPointCosts?.[model.id];
   const defaults=settings.generationDefaults||{};const profile=binding.capabilityProfile||{};
   const resolution=String(input.config?.vquality||profile.videoQualities?.[0]||'');
-  const videoRate=kind==='video'&&profile.videoBillingUnit&&(profile.videoBillingUnit==='duration'||profile.videoPricing?.resolutionRates?.[resolution]!==undefined);
+  const videoRate=kind==='video'&&profile.videoBillingUnit&&(profile.videoBillingUnit==='duration'||profile.videoPricing?.resolutionRates?.[resolution]!==undefined||profile.videoPricing?.resolutionPricing?.[resolution]!==undefined);
   if(price===undefined&&!videoRate)throw httpError(503,'Model price must be configured before generation');
   let cost=creditUnits(price??0);const multipliers=settings.generationPointMultipliers||{};
   if(kind==='video')for(const ref of input.references||[]){
@@ -102,7 +102,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   }
   if(kind==='image')cost=moneyProduct(cost,multipliers.imageQuality?.[input.config?.quality]);
   if(kind==='video'&&!profile.videoBillingUnit){cost=moneyProduct(cost,multipliers.videoQuality?.[input.config?.vquality]);cost=moneyProduct(cost,multipliers.videoSeconds?.[String(input.config?.videoSeconds)]);}
-  if(kind==='video'){validateVideoInput(input,profile);if(profile.videoBillingUnit){const prepared=await prepareVideoPolicy(ctx,input,profile,cost,userId);cost=creditUnits(prepared.cost);videoSnapshot=prepared.snapshot;}}
+  if(kind==='video'){validateVideoInput(input,profile);if(profile.videoBillingUnit){const prepared=await prepareVideoPolicy(ctx,input,profile,price===undefined?undefined:cost,userId);cost=creditUnits(prepared.cost);videoSnapshot=prepared.snapshot;}}
   const max=settings.generationCostControl?.maxPointsPerTask;
   if(cost<0n||(Number(max)>0&&cost>creditUnits(max)))throw httpError(400,'Generation cost exceeds the configured limit');
   if((input.references||[]).length>(kind==='video'?(profile.videoBillingUnit?profile.maxReferences??16:1):16))throw httpError(400,'Too many reference images for this protocol');

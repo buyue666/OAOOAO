@@ -8,7 +8,7 @@ const module={exports:{}}
 vm.runInNewContext(`(function(module,exports){${code}\n})`)(module,module.exports)
 const {selectableVideoDurations,videoReferenceLimit}=module.exports
 const model={capabilities:{durations:['4 秒','6 秒','8 秒','10 秒'],maxReferences:15,videoPolicy:{referenceLimits:{image:9,video:3,audio:3},referenceRules:{image:{maxCount:8}},durationsByMode:{first:[4,6],references:[8]},durationRules:{'720p':{mode:'range',min:4,max:8,step:2}}}}}
-test('duration dropdown follows resolution, mode and configured interval',()=>{
+test('duration choices follow resolution, mode and configured interval',()=>{
   assert.deepEqual([...selectableVideoDurations(model,'720p','first')],['4 秒','6 秒'])
   assert.deepEqual([...selectableVideoDurations(model,'720p','references')],['8 秒'])
   assert.deepEqual([...selectableVideoDurations(undefined,'720p','text')],[])

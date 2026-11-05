@@ -317,7 +317,7 @@ function SettingsSummary({ settings, onEdit }: { settings: AdminSettings; onEdit
   const defaults = settings.defaultModels
   const costs = settings.logicalModels.filter(model => model.bindings.some(binding => settings.systemChannels.some(channel => channel.id === binding.channelId))).map(model => {
     const binding = model.bindings[0], unit = binding?.capabilityProfile?.videoBillingUnit
-    return { id: model.id, name: model.name, unit, cost: (binding?.requestAlias ? settings.modelPointCosts?.[binding.requestAlias] : undefined) ?? settings.modelPointCosts?.[binding?.upstreamModel] ?? settings.modelPointCosts?.[model.id] }
+    return { id: model.id, name: model.name, capability: model.capability, unit, cost: (binding?.requestAlias ? settings.modelPointCosts?.[binding.requestAlias] : undefined) ?? settings.modelPointCosts?.[binding?.upstreamModel] ?? settings.modelPointCosts?.[model.id] }
   })
   return (
     <div className="flex flex-col gap-3">
@@ -328,7 +328,7 @@ function SettingsSummary({ settings, onEdit }: { settings: AdminSettings; onEdit
         <div className="overflow-x-auto">
           <table className="w-full min-w-[420px] text-left text-xs">
             <thead className="text-muted-foreground"><tr><th className="py-2 pr-3 font-medium">模型</th><th className="py-2 font-medium">基础价格</th></tr></thead>
-            <tbody>{costs.map(model => <tr key={model.id} className="border-t border-border"><td className="py-2 pr-3 text-[11px]">{model.name || model.id}</td><td className="py-2">{model.unit === 'duration' ? '按清晰度与时长定价' : model.cost === undefined ? '未配置' : `${formatAdminNumber(model.cost)} 积分/${model.unit === 'second' ? '秒' : '次'}`}</td></tr>)}</tbody>
+            <tbody>{costs.map(model => <tr key={model.id} className="border-t border-border"><td className="py-2 pr-3 text-[11px]">{model.name || model.id}</td><td className="py-2">{model.capability === 'video' ? '按清晰度、时长与输入素材计价' : model.cost === undefined ? '未配置' : `${formatAdminNumber(model.cost)} 积分/${model.unit === 'second' ? '秒' : '次'}`}</td></tr>)}</tbody>
           </table>
         </div>
       ) : <p className="text-xs text-muted-foreground">暂无有渠道绑定的模型，请先配置渠道。</p>}
@@ -342,6 +342,7 @@ function capabilityLabel(value: Capability | string) {
 }
 
 function modelPriceLabel(model: LogicalModel, costs: Record<string, number>) {
+  if (model.capability === 'video') return '按参数计价'
   const binding = model.bindings[0], unit = binding?.capabilityProfile?.videoBillingUnit
   const cost = (binding?.requestAlias ? costs[binding.requestAlias] : undefined) ?? costs[binding?.upstreamModel] ?? costs[model.id]
   return unit === 'duration' ? '按时长定价' : cost === undefined ? '未配置单价' : `${cost} 积分/${unit === 'second' ? '秒' : '次'}`
@@ -812,7 +813,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     </AdminSelect></AdminField>
                     <AdminField label="上游模型名称" hint="发给上游 API 的 model；例如 video-model。"><AdminInput className="w-44" value={binding.upstreamModel} placeholder="上游模型 ID" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, upstreamModel: event.target.value, id: `${item.channelId}:${event.target.value}` } : item) })} /></AdminField>
                     <AdminField label="渠道入口请求名（可选）" hint="客户端指定此名字时固定使用这条渠道绑定，例如 video-primary。"><AdminInput className="w-44" value={binding.requestAlias || ''} placeholder="对外别名（可选）" aria-label={`${model.id} 渠道${index + 1} 对外别名`} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, requestAlias: event.target.value.trim() || undefined } : item) })} /></AdminField>
-                    <AdminField label="渠道入口基础单价" hint="视频单位由下方计费方式决定；0 表示免费。"><AdminInput className="w-24" type="number" min="0" step="0.01" value={routeCost} aria-label={`${model.id} 渠道${index + 1} ${model.capability === 'video' && binding.capabilityProfile?.videoBillingUnit === 'second' ? '每秒积分' : '单价'}`} placeholder={model.capability === 'video' && binding.capabilityProfile?.videoBillingUnit === 'second' ? '积分/秒' : '积分/次'} title={binding.requestAlias ? `别名 ${binding.requestAlias} 的单次积分` : '该上游模型的单次积分'} onChange={(event) => setCosts((current) => { const next = {...current}; if (event.target.value.trim()) next[requestKey] = Number(event.target.value); else delete next[requestKey]; return next })} /></AdminField>
+                    {model.capability !== 'video' && <AdminField label="渠道入口基础单价" hint="视频单位由下方计费方式决定；0 表示免费。"><AdminInput className="w-24" type="number" min="0" step="0.01" value={routeCost} aria-label={`${model.id} 渠道${index + 1} ${'单价'}`} placeholder={'积分/次'} title={binding.requestAlias ? `别名 ${binding.requestAlias} 的单次积分` : '该上游模型的单次积分'} onChange={(event) => setCosts((current) => { const next = {...current}; if (event.target.value.trim()) next[requestKey] = Number(event.target.value); else delete next[requestKey]; return next })} /></AdminField>}
                     <AdminField label="入口图标" hint=""><LobeIconPicker className="w-48" compact value={binding.iconUrl} aria-label={`${model.id} 渠道${index + 1} 图标`} onChange={(value) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, iconUrl: value } : item) })} /></AdminField>
                     <AdminField label="路由优先级" hint="数字越小越优先。"><AdminInput className="w-20" type="number" min="1" value={binding.priority} aria-label="优先级" title="优先级：数字越小越先被选中" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, priority: Number(event.target.value) || 1 } : item) })} /></AdminField>
                     <AdminField label="同级权重" hint="同优先级渠道的流量分配权重。"><AdminInput className="w-20" type="number" min="1" max="1000" value={binding.weight ?? 1} aria-label="权重" title="权重：同级渠道之间的流量分配比例" onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, weight: Number(event.target.value) || 1 } : item) })} /></AdminField>
@@ -824,7 +825,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={binding.enabled} onChange={(event) => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, enabled: event.target.checked } : item) })} />启用</label>
                     <ControlButton variant="ghost" size="sm" aria-label="移除绑定" onClick={() => patchModel(model.id, { bindings: model.bindings.filter((_, position) => position !== index) })}><Trash2 className="size-3.5" /></ControlButton>
                     {channelModels.has(binding.channelId) && !channelModels.get(binding.channelId)?.includes(binding.upstreamModel) && <StatusBadge tone="warning">渠道未列出该模型</StatusBadge>}
-                    {model.capability === 'video' && <VideoProfileEditor profile={binding.capabilityProfile} onChange={patch => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, capabilityProfile: { ...(item.capabilityProfile || {}), ...patch } } : item) })} />}
+                    {model.capability === 'video' && <VideoProfileEditor fallbackGenerationRate={typeof routeCost === 'number' ? routeCost : undefined} profile={binding.capabilityProfile} onChange={patch => patchModel(model.id, { bindings: model.bindings.map((item, position) => position === index ? { ...item, capabilityProfile: { ...(item.capabilityProfile || {}), ...patch } } : item) })} />}
                     {model.capability === 'image' && (
                       <ImageBindingCapabilityEditor
                         profile={binding.capabilityProfile}
@@ -908,10 +909,10 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
               <AdminField label="显示名称" hint="例如“视频模型”，只控制页面文字，不是 API 请求名。"><AdminInput aria-label={`${model.id} 显示名称`} value={model.name} onChange={(event) => patchModel(model.id, { name: event.target.value })} /></AdminField>
               <AdminField label="默认模型图标" hint="可搜索 LobeHub 图标并单选，也可以粘贴站内路径或 HTTPS 地址；渠道绑定可单独覆盖"><LobeIconPicker value={model.iconUrl} aria-label={`${model.id} 默认模型图标`} onChange={(value) => patchModel(model.id, { iconUrl: value })} /></AdminField>
             </div>
-            <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+            {model.capability === 'video' ? <div className="mt-3 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">视频价格按清晰度、生成时长和输入素材计算，请在上方各清晰度卡片中设置。</div> : <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
               <p className="text-xs font-semibold text-foreground sm:col-span-2">5 · 默认基础价格<span className="ml-2 font-normal text-muted-foreground">渠道入口未设置单价时采用此价格；视频按所选的按秒、按次或时长定价方式计算。</span></p>
               <AdminField label="单次积分" hint="0 表示免费；不会自动向上游读取价格"><AdminInput aria-label={`${model.id} 单次积分`} type="number" min="0" step="1" value={costs[model.id] ?? ''} placeholder="未配置单价" onChange={(event) => setCosts((current) => { const next = {...current}; if (event.target.value.trim()) next[model.id] = Number(event.target.value); else delete next[model.id]; return next })} /></AdminField>
-            </div>
+            </div>}
               </AdminSectionCard>
             </div>
           </details>

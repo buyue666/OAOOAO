@@ -178,6 +178,10 @@ test('mobile and desktop share one parameter subtree and reserve room for the bo
   assert.match(output, /aria-controls=/)
   assert.match(output, /safe-area-inset-bottom/)
   assert.match(output, /合成原因/)
+  const pending = html(kit.WorkspaceShell, { params: 'Parameters', stage: 'Preview', onSubmit: noop, submitLabel: '生成', credits: 0, creditsPending: true })
+  assert.match(pending, /待估算/)
+  assert.doesNotMatch(pending, />0 积分</)
+  assert.match(html(kit.WorkspaceShell, { params: '', stage: '', onSubmit: noop, submitLabel: '生成', credits: 0 }), />0 积分</)
 })
 
 test('reference search is a named search control with a single managed focus surface, never a nested form', () => {

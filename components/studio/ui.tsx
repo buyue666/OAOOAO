@@ -40,7 +40,7 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
  * 通过 Radix 的浮层定位渲染提示：自动翻转、避让视口边缘，并通过 portal
  * 脱离侧栏和缩略图容器的 overflow。顶部工具栏尤其需要这个碰撞处理。
  */
-export function Tooltip({ label, side = 'top', className, children }: { label: string; side?: 'top' | 'right'; className?: string; children: ReactNode }) {
+export function Tooltip({ label, side = 'top', className, contentClassName, children }: { label: string; side?: 'top' | 'right'; className?: string; contentClassName?: string; children: ReactNode }) {
   return (
     <RadixTooltip.Provider delayDuration={100} skipDelayDuration={100}>
       <RadixTooltip.Root disableHoverableContent>
@@ -55,7 +55,7 @@ export function Tooltip({ label, side = 'top', className, children }: { label: s
             sideOffset={8}
             collisionPadding={8}
             avoidCollisions
-            className="lg-tooltip-surface lg-glass-overlay motion-fade pointer-events-none z-[60] max-w-[calc(100vw-16px)] whitespace-normal rounded-md border px-2 py-1 text-center text-xs font-medium shadow-md"
+            className={cn('lg-tooltip-surface lg-glass-overlay motion-fade pointer-events-none z-[60] max-w-[calc(100vw-16px)] whitespace-normal rounded-md border px-2 py-1 text-center text-xs font-medium shadow-md', contentClassName)}
           >
             {label}
           </RadixTooltip.Content>

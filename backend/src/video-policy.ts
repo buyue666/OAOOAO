@@ -52,13 +52,45 @@ export function validateVideoPolicySettings(profile:Json){
   }
   const pricing=profile.videoPricing;
   if(pricing!==undefined){
+    if(!pricing||typeof pricing!=='object'||Array.isArray(pricing))fail('视频价格配置无效');
     const validate=(value:any,depth=0)=>{
       if(depth>3)fail('视频价格配置层级无效');
       if(typeof value==='number'){if(!Number.isFinite(value)||value<0||value>1000000000)fail('视频价格必须为非负数');creditUnits(value);return;}
       if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length>120)fail('视频价格配置无效');
       for(const entry of Object.values(value))validate(entry,depth+1);
     };
-    validate(pricing);
+    const {resolutionPricing,...legacy}=pricing;
+    validate(legacy);
+    if(resolutionPricing!==undefined){
+      if(!resolutionPricing||typeof resolutionPricing!=='object'||Array.isArray(resolutionPricing)||Object.keys(resolutionPricing).length>16)fail('清晰度价格配置无效');
+      const refs=new Set(['extraImage','extraVideo','extraAudio','referenceVideoPerSecond','referenceAudioPerSecond']);
+      const referencePrices=(value:Json)=>{
+        if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!refs.has(key)))fail('输入素材价格配置无效');
+        for(const price of Object.values(value)){if(typeof price!=='number')fail('输入素材价格必须为数字');validate(price);}
+      };
+      for(const [quality,candidate] of Object.entries(resolutionPricing) as [string,Json][]){
+        if(!quality||quality.length>32||!candidate||typeof candidate!=='object'||Array.isArray(candidate)||Object.keys(candidate).some(key=>!['generationRate','generationDurationRates','referencePrices','referenceDurationTiers','additionalPrices'].includes(key)))fail('清晰度价格配置无效');
+        const row=candidate as Json;
+        if(row.generationRate!==undefined&&row.generationRate!==null){if(typeof row.generationRate!=='number')fail('生成价格必须为数字');validate(row.generationRate);}
+        if(row.generationDurationRates!==undefined){
+          if(!row.generationDurationRates||typeof row.generationDurationRates!=='object'||Array.isArray(row.generationDurationRates)||Object.keys(row.generationDurationRates).some(key=>!integer(Number(key),1,3600)))fail('指定时长价格无效');
+          validate(row.generationDurationRates);
+        }
+        if(row.referencePrices!==undefined)referencePrices(row.referencePrices);
+        if(row.additionalPrices!==undefined){
+          if(!row.additionalPrices||typeof row.additionalPrices!=='object'||Array.isArray(row.additionalPrices)||Object.keys(row.additionalPrices).some(key=>!/^[A-Za-z][A-Za-z0-9]{0,63}$/.test(key)||typeof row.additionalPrices[key]!=='number'))fail('附加价格配置无效');
+          validate(row.additionalPrices);
+        }
+        if(row.referenceDurationTiers!==undefined){
+          if(!Array.isArray(row.referenceDurationTiers)||!row.referenceDurationTiers.length||row.referenceDurationTiers.length>16)fail('输入素材价格分段无效');
+          let previous=0;
+          for(const tier of row.referenceDurationTiers){
+            if(!tier||typeof tier!=='object'||Object.keys(tier).some(key=>!['maxSeconds','prices'].includes(key))||!integer(tier.maxSeconds,previous+1,3600))fail('价格分段结束时长须为递增的整数');
+            referencePrices(tier.prices);previous=tier.maxSeconds;
+          }
+        }
+      }
+    }
   }
 }
 export function validateVideoInput(input:Json,profile:Json){
@@ -89,30 +121,42 @@ export function validateReferenceDurations(metadata:Json[],profile:Json,hardMax=
     if(max>0&&total>max+0.001)fail(`参考${type==='video'?'视频':'音频'}总时长不得超过 ${max} 秒`);
   }
 }
-export function videoBaseCost(base:bigint,profile:Json,quality:string,seconds:number):bigint{
-  const prices=profile.videoPricing||{},mode=profile.videoBillingUnit||'second';
-  const price=mode==='duration'?prices.durationRates?.[quality]?.[String(seconds)]:prices.resolutionRates?.[quality];
-  if(mode==='duration'&&price===undefined)throw httpError(503,'请先配置此清晰度和时长的视频积分价格');
-  const rate=price===undefined?base:creditUnits(price);
-  return mode==='second'?rate*BigInt(seconds):rate;
+export function videoResolutionPrices(profile:Json,quality:string):Json{
+  const pricing=profile.videoPricing||{};
+  return {...pricing,...pricing.resolutionPricing?.[quality]?.additionalPrices};
 }
-export function videoReferenceCost(metadata:Json[],profile:Json):bigint{
-  const prices=profile.videoPricing||{};let total=0n;
+export function videoBaseCost(base:bigint|undefined,profile:Json,quality:string,seconds:number):bigint{
+  const prices=profile.videoPricing||{},mode=profile.videoBillingUnit||'second';
+  const row=prices.resolutionPricing?.[quality]||{};
+  const price=mode==='duration'?(row.generationDurationRates??prices.durationRates?.[quality])?.[String(seconds)]:Object.hasOwn(row,'generationRate')?row.generationRate:prices.resolutionRates?.[quality];
+  if(mode==='duration'&&price===undefined)throw httpError(503,'请先配置此清晰度和时长的视频积分价格');
+  if(price===null||(price===undefined&&base===undefined))throw httpError(503,`请先配置 ${quality||'当前清晰度'} 的视频生成价格`);
+  const rate=price===undefined?base:creditUnits(price);
+  return mode==='second'?rate!*BigInt(seconds):rate!;
+}
+export function videoReferenceCost(metadata:Json[],profile:Json,context:{quality?:string;seconds?:number;multiplier?:number;defaultFreeCounts?:Record<string,number>}={}):bigint{
+  const pricing=profile.videoPricing||{},row=pricing.resolutionPricing?.[context.quality||'']||{};
+  const tiers=row.referenceDurationTiers as Json[]|undefined;
+  const tier=tiers?.find(item=>Number(context.seconds||0)<=item.maxSeconds);
+  const prices=tier?.prices??row.referencePrices??pricing;
+  const multiplier=tiers?10000n:creditUnits(context.multiplier??1);
+  let total=0n;
   for(const type of ['image','video','audio']){
     const items=metadata.filter(item=>item.type===type),rule=profile.videoReferenceRules?.[type]||{};
-    const free=rule.freeCount??0;
+    const free=rule.freeCount??context.defaultFreeCounts?.[type]??0;
     const billed=items.slice(free);if(!billed.length)continue;
+    if(tiers&&!tier)throw httpError(503,'请先配置此清晰度和生成时长的输入素材价格');
     const key=type==='image'?'extraImage':type==='video'?'extraVideo':'extraAudio';
     const secondKey=type==='video'?'referenceVideoPerSecond':'referenceAudioPerSecond';
     if(prices[key]===undefined&&(type==='image'||prices[secondKey]===undefined))throw httpError(503,'请先配置超额参考素材的积分价格，可明确填写 0');
-    if(prices[key]!==undefined)total+=creditUnits(prices[key])*BigInt(billed.length);
-    if(type!=='image'&&prices[secondKey]!==undefined)total+=(creditUnits(prices[secondKey])*BigInt(Math.ceil(billed.reduce((sum,item)=>sum+Number(item.duration||0),0)*1000))+999n)/1000n;
+    if(prices[key]!==undefined)total+=(creditUnits(prices[key])*multiplier*BigInt(billed.length)+9999n)/10000n;
+    if(type!=='image'&&prices[secondKey]!==undefined)total+=(creditUnits(prices[secondKey])*multiplier*BigInt(Math.ceil(billed.reduce((sum,item)=>sum+Number(item.duration||0),0)*1000))+9999999n)/10000000n;
   }
   return total;
 }
 
 /** Inspect owned/public reference bytes before charging; never trust client durations. */
-export async function prepareVideoPolicy(ctx:Context,input:Json,profile:Json,base:bigint,userId?:string){
+export async function prepareVideoPolicy(ctx:Context,input:Json,profile:Json,base:bigint|undefined,userId?:string){
   const config=input.config||{},metadata:Json[]=[];
   for(const reference of input.references||[]){
     if(!userId)throw httpError(401,'参考素材校验需要登录账号');
@@ -130,6 +174,6 @@ export async function prepareVideoPolicy(ctx:Context,input:Json,profile:Json,bas
   validateReferenceDurations(metadata,profile);
   validateVideoInput({...input,references:metadata},profile);
   const quality=String(config.vquality||profile.videoQualities?.[0]||''),seconds=Number(config.videoSeconds||profile.defaultVideoSeconds||profile.durationSeconds?.[0]||4);
-  const subtotal=videoBaseCost(base,profile,quality,seconds)+videoReferenceCost(metadata,profile);
+  const subtotal=videoBaseCost(base,profile,quality,seconds)+videoReferenceCost(metadata,profile,{quality,seconds});
   return {cost:creditDecimal(subtotal),snapshot:{referenceMetadata:metadata}};
 }

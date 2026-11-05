@@ -281,6 +281,8 @@ export function ratioLabel(
   resolution?: string,
   outputDimensionsByResolution?: Record<string, Record<string, string>>,
 ) {
+  if (value === 'adaptive') return '自动适配'
+  if (value === 'auto') return '自动'
   const dimensions = ratioDimension(value, outputDimensions, resolution, outputDimensionsByResolution)
   return dimensions ? `${value} · ${dimensions}` : value
 }
@@ -296,7 +298,7 @@ export function ratioDimension(
 }
 
 export function qualityLabel(value: string, labels?: Record<string, string>) {
-  return labels?.[value] || qualityLabelText[value] || value
+  return labels?.[value] || qualityLabelText[value] || ({standard: '标准', hd: '高清', sd: '标清', adaptive: '自动适配', auto: '自动'} as Record<string, string>)[value] || value
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   GripVertical,
   Image as ImageIcon,
   Loader2,
+  Minus,
   Plus,
   RefreshCw,
   Search,
@@ -35,8 +36,7 @@ export function ratioToCss(ratio: string) {
 }
 
 /**
- * 工作台骨架：桌面端左侧固定 320px 参数面板（可独立滚动、生成按钮常驻），
- * 右侧为自适应预览区；移动端参数入口在预览之前，生成按钮吸底。
+ * 工作台共用一个参数子树；改变面板位置和收起时保留输入、上传和控件状态。
  */
 export function WorkspaceShell({
   params,
@@ -45,6 +45,7 @@ export function WorkspaceShell({
   onSubmit,
   submitLabel,
   credits,
+  creditsPending = false,
   submitDisabled,
   notice,
   paramsTitle = '创作参数',
@@ -57,6 +58,7 @@ export function WorkspaceShell({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   submitLabel: string
   credits: number
+  creditsPending?: boolean
   submitDisabled?: boolean
   notice?: ReactNode
   paramsTitle?: string
@@ -64,26 +66,49 @@ export function WorkspaceShell({
   submitHint?: string
 }) {
   const [paramsOpen, setParamsOpen] = useState(false)
+  const [dock, setDock] = useState('left')
+  const [minimized, setMinimized] = useState(false)
+  const previousDock = useRef('left')
   const paramsId = useId()
+  const layoutKey = 'oao.workspace.panel-position'
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(layoutKey)
+      if (saved && ['left', 'right', 'top', 'bottom'].includes(saved)) setDock(saved)
+    } catch { /* Storage may be unavailable in private browsing. */ }
+  }, [])
+  const movePanel = (next: string) => {
+    if (!['left', 'right', 'top', 'bottom', 'fullscreen'].includes(next)) return
+    if (next === 'fullscreen' && dock !== 'fullscreen') previousDock.current = dock
+    setDock(next); setMinimized(false); setParamsOpen(true)
+    try { if (next !== 'fullscreen') window.localStorage.setItem(layoutKey, next) } catch { /* Keep the current layout usable. */ }
+  }
+  const displayedCredits = creditsPending ? '待估算' : `${credits} 积分`
 
   return (
-    <form onSubmit={onSubmit} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 pt-5 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-5 md:gap-5 md:px-8 md:pt-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10 xl:pb-6">
-      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="order-1 min-h-0 min-w-0">
+    <form onSubmit={onSubmit} data-panel-position={dock} data-panel-minimized={minimized} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && dock === 'fullscreen') { event.preventDefault(); movePanel(previousDock.current) } }} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 pt-5 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-5 md:gap-5 md:px-8 md:pt-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10 xl:pb-6">
+      <div className="workspace-layout-grid relative grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="workspace-params-panel order-1 min-h-0 min-w-0">
           <button type="button" onClick={() => setParamsOpen((value) => !value)} aria-expanded={paramsOpen} aria-controls={paramsId} className="studio-surface flex min-h-12 w-full items-center justify-between gap-3 px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 xl:hidden">
             <span>{paramsTitle}<span className="ml-2 text-xs font-normal text-muted-foreground">{paramsOpen ? '收起设置' : '展开开始创作'}</span></span>
             <ChevronDown className={cn('size-4 shrink-0 transition-transform', paramsOpen && 'rotate-180')} aria-hidden="true" />
           </button>
           <div id={paramsId} className={cn('workspace-params-glass mt-3 h-full min-h-0 flex-col xl:mt-0 xl:flex', paramsOpen ? 'flex' : 'hidden')}>
-            <div className="hidden shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 xl:flex">
-              <h2 className="text-sm font-semibold text-foreground">{paramsTitle}</h2>
-              {paramsHint && <span className="truncate text-[11px] text-muted-foreground">{paramsHint}</span>}
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+              <h2 className="text-xs font-semibold text-foreground" title={paramsHint}>{paramsTitle}</h2>
+              <div className="flex items-center gap-1">
+                <select aria-label="参数面板位置" value={dock} onChange={event => movePanel(event.target.value)} className="studio-field min-h-11 max-w-28 rounded-md border border-border bg-background px-2 text-xs">
+                  <option value="left">附着在左</option><option value="right">附着在右</option><option value="top">附着在上</option><option value="bottom">附着在下</option><option value="fullscreen">全屏输入</option>
+                </select>
+                {dock === 'fullscreen' && <button type="button" onClick={() => movePanel(previousDock.current)} className="min-h-11 rounded-md px-2 text-xs hover:bg-muted">退出全屏</button>}
+                <Tooltip label={minimized ? '展开参数面板' : '缩小参数面板'}><button type="button" aria-label={minimized ? '展开参数面板' : '缩小参数面板'} aria-expanded={!minimized} aria-controls={`${paramsId}-body`} onClick={() => setMinimized(value => !value)} className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">{minimized ? <Plus className="size-4" /> : <Minus className="size-4" />}</button></Tooltip>
+              </div>
             </div>
-            <div className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{params}</div>
-            <div className="hidden shrink-0 border-t border-border px-4 py-3 xl:block">
+            <div id={`${paramsId}-body`} className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4" hidden={minimized}>{params}</div>
+            <div className={cn('workspace-desktop-submit hidden shrink-0 border-t border-border px-4 py-3 xl:block', minimized && 'workspace-submit-hidden')}>
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-muted-foreground">预计消耗</span>
-                <span className="font-semibold tabular-nums text-studio-accent">{credits} 积分</span>
+                <span className="font-semibold tabular-nums text-studio-accent" aria-live="polite">{displayedCredits}</span>
               </div>
               {submitHint && <p className="mt-2 text-[11px] leading-5 text-muted-foreground" role="status">{submitHint}</p>}
               <ControlButton type="submit" variant="primary" size="lg" className="mt-3 w-full" disabled={submitDisabled}>
@@ -93,7 +118,7 @@ export function WorkspaceShell({
           </div>
         </aside>
 
-        <section className="order-2 min-h-0 min-w-0 overscroll-contain xl:overflow-y-auto xl:pr-1">
+        <section className="workspace-results-panel order-2 min-h-0 min-w-0 overscroll-contain xl:overflow-y-auto xl:pr-1" inert={dock === 'fullscreen' && !minimized}>
           {stageToolbar}
           {stage}
           {notice}
@@ -105,7 +130,7 @@ export function WorkspaceShell({
       <div className="workspace-submit-bar fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] text-muted-foreground">预计消耗</p>
-          <p className="text-sm font-semibold tabular-nums text-studio-accent">{credits} 积分</p>
+          <p className="text-sm font-semibold tabular-nums text-studio-accent" aria-live="polite">{displayedCredits}</p>
         </div>
         <ControlButton type="submit" variant="primary" size="lg" className="min-w-0 flex-1 sm:min-w-32 sm:flex-none" disabled={submitDisabled}>
           {submitLabel}

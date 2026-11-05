@@ -20,6 +20,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
+import {PromptReferenceInput} from './prompt-reference-input'
+import {VideoDurationSlider} from './video-duration-slider'
+import {orderedPromptReferences, type PromptReference} from '@/lib/studio/prompt-references'
 import {selectableVideoDurations,videoReferenceLimit} from '@/lib/studio/video-policy'
 import { quoteVideoGeneration } from '@/lib/studio/generation-api'
 import { useRouter } from 'next/navigation'
@@ -50,7 +53,7 @@ import {
 import { useStudio } from '@/lib/studio/store'
 import { useGeneration } from '@/lib/studio/generation-store'
 import { GenerationErrorNotice, GenerationNotice, LiveTaskList, LocalPreviewNotice } from './live-generation'
-import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioDimension } from '@/lib/studio/studio-models'
+import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioLabel, ratioDimension } from '@/lib/studio/studio-models'
 import { accountDataEpoch } from '@/lib/studio/account-data-sync'
 import { useServerWorks, useLibraryAssets } from '@/lib/studio/use-account-data'
 import { useVideoReferenceLibrary } from '@/lib/studio/use-video-reference-library'
@@ -1881,6 +1884,14 @@ export function VideoWorkspace() {
   const currentWork = stageSource.find((work) => work.id === selectedVideoId) ?? stageSource[0]
   const videoReady = Boolean(currentWork) && currentWork?.status !== '处理中'
   const videoFailed = Boolean(currentWork && currentWork.src === failedVideoSrc)
+  const selectedMention = (item: SelectedReference): PromptReference => ({id: item.id, name: item.title, type: item.kind === 'video' ? 'video' : item.kind === 'audio' ? 'audio' : 'image', preview: item.src})
+  const uploadMention = (item: UploadItem): PromptReference => ({id: item.id, name: item.name, type: item.kind || 'image', preview: item.preview, ready: item.status === 'done' && Boolean(item.dataUrl)})
+  const promptReferences = orderedPromptReferences(mode, {
+    first: [...firstFrameRef.map(selectedMention), ...firstFrameUploads.map(uploadMention)],
+    last: [...lastFrameRef.map(selectedMention), ...lastFrameUploads.map(uploadMention)],
+    source: [...sourceVideoRef.map(selectedMention), ...sourceVideoUploads.map(uploadMention)],
+    references: [...selectedRefs.map(selectedMention), ...uploads.map(uploadMention), ...(videoPolicy?.supportsVideoReference ? videoRefUploads.map(uploadMention) : []), ...(videoPolicy?.supportsAudioReference ? audioRefUploads.map(uploadMention) : [])],
+  })
   const referenceLabel = mode === 'first' ? '首帧输入' : mode === 'ends' ? '首尾帧输入' : mode === 'references' ? '多参考素材' : mode === 'edit' ? '编辑源视频' : '参考素材'
 
   async function publishUploads(items: UploadItem[], type: 'image' | 'video' | 'audio', role: GenerationReference['role'] = 'reference'): Promise<GenerationReference[]> {
@@ -2056,27 +2067,20 @@ export function VideoWorkspace() {
 
       <ParamSection title="镜头描述">
         <label htmlFor="video-prompt" className="sr-only">镜头描述</label>
-        <textarea
-          id="video-prompt"
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          rows={5}
-          placeholder="描述镜头运动、主体动作与氛围"
-          className="studio-field w-full resize-none border border-border bg-background p-3 text-sm leading-6 text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15"
-        />
+        <PromptReferenceInput id="video-prompt" value={prompt} onChange={setPrompt} references={promptReferences} placeholder="描述镜头运动、主体动作与氛围，输入 @ 引用已上传素材" />
       </ParamSection>
 
       <ParamSection title="模型">
-        <SelectField label="视频模型" value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.capabilities.videoPolicy?.billingUnit === 'duration' ? '按时长定价' : `${item.creditCost} 积分/${item.capabilities.videoPolicy?.billingUnit === 'second' ? '秒' : '次'}`}`, icon: <ModelIcon model={item} /> }))} />
+        <SelectField label="视频模型" value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · 按参数计价`, icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
       </ParamSection>
 
       <ParamSection title="输出">
         <div className="grid grid-cols-2 gap-3">
-          <SelectField label="比例" value={ratio} onChange={setRatio} options={capabilities.ratios.map((item) => ({ value: item, label: item }))} />
-          <SelectField label="时长" value={duration} onChange={setDuration} options={selectableVideoDurations(model,quality,mode).map((item) => ({ value: item, label: item }))} />
-          <SelectField label="清晰度" value={quality} onChange={setQuality} options={capabilities.qualities.map((item) => ({ value: item, label: item }))} className="col-span-2" />
+          <SelectField label="比例" value={ratio} onChange={setRatio} options={capabilities.ratios.map((item) => ({ value: item, label: ratioLabel(item) }))} />
+          <SelectField label="清晰度" value={quality} onChange={setQuality} options={capabilities.qualities.map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
         </div>
+        <div className="mt-3"><VideoDurationSlider value={duration} options={allowedDurations} onChange={setDuration} /></div>
       </ParamSection>
 
 
@@ -2297,6 +2301,7 @@ export function VideoWorkspace() {
         onSubmit={submit}
         submitLabel={submitting ? '正在提交…' : '开始生成'}
         credits={credits}
+        creditsPending={Boolean(videoPolicy && quoteBlock)}
         submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
         submitHint={submitBlock || (!prompt.trim() ? '先描述主体动作与镜头运动。' : undefined)}
         paramsTitle="视频参数"

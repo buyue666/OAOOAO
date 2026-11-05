@@ -116,3 +116,21 @@ frontend compatibility tests and migration reconciliation before any production 
   times are monotonic per account under the wallet lock, including multiple
   entries in one transaction; transaction-start `now()` must not reorder a
   subsequent debit before the expirations that preceded it.
+
+Video resolution pricing
+- Bindings can configure `videoPricing.resolutionPricing[quality]`. Its
+  `generationRate` follows `videoBillingUnit`; `generationDurationRates` maps
+  exact output seconds to a complete generation price for duration billing.
+- `referencePrices` applies to the output resolution, using extra image/video/
+  audio count prices and optional reference video/audio per-second prices.
+  Ordered `referenceDurationTiers` select a complete reference price map by
+  output duration (`maxSeconds` inclusive). Explicit tiers replace legacy
+  reference multipliers. They must cover each billable request's output duration.
+- Existing resolution/duration tables and binding/model fallback prices remain
+  compatible. A present `generationRate: null` explicitly removes its fallback;
+  an empty `referencePrices` map explicitly clears inherited reference prices.
+  Missing required prices block a quote/submission; explicit zero is free.
+- Quotes and submissions use the same resolution and duration rules, probe input
+  media durations, and calculate in wallet precision. Quotes create no paid jobs
+  or wallet operations. Bulk resolution edits copy only selected targets and
+  intersect the source duration rule with each target's native limits.

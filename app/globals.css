@@ -2286,6 +2286,24 @@
   box-shadow: var(--lg-shadow-2), inset 0 1px 0 var(--lg-highlight-soft);
 }
 .workspace-submit-bar { background: var(--lg-pane-bg); }
+.workspace-submit-hidden { display: none !important; }
+.workspace-params-scroll[hidden] { display: none; }
+.studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-params-panel { position: absolute; inset: 0; z-index: 40; }
+.studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-params-glass { display: flex; margin-top: 0; background: var(--background); }
+.studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-results-panel { visibility: hidden; }
+.studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-params-panel > button { display: none; }
+.studio-workspace-shell[data-panel-position='fullscreen'] .workspace-params-scroll > div { max-width: 1000px; margin-inline: auto; }
+@media (min-width: 1280px) {
+  .workspace-params-panel { grid-area: params; }
+  .workspace-results-panel { grid-area: results; }
+  .workspace-layout-grid { grid-template-areas: 'params results'; }
+  .studio-workspace-shell[data-panel-position='right'] .workspace-layout-grid { grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: 'results params'; }
+  .studio-workspace-shell:is([data-panel-position='top'], [data-panel-position='bottom']) .workspace-layout-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'params' 'results'; }
+  .studio-workspace-shell[data-panel-position='bottom'] .workspace-layout-grid { grid-template-areas: 'results' 'params'; }
+  .studio-workspace-shell:is([data-panel-position='top'], [data-panel-position='bottom']) .workspace-params-scroll > div { max-width: 1000px; margin-inline: auto; }
+  .studio-workspace-shell[data-panel-minimized='true'] .workspace-layout-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: 'params' 'results'; }
+  .studio-workspace-shell[data-panel-minimized='true'] .workspace-params-glass { height: auto; }
+}
 
 .studio-app-shell[data-studio-skin='gradient'] .workspace-params-glass {
   border-color: rgb(235 255 252 / 28%);
