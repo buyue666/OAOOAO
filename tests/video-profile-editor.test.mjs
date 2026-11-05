@@ -95,6 +95,17 @@ test('extra feature switches require an explicit administrator selection',()=>{
   assert.equal(h.profile().syntheticFeatureEnabled,false)
 })
 
+test('total reference limit is an explicit shared ceiling and zero keeps the upstream default',()=>{
+  const h=harness({...initial(),maxReferences:15})
+  assert.equal(h.field('参考素材合计上限（个）').props.value,0)
+  assert.match(text(h.render()),/沿用模型上限 15 个/)
+  h.field('参考素材合计上限（个）').props.onChange({target:{value:'8'}})
+  assert.equal(h.profile().videoReferenceTotalLimit,8)
+  assert.equal(h.profile().maxReferences,15)
+  h.field('参考素材合计上限（个）').props.onChange({target:{value:'0'}})
+  assert.equal(h.profile().videoReferenceTotalLimit,0)
+})
+
 test('adapters can explain combined billable time without changing the output duration band',()=>{
   const h=harness({...initial(),videoPricingTemplate:'reference-video-output'},{longDurationMultiplier:2,includeReferenceVideoDuration:true})
   assert.match(text(h.render()),/输出时长＋全部参考视频时长/)

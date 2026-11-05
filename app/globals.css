@@ -2300,6 +2300,20 @@
   .prompt-reference-mirror { visibility: hidden; }
 }
 .workspace-submit-hidden { display: none !important; }
+.workspace-reference-uploaders { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: .75rem; }
+.workspace-reference-uploaders > .workspace-reference-upload { min-width: 0; display: grid; grid-template-rows: auto 1fr; align-content: start; gap: .5rem; }
+.workspace-reference-uploaders > .workspace-reference-upload > ul,
+.workspace-reference-uploaders > .workspace-reference-upload > [role] { grid-row: auto; }
+.workspace-reference-uploaders .workspace-reference-dropzone { min-width: 0; min-height: 10rem; justify-content: flex-start; }
+.workspace-reference-uploaders .workspace-reference-select { margin-top: auto; }
+.admin-config-group > summary { list-style: none; }
+.admin-config-group > summary::-webkit-details-marker { display: none; }
+.admin-config-group > summary::after { content: '展开'; margin-left: auto; flex: none; font-size: 11px; font-weight: 400; color: var(--muted-foreground); }
+.admin-config-group[open] > summary::after { content: '收起'; }
+.admin-config-group > summary:hover { background: var(--muted); }
+.admin-config-group > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: .5rem; }
+.admin-config-group > summary > .admin-config-chevron { transform: rotate(-90deg); }
+.admin-config-group[open] > summary > .admin-config-chevron { transform: rotate(0); }
 .workspace-params-scroll[hidden] { display: none; }
 .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] { max-width: none; height: calc(100dvh - 60px); overflow: hidden; }
 .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-layout-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: 'params'; }
@@ -2318,7 +2332,8 @@
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-section { border-top: 0; padding-top: 0; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-param-content { margin-top: .5rem; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] [data-param-layout='mode'] [role='radiogroup'] { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
-  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] [data-param-layout='references'] .workspace-reference-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); align-items: start; gap: .75rem; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] [data-param-layout='references'] .workspace-reference-grid { display: flex; flex-direction: column; gap: .75rem; }
+  .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-reference-uploaders { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-reference-picker { grid-column: 1 / -1; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .reference-picker-grid { grid-template-columns: repeat(auto-fill, minmax(4rem, 1fr)); max-height: 6rem; overflow-y: auto; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-reference-dropzone { padding: .75rem; gap: .375rem; }

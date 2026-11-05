@@ -34,6 +34,16 @@ test('eight references with five free and one point per extra reference cost thr
   assert.throws(()=>videoReferenceCost(refs,{videoReferenceRules:{image:{freeCount:0}}}),/配置/);
 });
 
+test('mixed reference total is shared and configured limits cannot exceed the native ceiling',()=>{
+  const refs=[...Array(9).fill({type:'image'}),...Array(3).fill({type:'video'}),...Array(3).fill({type:'audio'})];
+  const rules={supportsReferenceImage:true,supportsVideoReference:true,supportsAudioReference:true,maxReferenceImages:9,maxReferenceVideos:3,maxReferenceAudios:3,maxReferences:15};
+  assert.doesNotThrow(()=>validateVideoInput({references:refs},rules));
+  assert.throws(()=>validateVideoInput({references:refs},{...rules,videoReferenceTotalLimit:14}),/合计最多 14/);
+  assert.throws(()=>validateVideoInput({references:[...refs,{type:'audio'}]},{...rules,videoReferenceTotalLimit:100}),/合计最多 15/);
+  assert.doesNotThrow(()=>validateVideoInput({references:refs},{...rules,videoReferenceTotalLimit:0}));
+  for(const value of [-1,1.5,1001,'15'])assert.throws(()=>validateVideoPolicySettings({videoReferenceTotalLimit:value}));
+});
+
 test('video and audio references apply free allowances and actual duration limits',()=>{
   const metadata=[{type:'video',duration:5},{type:'video',duration:8},{type:'audio',duration:2}];
   const rules={videoReferenceRules:{video:{freeCount:1,maxItemSeconds:10,maxTotalSeconds:14},audio:{freeCount:0}},videoPricing:{extraVideo:2,referenceVideoPerSecond:0.5,extraAudio:1,referenceAudioPerSecond:0.25}};

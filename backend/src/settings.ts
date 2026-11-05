@@ -1,5 +1,6 @@
 import {normalizeModelCatalog,modelReady} from './model-catalog.js';
 import {validateVideoPolicySettings} from './video-policy.js';
+import {validateUpstreamPricing} from './upstream-pricing.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
@@ -219,6 +220,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
     }
   }
   next=normalizeModelCatalog(next);
+  if(Object.hasOwn(patch,'logicalModels')||Object.hasOwn(patch,'modelPointCosts'))validateUpstreamPricing(next);
   const requestOwners=new Map<string,string>();
   for(const model of next.logicalModels)for(const name of [model.id,...(model.aliases||[])])requestOwners.set(String(name).trim().toLowerCase(),model.id);
   const routeNames=new Set<string>();

@@ -23,7 +23,7 @@ import {
 import {PromptReferenceInput} from './prompt-reference-input'
 import {VideoDurationSlider} from './video-duration-slider'
 import {orderedPromptReferences, serializePromptReferences, type PromptReference} from '@/lib/studio/prompt-references'
-import {selectableVideoDurations,videoReferenceLimit} from '@/lib/studio/video-policy'
+import {selectableVideoDurations,videoReferenceLimit,videoReferenceUploadLimit} from '@/lib/studio/video-policy'
 import { quoteVideoGeneration } from '@/lib/studio/generation-api'
 import { useRouter } from 'next/navigation'
 import { DirectorAgent } from './director-agent'
@@ -1262,7 +1262,7 @@ export function ImageWorkspace() {
         </div>
       </ParamSection>
 
-      <ParamSection title="参考素材" layout="references" hint={`${selectedRefs.length}/${referenceSelectionLimit}`}>
+      <ParamSection title="参考素材" layout="references" hint={`${selectedRefs.length + uploads.length}/${referenceSelectionLimit} · 合计`}>
         <div className="workspace-reference-grid flex flex-col gap-3">
           {referenceSelectionLimit > 0 && <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={Math.max(0, referenceSelectionLimit - selectedRefs.length)} />}
           {/*
@@ -2045,15 +2045,23 @@ export function VideoWorkspace() {
     setter((current) => (current.some((item) => item.id === asset.id) ? [] : toggleSelection(current, asset, 1)))
   }
 
+  const referenceUploadCounts = {image: uploads.length, video: videoPolicy?.supportsVideoReference ? videoRefUploads.length : 0, audio: videoPolicy?.supportsAudioReference ? audioRefUploads.length : 0}
+  const referenceUploadTotal = Object.values(referenceUploadCounts).reduce((total, count) => total + count, 0)
   const referenceHint = mode === 'ends'
     ? `${firstFrameUploads.length + firstFrameRef.length}/1 首帧 · ${lastFrameUploads.length + lastFrameRef.length}/1 尾帧`
     : mode === 'first' ? `${firstFrameUploads.length + firstFrameRef.length}/1`
       : mode === 'edit' ? `${sourceVideoUploads.length + sourceVideoRef.length}/1`
-        : `${selectedRefs.length + uploads.length}/${referenceSelectionLimit}`
+        : `${selectedRefs.length + referenceUploadTotal}/${referenceSelectionLimit} · 合计`
 
   /** 切换已选（视频工作台的多参考模式）：同样按快照保存，不依赖当前搜索结果。 */
   function toggleReference(asset: Asset) {
-    setSelectedRefs((current) => toggleSelection(current, asset, Math.max(0, referenceSelectionLimit - uploads.length)))
+    const type = asset.kind === 'video' ? 'video' : asset.kind === 'audio' ? 'audio' : 'image'
+    if (!selectedRefs.some(item => item.id === asset.id)) {
+      const count = selectedRefs.filter(item => (item.kind === 'scene' ? 'image' : item.kind) === type).length + referenceUploadCounts[type]
+      const limit = videoReferenceLimit(model, type)
+      if (count >= limit) {setNotice({tone: 'warning', text: `参考${type === 'image' ? '图片' : type === 'video' ? '视频' : '音频'}最多 ${limit} 个，包含上传和素材库选择。`}); return}
+    }
+    setSelectedRefs((current) => toggleSelection(current, asset, Math.max(0, referenceSelectionLimit - referenceUploadTotal)))
   }
 
   const params = (
@@ -2143,10 +2151,14 @@ export function VideoWorkspace() {
         )}
         {(mode === 'text' || mode === 'references') && (
           <div className="workspace-reference-grid flex flex-col gap-3">
-            {capabilities.maxReferences > 0 ? <><ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={Math.max(0, Math.min(capabilities.maxReferences - selectedRefs.length - videoRefUploads.length - audioRefUploads.length, videoReferenceLimit(model,'image') - selectedRefs.filter(item=>['image','scene'].includes(item.kind)).length))} hint="PNG / JPG / WEBP，单个不超过 12 MB" />
-            {videoPolicy?.supportsVideoReference && <ReferenceUploader items={videoRefUploads} onItemsChange={setVideoRefUploads} kind="video" maxFiles={Math.min(videoReferenceLimit(model,'video'), Math.max(0, referenceSelectionLimit - selectedRefs.length - uploads.length - audioRefUploads.length))} maxFileBytes={24 * 1024 * 1024} label="参考视频" emptyText="上传参考视频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
-            {videoPolicy?.supportsAudioReference && <ReferenceUploader items={audioRefUploads} onItemsChange={setAudioRefUploads} kind="audio" maxFiles={Math.min(videoReferenceLimit(model,'audio'), Math.max(0, referenceSelectionLimit - selectedRefs.length - uploads.length - videoRefUploads.length))} label="参考音频" emptyText="上传参考音频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
-            <ReferencePicker assets={referencePool} selectedIds={selectedRefs.map((item) => item.id)} onToggle={(_, asset) => toggleReference(asset as Asset)} maxReferences={referenceSelectionLimit} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></> : <p className="text-xs leading-5 text-muted-foreground">当前模型使用文字描述生成视频，不支持参考素材。</p>}
+            {capabilities.maxReferences > 0 ? <>
+            <p className="text-[11px] leading-5 text-muted-foreground">图片、视频、音频合计最多 {referenceSelectionLimit} 个；上传文件与素材库选择共用额度。</p>
+            <div className="workspace-reference-uploaders">
+            <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={videoReferenceUploadLimit(model, 'image', selectedRefs, referenceUploadCounts)} hint="PNG / JPG / WEBP，单个不超过 12 MB" />
+            {videoPolicy?.supportsVideoReference && <ReferenceUploader items={videoRefUploads} onItemsChange={setVideoRefUploads} kind="video" maxFiles={videoReferenceUploadLimit(model, 'video', selectedRefs, referenceUploadCounts)} maxFileBytes={24 * 1024 * 1024} label="参考视频" emptyText="上传参考视频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
+            {videoPolicy?.supportsAudioReference && <ReferenceUploader items={audioRefUploads} onItemsChange={setAudioRefUploads} kind="audio" maxFiles={videoReferenceUploadLimit(model, 'audio', selectedRefs, referenceUploadCounts)} label="参考音频" emptyText="上传参考音频" hint={`数量与时长按模型参考规则校验；单个不超过 24 MiB`} />}
+            </div>
+            <ReferencePicker assets={referencePool} selectedIds={selectedRefs.map((item) => item.id)} onToggle={(_, asset) => toggleReference(asset as Asset)} maxReferences={Math.max(0, referenceSelectionLimit - referenceUploadTotal)} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => { void refreshSources() }} onLoadMore={serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch /></> : <p className="text-xs leading-5 text-muted-foreground">当前模型使用文字描述生成视频，不支持参考素材。</p>}
           </div>
         )}
       </ParamSection>}

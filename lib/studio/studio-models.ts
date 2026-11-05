@@ -142,7 +142,7 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
      * （实测 `e2e-image` 无 profile，带 references 提交返回 200 且 `kind:"edit"`）。
      * 给 0 会把一个真实可用的能力从界面上抹掉——用户报的「选不到上传素材」会变成「根本没有入口」。
      */
-    maxReferences: explicitlyUnsupported ? 0 : Math.max(1, Number(profile?.maxReferences ?? profile?.maxReferenceImages) || UNCONFIGURED_REFERENCE_LIMIT),
+    maxReferences: explicitlyUnsupported ? 0 : Math.min(Math.max(1, Number(profile?.maxReferences ?? profile?.maxReferenceImages) || UNCONFIGURED_REFERENCE_LIMIT), model.capability === 'video' && Number(profile?.videoReferenceTotalLimit) > 0 ? Number(profile?.videoReferenceTotalLimit) : Infinity),
     // 后端 maxBatchSize 决定能否一次提交多张/多条；缺省按 1 处理，避免发出后端不支持的批量。
     maxBatchSize: Math.max(1, Number(profile?.maxBatchSize) || 1),
   }

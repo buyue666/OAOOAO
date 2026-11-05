@@ -15,6 +15,30 @@ function load(path, imports = {}) {
 }
 const mentions = load('../lib/studio/prompt-references.ts')
 const build = load('../lib/studio/video-references.ts').buildVideoReferences
+const referencePolicy = load('../lib/studio/video-policy.ts')
+const sessionModels = load('../lib/studio/studio-models.ts')
+
+test('session models expose the configured total ceiling without raising upstream limits',()=>{
+  const profile={supportsReferenceImage:true,maxReferences:15,maxReferenceImages:9,videoBillingUnit:'second'}
+  const session={logicalModels:[{id:'video',name:'视频',capability:'video',enabled:true,bindings:[{id:'one',channelId:'one',upstreamModel:'video-model',enabled:true,priority:1,capabilityProfile:profile}]}]}
+  const limit=()=>sessionModels.modelsFromSession(session)[0].capabilities.maxReferences
+  assert.equal(limit(),15)
+  profile.videoReferenceTotalLimit=8;assert.equal(limit(),8)
+  profile.videoReferenceTotalLimit=100;assert.equal(limit(),15)
+  profile.videoReferenceTotalLimit=0;assert.equal(limit(),15)
+})
+
+test('mixed upload limits count library files by type and share the total ceiling',()=>{
+  const policy={supportsVideoReference:true,supportsAudioReference:true,referenceLimits:{image:9,video:3,audio:3}}
+  const model={capabilities:{maxReferences:15,videoPolicy:policy,privateVideo:policy}}
+  const selected=[{kind:'image'},{kind:'scene'},{kind:'video'},{kind:'video'},{kind:'audio'}]
+  const uploads={image:5,video:1,audio:2}
+  assert.equal(referencePolicy.videoReferenceUploadLimit(model,'video',selected,uploads),1,'selected videos consume the same three-video limit')
+  assert.equal(referencePolicy.videoReferenceUploadLimit(model,'image',selected,uploads),7)
+  assert.equal(referencePolicy.videoReferenceUploadLimit(model,'audio',selected,uploads),2)
+  model.capabilities.maxReferences=10
+  assert.equal(referencePolicy.videoReferenceUploadLimit(model,'image',selected,uploads),2,'all media types consume the total allowance')
+})
 
 function workspaceHarness(name, props) {
   const slots=[], effects=[]; let cursor=0

@@ -281,7 +281,8 @@ export function ReferenceUploader({
   const acceptedTypes = kind === 'audio' ? ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/ogg', 'audio/flac', 'audio/aac'] : kind === 'video' ? VIDEO_ACCEPTED_TYPES : IMAGE_ACCEPTED_TYPES
   const maxFileSize = maxFileBytes ?? (kind === 'audio' ? 24 * 1024 * 1024 : kind === 'video' ? VIDEO_MAX_FILE_SIZE : IMAGE_MAX_FILE_SIZE)
   const uploadHint = hint ?? (kind === 'audio' ? 'MP3 / WAV / M4A / OGG / FLAC / AAC，单个不超过 24 MB' : kind === 'video' ? 'MP4 / MOV / WEBM，单个不超过 200 MB' : 'PNG / JPG / WEBP，单个不超过 12 MB')
-  const uploadEmptyText = emptyText ?? (kind === 'video' ? '拖拽视频到此处，或点击选择' : '拖拽文件到此处，或点击选择')
+  const uploadLabel = label ?? (kind === 'audio' ? '参考音频' : kind === 'video' ? '参考视频' : '参考图片')
+  const uploadEmptyText = emptyText ?? (kind === 'audio' ? '上传参考音频' : kind === 'video' ? '上传参考视频' : '上传参考图片')
   const [message, setMessage] = useState<{ tone: 'warning' | 'accent'; text: string } | null>(null)
   useEffect(() => {
     if (message?.tone !== 'accent') return
@@ -386,9 +387,9 @@ export function ReferenceUploader({
 
   return (
     <div className="workspace-reference-upload flex flex-col gap-3">
-      {label && (
+      {(
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-medium text-foreground">{label}</p>
+          <p className="text-[11px] font-medium text-foreground">{uploadLabel}</p>
           <span className="text-[10px] text-muted-foreground">{kind === 'audio' ? '音频文件' : kind === 'video' ? '视频文件' : '图片文件'}</span>
         </div>
       )}
@@ -427,7 +428,7 @@ export function ReferenceUploader({
             event.target.value = ''
           }}
         />
-        <ControlButton type="button" variant="secondary" size="sm" disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
+        <ControlButton className="workspace-reference-select" type="button" variant="secondary" size="sm" disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
           <Plus className="size-3.5" aria-hidden="true" />
           {selectLabel}
         </ControlButton>

@@ -80,6 +80,7 @@ export type SessionSettings = {
       supportsVideoRegeneration?: boolean
       supportsVideoExtension?: boolean
       maxReferences?: number
+      videoReferenceTotalLimit?: number
       videoQualities?: string[]
       maxDurationByResolution?: Record<string, number>
       videoProtocol?: string

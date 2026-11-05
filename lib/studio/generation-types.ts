@@ -252,6 +252,7 @@ export type SessionLogicalModel = {
       supportsVideoReference?: boolean
       supportsAudioReference?: boolean
       maxReferences?: number
+      videoReferenceTotalLimit?: number
       videoQualities?: string[]
       maxDurationByResolution?: Record<string, number>
       supportsMultiReference?: boolean

@@ -13,3 +13,10 @@ export function videoReferenceLimit(model:ModelConfig|undefined,type:'image'|'vi
   const feature=model?.capabilities.videoPolicy,native=feature?.referenceLimits?.[type]||(type==='image'||(type==='video'&&feature?.supportsVideoReference)||(type==='audio'&&feature?.supportsAudioReference)?model?.capabilities.maxReferences||0:0),configured=feature?.referenceRules?.[type]?.maxCount||0
   return configured>0?(native>0?Math.min(configured,native):configured):native
 }
+
+/** maxFiles includes existing uploads; library selections consume the same limits. */
+export function videoReferenceUploadLimit(model:ModelConfig|undefined,type:'image'|'video'|'audio',selected:readonly {kind:string}[],uploads:Record<'image'|'video'|'audio',number>):number{
+  const selectedOfType=selected.filter(item=>(item.kind==='scene'?'image':item.kind)===type).length
+  const otherUploads=Object.entries(uploads).reduce((total,[kind,count])=>total+(kind===type?0:count),0)
+  return Math.max(0,Math.min(videoReferenceLimit(model,type)-selectedOfType,(model?.capabilities.maxReferences||0)-selected.length-otherUploads))
+}

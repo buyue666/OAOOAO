@@ -147,3 +147,14 @@ Video resolution pricing
   limits and duration bands; billable seconds only multiply the selected rate.
   Fractional seconds use milliseconds, rounding the final debit up to the
   wallet's four-decimal precision. Request/duration billing stays unchanged.
+- `videoReferenceTotalLimit` is an optional integer 0–1000 shared by image,
+  video and audio references, including uploads and library selections. Zero
+  adds no administrative restriction. A positive value intersects with the
+  native `maxReferences` ceiling; per-type count and duration rules still apply.
+- Within a logical model, accounts using the same normalized provider URL,
+  protocol and case-sensitive upstream model share base/video prices and free
+  reference quotas. Routing writes reject conflicting prices atomically. The
+  editor can explicitly unify existing differences from a selected account and
+  synchronizes subsequent price edits. Account routing, concurrency, capability
+  switches, enabled qualities, duration rules and reference limits stay local.
+  Configuration reads and deployments never rewrite prices automatically.

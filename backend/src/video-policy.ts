@@ -23,6 +23,7 @@ export function videoInputMode(input:Json):string{
 }
 export function validateVideoPolicySettings(profile:Json){
   const integer=(value:any,min:number,max:number)=>Number.isInteger(value)&&value>=min&&value<=max;
+  if(profile.videoReferenceTotalLimit!==undefined&&!integer(profile.videoReferenceTotalLimit,0,1000))fail('参考素材合计上限须为 0–1000 的整数');
   if(profile.videoPricingTemplate!==undefined&&!['standard','reference-video-output'].includes(profile.videoPricingTemplate))fail('视频价格模板无效');
   if(profile.videoBillingUnit!==undefined&&!['second','request','duration'].includes(profile.videoBillingUnit))fail('视频计费方式无效');
   for(const flag of ['supportsFirstFrame','supportsLastFrame','supportsReferenceImage','supportsVideoReference','supportsAudioReference'])if(profile[flag]!==undefined&&typeof profile[flag]!=='boolean')fail('视频能力开关必须是布尔值');
@@ -98,6 +99,9 @@ export function validateVideoPolicySettings(profile:Json){
 export function validateVideoInput(input:Json,profile:Json){
   const config=input.config||{},refs:Json[]=input.references||[],quality=String(config.vquality||profile.videoQualities?.[0]||''),seconds=Number(config.videoSeconds||profile.defaultVideoSeconds||profile.durationSeconds?.[0]||4);
   const mode=videoInputMode(input);
+  const nativeTotal=Number(profile.maxReferences)||0,configuredTotal=Number(profile.videoReferenceTotalLimit)||0;
+  const totalLimit=configuredTotal>0?(nativeTotal>0?Math.min(configuredTotal,nativeTotal):configuredTotal):nativeTotal;
+  if(totalLimit>0&&refs.length>totalLimit)fail(`参考素材合计最多 ${totalLimit} 个`);
   if(profile.videoQualities?.length&&!profile.videoQualities.includes(quality))fail('当前渠道未开启此视频清晰度');
   if(profile.durationSeconds?.length&&!videoDurations(profile,quality,mode).includes(seconds))fail('此清晰度或生成模式不支持所选时长');
   if(refs.some(ref=>ref.role==='first_frame')&&profile.supportsFirstFrame===false)fail('当前渠道未开启首帧功能');
