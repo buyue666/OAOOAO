@@ -386,7 +386,7 @@ export function ReferenceUploader({
   }
 
   return (
-    <div className="workspace-reference-upload flex flex-col gap-3">
+    <div className="workspace-reference-upload flex flex-col gap-3" data-has-uploads={items.length > 0}>
       {(
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-medium text-foreground">{uploadLabel}</p>
@@ -428,12 +428,13 @@ export function ReferenceUploader({
             event.target.value = ''
           }}
         />
-        <ControlButton className="workspace-reference-select" type="button" variant="secondary" size="sm" disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
+        <ControlButton className="workspace-reference-select" type="button" variant="secondary" size="sm" aria-label={`${selectLabel} · ${uploadLabel}`} disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
           <Plus className="size-3.5" aria-hidden="true" />
           {selectLabel}
         </ControlButton>
       </div>
 
+      <div className="workspace-reference-files flex min-w-0 flex-col gap-3">
       {message && (
         <Notice tone={message.tone}>
           {message.tone === 'warning' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> : <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />}
@@ -525,6 +526,7 @@ export function ReferenceUploader({
           ))}
         </ul>
       )}
+      </div>
     </div>
   )
 }
