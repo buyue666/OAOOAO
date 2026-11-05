@@ -50,6 +50,7 @@ test('English copy formats owned prices and durations without translating interp
   assert.equal(englishText('自选模型 · 按参数计价'),'自选模型 · Priced by parameters')
   assert.equal(englishText('gpt-image · 5 积分/次'),'gpt-image · 5 credits/request')
   assert.equal(englishText('预计消耗 50 积分'),'Estimated cost: 50 credits')
+  assert.equal(englishText('消耗 20 积分 · 已退回'),'Used 20 credits · Refunded')
   assert.equal(englishText('15 秒'),'15 s');assert.equal(chineseText('15 秒'),'15 秒')
   assert.equal(englishText('移除 {0}',['参考图片']),'Remove 参考图片')
   assert.equal(englishText('一只猫在抓老鼠'),'一只猫在抓老鼠')

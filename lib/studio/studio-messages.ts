@@ -547,5 +547,6 @@ export const studioEnglish: Readonly<Record<string, string>> = {
   "围绕同一个原创角色创作一组连续画面，保持面部、服装和画风一致，让角色出现在三个不同场景里。": "Create a sequence featuring the same original character. Keep the face, clothing, and style consistent across three different scenes.",
   "继续编辑": "Continue editing",
   "{0} 更新": "{0} updated",
-  "项目读取失败": "Could not load project"
+  "项目读取失败": "Could not load project",
+  "消耗 {0} 积分 · 已退回": "Used {0} credits · Refunded"
 }
