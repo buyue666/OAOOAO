@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useUiText } from '@/lib/studio/i18n'
 import { usePathname, useRouter } from 'next/navigation'
 import { useStudio } from '@/lib/studio/store'
 import { MobileNav } from './mobile-nav'
@@ -35,6 +36,7 @@ function isProtectedStudioRoute(pathname: string) {
 }
 
 export function StudioApp({ children }: { children: React.ReactNode }) {
+  const tx = useUiText()
   const { state } = useStudio()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const pathname = usePathname()
@@ -62,7 +64,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   }, [pathname, isProtectedRoute, authChecking, authRedirecting])
 
   if (authChecking || authRedirecting) {
-    return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{authRedirecting ? '正在前往登录页…' : '正在检查登录状态…'}</main>
+    return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{tx(authRedirecting ? '正在前往登录页…' : '正在检查登录状态…')}</main>
   }
 
   /**

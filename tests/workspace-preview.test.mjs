@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ts from 'typescript'
+import {chineseLocale} from './helpers/locale.mjs'
 
 // Render the real owned components with inert leaf controls. No HTTP, accounts,
 // fixture credentials, or provider calls are needed for these state regressions.
@@ -25,6 +26,7 @@ function load(source, mocks = {}) {
   const module = { exports: {} }
   new Function('require', 'module', 'exports', compile(source))((name) => {
     if (Object.hasOwn(mocks, name)) return mocks[name]
+    if (name === '@/lib/studio/i18n') return chineseLocale
     if (name === './ui') return ui
     if (name === '@/lib/utils') return { cn: (...items) => items.filter(Boolean).join(' ') }
     return require(name)

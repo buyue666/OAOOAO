@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -8,7 +9,7 @@ import { useStudio } from '@/lib/studio/store'
 import { logout } from '@/lib/studio/account-api'
 import { useLocale } from '@/lib/studio/i18n'
 import { Tooltip } from './ui'
-import { studioPageTitle } from './studio-nav'
+import { localizedStudioPageTitle } from './studio-nav'
 import { cn } from '@/lib/utils'
 import { AnnouncementList, useAnnouncements } from '@/components/site-announcements'
 import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
@@ -24,6 +25,7 @@ const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text
  * 主题与语言切换放进账户菜单，避免顶栏堆叠多个工具按钮。
  */
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
+  const tx = useUiText()
   const pathname = usePathname()
   const router = useRouter()
   const { state, toggleTheme, refreshSession } = useStudio()
@@ -37,15 +39,15 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   const projectId = pathname.startsWith('/projects/') ? pathname.split('/')[2] : undefined
   const projectTitle = projectId ? state.projects.find((project) => project.id === projectId)?.title : undefined
-  const pageTitle = studioPageTitle(pathname, projectTitle)
-  const themeLabel = state.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'
+  const pageTitle = localizedStudioPageTitle(pathname, projectTitle, tx)
+  const themeLabel = tx(state.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题')
   const localeLabel = locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')
   const isConnected = state.backendStatus === 'connected'
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   const { unread: notificationCount } = useAnnouncements()
-  const creditsLabel = `${state.credits.toLocaleString()} 积分`
+  const creditsLabel = tx('{0} 积分', [state.credits.toLocaleString(locale)])
   const checkIn = useCheckIn({ accountId: state.user.id, connected: isConnected, active: accountOpen, refreshSession })
-  const checkInDetails = checkIn.status ? checkInDisplay(checkIn.status) : null
+  const checkInDetails = checkIn.status ? checkInDisplay(checkIn.status, locale) : null
   function capturePlansDestination(event: React.MouseEvent<HTMLAnchorElement>) {
     const returnTo = safeReturnPath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
     const destination = event.currentTarget.dataset?.storefront === 'plans' ? '/plans' : '/credits'
@@ -103,7 +105,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   return (
     <header className="studio-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3 md:px-5">
       <div className="flex min-w-0 items-center gap-2">
-        <button type="button" onClick={onMenuClick} aria-label="打开导航" className={cn(iconButtonClass, 'lg:hidden')}>
+        <button type="button" onClick={onMenuClick} aria-label={tx("打开导航")} className={cn(iconButtonClass, 'lg:hidden')}>
           <Menu className="size-5" aria-hidden="true" />
         </button>
         <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground" aria-current="page">{pageTitle}</p>
@@ -111,7 +113,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {isConnected && (rechargeEnabled ? (
-          <a href="/credits" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={`${creditsLabel}，查看积分超市`} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
+          <a href="/credits" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={tx("{0}，查看积分超市", [creditsLabel])} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
             <Coins className="size-4 text-studio-accent" aria-hidden="true" />
             <span className="tabular-nums">{creditsLabel}</span>
           </a>
@@ -123,12 +125,12 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         ))}
 
         <div className="relative" ref={notificationsRef}>
-          <Tooltip label={`通知，${notificationCount} 条未读`}>
+          <Tooltip label={tx("通知，{0} 条未读", [notificationCount])}>
             <button
               type="button"
               onClick={() => setNotificationsOpen((value) => !value)}
               aria-expanded={notificationsOpen}
-              aria-label={`通知，${notificationCount} 条未读`}
+              aria-label={tx("通知，{0} 条未读", [notificationCount])}
               className={cn(iconButtonClass, 'relative')}
             >
               <Bell className="size-4" aria-hidden="true" />
@@ -136,15 +138,15 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             </button>
           </Tooltip>
           {notificationsOpen && (
-            <div role="dialog" aria-label="通知" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-72 max-w-[calc(100vw-24px)] rounded-lg border border-border p-3 text-left shadow-[var(--lg-shadow-4)]">
-              <p className="text-sm font-semibold text-foreground">通知</p>
+            <div role="dialog" aria-label={tx("通知")} className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 w-72 max-w-[calc(100vw-24px)] rounded-lg border border-border p-3 text-left shadow-[var(--lg-shadow-4)]">
+              <p className="text-sm font-semibold text-foreground">{tx("通知")}</p>
               <AnnouncementList />
             </div>
           )}
         </div>
 
         <div className="relative" ref={accountRef}>
-          <Tooltip label={isConnected ? '账户' : '登录'}>
+          <Tooltip label={isConnected ? tx('账户') : tx('登录')}>
             <button
               type="button"
               onClick={() => {
@@ -153,34 +155,33 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               }}
               aria-expanded={isConnected ? accountOpen : undefined}
               aria-haspopup={isConnected ? 'menu' : undefined}
-              aria-label={isConnected ? '打开账户菜单' : '登录'}
+              aria-label={isConnected ? tx('打开账户菜单') : tx('登录')}
               className="flex size-9 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-foreground transition-colors duration-150 hover:border-studio-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             >
               {isConnected ? state.user.name.split(/\s+/).map((item) => item[0]).join('').slice(0, 2).toUpperCase() : <LogIn className="size-4" aria-hidden="true" />}
             </button>
           </Tooltip>
           {isConnected && (
-            <div hidden={!accountOpen} role="menu" aria-label="账户菜单" className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 max-h-[calc(100dvh-5rem)] w-72 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-xl border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]">
+            <div hidden={!accountOpen} role="menu" aria-label={tx("账户菜单")} className="lg-glass-overlay motion-panel absolute right-0 top-11 z-40 max-h-[calc(100dvh-5rem)] w-72 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-xl border border-border p-1.5 text-left shadow-[var(--lg-shadow-4)]">
               <div className="border-b border-border px-2.5 pb-2.5 pt-1.5">
                 <p className="truncate text-sm font-semibold text-foreground">{state.user.name}</p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{state.user.email || '未设置邮箱'}</p>
-                <p className="mt-1.5 text-xs font-medium text-studio-accent">{creditsLabel} · {state.user.plan}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{state.user.email || tx('未设置邮箱')}</p>
+                <p className="mt-1.5 text-xs font-medium text-studio-accent">{creditsLabel} · {tx(state.user.plan)}</p>
                 <div className="mt-3 rounded-lg border border-studio-accent/20 bg-studio-accent/5 p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0"><p className="flex items-center gap-1 text-xs font-semibold"><CalendarCheck className="size-3.5" aria-hidden="true" />每日签到</p><p className="mt-1 text-[11px] text-muted-foreground">{checkInDetails?.title ?? (checkIn.loading ? '正在读取…' : '查看今日签到状态')}</p></div>
-                    <button type="button" role="menuitem" onClick={() => void (checkIn.status ? checkIn.claim() : checkIn.refresh())} disabled={checkIn.loading || checkIn.claiming || Boolean(checkIn.status && (!checkIn.status.enabled || checkIn.status.claimed))} className="rounded-md bg-studio-accent px-3 py-1.5 text-xs font-semibold text-studio-accent-foreground transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-60">{checkIn.claiming ? '领取中…' : checkIn.loading ? '读取中…' : checkIn.status?.claimed ? '已签到' : checkIn.status?.enabled ? '签到领取' : checkIn.status ? '未开放' : '重新读取'}</button>
+                    <div className="min-w-0"><p className="flex items-center gap-1 text-xs font-semibold"><CalendarCheck className="size-3.5" aria-hidden="true" />{tx("每日签到")}</p><p className="mt-1 text-[11px] text-muted-foreground">{checkInDetails?.title ?? (checkIn.loading ? tx('正在读取…') : tx('查看今日签到状态'))}</p></div>
+                    <button type="button" role="menuitem" onClick={() => void (checkIn.status ? checkIn.claim() : checkIn.refresh())} disabled={checkIn.loading || checkIn.claiming || Boolean(checkIn.status && (!checkIn.status.enabled || checkIn.status.claimed))} className="rounded-md bg-studio-accent px-3 py-1.5 text-xs font-semibold text-studio-accent-foreground transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-60">{checkIn.claiming ? tx('领取中…') : checkIn.loading ? tx('读取中…') : checkIn.status?.claimed ? tx('已签到') : checkIn.status?.enabled ? tx('签到领取') : checkIn.status ? tx('未开放') : tx('重新读取')}</button>
                   </div>
                   {checkInDetails && (checkIn.status?.enabled || checkIn.status?.claimed) && <div className="mt-2 space-y-1 border-t border-studio-accent/15 pt-2 text-[11px] leading-4 text-muted-foreground"><p>{checkInDetails.rule}</p><p>{checkInDetails.validity}</p></div>}
-                  {checkIn.status && <p className="mt-1.5 text-[10px] text-muted-foreground">{checkIn.status.date} · 按北京时间每日一次</p>}
+                  {checkIn.status && <p className="mt-1.5 text-[10px] text-muted-foreground">{checkIn.status.date} {tx(" · 按北京时间每日一次")}</p>}
                   {checkIn.error && <p role="status" className="mt-1.5 text-[11px] leading-4 text-destructive">{checkIn.error}</p>}
                 </div>
               </div>
               <div className="mt-1 flex flex-col gap-0.5">
                 <Link href="/account" role="menuitem" onClick={() => setAccountOpen(false)} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted">
-                  <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />账户与套餐
-                </Link>
-                {rechargeEnabled && <a href="/credits" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Coins className="size-4 text-muted-foreground" aria-hidden="true" />积分超市</a>}
-                {rechargeEnabled && <a href="/plans" data-storefront="plans" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Crown className="size-4 text-muted-foreground" aria-hidden="true" />会员套餐</a>}
+                  <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />{tx("账户与套餐")}</Link>
+                {rechargeEnabled && <a href="/credits" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Coins className="size-4 text-muted-foreground" aria-hidden="true" />{tx("积分超市")}</a>}
+                {rechargeEnabled && <a href="/plans" data-storefront="plans" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Crown className="size-4 text-muted-foreground" aria-hidden="true" />{tx("会员套餐")}</a>}
                 <AccountWatermarkMenuItem onSelect={() => setAccountOpen(false)} />
                 <button type="button" role="menuitem" onClick={() => { toggleTheme(); setAccountOpen(false) }} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted">
                   {state.theme === 'dark' ? <Sun className="size-4 text-muted-foreground" aria-hidden="true" /> : <Moon className="size-4 text-muted-foreground" aria-hidden="true" />}{themeLabel}
@@ -189,10 +190,10 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                   <Languages className="size-4 text-muted-foreground" aria-hidden="true" />{localeLabel}
                 </button>
                 <button type="button" role="menuitem" onClick={() => void signOut()} disabled={signingOut} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted disabled:opacity-60">
-                  <LogOut className="size-4 text-muted-foreground" aria-hidden="true" />{signingOut ? '正在退出…' : '退出登录'}
+                  <LogOut className="size-4 text-muted-foreground" aria-hidden="true" />{signingOut ? tx('正在退出…') : tx('退出登录')}
                 </button>
               </div>
-              {signOutError && <p role="alert" className="px-2.5 pb-1.5 pt-1 text-xs text-destructive">{signOutError}</p>}
+              {signOutError && <p role="alert" className="px-2.5 pb-1.5 pt-1 text-xs text-destructive">{tx(signOutError)}</p>}
             </div>
           )}
         </div>

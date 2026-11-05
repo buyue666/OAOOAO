@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -41,6 +42,7 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
  * 脱离侧栏和缩略图容器的 overflow。顶部工具栏尤其需要这个碰撞处理。
  */
 export function Tooltip({ label, side = 'top', className, contentClassName, children }: { label: string; side?: 'top' | 'right'; className?: string; contentClassName?: string; children: ReactNode }) {
+  const tx = useUiText()
   return (
     <RadixTooltip.Provider delayDuration={100} skipDelayDuration={100}>
       <RadixTooltip.Root disableHoverableContent>
@@ -57,7 +59,7 @@ export function Tooltip({ label, side = 'top', className, contentClassName, chil
             avoidCollisions
             className={cn('lg-tooltip-surface lg-glass-overlay motion-fade pointer-events-none z-[60] max-w-[calc(100vw-16px)] whitespace-normal rounded-md border px-2 py-1 text-center text-xs font-medium shadow-md', contentClassName)}
           >
-            {label}
+            {tx(label)}
           </RadixTooltip.Content>
         </RadixTooltip.Portal>
       </RadixTooltip.Root>
@@ -66,11 +68,12 @@ export function Tooltip({ label, side = 'top', className, contentClassName, chil
 }
 
 export function IconAction({ label, className, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+  const tx = useUiText()
   return (
     <button
       type="button"
-      aria-label={label}
-      title={label}
+      aria-label={tx(label)}
+      title={tx(label)}
       className={cn('studio-icon-action inline-flex size-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', className)}
       {...props}
     >
@@ -80,6 +83,7 @@ export function IconAction({ label, className, children, ...props }: ButtonHTMLA
 }
 
 export function StatusBadge({ children, tone = 'neutral', className, solid = false }: { children: ReactNode; tone?: Tone; className?: string; solid?: boolean }) {
+  const tx = useUiText()
   return (
     <span data-tone={tone} data-solid={solid ? 'true' : undefined} className={cn(
       'studio-status-badge inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium leading-5',
@@ -91,7 +95,7 @@ export function StatusBadge({ children, tone = 'neutral', className, solid = fal
       tone === 'neutral' && (solid ? 'border-border bg-card text-card-foreground' : 'border-border bg-secondary text-secondary-foreground'),
       className,
     )}>
-      {children}
+      {typeof children === 'string' ? tx(children) : children}
     </span>
   )
 }
@@ -168,6 +172,7 @@ export function SearchField({ value, onChange, placeholder = '搜索' }: { value
 }
 
 export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode }>; className?: string; hint?: string; disabled?: boolean }) {
+  const tx = useUiText()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [menuStyle, setMenuStyle] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
@@ -227,7 +232,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
 
   return (
     <label className={cn('flex min-w-0 flex-col gap-1.5', className)}>
-      {label && <span className="text-xs font-medium text-muted-foreground">{label}</span>}
+      {label && <span className="text-xs font-medium text-muted-foreground">{tx(label)}</span>}
       <span className="relative">
         <button
           ref={triggerRef}
@@ -236,7 +241,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
           className="studio-select-trigger studio-field flex h-10 w-full items-center justify-between gap-2 border border-border px-3 text-left text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-150 focus-visible:border-studio-accent/70 focus-visible:ring-2 focus-visible:ring-studio-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
           aria-haspopup="listbox"
           aria-expanded={open}
-          aria-label={label}
+          aria-label={label ? tx(label) : undefined}
           onClick={() => setOpen((current) => !current)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') { event.preventDefault(); if (!open) setOpen(true); else moveSelection(1) }
@@ -246,7 +251,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
         >
           <span className={cn('flex min-w-0 items-center gap-2 truncate', !selected && 'text-muted-foreground')}>
             {selected?.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{selected.icon}</span>}
-            <span className="truncate">{selected?.label || '暂无选项'}</span>
+            <span className="truncate">{selected?.label ? tx(selected.label) : tx('暂无选项')}</span>
           </span>
           <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-180 text-studio-accent')} aria-hidden="true" />
         </button>
@@ -254,25 +259,26 @@ export function SelectField({ label, value, onChange, options, className, hint, 
           <div
             data-studio-select-menu
             role="listbox"
-            aria-label={label}
+            aria-label={label ? tx(label) : undefined}
             className="studio-select-menu"
             style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width, maxHeight: menuStyle.maxHeight }}
           >
             {options.map((option) => {
               const active = option.value === value
-              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 flex-1 truncate whitespace-nowrap">{option.label}</span>{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
+              return <button key={option.value} type="button" role="option" aria-selected={active} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 flex-1 truncate whitespace-nowrap">{tx(option.label)}</span>{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
             })}
           </div>,
           document.body,
         )}
       </span>
-      {hint && <span className="text-[11px] leading-4 text-muted-foreground">{hint}</span>}
+      {hint && <span className="text-[11px] leading-4 text-muted-foreground">{tx(hint)}</span>}
     </label>
   )
 }
 
 /** 分段控制器：选中指示器用 transform 平滑移动，不改变任何元素尺寸。 */
 export function SegmentedControl({ value, onChange, options, className }: { value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode }>; className?: string }) {
+  const tx = useUiText()
   const listRef = useRef<HTMLDivElement>(null)
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null)
 
@@ -310,7 +316,7 @@ export function SegmentedControl({ value, onChange, options, className }: { valu
           className={cn('relative z-10 inline-flex h-7 shrink-0 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', value === option.value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
         >
           {option.icon}
-          {option.label}
+          {tx(option.label)}
         </button>
       ))}
     </div>
@@ -413,6 +419,7 @@ function useDialogBehavior(open: boolean, onClose: () => void) {
 }
 
 export function Modal({ open, title, description, onClose, children, footer, className }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; className?: string }) {
+  const tx = useUiText()
   const containerRef = useDialogBehavior(open, onClose)
   if (!open) return null
   if (typeof document === 'undefined') return null
@@ -420,7 +427,7 @@ export function Modal({ open, title, description, onClose, children, footer, cla
   return createPortal(
     <div className="studio-modal-backdrop motion-fade fixed inset-0 z-50 flex items-center justify-center bg-studio-ink/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <section ref={containerRef} tabIndex={-1} onKeyDown={event => {if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); onClose()}}} className={cn('studio-modal-surface lg-glass-overlay motion-panel flex max-h-[calc(100dvh-32px)] w-full max-w-lg flex-col overflow-hidden border border-border outline-none', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4"><div><h2 id="modal-title" className="text-base font-semibold tracking-[-0.01em] text-foreground">{title}</h2>{description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}</div><IconAction label="关闭" onClick={onClose}><X /></IconAction></div>
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4"><div><h2 id="modal-title" className="text-base font-semibold tracking-[-0.01em] text-foreground">{title}</h2>{description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}</div><IconAction label={tx("关闭")} onClick={onClose}><X /></IconAction></div>
         <div className="min-h-0 overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="flex max-h-32 flex-wrap items-center justify-end gap-2 overflow-y-auto border-t border-border bg-muted/40 px-4 py-3 sm:px-5">{footer}</div>}
       </section>
@@ -434,6 +441,7 @@ export function Modal({ open, title, description, onClose, children, footer, cla
  * 用于导演 Agent 和分镜页，避免长期挤压主预览区。
  */
 export function SidePanel({ open, onClose, title, description, children, footer, width = 'lg:w-[360px]' }: { open: boolean; onClose: () => void; title: string; description?: string; children: ReactNode; footer?: ReactNode; width?: string }) {
+  const tx = useUiText()
   const containerRef = useDialogBehavior(open, onClose)
   if (!open || typeof document === 'undefined') return null
   const portalRoot = document.querySelector<HTMLElement>('[data-studio-portal-root]') ?? document.body
@@ -446,7 +454,7 @@ export function SidePanel({ open, onClose, title, description, children, footer,
             <h2 id="side-panel-title" className="truncate text-sm font-semibold text-foreground">{title}</h2>
             {description && <p className="mt-0.5 truncate text-xs text-muted-foreground">{description}</p>}
           </div>
-          <IconAction label="关闭面板" onClick={onClose}><X /></IconAction>
+          <IconAction label={tx("关闭面板")} onClick={onClose}><X /></IconAction>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         {footer && <div className="border-t border-border bg-muted/40 px-4 py-3">{footer}</div>}

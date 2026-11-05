@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { translateUiText, type UiText } from './ui-translation'
 
 export type Locale = 'zh-CN' | 'en-US'
 
@@ -118,7 +119,7 @@ const messages = {
 } as const
 
 type TranslationKey = keyof typeof messages['zh-CN']
-type LocaleContextValue = { locale: Locale; setLocale: (locale: Locale) => void; toggleLocale: () => void; t: (key: TranslationKey) => string }
+type LocaleContextValue = { locale: Locale; setLocale: (locale: Locale) => void; toggleLocale: () => void; t: (key: TranslationKey) => string; text: UiText }
 const LocaleContext = createContext<LocaleContextValue | null>(null)
 const storageKey = 'oaooao-locale'
 
@@ -126,10 +127,15 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>('zh-CN')
 
   useEffect(() => {
+    const readLocale = (value: string | null) => {
+      if (value === 'en-US' || value === 'zh-CN') setLocaleState(value)
+    }
     try {
-      const saved = window.localStorage.getItem(storageKey)
-      if (saved === 'en-US' || saved === 'zh-CN') setLocaleState(saved)
+      readLocale(window.localStorage.getItem(storageKey))
     } catch { /* 不能使用本地存储时使用中文默认值 */ }
+    const syncLocale = (event: StorageEvent) => { if (event.key === storageKey) readLocale(event.newValue) }
+    window.addEventListener('storage', syncLocale)
+    return () => window.removeEventListener('storage', syncLocale)
   }, [])
 
   useEffect(() => {
@@ -141,7 +147,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     try { window.localStorage.setItem(storageKey, next) } catch { /* 忽略存储失败，当前页面仍可切换 */ }
   }, [])
   const toggleLocale = useCallback(() => setLocale(locale === 'zh-CN' ? 'en-US' : 'zh-CN'), [locale, setLocale])
-  const value = useMemo(() => ({ locale, setLocale, toggleLocale, t: (key: TranslationKey) => messages[locale][key] }), [locale, setLocale, toggleLocale])
+  const text = useCallback<UiText>((source, values) => translateUiText(locale, source, values), [locale])
+  const value = useMemo(() => ({ locale, setLocale, toggleLocale, t: (key: TranslationKey) => messages[locale][key], text }), [locale, setLocale, toggleLocale, text])
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>
 }
@@ -150,4 +157,9 @@ export function useLocale() {
   const value = useContext(LocaleContext)
   if (!value) throw new Error('useLocale 必须在 LocaleProvider 内使用')
   return value
+}
+
+/** Chinese is the fallback for standalone UI previews outside the app provider. */
+export function useUiText(): UiText {
+  return useContext(LocaleContext)?.text ?? ((source, values) => translateUiText('zh-CN', source, values))
 }

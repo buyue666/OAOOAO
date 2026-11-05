@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import type { FormEvent, ReactNode } from 'react'
 import { Children, isValidElement, useEffect, useId, useRef, useState } from 'react'
 import {
@@ -65,6 +66,7 @@ export function WorkspaceShell({
   paramsHint?: string
   submitHint?: string
 }) {
+  const tx = useUiText()
   const [paramsOpen, setParamsOpen] = useState(false)
   const [dock, setDock] = useState('left')
   const [minimized, setMinimized] = useState(false)
@@ -83,36 +85,36 @@ export function WorkspaceShell({
     setDock(next); setMinimized(false); setParamsOpen(true)
     try { if (next !== 'fullscreen') window.localStorage.setItem(layoutKey, next) } catch { /* Keep the current layout usable. */ }
   }
-  const displayedCredits = creditsPending ? '待估算' : `${credits} 积分`
+  const displayedCredits = creditsPending ? tx('待估算') : tx('{0} 积分', [credits])
 
   return (
     <form onSubmit={onSubmit} data-panel-position={dock} data-panel-minimized={minimized} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && dock === 'fullscreen') { event.preventDefault(); movePanel(previousDock.current) } }} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 pt-5 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-5 md:gap-5 md:px-8 md:pt-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10 xl:pb-6">
       <div className="workspace-layout-grid relative grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="workspace-params-panel order-1 min-h-0 min-w-0">
           <button type="button" onClick={() => setParamsOpen((value) => !value)} aria-expanded={paramsOpen} aria-controls={paramsId} className="studio-surface flex min-h-12 w-full items-center justify-between gap-3 px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 xl:hidden">
-            <span>{paramsTitle}<span className="ml-2 text-xs font-normal text-muted-foreground">{paramsOpen ? '收起设置' : '展开开始创作'}</span></span>
+            <span>{tx(paramsTitle)}<span className="ml-2 text-xs font-normal text-muted-foreground">{paramsOpen ? tx('收起设置') : tx('展开开始创作')}</span></span>
             <ChevronDown className={cn('size-4 shrink-0 transition-transform', paramsOpen && 'rotate-180')} aria-hidden="true" />
           </button>
           <div id={paramsId} className={cn('workspace-params-glass mt-3 h-full min-h-0 flex-col xl:mt-0 xl:flex', paramsOpen ? 'flex' : 'hidden')}>
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-              <h2 className="text-xs font-semibold text-foreground" title={paramsHint}>{paramsTitle}</h2>
+              <h2 className="text-xs font-semibold text-foreground" title={paramsHint}>{tx(paramsTitle)}</h2>
               <div className="flex items-center gap-1">
-                <select aria-label="参数面板位置" value={dock} onChange={event => movePanel(event.target.value)} className="studio-field min-h-11 max-w-28 rounded-md border border-border bg-background px-2 text-xs">
-                  <option value="left">附着在左</option><option value="right">附着在右</option><option value="top">附着在上</option><option value="bottom">附着在下</option><option value="fullscreen">全屏输入</option>
+                <select aria-label={tx("参数面板位置")} value={dock} onChange={event => movePanel(event.target.value)} className="studio-field min-h-11 max-w-28 rounded-md border border-border bg-background px-2 text-xs">
+                  <option value="left">{tx("附着在左")}</option><option value="right">{tx("附着在右")}</option><option value="top">{tx("附着在上")}</option><option value="bottom">{tx("附着在下")}</option><option value="fullscreen">{tx("全屏输入")}</option>
                 </select>
-                {dock === 'fullscreen' && <button type="button" onClick={() => movePanel(previousDock.current)} className="min-h-11 rounded-md px-2 text-xs hover:bg-muted">退出全屏</button>}
-                <Tooltip label={minimized ? '展开参数面板' : '缩小参数面板'}><button type="button" aria-label={minimized ? '展开参数面板' : '缩小参数面板'} aria-expanded={!minimized} aria-controls={`${paramsId}-body`} onClick={() => setMinimized(value => !value)} className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">{minimized ? <Plus className="size-4" /> : <Minus className="size-4" />}</button></Tooltip>
+                {dock === 'fullscreen' && <button type="button" onClick={() => movePanel(previousDock.current)} className="min-h-11 rounded-md px-2 text-xs hover:bg-muted">{tx("退出全屏")}</button>}
+                <Tooltip label={minimized ? tx('展开参数面板') : tx('缩小参数面板')}><button type="button" aria-label={minimized ? tx('展开参数面板') : tx('缩小参数面板')} aria-expanded={!minimized} aria-controls={`${paramsId}-body`} onClick={() => setMinimized(value => !value)} className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">{minimized ? <Plus className="size-4" /> : <Minus className="size-4" />}</button></Tooltip>
               </div>
             </div>
             <div id={`${paramsId}-body`} className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4" hidden={minimized}><div className="workspace-params-content">{params}</div></div>
             <div className={cn('workspace-desktop-submit hidden shrink-0 border-t border-border px-4 py-3 xl:block', minimized && 'workspace-submit-hidden')}>
               <div className="flex items-center justify-between gap-3 text-xs">
-                <span className="text-muted-foreground">预计消耗</span>
+                <span className="text-muted-foreground">{tx("预计消耗")}</span>
                 <span className="font-semibold tabular-nums text-studio-accent" aria-live="polite">{displayedCredits}</span>
               </div>
-              {submitHint && <p className="mt-2 text-[11px] leading-5 text-muted-foreground" role="status">{submitHint}</p>}
+              {submitHint && <p className="mt-2 text-[11px] leading-5 text-muted-foreground" role="status">{tx(submitHint)}</p>}
               <ControlButton type="submit" variant="primary" size="lg" className="mt-3 w-full" disabled={submitDisabled}>
-                {submitLabel}
+                {tx(submitLabel)}
               </ControlButton>
             </div>
           </div>
@@ -129,13 +131,13 @@ export function WorkspaceShell({
       {/* 移动端吸底提交条：玻璃表面，始终可操作。 */}
       <div className="workspace-submit-bar fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-muted-foreground">预计消耗</p>
+          <p className="text-[11px] text-muted-foreground">{tx("预计消耗")}</p>
           <p className="text-sm font-semibold tabular-nums text-studio-accent" aria-live="polite">{displayedCredits}</p>
         </div>
         <ControlButton type="submit" variant="primary" size="lg" className="min-w-0 flex-1 sm:min-w-32 sm:flex-none" disabled={submitDisabled}>
-          {submitLabel}
+          {tx(submitLabel)}
         </ControlButton>
-        {submitHint && <p className="w-full text-[11px] leading-5 text-muted-foreground" role="status">{submitHint}</p>}
+        {submitHint && <p className="w-full text-[11px] leading-5 text-muted-foreground" role="status">{tx(submitHint)}</p>}
       </div>
     </form>
   )
@@ -163,12 +165,13 @@ export function WorkspaceParams({children}: {children: ReactNode}) {
 
 /** 参数分组：统一 4/8px 间距与分割线，避免每个页面各写一套。 */
 export function ParamSection({ title, hint, action, children, layout }: { title: string; hint?: string; action?: ReactNode; children: ReactNode; layout?: 'prompt' | 'mode' | 'model' | 'output' | 'references' | 'advanced' }) {
+  const tx = useUiText()
   return (
     <section data-param-layout={layout} className="workspace-param-section min-w-0 border-t border-border pt-4 first:border-t-0 first:pt-0">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-xs font-semibold text-foreground">
-          {title}
-          {hint && <span className="ml-1.5 font-normal text-muted-foreground">{hint}</span>}
+          {tx(title)}
+          {hint && <span className="ml-1.5 font-normal text-muted-foreground">{tx(hint)}</span>}
         </h3>
         {action}
       </div>
@@ -194,6 +197,7 @@ export function OptionGrid({
   columns?: 2 | 3
   label?: string
 }) {
+  const tx = useUiText()
   return (
     <div className={cn('grid gap-1.5', columns === 3 ? 'grid-cols-3' : 'grid-cols-2')} role="radiogroup" aria-label={label}>
       {options.map((option) => {
@@ -212,8 +216,8 @@ export function OptionGrid({
                 : 'border-border bg-card text-muted-foreground hover:border-studio-accent/40 hover:text-foreground',
             )}
           >
-            <span className="w-full truncate text-xs font-medium">{option.label}</span>
-            {option.hint && <span className="w-full truncate text-[10px] text-muted-foreground">{option.hint}</span>}
+            <span className="w-full truncate text-xs font-medium">{tx(option.label)}</span>
+            {option.hint && <span className="w-full truncate text-[10px] text-muted-foreground">{tx(option.hint)}</span>}
           </button>
         )
       })}
@@ -287,6 +291,7 @@ export function ReferenceUploader({
   libraryItems?: Array<{id: string; title: string; src: string; kind: string}>
   onRemoveLibraryItem?: (id: string) => void
 }) {
+  const tx = useUiText()
   const [dragging, setDragging] = useState(false)
   const acceptedTypes = kind === 'audio' ? ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/ogg', 'audio/flac', 'audio/aac'] : kind === 'video' ? VIDEO_ACCEPTED_TYPES : IMAGE_ACCEPTED_TYPES
   const maxFileSize = maxFileBytes ?? (kind === 'audio' ? 24 * 1024 * 1024 : kind === 'video' ? VIDEO_MAX_FILE_SIZE : IMAGE_MAX_FILE_SIZE)
@@ -399,8 +404,8 @@ export function ReferenceUploader({
     <div className="workspace-reference-upload flex flex-col gap-3" data-has-uploads={items.length + libraryItems.length > 0}>
       {(
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] font-medium text-foreground">{uploadLabel}</p>
-          <span className="text-[10px] text-muted-foreground">{kind === 'audio' ? '音频文件' : kind === 'video' ? '视频文件' : '图片文件'}</span>
+          <p className="text-[11px] font-medium text-foreground">{tx(uploadLabel)}</p>
+          <span className="text-[10px] text-muted-foreground">{kind === 'audio' ? tx('音频文件') : kind === 'video' ? tx('视频文件') : tx('图片文件')}</span>
         </div>
       )}
       <div
@@ -425,8 +430,8 @@ export function ReferenceUploader({
         <span className={cn('flex size-9 items-center justify-center rounded-md transition-colors duration-200', dragging ? 'bg-studio-accent/15 text-studio-accent' : 'bg-muted text-muted-foreground')}>
           <Upload className="size-4" aria-hidden="true" />
         </span>
-        <p className="text-xs font-medium text-foreground">{dragging ? '松开即可添加文件' : uploadEmptyText}</p>
-        <p className="text-[11px] leading-5 text-muted-foreground">{maxFiles > 0 ? `${uploadHint} · 最多 ${maxFiles} 个` : '参考位置已占满，请先移除部分已选素材。'}</p>
+        <p className="text-xs font-medium text-foreground">{dragging ? tx('松开即可添加文件') : tx(uploadEmptyText)}</p>
+        <p className="text-[11px] leading-5 text-muted-foreground">{maxFiles > 0 ? tx("{0} · 最多 {1} 个", [tx(uploadHint), maxFiles]) : tx('参考位置已占满，请先移除部分已选素材。')}</p>
         <input
           ref={inputRef}
           type="file"
@@ -439,25 +444,25 @@ export function ReferenceUploader({
           }}
         />
         <div className="workspace-reference-select flex flex-wrap justify-center gap-2">
-        <ControlButton type="button" variant="secondary" size="sm" aria-label={`${selectLabel} · ${uploadLabel}`} disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
+        <ControlButton type="button" variant="secondary" size="sm" aria-label={`${tx(selectLabel)} · ${tx(uploadLabel)}`} disabled={items.length >= maxFiles} onClick={() => inputRef.current?.click()}>
           <Plus className="size-3.5" aria-hidden="true" />
-          {selectLabel}
+          {tx(selectLabel)}
         </ControlButton>
-        {onPickFromLibrary && <ControlButton type="button" variant="secondary" size="sm" aria-label={`从素材库选择 · ${uploadLabel}`} onClick={onPickFromLibrary}><ImageIcon className="size-3.5" aria-hidden="true" />从素材库选择</ControlButton>}
+        {onPickFromLibrary && <ControlButton type="button" variant="secondary" size="sm" aria-label={tx("从素材库选择 · {0}", [tx(uploadLabel)])} onClick={onPickFromLibrary}><ImageIcon className="size-3.5" aria-hidden="true" />{tx("从素材库选择")}</ControlButton>}
         </div>
       </div>
 
       <div className="workspace-reference-files flex min-w-0 flex-col gap-3">
-      {libraryItems.length > 0 && <ul className="grid grid-cols-3 gap-2" aria-label={`${uploadLabel} · 已选素材库文件`}>{libraryItems.map(item => <li key={item.id} className="relative min-w-0 rounded-md border border-border bg-muted p-1">{item.kind === 'audio' ? <span className="flex h-14 items-center justify-center text-xs text-muted-foreground">音频</span> : <MediaThumb src={item.src} alt={item.title} fallback={item.title} kind={item.kind === 'video' ? 'video' : 'image'} className="h-14 w-full rounded" />}<p className="mt-1 truncate pr-4 text-[10px]" title={item.title}>{item.title}</p>{onRemoveLibraryItem && <IconAction label={`移除 ${item.title}`} className="absolute right-0 top-0 size-6 bg-card/90" onClick={() => onRemoveLibraryItem(item.id)}><X className="size-3" /></IconAction>}</li>)}</ul>}
+      {libraryItems.length > 0 && <ul className="grid grid-cols-3 gap-2" aria-label={tx("{0} · 已选素材库文件", [tx(uploadLabel)])}>{libraryItems.map(item => <li key={item.id} className="relative min-w-0 rounded-md border border-border bg-muted p-1">{item.kind === 'audio' ? <span className="flex h-14 items-center justify-center text-xs text-muted-foreground">{tx("音频")}</span> : <MediaThumb src={item.src} alt={item.title} fallback={item.title} kind={item.kind === 'video' ? 'video' : 'image'} className="h-14 w-full rounded" />}<p className="mt-1 truncate pr-4 text-[10px]" title={item.title}>{item.title}</p>{onRemoveLibraryItem && <IconAction label={tx("移除 {0}", [item.title])} className="absolute right-0 top-0 size-6 bg-card/90" onClick={() => onRemoveLibraryItem(item.id)}><X className="size-3" /></IconAction>}</li>)}</ul>}
       {message && (
         <Notice tone={message.tone}>
           {message.tone === 'warning' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> : <Check className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />}
-          {message.text}
+          {tx(message.text)}
         </Notice>
       )}
 
       {items.length > 0 && (
-        <ul className="grid grid-cols-3 gap-2" aria-label="已添加的参考素材">
+        <ul className="grid grid-cols-3 gap-2" aria-label={tx("已添加的参考素材")}>
           {items.map((item, index) => (
             <li
               key={item.id}
@@ -496,34 +501,33 @@ export function ReferenceUploader({
                 {item.status === 'failed' && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-studio-ink/70 px-1 text-center">
                     <AlertTriangle className="size-3.5 text-studio-warn" aria-hidden="true" />
-                    <span className="text-[10px] leading-4 text-studio-ink-foreground">读取失败</span>
+                    <span className="text-[10px] leading-4 text-studio-ink-foreground">{tx("读取失败")}</span>
                   </div>
                 )}
                 {item.status === 'cancelled' && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-studio-ink/60 text-[10px] text-studio-ink-foreground">已取消</div>
+                  <div className="absolute inset-0 flex items-center justify-center bg-studio-ink/60 text-[10px] text-studio-ink-foreground">{tx("已取消")}</div>
                 )}
                 <span className="absolute left-1 top-1 flex size-5 items-center justify-center rounded bg-studio-ink/70 text-[10px] font-medium text-studio-ink-foreground" aria-hidden="true">
                   {index + 1}
                 </span>
                 <span className="absolute right-1 top-1 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-                  <Tooltip label="拖动排序">
+                  <Tooltip label={tx("拖动排序")}>
                     <span className="flex size-5 cursor-grab items-center justify-center rounded bg-studio-ink/70 text-studio-ink-foreground">
                       <GripVertical className="size-3" aria-hidden="true" />
                     </span>
                   </Tooltip>
-                  <IconAction label={`删除 ${item.name}`} onClick={() => removeItem(item.id)} className="size-5 bg-studio-ink/70 text-studio-ink-foreground hover:bg-studio-ink/90 hover:text-studio-ink-foreground">
+                  <IconAction label={tx("删除 {0}", [item.name])} onClick={() => removeItem(item.id)} className="size-5 bg-studio-ink/70 text-studio-ink-foreground hover:bg-studio-ink/90 hover:text-studio-ink-foreground">
                     <Trash2 className="size-3" aria-hidden="true" />
                   </IconAction>
                 </span>
               </div>
               <p className="mt-1 truncate text-[10px] text-muted-foreground" title={item.name}>{item.name}</p>
               <p className="truncate text-[10px] text-muted-foreground/80">
-                {item.status === 'uploading' ? `读取中 ${Math.round(item.progress)}%` : item.status === 'done' ? formatSize(item.size) : item.status === 'failed' ? item.error || '读取失败，可重试' : '已取消'}
+                {item.status === 'uploading' ? tx("读取中 {0}%", [Math.round(item.progress)]) : item.status === 'done' ? formatSize(item.size) : item.status === 'failed' ? item.error || tx('读取失败，可重试') : tx('已取消')}
               </p>
               {item.status === 'uploading' && (
                 <button type="button" onClick={() => updateItem(item.id, { status: 'cancelled' })} className="mt-0.5 text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-                  取消
-                </button>
+                  {tx("取消")}</button>
               )}
               {(item.status === 'failed' || item.status === 'cancelled') && (
                 <button type="button" onClick={() => {
@@ -533,8 +537,7 @@ export function ReferenceUploader({
                   void readItem(item.id, file)
                 }} className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-studio-accent underline-offset-2 hover:underline">
                   <RefreshCw className="size-2.5" aria-hidden="true" />
-                  重试
-                </button>
+                  {tx("重试")}</button>
               )}
             </li>
           ))}
@@ -546,7 +549,8 @@ export function ReferenceUploader({
 }
 
 export function ReferenceLibraryDialog({open, title, onClose, ...picker}: Parameters<typeof ReferencePicker>[0] & {open: boolean; title: string; onClose: () => void}) {
-  return <Modal open={open} title={title} description="选择素材后保留在上传区，可继续添加或移除。" onClose={onClose} className="sm:max-w-3xl" footer={<ControlButton onClick={onClose}>完成选择</ControlButton>}><ReferencePicker {...picker} /></Modal>
+  const tx = useUiText()
+  return <Modal open={open} title={title} description={tx("选择素材后保留在上传区，可继续添加或移除。")} onClose={onClose} className="sm:max-w-3xl" footer={<ControlButton onClick={onClose}>{tx("完成选择")}</ControlButton>}><ReferencePicker {...picker} /></Modal>
 }
 
 /** 素材库选择：与上传区共用同一份选中状态，支持搜索与分页，缩略图网格不出现原生横向滚动条。 */
@@ -593,6 +597,7 @@ export function ReferencePicker({
   replaceSelection?: boolean
   emptyText?: string
 }) {
+  const tx = useUiText()
   const [keyword, setKeyword] = useState('')
   const [visible, setVisible] = useState(REFERENCE_PAGE_SIZE)
   /** 缩略图加载失败的素材不渲染成占位块，直接跳过并如实计数。 */
@@ -638,7 +643,7 @@ export function ReferencePicker({
     <div className="workspace-reference-picker flex flex-col gap-2" data-testid="reference-picker">
       <div className="flex items-center justify-between gap-2">
         <p className="min-w-0 flex-1 text-[11px] text-muted-foreground" data-testid="reference-picker-status">
-          从素材库选择 · 已选 {selectedIds.length}/{maxReferences} · 可选 {shown.length}{total > shown.length ? `/${total}` : ''}
+          {tx("从素材库选择 · 已选 ")}{selectedIds.length}/{maxReferences} {tx(" · 可选 ")}{shown.length}{total > shown.length ? `/${total}` : ''}
         </p>
         {onReload && (
           <button
@@ -647,8 +652,7 @@ export function ReferencePicker({
             className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
           >
             <RefreshCw className={cn('size-3', loading && 'animate-spin')} aria-hidden="true" />
-            刷新素材
-          </button>
+            {tx("刷新素材")}</button>
         )}
       </div>
       {/*
@@ -661,29 +665,29 @@ export function ReferencePicker({
       */}
       <div
         role="search"
-        aria-label="搜索参考素材"
+        aria-label={tx("搜索参考素材")}
         className="studio-search-field flex min-h-10 min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 text-muted-foreground transition-[border-color,box-shadow] focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15"
       >
         <Search className="size-3.5 shrink-0" aria-hidden="true" />
         <input
           type="search"
           data-focus-managed
-          aria-label="搜索素材"
+          aria-label={tx("搜索素材")}
           value={keyword}
           onChange={(event) => { setKeyword(event.target.value); if (serverSearch && !event.target.value.trim()) onSearch?.('') }}
           onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (!event.nativeEvent.isComposing) submitSearch(keyword) } }}
-          placeholder={serverSearch ? '按名称搜索素材，回车查询' : '按名称或标签搜索素材'}
+          placeholder={serverSearch ? tx('按名称搜索素材，回车查询') : tx('按名称或标签搜索素材')}
           data-testid="reference-picker-search"
           style={{ border: 0, background: 'transparent', boxShadow: 'none', outline: 'none', borderRadius: 0 }}
           className="h-9 min-w-0 w-full flex-1 appearance-none p-0 text-xs text-foreground placeholder:text-muted-foreground/70 [&::-webkit-search-cancel-button]:appearance-none"
         />
         {keyword && (
-          <button type="button" onClick={() => submitSearch('')} aria-label="清除搜索" className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+          <button type="button" onClick={() => submitSearch('')} aria-label={tx("清除搜索")} className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
             <X className="size-3" aria-hidden="true" />
           </button>
         )}
       </div>
-      {shown.length > 0 && (loading || failed) && <p role="status" className="text-[11px] leading-5 text-muted-foreground">{failed ? `素材更新失败：${libraryMessage || '请稍后刷新'}。下方保留上次结果。` : '正在更新素材…'}</p>}
+      {shown.length > 0 && (loading || failed) && <p role="status" className="text-[11px] leading-5 text-muted-foreground">{failed ? tx("素材更新失败：{0}。下方保留上次结果。", [libraryMessage || '请稍后刷新']) : tx('正在更新素材…')}</p>}
       {shown.length ? (
         <div className="reference-picker-grid grid grid-cols-4 gap-2">
           {shown.map((asset) => {
@@ -707,7 +711,7 @@ export function ReferencePicker({
                     : 'border-border hover:-translate-y-0.5 hover:border-studio-accent/50 hover:shadow-[var(--lg-shadow-2)]',
                 )}
               >
-                {asset.kind === 'audio' ? <span className="flex size-full items-center justify-center p-2 text-xs text-muted-foreground">音频 · {asset.title}</span> : <MediaThumb loading="lazy" onLoadError={() => setBrokenIds((current) => (current.includes(asset.id) ? current : [...current, asset.id]))} src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="size-full" />}
+                {asset.kind === 'audio' ? <span className="flex size-full items-center justify-center p-2 text-xs text-muted-foreground">{tx("音频 · ")}{asset.title}</span> : <MediaThumb loading="lazy" onLoadError={() => setBrokenIds((current) => (current.includes(asset.id) ? current : [...current, asset.id]))} src={asset.src} poster={asset.poster} kind={asset.kind === 'video' ? 'video' : 'image'} alt={asset.title} fallback={asset.fallback} className="size-full" />}
                 {selected && (
                   <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-studio-accent text-studio-accent-foreground">
                     <Check className="size-2.5" aria-hidden="true" />
@@ -720,14 +724,14 @@ export function ReferencePicker({
       ) : (
         <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] leading-5 text-muted-foreground">
           {failed
-            ? `素材库读取失败：${libraryMessage || '请稍后重试'}`
+            ? tx("素材库读取失败：{0}", [libraryMessage || '请稍后重试'])
             : loading
-              ? '正在读取素材库…'
+              ? tx('正在读取素材库…')
               : libraryState === 'unauthenticated'
-                ? '未登录：登录后可使用已上传的素材。'
+                ? tx('未登录：登录后可使用已上传的素材。')
                 : keyword.trim()
-                  ? `没有匹配「${keyword.trim()}」的素材。`
-                  : emptyText || '素材库里还没有图片素材。可先到「素材库」上传，或换用支持参考图的模型。'}
+                  ? tx("没有匹配「{0}」的素材。", [keyword.trim()])
+                  : emptyText || tx('素材库里还没有图片素材。可先到「素材库」上传，或换用支持参考图的模型。')}
         </p>
       )}
       {shown.length < matched.length && (
@@ -737,8 +741,7 @@ export function ReferencePicker({
           data-testid="reference-picker-more"
           className="h-8 w-full border border-border text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:border-studio-accent/50 hover:text-foreground"
         >
-          加载更多（还有 {matched.length - shown.length} 条）
-        </button>
+          {tx("加载更多（还有 ")}{matched.length - shown.length} {tx(" 条）")}</button>
       )}
       {!hiddenLocally && hiddenOnServer > 0 && onLoadMore && (
         <button
@@ -748,7 +751,7 @@ export function ReferencePicker({
           data-testid="reference-picker-load-more"
           className="h-8 w-full border border-border text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:border-studio-accent/50 hover:text-foreground disabled:opacity-60"
         >
-          {loadingMore ? '正在读取…' : `从服务器加载更多（还有 ${hiddenOnServer} 条）`}
+          {loadingMore ? tx('正在读取…') : tx("从服务器加载更多（还有 {0} 条）", [hiddenOnServer])}
         </button>
       )}
     </div>
@@ -786,15 +789,16 @@ export function ResultStage({
   mediaKind?: 'image' | 'video'
   resultCount?: number
 }) {
+  const tx = useUiText()
   const active = status === 'queued' || status === 'processing'
   const showContent = !isEmpty
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="result-stage">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="mr-1 text-sm font-semibold text-foreground">{mediaKind === 'video' ? '视频预览' : '画面预览'}</h2>
-          <StatusBadge tone={status === 'failed' ? 'warning' : status === 'done' ? 'success' : status === 'idle' ? 'neutral' : 'accent'}>{statusLabel}</StatusBadge>
-          <span className="text-[11px] text-muted-foreground">{resultCount ? `${resultCount} 个结果 · ` : ''}{ratio}</span>
+          <h2 className="mr-1 text-sm font-semibold text-foreground">{mediaKind === 'video' ? tx('视频预览') : tx('画面预览')}</h2>
+          <StatusBadge tone={status === 'failed' ? 'warning' : status === 'done' ? 'success' : status === 'idle' ? 'neutral' : 'accent'}>{tx(statusLabel)}</StatusBadge>
+          <span className="text-[11px] text-muted-foreground">{resultCount ? tx("{0} 个结果 · ", [resultCount]) : ''}{ratio}</span>
         </div>
         <SegmentedControl value={view} onChange={onViewChange} options={viewOptions} />
       </div>
@@ -804,17 +808,17 @@ export function ResultStage({
           {!showContent && !active && status !== 'failed' ? (
             <div className="flex size-full flex-col items-center justify-center rounded-lg border border-dashed border-border px-5 text-center" role="status">
               <span className="mb-5 flex size-14 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground shadow-sm"><ImageIcon className="size-6" aria-hidden="true" /></span>
-              <p className="text-sm font-medium text-foreground">让灵感在这里成形</p>
-              <p className="mt-2 max-w-72 text-xs leading-6 text-muted-foreground">{emptyHint}</p>
-              <div className="mt-6 flex items-center gap-2 text-[10px] text-muted-foreground" aria-hidden="true"><span className="rounded-full border border-border px-2 py-1">01 描述创意</span><span>→</span><span className="rounded-full border border-border px-2 py-1">02 设置参数</span><span>→</span><span className="rounded-full border border-border px-2 py-1">03 生成</span></div>
+              <p className="text-sm font-medium text-foreground">{tx("让灵感在这里成形")}</p>
+              <p className="mt-2 max-w-72 text-xs leading-6 text-muted-foreground">{tx(emptyHint)}</p>
+              <div className="mt-6 flex items-center gap-2 text-[10px] text-muted-foreground" aria-hidden="true"><span className="rounded-full border border-border px-2 py-1">{tx("01 描述创意")}</span><span>→</span><span className="rounded-full border border-border px-2 py-1">{tx("02 设置参数")}</span><span>→</span><span className="rounded-full border border-border px-2 py-1">{tx("03 生成")}</span></div>
             </div>
           ) : showContent ? <div className="size-full overflow-auto overscroll-contain rounded-lg" data-testid="result-stage-content">{children}</div> : null}
 
           {active && !showContent && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg bg-card/80 px-6 text-center" role="status">
               <Loader2 className="size-6 animate-spin text-studio-accent motion-reduce:animate-none" aria-hidden="true" />
-              <p className="text-sm font-medium text-foreground">{statusLabel}</p>
-              <p className="max-w-72 text-xs leading-6 text-muted-foreground">任务正在处理中，结果会自动出现在这里。你也可以到任务记录查看进度。</p>
+              <p className="text-sm font-medium text-foreground">{tx(statusLabel)}</p>
+              <p className="max-w-72 text-xs leading-6 text-muted-foreground">{tx("任务正在处理中，结果会自动出现在这里。你也可以到任务记录查看进度。")}</p>
               <div className="mt-2 h-1 w-40 overflow-hidden rounded-full bg-muted">
                 <div className="studio-waiting h-full w-1/3 rounded-full bg-studio-accent" />
               </div>
@@ -824,19 +828,18 @@ export function ResultStage({
           {status === 'failed' && !showContent && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg bg-card/80 px-6 text-center" role="alert">
               <AlertTriangle className="size-5 text-studio-warn" aria-hidden="true" />
-              <p className="text-sm font-medium text-foreground">{statusLabel}</p>
-              <p className="max-w-72 text-xs leading-6 text-muted-foreground">查看下方任务卡片了解原因。已填写的描述和参考素材会保留。</p>
+              <p className="text-sm font-medium text-foreground">{tx(statusLabel)}</p>
+              <p className="max-w-72 text-xs leading-6 text-muted-foreground">{tx("查看下方任务卡片了解原因。已填写的描述和参考素材会保留。")}</p>
               {onRetry && (
                 <ControlButton type="button" variant="secondary" size="sm" onClick={onRetry}>
                   <RefreshCw className="size-3.5" aria-hidden="true" />
-                  重试
-                </ControlButton>
+                  {tx("重试")}</ControlButton>
               )}
             </div>
           )}
         </div>
       </div>
-      {showContent && (active || status === 'failed') && <p role="status" className="flex items-center gap-2 text-xs leading-5 text-muted-foreground">{active ? <Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <AlertTriangle className="size-3.5 shrink-0 text-studio-warn" aria-hidden="true" />}{active ? '新任务正在生成，你可以继续查看已有结果。' : '最近一次生成失败，已保留之前的结果。请查看下方任务原因。'}</p>}
+      {showContent && (active || status === 'failed') && <p role="status" className="flex items-center gap-2 text-xs leading-5 text-muted-foreground">{active ? <Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <AlertTriangle className="size-3.5 shrink-0 text-studio-warn" aria-hidden="true" />}{active ? tx('新任务正在生成，你可以继续查看已有结果。') : tx('最近一次生成失败，已保留之前的结果。请查看下方任务原因。')}</p>}
     </div>
   )
 }
@@ -848,6 +851,7 @@ export function ResultActions({ children }: { children: ReactNode }) {
 
 /** 任务队列：生成队列、进度和实际结果清晰区分。 */
 export function TaskQueue({ tasks, emptyText }: { tasks: Array<{ id: string; title: string; status: string; stage: string; credits: number }>; emptyText: string }) {
+  const tx = useUiText()
   if (tasks.length === 0) return <p className="text-xs leading-5 text-muted-foreground">{emptyText}</p>
   return (
     <ul className="flex flex-col">
@@ -864,7 +868,7 @@ export function TaskQueue({ tasks, emptyText }: { tasks: Array<{ id: string; tit
             <p className="truncate text-xs font-medium text-foreground">{task.title}</p>
             <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{task.stage}</p>
           </div>
-          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{task.credits > 0 ? `${task.credits} 积分` : '—'}</span>
+          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{task.credits > 0 ? tx("{0} 积分", [task.credits]) : '—'}</span>
         </li>
       ))}
     </ul>

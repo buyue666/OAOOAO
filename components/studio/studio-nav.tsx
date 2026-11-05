@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import {
@@ -100,6 +101,16 @@ export function studioPageTitle(pathname: string, projectTitle?: string) {
   return rootTitles[root] ?? 'OAO'
 }
 
+/** Translate page chrome without treating a user-authored project title as UI copy. */
+export function localizedStudioPageTitle(pathname: string, projectTitle: string | undefined, tx: (source: string) => string) {
+  const [root, id, section] = pathname.split('/').filter(Boolean)
+  if (id && (root === 'projects' || root === 'drama')) {
+    const name = projectTitle ?? tx(root === 'drama' ? '短剧项目' : '项目')
+    return section ? `${name} · ${tx(sectionTitles[section] ?? section)}` : name
+  }
+  return tx(studioPageTitle(pathname))
+}
+
 export function StudioNavLink({
   item,
   pathname,
@@ -111,14 +122,16 @@ export function StudioNavLink({
   collapsed?: boolean
   onNavigate?: () => void
 }) {
+  const tx = useUiText()
   const Icon = item.icon
+  const label = tx(item.label)
   const active = isNavItemActive(pathname, item)
   const link = (
     <Link
       href={item.href}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
-      aria-label={collapsed ? item.label : undefined}
+      aria-label={collapsed ? label : undefined}
       data-active={active ? 'true' : 'false'}
       className={cn(
         'studio-nav-item flex h-10 items-center rounded-lg text-sm font-medium',
@@ -127,11 +140,11 @@ export function StudioNavLink({
       )}
     >
       <Icon className="size-[18px] shrink-0" aria-hidden="true" />
-      {!collapsed && <span className="truncate">{item.label}</span>}
+      {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   )
 
-  return collapsed ? <Tooltip label={item.label} side="right" className="flex w-full justify-center">{link}</Tooltip> : link
+  return collapsed ? <Tooltip label={label} side="right" className="flex w-full justify-center">{link}</Tooltip> : link
 }
 
 export function StudioToolsNav({
@@ -145,6 +158,7 @@ export function StudioToolsNav({
   onNavigate?: () => void
   idSuffix?: string
 }) {
+  const tx = useUiText()
   const router = useRouter()
   const active = isNavItemActive(pathname, studioToolsNav)
   const [open, setOpen] = useState(active)
@@ -160,7 +174,7 @@ export function StudioToolsNav({
       type="button"
       aria-expanded={collapsed ? undefined : open}
       aria-controls={collapsed ? undefined : submenuId}
-      aria-label={collapsed ? studioToolsNav.label : undefined}
+      aria-label={collapsed ? tx(studioToolsNav.label) : undefined}
       data-active={active ? 'true' : 'false'}
       onClick={() => {
         if (collapsed) {
@@ -176,15 +190,15 @@ export function StudioToolsNav({
       )}
     >
       <Icon className="size-[18px] shrink-0" aria-hidden="true" />
-      {!collapsed && <><span className="min-w-0 flex-1 truncate text-left">{studioToolsNav.label}</span><ChevronDown className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden="true" /></>}
+      {!collapsed && <><span className="min-w-0 flex-1 truncate text-left">{tx(studioToolsNav.label)}</span><ChevronDown className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden="true" /></>}
     </button>
   )
 
   return (
     <div className="flex flex-col gap-1">
-      {collapsed ? <Tooltip label={studioToolsNav.label} side="right" className="flex w-full justify-center">{parent}</Tooltip> : parent}
+      {collapsed ? <Tooltip label={tx(studioToolsNav.label)} side="right" className="flex w-full justify-center">{parent}</Tooltip> : parent}
       {!collapsed && open && (
-        <div id={submenuId} className="ml-3 flex flex-col gap-1 border-l border-sidebar-border pl-3" aria-label="创作工具子菜单">
+        <div id={submenuId} className="ml-3 flex flex-col gap-1 border-l border-sidebar-border pl-3" aria-label={tx("创作工具子菜单")}>
           {studioToolItems.map((item) => {
             const ItemIcon = item.icon
             const itemActive = isNavItemActive(pathname, item)
@@ -201,7 +215,7 @@ export function StudioToolsNav({
                 )}
               >
                 <ItemIcon className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate">{tx(item.label)}</span>
               </Link>
             )
           })}

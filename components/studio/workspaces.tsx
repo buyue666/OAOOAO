@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import type { FormEvent, PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -222,7 +223,8 @@ function useWorkReuseParams({ kind, accountId, connected, models, prompt, protec
 }
 
 function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () => void }) {
-  return <Notice tone="neutral"><div className="flex min-w-0 flex-col gap-2"><p className="text-xs leading-5">已收到作品参数。套用会替换当前描述及可用的原模型，其他参数请自行核对。</p><div className="flex flex-wrap gap-2"><ControlButton type="button" size="sm" onClick={apply}>套用作品参数</ControlButton><ControlButton type="button" size="sm" variant="secondary" onClick={dismiss}>保留当前草稿</ControlButton></div></div></Notice>
+  const tx = useUiText()
+  return <Notice tone="neutral"><div className="flex min-w-0 flex-col gap-2"><p className="text-xs leading-5">{tx("已收到作品参数。套用会替换当前描述及可用的原模型，其他参数请自行核对。")}</p><div className="flex flex-wrap gap-2"><ControlButton type="button" size="sm" onClick={apply}>{tx("套用作品参数")}</ControlButton><ControlButton type="button" size="sm" variant="secondary" onClick={dismiss}>{tx("保留当前草稿")}</ControlButton></div></div></Notice>
 }
 
 /** 结果卡片：媒体轻微放大、操作按钮渐显，选中态用描边表达而不遮挡素材。 */function ResultTile({
@@ -250,6 +252,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
   className?: string
   fit?: boolean
 }) {
+  const tx = useUiText()
   return (
     <div className={cn('group relative min-w-0 overflow-hidden rounded-lg border bg-studio-ink', selected ? 'border-studio-accent ring-1 ring-inset ring-studio-accent' : 'border-studio-ink-line', className)}>
       <button type="button" onClick={() => { onSelect(); onImageClick?.() }} aria-pressed={selected} aria-label={`${onImageClick ? '编辑并选择' : '选择'} ${label}`} className={cn('block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent', fit && 'h-full')}>
@@ -259,7 +262,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
             poster={work.poster}
             kind={work.kind === 'video' ? 'video' : 'image'}
             alt={work.title}
-            fallback="预览加载失败，可打开详情或重试下载"
+            fallback={tx("预览加载失败，可打开详情或重试下载")}
             className="size-full [&_img]:object-contain [&_video]:object-contain"
           />
         </span>
@@ -275,14 +278,14 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
       <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-2 pb-2 pt-6 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:has-[[role=alert]]:opacity-100">
         <span className="truncate text-[10px] text-studio-ink-foreground">{work.model}</span>
         <span className="flex shrink-0 items-center gap-0.5">
-          <Tooltip label="预览">
-            <IconAction label={`预览 ${work.title}`} onClick={onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
+          <Tooltip label={tx("预览")}>
+            <IconAction label={tx("预览 {0}", [work.title])} onClick={onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
               <Maximize2 className="size-3" aria-hidden="true" />
             </IconAction>
           </Tooltip>
           <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} iconOnly className="flex size-6 items-center justify-center rounded text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-50" />
-          <Tooltip label="更多操作">
-            <IconAction label={`${work.title} 的更多操作`} onClick={onEdit ?? onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
+          <Tooltip label={tx("更多操作")}>
+            <IconAction label={tx("{0} 的更多操作", [work.title])} onClick={onEdit ?? onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
               <MoreHorizontal className="size-3" aria-hidden="true" />
             </IconAction>
           </Tooltip>
@@ -325,6 +328,7 @@ function clampPan(pan: { x: number; y: number }, bounds: { maxX: number; maxY: n
 }
 
 function ZoomableMedia({ work }: { work: Work }) {
+  const tx = useUiText()
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
@@ -392,7 +396,7 @@ function ZoomableMedia({ work }: { work: Work }) {
       className={cn('relative h-[min(68dvh,720px)] select-none overflow-hidden overscroll-contain rounded-sm bg-studio-ink touch-none', zoom > 1 ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in')}
       role="region"
       onDragStart={(event) => event.preventDefault()}
-      aria-label={`图片详情预览，当前缩放 ${Math.round(zoom * 100)}%`}
+      aria-label={tx("图片详情预览，当前缩放 {0}%", [Math.round(zoom * 100)])}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={stopDragging}
@@ -411,18 +415,18 @@ function ZoomableMedia({ work }: { work: Work }) {
       </div>
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3">
         <span className="rounded-md bg-studio-ink/80 px-2.5 py-1.5 text-[11px] font-medium text-studio-ink-foreground">
-          {zoom > 1 ? '拖动查看细节' : '滚轮或双击放大'}
+          {zoom > 1 ? tx('拖动查看细节') : tx('滚轮或双击放大')}
         </span>
         <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-studio-ink-foreground/15 bg-studio-ink/80 p-1 text-studio-ink-foreground shadow-lg">
-          <IconAction label="缩小" onClick={() => updateZoom(zoom - 0.5)} disabled={zoom <= 1} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-40">
+          <IconAction label={tx("缩小")} onClick={() => updateZoom(zoom - 0.5)} disabled={zoom <= 1} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-40">
             <ZoomOut className="size-3.5" aria-hidden="true" />
           </IconAction>
           <span className="min-w-11 text-center text-[11px] font-medium tabular-nums" aria-live="polite">{Math.round(zoom * 100)}%</span>
-          <IconAction label="放大" onClick={() => updateZoom(zoom + 0.5)} disabled={zoom >= 5} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-40">
+          <IconAction label={tx("放大")} onClick={() => updateZoom(zoom + 0.5)} disabled={zoom >= 5} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground disabled:opacity-40">
             <ZoomIn className="size-3.5" aria-hidden="true" />
           </IconAction>
           <span className="mx-0.5 h-4 w-px bg-studio-ink-foreground/20" aria-hidden="true" />
-          <IconAction label="重置缩放" onClick={() => { updateZoom(1); setPan({ x: 0, y: 0 }) }} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
+          <IconAction label={tx("重置缩放")} onClick={() => { updateZoom(1); setPan({ x: 0, y: 0 }) }} className="size-7 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
             <RotateCcw className="size-3.5" aria-hidden="true" />
           </IconAction>
         </div>
@@ -432,6 +436,7 @@ function ZoomableMedia({ work }: { work: Work }) {
 }
 
 function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onClose: () => void; onNotice: (text: string) => void }) {
+  const tx = useUiText()
   const router = useRouter()
   const [zoomed, setZoomed] = useState(false)
   if (!work) return null
@@ -447,21 +452,19 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
   return (
     <Modal
       open
-      title={zoomed ? `${work.title} · 放大预览` : work.title}
-      description={zoomed ? '使用按钮或滚轮放大，拖动画面查看细节。' : `${work.kind === 'image' ? '图片' : '视频'} · ${work.model} · ${work.ratio}`}
+      title={zoomed ? tx("{0} · 放大预览", [work.title]) : work.title}
+      description={zoomed ? tx('使用按钮或滚轮放大，拖动画面查看细节。') : `${work.kind === 'image' ? '图片' : '视频'} · ${work.model} · ${work.ratio}`}
       onClose={closeModal}
       className={zoomed ? 'max-w-[min(96vw,1100px)]' : undefined}
       footer={
         zoomed ? (
           <ControlButton variant="secondary" size="sm" onClick={() => setZoomed(false)}>
-            返回详情
-          </ControlButton>
+            {tx("返回详情")}</ControlButton>
         ) : (
           <>
             <ControlButton variant="secondary" size="sm" onClick={() => onNotice('当前结果参数已保留，可直接在工作台继续调整。')}>
               <Copy className="size-3.5" aria-hidden="true" />
-              复用参数
-            </ControlButton>
+              {tx("复用参数")}</ControlButton>
             {/**
               * 结果详情里的画布入口。
               * 早先写死 `/canvas/aurora`（演示项目，真实账号下 404）；
@@ -469,12 +472,10 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
               */}
             <ControlButton variant="secondary" size="sm" onClick={() => router.push('/canvas')}>
               <Send className="size-3.5" aria-hidden="true" />
-              送入画布
-            </ControlButton>
+              {tx("送入画布")}</ControlButton>
             <ControlButton variant="primary" size="sm" onClick={() => onNotice('请在结果舞台使用「加入项目」，那里会真实写入所选项目。')}>
               <Plus className="size-3.5" aria-hidden="true" />
-              加入项目
-            </ControlButton>
+              {tx("加入项目")}</ControlButton>
             <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg border border-border px-3 text-xs hover:bg-muted disabled:opacity-50" />
           </>
         )
@@ -487,7 +488,7 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
           <button
             type="button"
             onClick={() => setZoomed(true)}
-            aria-label={`放大查看 ${work.title}`}
+            aria-label={tx("放大查看 {0}", [work.title])}
             className="group relative block w-full overflow-hidden rounded-lg border border-border bg-studio-workspace text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent"
           >
             <div style={{ aspectRatio: ratioToCss(work.ratio) }}>
@@ -496,13 +497,12 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
             <span className="pointer-events-none absolute inset-0 flex items-end justify-end bg-studio-ink/0 p-3 transition-colors duration-200 group-hover:bg-studio-ink/25 group-focus-visible:bg-studio-ink/25">
               <span className="inline-flex items-center gap-1.5 rounded-md bg-studio-ink/80 px-2.5 py-1.5 text-xs font-medium text-studio-ink-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
                 <Maximize2 className="size-3.5" aria-hidden="true" />
-                放大预览
-              </span>
+                {tx("放大预览")}</span>
             </span>
           </button>
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            <div className="flex justify-between gap-2 border-b border-border/60 py-2"><dt className="text-muted-foreground">状态</dt><dd className="font-medium text-foreground">{work.status}</dd></div>
-            <div className="flex justify-between gap-2 border-b border-border/60 py-2"><dt className="text-muted-foreground">更新时间</dt><dd className="font-medium text-foreground">{work.updatedAt}</dd></div>
+            <div className="flex justify-between gap-2 border-b border-border/60 py-2"><dt className="text-muted-foreground">{tx("状态")}</dt><dd className="font-medium text-foreground">{work.status}</dd></div>
+            <div className="flex justify-between gap-2 border-b border-border/60 py-2"><dt className="text-muted-foreground">{tx("更新时间")}</dt><dd className="font-medium text-foreground">{work.updatedAt}</dd></div>
           </dl>
         </>
       )}
@@ -511,6 +511,7 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
 }
 
 export function ImageWorkspace() {
+  const tx = useUiText()
   const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
   const generation = useGeneration()
   const router = useRouter()
@@ -1231,39 +1232,39 @@ export function ImageWorkspace() {
   const params = (
     <WorkspaceParams>
       {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
-      <ParamSection title="提示词" layout="prompt">
-        <label htmlFor="image-prompt" className="sr-only">画面描述</label>
-        <PromptReferenceInput id="image-prompt" value={prompt} onChange={setPrompt} references={imagePromptReferences} placeholder="描述你想看到的画面，输入 @ 引用已上传素材" />
+      <ParamSection title={tx("提示词")} layout="prompt">
+        <label htmlFor="image-prompt" className="sr-only">{tx("画面描述")}</label>
+        <PromptReferenceInput id="image-prompt" value={prompt} onChange={setPrompt} references={imagePromptReferences} placeholder={tx("描述你想看到的画面，输入 @ 引用已上传素材")} />
       </ParamSection>
 
-      <ParamSection title="模型" layout="model">
-        <SelectField label="图像模型" value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, icon: <ModelIcon model={item} /> }))} />
-        {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
-        {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">模型与计费以当前账户配置为准；实际扣费以任务结果为准。</p>}
+      <ParamSection title={tx("模型")} layout="model">
+        <SelectField label={tx("图像模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, icon: <ModelIcon model={item} /> }))} />
+        {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{tx(submitBlock)}</p>}
+        {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{tx("模型与计费以当前账户配置为准；实际扣费以任务结果为准。")}</p>}
       </ParamSection>
 
-      <ParamSection title="输出" layout="output">
+      <ParamSection title={tx("输出")} layout="output">
         <div className="space-y-3">
           <div>
-            <p className="mb-2 text-xs font-medium text-foreground">比例</p>
-            <OptionGrid value={ratio} onChange={setRatio} options={ratioCards} columns={3} label="图片比例" />
+            <p className="mb-2 text-xs font-medium text-foreground">{tx("比例")}</p>
+            <OptionGrid value={ratio} onChange={setRatio} options={ratioCards} columns={3} label={tx("图片比例")} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-          <SelectField label="清晰度" value={resolution} onChange={setResolution} options={resolutionOptions.map((item) => ({ value: item, label: item }))} />
-          <SelectField label="图片质量" value={quality} onChange={setQuality} options={qualityOptions.map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
+          <SelectField label={tx("清晰度")} value={resolution} onChange={setResolution} options={resolutionOptions.map((item) => ({ value: item, label: item }))} />
+          <SelectField label={tx("图片质量")} value={quality} onChange={setQuality} options={qualityOptions.map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
           {maxBatch > 1 ? (
-            <SelectField label="生成数量" value={count} onChange={setCount} options={countOptions.map((item) => ({ value: item, label: `${item} 张` }))} className="col-span-2" hint={`当前模型最多 ${maxBatch} 张，超出部分会按批次分多次提交。`} />
+            <SelectField label={tx("生成数量")} value={count} onChange={setCount} options={countOptions.map((item) => ({ value: item, label: `${item} 张` }))} className="col-span-2" hint={tx("当前模型最多 {0} 张，超出部分会按批次分多次提交。", [maxBatch])} />
           ) : (
             <div className="col-span-2 rounded-lg border border-border bg-muted/40 p-3">
-              <p className="text-xs font-medium text-foreground">生成数量固定为 1 张</p>
-              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">当前模型每次只产出一张结果，需要多张请更换支持批量的模型。</p>
+              <p className="text-xs font-medium text-foreground">{tx("生成数量固定为 1 张")}</p>
+              <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{tx("当前模型每次只产出一张结果，需要多张请更换支持批量的模型。")}</p>
             </div>
           )}
           </div>
         </div>
       </ParamSection>
 
-      <ParamSection title="参考素材" layout="references" hint={`${selectedRefs.length + uploads.length}/${referenceSelectionLimit} · 合计`}>
+      <ParamSection title={tx("参考素材")} layout="references" hint={tx("{0}/{1} · 合计", [selectedRefs.length + uploads.length, referenceSelectionLimit])}>
         <div className="workspace-reference-grid flex flex-col gap-3">
           {referenceSelectionLimit > 0 && <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={Math.max(0, referenceSelectionLimit - selectedRefs.length)} />}
           {/*
@@ -1286,13 +1287,13 @@ export function ImageWorkspace() {
               serverSearch
             />
           ) : (
-            <p className="text-[11px] leading-5 text-muted-foreground">当前模型不接受参考图，因此不提供素材库选择。请换用支持参考图的模型。</p>
+            <p className="text-[11px] leading-5 text-muted-foreground">{tx("当前模型不接受参考图，因此不提供素材库选择。请换用支持参考图的模型。")}</p>
           )}
         </div>
       </ParamSection>
 
       <ParamSection
-        title="高级参数"
+        title={tx("高级参数")}
         layout="advanced"
         action={
           <button
@@ -1302,7 +1303,7 @@ export function ImageWorkspace() {
             className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
           >
             <SlidersHorizontal className="size-3" aria-hidden="true" />
-            {advanced ? '收起' : '展开'}
+            {advanced ? tx('收起') : tx('展开')}
           </button>
         }
       >
@@ -1317,10 +1318,10 @@ export function ImageWorkspace() {
                 options={parameter.options}
               />
             ))}
-            <p className="col-span-2 text-[11px] leading-5 text-muted-foreground">只显示当前模型支持的选项，未支持的参数不会保留空白区域。</p>
+            <p className="col-span-2 text-[11px] leading-5 text-muted-foreground">{tx("只显示当前模型支持的选项，未支持的参数不会保留空白区域。")}</p>
           </div>
         ) : (
-          <p className="text-[11px] leading-5 text-muted-foreground">高级参数默认使用模型推荐值；展开后可覆盖当前会话的默认值。</p>
+          <p className="text-[11px] leading-5 text-muted-foreground">{tx("高级参数默认使用模型推荐值；展开后可覆盖当前会话的默认值。")}</p>
         )}
       </ParamSection>
     </WorkspaceParams>
@@ -1361,7 +1362,7 @@ export function ImageWorkspace() {
          * 于是任务已完成、后端已有结果时舞台仍然显示空态，必须刷新才恢复。
          */
         isEmpty={stageSource.length === 0}
-        emptyHint={serverWorksResult.state === 'loading' ? '正在读取已有结果…' : serverWorksResult.state === 'error' ? '暂时无法读取结果，请刷新页面重试。' : '写下画面描述，在创作参数中选择模型。完成的图片会自动出现在这里。'}
+        emptyHint={serverWorksResult.state === 'loading' ? tx('正在读取已有结果…') : serverWorksResult.state === 'error' ? tx('暂时无法读取结果，请刷新页面重试。') : tx('写下画面描述，在创作参数中选择模型。完成的图片会自动出现在这里。')}
       >
         {view === 'single' && selectedWork && (
           <ResultTile
@@ -1369,7 +1370,7 @@ export function ImageWorkspace() {
             ratio={ratio}
             fit
             selected
-            label="当前结果"
+            label={tx("当前结果")}
             onSelect={() => setSelectedWorkId(selectedWork.id)}
             onOpen={() => setDetailWork(selectedWork)}
             onImageClick={() => setEditorWork(selectedWork)}
@@ -1385,7 +1386,7 @@ export function ImageWorkspace() {
                 work={work}
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
-                label={work.id === selectedWork?.id ? '当前选择' : `结果 ${index + 1}`}
+                label={work.id === selectedWork?.id ? tx('当前选择') : tx("结果 {0}", [index + 1])}
                 onSelect={() => setSelectedWorkId(work.id)}
                 onOpen={() => setDetailWork(work)}
                 onImageClick={() => setEditorWork(work)}
@@ -1402,12 +1403,12 @@ export function ImageWorkspace() {
                 work={work}
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
-                label={index === 0 ? 'A · 当前结果' : 'B · 对比结果'}
+                label={index === 0 ? tx('A · 当前结果') : tx('B · 对比结果')}
                 onSelect={() => setSelectedWorkId(work.id)}
                 onOpen={() => setDetailWork(work)}
               />
             ))}
-            {visibleWorks.length < 2 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center text-xs leading-6 text-muted-foreground"><Columns2 className="size-5" aria-hidden="true" />再生成一张图片，即可并排比较。</div>}
+            {visibleWorks.length < 2 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center text-xs leading-6 text-muted-foreground"><Columns2 className="size-5" aria-hidden="true" />{tx("再生成一张图片，即可并排比较。")}</div>}
           </div>
         )}
       </ResultStage>
@@ -1424,34 +1425,31 @@ export function ImageWorkspace() {
           setNotice({ tone: 'accent', text: `已复用参数：${selectedWork.prompt ? `提示词「${selectedWork.prompt.slice(0, 20)}」` : '（该结果没有记录提示词）'}${selectedWork.model ? ` · 模型 ${selectedWork.model}` : ''}` })
         }}>
           <Copy className="size-3.5" aria-hidden="true" />
-          复用参数
-        </ControlButton>
+          {tx("复用参数")}</ControlButton>
         <ControlButton size="sm" variant="ghost" disabled={!selectedWork || projectBusy} onClick={() => void sendToCanvas()}>
           <Send className="size-3.5" aria-hidden="true" />
-          送入画布
-        </ControlButton>
+          {tx("送入画布")}</ControlButton>
         <ControlButton size="sm" variant="ghost" disabled={!selectedWork || projectBusy} onClick={() => void addToProject()}>
           <Plus className="size-3.5" aria-hidden="true" />
-          {projectBusy ? '处理中…' : '加入项目'}
+          {projectBusy ? tx('处理中…') : tx('加入项目')}
         </ControlButton>
-        <MediaDownloadButton media={{ url: selectedWork?.src ?? '', kind: 'image' }} title={selectedWork?.title ?? '作品'} prompt={selectedWork?.prompt} taskId={selectedWork?.taskId ?? selectedWork?.id} disabled={!selectedWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
+        <MediaDownloadButton media={{ url: selectedWork?.src ?? '', kind: 'image' }} title={selectedWork?.title ?? tx('作品')} prompt={selectedWork?.prompt} taskId={selectedWork?.taskId ?? selectedWork?.id} disabled={!selectedWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
-          导演 Agent
-        </ControlButton>
+          {tx("导演 Agent")}</ControlButton>
       </ResultActions>
 
       <section aria-labelledby="image-queue" className="studio-surface px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="image-queue" className="text-xs font-semibold text-foreground">生成任务</h2>
-          <span className="text-[11px] text-muted-foreground">{liveImageTasks.length} 条任务</span>
+          <h2 id="image-queue" className="text-xs font-semibold text-foreground">{tx("生成任务")}</h2>
+          <span className="text-[11px] text-muted-foreground">{liveImageTasks.length} {tx(" 条任务")}</span>
         </div>
         <div className="mt-2">
           <LiveTaskList
             kinds={['image']}
             limit={4}
             compact
-            emptyHint="还没有图片任务"
+            emptyHint={tx("还没有图片任务")}
             onSelectTask={(task) => {
               setSelectedTaskId(task.id)
               setSelectedWorkId(null)
@@ -1463,14 +1461,14 @@ export function ImageWorkspace() {
         </div>
       </section>
 
-      {!liveReady && <LocalPreviewNotice what="图片生成" />}
+      {!liveReady && <LocalPreviewNotice what={tx("图片生成")} />}
       <GenerationErrorNotice />
       <GenerationNotice />
 
       {notice && (
         <Notice tone={notice.tone}>
           <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span aria-live="polite">{notice.text}</span>
+          <span aria-live="polite">{tx(notice.text)}</span>
         </Notice>
       )}
     </div>
@@ -1482,27 +1480,27 @@ export function ImageWorkspace() {
         params={params}
         stage={stage}
         onSubmit={submit}
-        submitLabel={submitting ? '正在提交…' : '开始生成'}
+        submitLabel={submitting ? tx('正在提交…') : tx('开始生成')}
         credits={credits}
         submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
-        submitHint={submitBlock || (!prompt.trim() ? '先写下你想生成的画面。' : undefined)}
-        paramsTitle="图片参数"
-        paramsHint={model ? `${model.shortName} · ${count} 张` : '暂无可用模型'}
+        submitHint={submitBlock || (!prompt.trim() ? tx('先写下你想生成的画面。') : undefined)}
+        paramsTitle={tx("图片参数")}
+        paramsHint={model ? tx("{0} · {1} 张", [model.shortName, count]) : tx('暂无可用模型')}
       />
-      <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title="导演 Agent" description="基于当前图片参数继续拆解镜头与素材">
+      <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title={tx("导演 Agent")} description={tx("基于当前图片参数继续拆解镜头与素材")}>
         <DirectorAgent context="图片工作台 · 极光之后" />
       </SidePanel>
       <SidePanel
         open={Boolean(editorWork)}
         onClose={() => setEditorWork(null)}
-        title="图片编辑"
+        title={tx("图片编辑")}
         description={editorWork?.title}
         width="lg:w-[min(920px,calc(100vw-160px))] lg:max-w-none"
       >
         {editorWork && <ImageEditorPanel
           imageSrc={editorWork.src}
           title={editorWork.title}
-          description="画笔、涂抹、扩图、高清修复、分图层和转视频"
+          description={tx("画笔、涂抹、扩图、高清修复、分图层和转视频")}
           versions={editorVersions}
           activeVersionId={editorWork.id}
           showHeader={false}
@@ -1534,6 +1532,7 @@ export function ImageWorkspace() {
 }
 
 export function VideoWorkspace() {
+  const tx = useUiText()
   const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
   const generation = useGeneration()
   const router = useRouter()
@@ -2087,24 +2086,24 @@ export function VideoWorkspace() {
   const params = (
     <WorkspaceParams>
       {reused.pending && <ReuseDraftNotice apply={reused.applyPending} dismiss={reused.dismiss} />}
-      <ParamSection title="生成模式" layout="mode">
-        <OptionGrid value={mode} onChange={setMode} options={modeOptions} label="生成模式" />
+      <ParamSection title={tx("生成模式")} layout="mode">
+        <OptionGrid value={mode} onChange={setMode} options={modeOptions} label={tx("生成模式")} />
       </ParamSection>
 
-      <ParamSection title="镜头描述" layout="prompt">
-        <label htmlFor="video-prompt" className="sr-only">镜头描述</label>
-        <PromptReferenceInput id="video-prompt" value={prompt} onChange={setPrompt} references={promptReferences} placeholder="描述镜头运动、主体动作与氛围，输入 @ 引用已上传素材" />
+      <ParamSection title={tx("镜头描述")} layout="prompt">
+        <label htmlFor="video-prompt" className="sr-only">{tx("镜头描述")}</label>
+        <PromptReferenceInput id="video-prompt" value={prompt} onChange={setPrompt} references={promptReferences} placeholder={tx("描述镜头运动、主体动作与氛围，输入 @ 引用已上传素材")} />
       </ParamSection>
 
-      <ParamSection title="模型" layout="model">
-        <SelectField label="视频模型" value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · 按参数计价`, icon: <ModelIcon model={item} /> }))} />
-        {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{submitBlock}</p>}
+      <ParamSection title={tx("模型")} layout="model">
+        <SelectField label={tx("视频模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: `${item.shortName} · 按参数计价`, icon: <ModelIcon model={item} /> }))} />
+        {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{tx(submitBlock)}</p>}
       </ParamSection>
 
-      <ParamSection title="输出" layout="output">
+      <ParamSection title={tx("输出")} layout="output">
         <div className="grid grid-cols-2 gap-3">
-          <SelectField label="比例" value={ratio} onChange={setRatio} options={capabilities.ratios.map((item) => ({ value: item, label: ['adaptive', 'auto'].includes(item) ? '自动适配' : item }))} />
-          <SelectField label="清晰度" value={quality} onChange={setQuality} options={capabilities.qualities.map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
+          <SelectField label={tx("比例")} value={ratio} onChange={setRatio} options={capabilities.ratios.map((item) => ({ value: item, label: ['adaptive', 'auto'].includes(item) ? '自动适配' : item }))} />
+          <SelectField label={tx("清晰度")} value={quality} onChange={setQuality} options={capabilities.qualities.map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
         </div>
         <div className="mt-3"><VideoDurationSlider value={duration} options={allowedDurations} onChange={setDuration} /></div>
       </ParamSection>
@@ -2112,26 +2111,26 @@ export function VideoWorkspace() {
 
       {<ParamSection title={referenceLabel} layout="references" hint={referenceHint}>
         <div className="workspace-reference-grid flex flex-col gap-3">
-          {frameMode && <p className="text-[11px] leading-5 text-muted-foreground">首帧必选，尾帧可选。{frameReferenceTypes.length ? `可附加${frameReferenceTypes.includes('image') ? '图片' : ''}${frameReferenceTypes.length > 1 ? '、' : ''}${frameReferenceTypes.includes('audio') ? '音频' : ''}参考；首尾帧模式不接受参考视频。` : '当前模型仅接受帧图片。'}</p>}
-          <p className="text-[11px] leading-5 text-muted-foreground">合计最多 {referenceSelectionLimit} 个，包含首尾帧；上传文件与素材库选择共用额度。</p>
+          {frameMode && <p className="text-[11px] leading-5 text-muted-foreground">{tx("首帧必选，尾帧可选。")}{frameReferenceTypes.length ? tx("可附加{0}{1}{2}参考；首尾帧模式不接受参考视频。", [frameReferenceTypes.includes('image') ? tx('图片') : '', frameReferenceTypes.length > 1 ? ' / ' : '', frameReferenceTypes.includes('audio') ? tx('音频') : '']) : tx('当前模型仅接受帧图片。')}</p>}
+          <p className="text-[11px] leading-5 text-muted-foreground">{tx("合计最多 ")}{referenceSelectionLimit} {tx(" 个，包含首尾帧；上传文件与素材库选择共用额度。")}</p>
           <div className="workspace-reference-uploaders">
-            {frameMode && <ReferenceUploader items={firstFrameUploads} onItemsChange={items => {setFirstFrameUploads(items); if (items.length) setFirstFrameRef([])}} maxFiles={frameSlotLimit('first')} kind="image" label="首帧图片" emptyText="上传首帧图片" selectLabel="上传图片" onPickFromLibrary={() => openReferenceLibrary('first')} libraryItems={firstFrameRef} onRemoveLibraryItem={() => setFirstFrameRef([])} />}
-            {frameMode && capabilities.lastFrame && <ReferenceUploader items={lastFrameUploads} onItemsChange={items => {setLastFrameUploads(items); if (items.length) setLastFrameRef([])}} maxFiles={frameSlotLimit('last')} kind="image" label="尾帧图片（可选）" emptyText="上传尾帧图片" selectLabel="上传图片" onPickFromLibrary={() => openReferenceLibrary('last')} libraryItems={lastFrameRef} onRemoveLibraryItem={() => setLastFrameRef([])} />}
-            {mode === 'edit' && <ReferenceUploader items={sourceVideoUploads} onItemsChange={items => {setSourceVideoUploads(items); if (items.length) setSourceVideoRef([])}} maxFiles={1} kind="video" label="待编辑视频" emptyText="上传待编辑视频" selectLabel="上传视频" onPickFromLibrary={() => openReferenceLibrary('source')} libraryItems={sourceVideoRef} onRemoveLibraryItem={() => setSourceVideoRef([])} />}
+            {frameMode && <ReferenceUploader items={firstFrameUploads} onItemsChange={items => {setFirstFrameUploads(items); if (items.length) setFirstFrameRef([])}} maxFiles={frameSlotLimit('first')} kind="image" label={tx("首帧图片")} emptyText={tx("上传首帧图片")} selectLabel={tx("上传图片")} onPickFromLibrary={() => openReferenceLibrary('first')} libraryItems={firstFrameRef} onRemoveLibraryItem={() => setFirstFrameRef([])} />}
+            {frameMode && capabilities.lastFrame && <ReferenceUploader items={lastFrameUploads} onItemsChange={items => {setLastFrameUploads(items); if (items.length) setLastFrameRef([])}} maxFiles={frameSlotLimit('last')} kind="image" label={tx("尾帧图片（可选）")} emptyText={tx("上传尾帧图片")} selectLabel={tx("上传图片")} onPickFromLibrary={() => openReferenceLibrary('last')} libraryItems={lastFrameRef} onRemoveLibraryItem={() => setLastFrameRef([])} />}
+            {mode === 'edit' && <ReferenceUploader items={sourceVideoUploads} onItemsChange={items => {setSourceVideoUploads(items); if (items.length) setSourceVideoRef([])}} maxFiles={1} kind="video" label={tx("待编辑视频")} emptyText={tx("上传待编辑视频")} selectLabel={tx("上传视频")} onPickFromLibrary={() => openReferenceLibrary('source')} libraryItems={sourceVideoRef} onRemoveLibraryItem={() => setSourceVideoRef([])} />}
             {mode !== 'edit' && capabilities.maxReferences > 0 && <>
-              {acceptsImageReferences && <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={videoReferenceUploadLimit(model, 'image', activeSelectedRefs, referenceUploadCounts, reservedFrameCount)} label={frameMode ? '参考图片（可选）' : '参考图片'} selectLabel="上传图片" onPickFromLibrary={() => openReferenceLibrary('image')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'image')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
-              {acceptsVideoReferences && <ReferenceUploader items={videoRefUploads} onItemsChange={setVideoRefUploads} kind="video" maxFiles={videoReferenceUploadLimit(model, 'video', activeSelectedRefs, referenceUploadCounts)} maxFileBytes={24 * 1024 * 1024} label="参考视频" selectLabel="上传视频" hint="单个不超过 24 MiB；时长按模型规则校验" onPickFromLibrary={() => openReferenceLibrary('video')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'video')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
-              {acceptsAudioReferences && <ReferenceUploader items={audioRefUploads} onItemsChange={setAudioRefUploads} kind="audio" maxFiles={videoReferenceUploadLimit(model, 'audio', activeSelectedRefs, referenceUploadCounts, reservedFrameCount)} label={frameMode ? '参考音频（可选）' : '参考音频'} selectLabel="上传音频" hint="单个不超过 24 MiB；时长按模型规则校验" onPickFromLibrary={() => openReferenceLibrary('audio')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'audio')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
+              {acceptsImageReferences && <ReferenceUploader items={uploads} onItemsChange={setUploads} maxFiles={videoReferenceUploadLimit(model, 'image', activeSelectedRefs, referenceUploadCounts, reservedFrameCount)} label={frameMode ? tx('参考图片（可选）') : tx('参考图片')} selectLabel={tx("上传图片")} onPickFromLibrary={() => openReferenceLibrary('image')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'image')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
+              {acceptsVideoReferences && <ReferenceUploader items={videoRefUploads} onItemsChange={setVideoRefUploads} kind="video" maxFiles={videoReferenceUploadLimit(model, 'video', activeSelectedRefs, referenceUploadCounts)} maxFileBytes={24 * 1024 * 1024} label={tx("参考视频")} selectLabel={tx("上传视频")} hint={tx("单个不超过 24 MiB；时长按模型规则校验")} onPickFromLibrary={() => openReferenceLibrary('video')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'video')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
+              {acceptsAudioReferences && <ReferenceUploader items={audioRefUploads} onItemsChange={setAudioRefUploads} kind="audio" maxFiles={videoReferenceUploadLimit(model, 'audio', activeSelectedRefs, referenceUploadCounts, reservedFrameCount)} label={frameMode ? tx('参考音频（可选）') : tx('参考音频')} selectLabel={tx("上传音频")} hint={tx("单个不超过 24 MiB；时长按模型规则校验")} onPickFromLibrary={() => openReferenceLibrary('audio')} libraryItems={activeSelectedRefs.filter(item => referenceKind(item) === 'audio')} onRemoveLibraryItem={id => setSelectedRefs(current => current.filter(item => item.id !== id))} />}
             </>}
           </div>
-          {capabilities.maxReferences <= 0 && <p className="text-xs text-muted-foreground">当前模型不支持参考素材。</p>}
-          <ReferenceLibraryDialog open={libraryTarget !== null} title={libraryTarget === 'first' ? '选择首帧图片' : libraryTarget === 'last' ? '选择尾帧图片' : libraryTarget === 'source' ? '选择待编辑视频' : pickerKind === 'audio' ? '选择参考音频' : pickerKind === 'video' ? '选择参考视频' : '选择参考图片'} onClose={() => setLibraryTarget(null)} assets={referencePool} selectedIds={pickerSelected.map(item => item.id)} onToggle={(_, asset) => pickLibraryReference(asset as Asset)} maxReferences={pickerLimit} replaceSelection={isFramePicker || libraryTarget === 'source'} emptyText={`素材库暂时没有${pickerKind === 'image' ? '图片' : pickerKind === 'video' ? '视频' : '音频'}素材，可关闭窗口直接上传。`} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => {void refreshSources()}} onLoadMore={serverLibrary.hasMore ? () => {void serverLibrary.loadMore()} : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
+          {capabilities.maxReferences <= 0 && <p className="text-xs text-muted-foreground">{tx("当前模型不支持参考素材。")}</p>}
+          <ReferenceLibraryDialog open={libraryTarget !== null} title={libraryTarget === 'first' ? tx('选择首帧图片') : libraryTarget === 'last' ? tx('选择尾帧图片') : libraryTarget === 'source' ? tx('选择待编辑视频') : pickerKind === 'audio' ? tx('选择参考音频') : pickerKind === 'video' ? tx('选择参考视频') : tx('选择参考图片')} onClose={() => setLibraryTarget(null)} assets={referencePool} selectedIds={pickerSelected.map(item => item.id)} onToggle={(_, asset) => pickLibraryReference(asset as Asset)} maxReferences={pickerLimit} replaceSelection={isFramePicker || libraryTarget === 'source'} emptyText={tx("素材库暂时没有{0}素材，可关闭窗口直接上传。", [tx(pickerKind === 'image' ? '图片' : pickerKind === 'video' ? '视频' : '音频')])} libraryState={serverLibrary.state} libraryMessage={serverLibrary.message} libraryTotal={referencePool.length + serverLibrary.remaining} onReload={() => {void refreshSources()}} onLoadMore={serverLibrary.hasMore ? () => {void serverLibrary.loadMore()} : undefined} loadingMore={serverLibrary.loadingMore} onSearch={setLibraryKeyword} serverSearch />
         </div>
       </ParamSection>}
 
-      {videoPolicy && <p role="status" className="workspace-param-feedback text-xs leading-5 text-muted-foreground">{quoteBlock || `预计消耗 ${credits} 积分`}</p>}
+      {videoPolicy && <p role="status" className="workspace-param-feedback text-xs leading-5 text-muted-foreground">{tx(quoteBlock) || tx("预计消耗 {0} 积分", [credits])}</p>}
       <ParamSection
-        title="高级参数"
+        title={tx("高级参数")}
         layout="advanced"
         action={
           <button
@@ -2141,18 +2140,18 @@ export function VideoWorkspace() {
             className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
           >
             <SlidersHorizontal className="size-3" aria-hidden="true" />
-            {advanced ? '收起' : '展开'}
+            {advanced ? tx('收起') : tx('展开')}
           </button>
         }
       >
         {advanced ? (
           <div className="workspace-reference-grid flex flex-col gap-3">
             {/* 只列出后端视频任务真实接受、并且会提交的参数。 */}
-            <SelectField label="清晰度" value={quality} onChange={setQuality} options={(capabilities.qualities.length ? capabilities.qualities : ['480', '720', '1080']).map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
-            <p className="text-[11px] leading-5 text-muted-foreground">运动强度、镜头稳定等参数后端当前不接受，因此不提供无效控件。</p>
+            <SelectField label={tx("清晰度")} value={quality} onChange={setQuality} options={(capabilities.qualities.length ? capabilities.qualities : ['480', '720', '1080']).map((item) => ({ value: item, label: qualityLabel(item, model?.capabilities.qualityLabels) }))} />
+            <p className="text-[11px] leading-5 text-muted-foreground">{tx("运动强度、镜头稳定等参数后端当前不接受，因此不提供无效控件。")}</p>
           </div>
         ) : (
-          <p className="text-[11px] leading-5 text-muted-foreground">高级参数默认使用模型推荐值，展开后可覆盖清晰度。</p>
+          <p className="text-[11px] leading-5 text-muted-foreground">{tx("高级参数默认使用模型推荐值，展开后可覆盖清晰度。")}</p>
         )}
       </ParamSection>
     </WorkspaceParams>
@@ -2183,7 +2182,7 @@ export function VideoWorkspace() {
         }}
         /** 与图片工作台一致：空判定看真实来源，不看本地演示数据。 */
         isEmpty={stageSource.length === 0}
-        emptyHint={serverWorksResult.state === 'loading' ? '正在读取已有结果…' : serverWorksResult.state === 'error' ? '暂时无法读取结果，请刷新页面重试。' : '描述主体动作与镜头运动，在创作参数中选择模型。完成的视频会在这里播放。'}
+        emptyHint={serverWorksResult.state === 'loading' ? tx('正在读取已有结果…') : serverWorksResult.state === 'error' ? tx('暂时无法读取结果，请刷新页面重试。') : tx('描述主体动作与镜头运动，在创作参数中选择模型。完成的视频会在这里播放。')}
       >
         {view === 'single' && currentWork && (
           <div className="size-full">
@@ -2198,14 +2197,14 @@ export function VideoWorkspace() {
                 playsInline
                 preload="metadata"
                 onError={() => setFailedVideoSrc(currentWork.src)}
-                aria-label={`${currentWork.title} 视频结果`}
+                aria-label={tx("{0} 视频结果", [currentWork.title])}
               />
             ) : (
               <div className="relative size-full">
                 <MediaThumb src={currentWork.poster} alt={`${currentWork.title} 封面`} fallback={currentWork.fallback} className="size-full" />
                 <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-3 pb-3 pt-8">
-                  <span className="text-[11px] text-studio-ink-foreground">{videoFailed ? '视频加载失败，已显示封面' : '视频生成中，完成后可播放'}</span>
-                  {videoFailed ? <ControlButton size="sm" variant="secondary" onClick={() => setFailedVideoSrc('')}>重新加载</ControlButton> : <StatusBadge tone="accent">处理中</StatusBadge>}
+                  <span className="text-[11px] text-studio-ink-foreground">{videoFailed ? tx('视频加载失败，已显示封面') : tx('视频生成中，完成后可播放')}</span>
+                  {videoFailed ? <ControlButton size="sm" variant="secondary" onClick={() => setFailedVideoSrc('')}>{tx("重新加载")}</ControlButton> : <StatusBadge tone="accent">{tx("处理中")}</StatusBadge>}
                 </span>
               </div>
             )}
@@ -2214,7 +2213,7 @@ export function VideoWorkspace() {
         {view === 'grid' && (
           <div className="grid min-h-full grid-cols-2 content-start gap-2">
             {stageSource.map((work, index) => (
-              <ResultTile key={work.id} work={work} ratio={ratio} selected={work.id === currentWork?.id} label={work.id === currentWork?.id ? '当前结果' : `结果 ${index + 1}`} onSelect={() => { setSelectedVideoId(work.id); setView('single') }} onOpen={() => setDetailWork(work)} />
+              <ResultTile key={work.id} work={work} ratio={ratio} selected={work.id === currentWork?.id} label={work.id === currentWork?.id ? tx('当前结果') : tx("结果 {0}", [index + 1])} onSelect={() => { setSelectedVideoId(work.id); setView('single') }} onOpen={() => setDetailWork(work)} />
             ))}
           </div>
         )}
@@ -2230,41 +2229,38 @@ export function VideoWorkspace() {
           setNotice({ tone: 'accent', text: `已复用参数：${currentWork.prompt ? `提示词「${currentWork.prompt.slice(0, 20)}」` : '（该结果没有记录提示词）'}${currentWork.model ? ` · 模型 ${currentWork.model}` : ''}` })
         }}>
           <Copy className="size-3.5" aria-hidden="true" />
-          复用参数
-        </ControlButton>
+          {tx("复用参数")}</ControlButton>
         <ControlButton size="sm" variant="ghost" disabled={!currentWork || projectBusy} onClick={() => void addVideoToProject()}>
           <Plus className="size-3.5" aria-hidden="true" />
-          {projectBusy ? '处理中…' : '加入项目'}
+          {projectBusy ? tx('处理中…') : tx('加入项目')}
         </ControlButton>
         <ControlButton size="sm" variant="ghost" disabled={!currentWork || projectBusy} onClick={() => void sendVideoToCanvas()}>
           <Send className="size-3.5" aria-hidden="true" />
-          送入画布
-        </ControlButton>
-        <MediaDownloadButton media={{ url: currentWork?.src ?? '', kind: 'video' }} title={currentWork?.title ?? '作品'} prompt={currentWork?.prompt} taskId={currentWork?.taskId ?? currentWork?.id} disabled={!currentWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
+          {tx("送入画布")}</ControlButton>
+        <MediaDownloadButton media={{ url: currentWork?.src ?? '', kind: 'video' }} title={currentWork?.title ?? tx('作品')} prompt={currentWork?.prompt} taskId={currentWork?.taskId ?? currentWork?.id} disabled={!currentWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
         <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
-          导演 Agent
-        </ControlButton>
+          {tx("导演 Agent")}</ControlButton>
       </ResultActions>
 
       <section aria-labelledby="video-queue" className="studio-surface px-4 py-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="video-queue" className="text-xs font-semibold text-foreground">生成任务</h2>
-          <span className="text-[11px] text-muted-foreground">{liveVideoTasks.length} 条任务</span>
+          <h2 id="video-queue" className="text-xs font-semibold text-foreground">{tx("生成任务")}</h2>
+          <span className="text-[11px] text-muted-foreground">{liveVideoTasks.length} {tx(" 条任务")}</span>
         </div>
         <div className="mt-2">
-          <LiveTaskList kinds={['video']} limit={4} compact emptyHint="还没有视频任务" />
+          <LiveTaskList kinds={['video']} limit={4} compact emptyHint={tx("还没有视频任务")} />
         </div>
       </section>
 
-      {!liveReady && <LocalPreviewNotice what="视频生成" />}
+      {!liveReady && <LocalPreviewNotice what={tx("视频生成")} />}
       <GenerationErrorNotice />
       <GenerationNotice />
 
       {notice && (
         <Notice tone={notice.tone}>
           <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <span aria-live="polite">{notice.text}</span>
+          <span aria-live="polite">{tx(notice.text)}</span>
         </Notice>
       )}
     </div>
@@ -2276,15 +2272,15 @@ export function VideoWorkspace() {
         params={params}
         stage={stage}
         onSubmit={submit}
-        submitLabel={submitting ? '正在提交…' : '开始生成'}
+        submitLabel={submitting ? tx('正在提交…') : tx('开始生成')}
         credits={credits}
         creditsPending={Boolean(videoPolicy && quoteBlock)}
         submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
-        submitHint={submitBlock || (!prompt.trim() ? '先描述主体动作与镜头运动。' : undefined)}
-        paramsTitle="视频参数"
-        paramsHint={model ? `${model.shortName} · ${duration}` : '暂无可用模型'}
+        submitHint={submitBlock || (!prompt.trim() ? tx('先描述主体动作与镜头运动。') : undefined)}
+        paramsTitle={tx("视频参数")}
+        paramsHint={model ? `${model.shortName} · ${duration}` : tx('暂无可用模型')}
       />
-      <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title="导演 Agent" description="基于当前视频参数继续拆解镜头与素材">
+      <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title={tx("导演 Agent")} description={tx("基于当前视频参数继续拆解镜头与素材")}>
         <DirectorAgent context="视频工作台 · 极光之后" />
       </SidePanel>
       <ResultDetailModal work={detailWork} onClose={() => setDetailWork(null)} onNotice={(text) => setNotice({ tone: 'accent', text })} />

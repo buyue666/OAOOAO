@@ -49,15 +49,24 @@ export function checkInRuleChanges(previous: CheckInSettings, next: CheckInSetti
   return result
 }
 
-export function formatPointsExpiry(value: string | null | undefined): string | null {
+export function formatPointsExpiry(value: string | null | undefined, locale = 'zh-CN'): string | null {
   if (!value) return null
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return null
-  return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(date)
+  return new Intl.DateTimeFormat(locale, { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(date)
 }
 
 /** Claimed rewards use their immutable server snapshot, never today's new rule. */
-export function checkInDisplay(status: CheckInStatus) {
+export function checkInDisplay(status: CheckInStatus, locale = 'zh-CN') {
+  if (locale === 'en-US') {
+    if (status.claimed) {
+      const amount = typeof status.claimedRewardPoints === 'number' ? ` ${status.claimedRewardPoints.toLocaleString(locale)} credits` : ''
+      const expiry = formatPointsExpiry(status.expiresAt, locale)
+      return {title: `Claimed${amount} today`, rule: status.claimedPlanName ? `${status.claimedPlanName} · Rule at claim time` : 'Check-in rule at claim time', validity: expiry ? `Expires ${expiry} (Beijing time)` : status.claimedValidityDays === 0 || (status.expiresAt === null && status.claimedValidityDays == null) ? 'This reward never expires' : 'See account records for this reward’s expiry'}
+    }
+    const days = status.validityDays ?? 0
+    return {title: status.enabled ? `Claim ${status.rewardPoints.toLocaleString(locale)} credits` : 'Check-in unavailable', rule: status.rulePlanName ? `${status.rulePlanName} check-in reward` : 'Base check-in rule', validity: days === 0 ? 'Reward never expires' : `Valid for ${days} days after claiming (24 hours per day)`}
+  }
   if (status.claimed) {
     const amount = typeof status.claimedRewardPoints === 'number' ? ` ${status.claimedRewardPoints.toLocaleString('zh-CN')} 积分` : ''
     const expiry = formatPointsExpiry(status.expiresAt)

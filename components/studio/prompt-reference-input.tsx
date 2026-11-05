@@ -1,11 +1,13 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import {useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode} from 'react'
 import {createPortal} from 'react-dom'
 import {FileAudio, FileVideo, Image as ImageIcon} from 'lucide-react'
 import {insertReferenceMention, promptReferenceMentions, referenceMentionLabel, referenceMentionQuery, type PromptReference} from '@/lib/studio/prompt-references'
 
 export function PromptReferenceInput({id, value, onChange, references, placeholder}: {id: string; value: string; onChange: (value: string) => void; references: PromptReference[]; placeholder?: string}) {
+  const tx = useUiText()
   const textarea = useRef<HTMLTextAreaElement>(null)
   const mirror = useRef<HTMLDivElement>(null)
   const restoredCaret = useRef<number | null>(null)
@@ -73,15 +75,15 @@ export function PromptReferenceInput({id, value, onChange, references, placehold
         else if ((event.key === 'Enter' || event.key === 'Tab') && candidates.length) {event.preventDefault(); choose(candidates[Math.min(active, candidates.length - 1)].index)}
       }} className="prompt-reference-textarea relative block min-h-36 w-full resize-y bg-transparent outline-none" />
     </div>
-    {visible && createPortal(<div id={listId} role="listbox" aria-label="选择已上传的参考素材" className="fixed z-[100] overflow-y-auto rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl" style={position}>
-      <p className="px-2 py-1 text-[11px] text-muted-foreground">选择参考素材 · 图、视频、音频分别编号</p>
+    {visible && createPortal(<div id={listId} role="listbox" aria-label={tx("选择已上传的参考素材")} className="fixed z-[100] overflow-y-auto rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl" style={position}>
+      <p className="px-2 py-1 text-[11px] text-muted-foreground">{tx("选择参考素材 · 图、视频、音频分别编号")}</p>
       {candidates.length ? candidates.map((reference, position) => {
         const Icon = reference.type === 'audio' ? FileAudio : reference.type === 'video' ? FileVideo : ImageIcon
         return <button key={`${reference.id}:${reference.index}`} id={`${listId}-${reference.index}`} type="button" role="option" aria-selected={position === Math.min(active, candidates.length - 1)} disabled={reference.ready === false} onMouseDown={event => event.preventDefault()} onClick={() => choose(reference.index)} className={`flex min-h-12 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-xs disabled:opacity-50 ${position === Math.min(active, candidates.length - 1) ? 'bg-studio-accent/10 text-foreground' : 'hover:bg-muted'}`}>
           {reference.type === 'image' && reference.preview ? <img src={reference.preview} alt="" className="size-9 rounded-md border border-border object-cover" /> : <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted"><Icon className="size-4" /></span>}
-          <span className="min-w-0 flex-1"><span className="prompt-reference-mention rounded px-1 py-0.5 font-medium">{reference.label}</span><span className="ml-2 break-words">{reference.name}</span><span className="mt-0.5 block text-[10px] text-muted-foreground">{reference.type === 'image' ? '图片' : reference.type === 'video' ? '视频' : '音频'}{reference.ready === false ? ' · 读取中' : ''}</span></span>
+          <span className="min-w-0 flex-1"><span className="prompt-reference-mention rounded px-1 py-0.5 font-medium">{reference.label}</span><span className="ml-2 break-words">{reference.name}</span><span className="mt-0.5 block text-[10px] text-muted-foreground">{reference.type === 'image' ? tx('图片') : reference.type === 'video' ? tx('视频') : tx('音频')}{reference.ready === false ? tx(' · 读取中') : ''}</span></span>
         </button>
-      }) : <p className="px-2 py-3 text-xs text-muted-foreground">{references.length ? '没有匹配的素材' : '先上传或选择参考素材，再输入 @ 引用'}</p>}
+      }) : <p className="px-2 py-3 text-xs text-muted-foreground">{references.length ? tx('没有匹配的素材') : tx('先上传或选择参考素材，再输入 @ 引用')}</p>}
     </div>, document.body)}
   </>
 }

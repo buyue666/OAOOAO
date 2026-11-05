@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import ts from 'typescript'
+import {chineseLocale} from './helpers/locale.mjs'
 
 const compiled = ts.transpileModule(readFileSync(new URL('../lib/studio/result-delivery.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
 const module = { exports: {} }
@@ -134,6 +135,7 @@ function buttonHarness() {
   }
   const exports = {}
   const dependencies = {
+    '@/lib/studio/i18n': chineseLocale,
     react,
     'react/jsx-runtime': { jsx: (type, props, key) => ({ type, props, key }), jsxs: (type, props, key) => ({ type, props, key }) },
     'lucide-react': { Download: 'Download', LoaderCircle: 'LoaderCircle' },

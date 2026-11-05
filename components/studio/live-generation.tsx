@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import { useCallback, useMemo, useState } from 'react'
 import { AlertTriangle, Ban, CheckCircle2, Coins, Info, Loader2, RefreshCw, RotateCcw, Undo2 } from 'lucide-react'
 import { useGeneration } from '@/lib/studio/generation-store'
@@ -28,12 +29,12 @@ function formatTime(value: number) {
 
 /** 生成服务暂不可用时的统一提示。 */
 export function LocalPreviewNotice({ what = '生成' }: { what?: string }) {
+  const tx = useUiText()
   return (
     <Notice tone="warning">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       <span>
-        当前暂时无法提交{what}，请稍后重试。
-      </span>
+        {tx("当前暂时无法提交")}{what}{tx("，请稍后重试。")}</span>
     </Notice>
   )
 }
@@ -47,6 +48,7 @@ export function LocalPreviewNotice({ what = '生成' }: { what?: string }) {
  * 「没生成」「没扣费」两件系统并不知道的事。这类情况改为中性的「提交结果未确认」。
  */
 export function GenerationErrorNotice() {
+  const tx = useUiText()
   const { lastError, dismissError } = useGeneration()
   if (!lastError) return null
   const indeterminate = Boolean(lastError.indeterminate)
@@ -59,10 +61,10 @@ export function GenerationErrorNotice() {
     <Notice tone="warning">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       <span role={indeterminate ? 'status' : 'alert'} className="min-w-0 flex-1" data-testid={indeterminate ? 'generation-indeterminate' : 'generation-error'}>
-        <span className="block font-medium">{indeterminate ? '提交结果未确认：' : '生成失败：'}{lastError.message}</span>
-        <span className="mt-0.5 block text-[11px]">{hint}{lastError.status ? `（HTTP ${lastError.status}）` : ''}</span>
+        <span className="block font-medium">{indeterminate ? tx('提交结果未确认：') : tx('生成失败：')}{lastError.message}</span>
+        <span className="mt-0.5 block text-[11px]">{tx(hint)}{lastError.status ? `（HTTP ${lastError.status}）` : ''}</span>
       </span>
-      <button type="button" onClick={dismissError} className="shrink-0 text-[11px] underline">关闭</button>
+      <button type="button" onClick={dismissError} className="shrink-0 text-[11px] underline">{tx("关闭")}</button>
     </Notice>
   )
 }
@@ -74,38 +76,39 @@ export function GenerationErrorNotice() {
  * 这里明确区分「查询失败」与「生成失败」，避免用户以为任务已失败或已退款。
  */
 export function QueryUnavailableNotice() {
+  const tx = useUiText()
   const { queryUnavailable, refresh, loading } = useGeneration()
   if (!queryUnavailable) return null
   return (
     <Notice tone="warning">
       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1">
-        <span className="block font-medium">暂时无法查询任务状态</span>
+        <span className="block font-medium">{tx("暂时无法查询任务状态")}</span>
         <span className="mt-0.5 block text-[11px] leading-5">
-          这不代表任务失败：上游可能仍在生成。系统会按退避策略自动重试；你也可以手动重新检查。
-          积分是否退回以服务端记录为准，离线期间不会自行判定退款。
-        </span>
+          {tx("这不代表任务失败：上游可能仍在生成。系统会按退避策略自动重试；你也可以手动重新检查。 积分是否退回以服务端记录为准，离线期间不会自行判定退款。")}</span>
       </span>
       <button type="button" onClick={() => void refresh()} disabled={loading} className="shrink-0 text-[11px] underline disabled:opacity-60">
-        {loading ? '检查中…' : '立即重试'}
+        {loading ? tx('检查中…') : tx('立即重试')}
       </button>
     </Notice>
   )
 }
 
 export function GenerationNotice() {
+  const tx = useUiText()
   const { lastNotice, setNotice } = useGeneration()
   if (!lastNotice) return null
   return (
     <Notice tone="accent">
       <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0 flex-1" aria-live="polite">{lastNotice}</span>
-      <button type="button" onClick={() => setNotice(null)} className="shrink-0 text-[11px] underline">关闭</button>
+      <button type="button" onClick={() => setNotice(null)} className="shrink-0 text-[11px] underline">{tx("关闭")}</button>
     </Notice>
   )
 }
 
 function TaskActions({ task, compact }: { task: GenerationTaskView; compact?: boolean }) {
+  const tx = useUiText()
   const { cancelTask, retryTask, recoverTask, resubmit, canResubmit } = useGeneration()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -150,66 +153,60 @@ function TaskActions({ task, compact }: { task: GenerationTaskView; compact?: bo
       <div className="flex flex-wrap items-center gap-1.5">
         {canCancelTask && !confirming && (
           <ControlButton size="sm" variant="danger" disabled={busy !== null} onClick={() => setConfirming(true)}>
-            <Ban className="size-3.5" aria-hidden="true" />取消任务
-          </ControlButton>
+            <Ban className="size-3.5" aria-hidden="true" />{tx("取消任务")}</ControlButton>
         )}
         {confirming && (
           <>
-            <span className="text-[11px] text-muted-foreground">取消后上游已产生的素材不会被删除，确认取消？</span>
-            <ControlButton size="sm" variant="danger" disabled={busy !== null} onClick={() => void run('cancel')}>{busy === 'cancel' ? '取消中' : '确认取消'}</ControlButton>
-            <ControlButton size="sm" variant="ghost" disabled={busy !== null} onClick={() => setConfirming(false)}>返回</ControlButton>
+            <span className="text-[11px] text-muted-foreground">{tx("取消后上游已产生的素材不会被删除，确认取消？")}</span>
+            <ControlButton size="sm" variant="danger" disabled={busy !== null} onClick={() => void run('cancel')}>{busy === 'cancel' ? tx('取消中') : tx('确认取消')}</ControlButton>
+            <ControlButton size="sm" variant="ghost" disabled={busy !== null} onClick={() => setConfirming(false)}>{tx("返回")}</ControlButton>
           </>
         )}
         {task.status === 'error' && (
           <ControlButton size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('retry')}>
-            <RotateCcw className="size-3.5" aria-hidden="true" />{busy === 'retry' ? '提交中' : '重试'}
+            <RotateCcw className="size-3.5" aria-hidden="true" />{busy === 'retry' ? tx('提交中') : tx('重试')}
           </ControlButton>
         )}
         {canRecover && (
           <ControlButton size="sm" variant="ghost" disabled={busy !== null} onClick={() => void run('recover')}>
-            <Undo2 className="size-3.5" aria-hidden="true" />{busy === 'recover' ? '检查中' : '重新检查上游'}
+            <Undo2 className="size-3.5" aria-hidden="true" />{busy === 'recover' ? tx('检查中') : tx('重新检查上游')}
           </ControlButton>
         )}
         {/* 提交结果未确认：复用原幂等标识重试，后端会返回原任务而不是新建。 */}
         {resubmitAvailable && (
           <ControlButton size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('resubmit')}>
-            <RotateCcw className="size-3.5" aria-hidden="true" />{busy === 'resubmit' ? '重试中' : '重新提交'}
+            <RotateCcw className="size-3.5" aria-hidden="true" />{busy === 'resubmit' ? tx('重试中') : tx('重新提交')}
           </ControlButton>
         )}
         {queryExhausted && (
           <ControlButton size="sm" variant="ghost" disabled={busy !== null} onClick={() => void run('recover')}>
-            <Undo2 className="size-3.5" aria-hidden="true" />{busy === 'recover' ? '检查中' : '重新检查'}
+            <Undo2 className="size-3.5" aria-hidden="true" />{busy === 'recover' ? tx('检查中') : tx('重新检查')}
           </ControlButton>
         )}
       </div>
       {/* 未确认提交：给出醒目、可操作的恢复入口与「不会重复扣费」的说明。 */}
       {unconfirmed && (
         <div className="rounded-md border border-studio-warn/40 bg-studio-warn/10 p-2.5" role="status">
-          <p className="text-[11px] font-medium text-studio-warn">提交结果未确认（响应丢失）</p>
+          <p className="text-[11px] font-medium text-studio-warn">{tx("提交结果未确认（响应丢失）")}</p>
           <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-            服务端可能已经创建了任务并扣费。点击「重新提交」会使用<strong className="font-medium">同一个请求标识</strong>重试，
-            后端按该标识去重，因此只会有一个任务、只扣一次费用；若已创建则直接返回原任务。
-          </p>
+            {tx("服务端可能已经创建了任务并扣费。点击「重新提交」会使用")}<strong className="font-medium">{tx("同一个请求标识")}</strong>{tx("重试， 后端按该标识去重，因此只会有一个任务、只扣一次费用；若已创建则直接返回原任务。")}</p>
           {!hasOriginalIdentity && (
             <p className="mt-1 text-[11px] leading-5 text-destructive">
-              找不到原始请求标识，出于避免重复扣费的考虑不提供自动重试。请到作品列表确认结果是否已生成。
-            </p>
+              {tx("找不到原始请求标识，出于避免重复扣费的考虑不提供自动重试。请到作品列表确认结果是否已生成。")}</p>
           )}
         </div>
       )}
       {queryFailed && !queryExhausted && (
         <p className="text-[11px] text-muted-foreground" aria-live="polite">
-          查询失败 {task.queryFailures} 次，仍在自动重试（不代表任务失败）。
-        </p>
+          {tx("查询失败 ")}{task.queryFailures} {tx(" 次，仍在自动重试（不代表任务失败）。")}</p>
       )}
       {queryExhausted && !unconfirmed && (
         <p className="text-[11px] text-studio-warn">
-          已连续 {task.queryFailures} 次无法确认状态，自动轮询已暂停。任务可能仍在上游生成，请点击「重新检查」查询上游结果
-          {resubmitAvailable ? '，或用「重新提交」按原标识重试（不会重复创建任务或重复扣费）。' : '。'}
+          {tx("已连续 ")}{task.queryFailures} {tx(" 次无法确认状态，自动轮询已暂停。任务可能仍在上游生成，请点击「重新检查」查询上游结果")}{resubmitAvailable ? tx('，或用「重新提交」按原标识重试（不会重复创建任务或重复扣费）。') : '。'}
         </p>
       )}
       {error && <p role="alert" className="text-[11px] text-destructive">{error}</p>}
-      {!compact && task.needsReview && <p className="text-[11px] text-studio-warn">上游创建结果待确认：{task.reviewReason || '请联系管理员在该任务的人工接管中处理。'}</p>}
+      {!compact && task.needsReview && <p className="text-[11px] text-studio-warn">{tx("上游创建结果待确认：")}{task.reviewReason || tx('请联系管理员在该任务的人工接管中处理。')}</p>}
     </div>
   )
 }
@@ -233,6 +230,7 @@ function pointsSummary(task: GenerationTaskView): string {
 }
 
 export function GenerationTaskCard({ task, compact = false, onSelect }: { task: GenerationTaskView; compact?: boolean; onSelect?: (task: GenerationTaskView) => void }) {
+  const tx = useUiText()
   const unconfirmed = Boolean(task.unconfirmed) || task.id.startsWith('unconfirmed:')
   const meta = unconfirmed ? { label: '提交未确认', tone: 'warning' as Tone } : taskStatusMeta(task.status)
   const active = isActiveStatus(task.status) && !unconfirmed
@@ -254,21 +252,21 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           {onSelect ? (
-            <button type="button" onClick={() => onSelect(task)} className="block max-w-full truncate text-left text-xs font-medium text-foreground hover:text-studio-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent" title="在预览中查看此任务结果">{task.title}</button>
+            <button type="button" onClick={() => onSelect(task)} className="block max-w-full truncate text-left text-xs font-medium text-foreground hover:text-studio-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent" title={tx("在预览中查看此任务结果")}>{task.title}</button>
           ) : <p className="truncate text-xs font-medium text-foreground">{task.title}</p>}
-          <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{task.model || '未指定模型'} · {task.id.slice(0, 8)}</p>
+          <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{task.model || tx('未指定模型')} · {task.id.slice(0, 8)}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {active && <Loader2 className="size-3.5 animate-spin text-studio-accent motion-reduce:animate-none" aria-hidden="true" />}
           {task.status === 'success' && <CheckCircle2 className="size-3.5 text-success" aria-hidden="true" />}
-          <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+          <StatusBadge tone={meta.tone}>{tx(meta.label)}</StatusBadge>
         </div>
       </header>
 
       {task.media.length > 0 && (
         <div className={cn('grid gap-2', task.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1', compact && 'gap-1.5')}>
           {task.media.slice(0, compact ? 2 : 4).map((item, index) => (
-            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback="结果未能加载" kind={item.kind === 'video' ? 'video' : 'image'} className={cn('aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain', compact && 'max-w-none')} />
+            <MediaThumb key={`${item.url}-${index}`} src={item.url} poster={item.poster} alt={`${task.title} 结果 ${index + 1}`} fallback={tx("结果未能加载")} kind={item.kind === 'video' ? 'video' : 'image'} className={cn('aspect-square w-full max-w-[220px] rounded-md [&_img]:object-contain [&_video]:object-contain', compact && 'max-w-none')} />
           ))}
         </div>
       )}
@@ -288,7 +286,7 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
           ? <p className="rounded-md border border-studio-warn/40 bg-studio-warn/10 p-2 text-[11px] leading-5 text-studio-warn" role="status">{task.error}</p>
           : queryIssue
             ? <p className="rounded-md border border-border bg-muted/40 p-2 text-[11px] leading-5 text-muted-foreground" role="status" data-testid="task-query-issue">{task.error}</p>
-            : <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] leading-5 text-destructive" role="alert">失败原因：{task.error}</p>
+            : <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] leading-5 text-destructive" role="alert">{tx("失败原因：")}{task.error}</p>
       )}
 
       <div className={cn('flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-[11px] text-muted-foreground', compact && 'mt-auto gap-1 pt-1.5 text-[10px]')}>
@@ -301,12 +299,12 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
             * 「结果未知 / 正在查询 / 等待上游确认」全都被显示成「未产生积分消耗」——
             * 而这时后端可能已经扣费，等于向用户承诺了一件系统并不知道的事。
             */}
-          {pointsSummary(task)}
+          {tx(pointsSummary(task))}
         </span>
         <span>{formatTime(task.createdAt)}</span>
       </div>
 
-      {task.executionPhase && !compact && <p className="text-[10px] text-muted-foreground">执行阶段：{task.executionPhase}</p>}
+      {task.executionPhase && !compact && <p className="text-[10px] text-muted-foreground">{tx("执行阶段：")}{task.executionPhase}</p>}
 
       {!compact && <TaskActions task={task} compact={compact} />}
     </article>
@@ -317,6 +315,7 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
  * 真实生成任务列表。按类型过滤后展示，并包含刷新、加载、空数据与错误状态。
  */
 export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint, onSelectTask }: { kinds?: GenerationKind[]; limit?: number; compact?: boolean; emptyHint?: string; onSelectTask?: (task: GenerationTaskView) => void }) {
+  const tx = useUiText()
   const { tasks, loading, refresh, queryUnavailable } = useGeneration()
   const matching = useMemo(() => kinds?.length ? tasks.filter((task) => kinds.includes(task.kind)) : tasks, [kinds, tasks])
   const activeCount = matching.filter((task) => isActiveStatus(task.status)).length
@@ -328,17 +327,15 @@ export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint, onS
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          最近 {visible.length} 条任务{activeCount > 0 ? ` · ${activeCount} 条进行中` : ''}
+          {tx("最近 ")}{visible.length} {tx(" 条任务")}{activeCount > 0 ? tx(" · {0} 条进行中", [activeCount]) : ''}
         </p>
         <ControlButton size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
-          <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} aria-hidden="true" />刷新
-        </ControlButton>
+          <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} aria-hidden="true" />{tx("刷新")}</ControlButton>
       </div>
 
       {loading && !visible.length && (
         <div className="studio-surface flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground" role="status">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />正在读取任务
-        </div>
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />{tx("正在读取任务")}</div>
       )}
 
       {visible.map((task) => <GenerationTaskCard key={task.id} task={task} compact={compact} onSelect={onSelectTask} />)}
@@ -346,8 +343,8 @@ export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint, onS
       {queryUnavailable && <QueryUnavailableNotice />}
       {!loading && !queryUnavailable && !visible.length && (
         <div className="studio-surface flex flex-col items-center justify-center border-dashed py-8 text-center">
-          <p className="text-xs font-medium">{emptyHint || '还没有生成任务'}</p>
-          <p className="mt-1 max-w-sm text-[11px] leading-5 text-muted-foreground">填写参数并点击生成后，任务会在这里显示进度、结果与积分消耗。</p>
+          <p className="text-xs font-medium">{emptyHint || tx('还没有生成任务')}</p>
+          <p className="mt-1 max-w-sm text-[11px] leading-5 text-muted-foreground">{tx("填写参数并点击生成后，任务会在这里显示进度、结果与积分消耗。")}</p>
         </div>
       )}
     </div>

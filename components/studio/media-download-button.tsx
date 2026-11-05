@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiText } from '@/lib/studio/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Download, LoaderCircle } from 'lucide-react'
 import { downloadMedia, type DeliverableMedia } from '@/lib/studio/result-delivery'
@@ -14,6 +15,7 @@ export function MediaDownloadButton(props: Props) {
 }
 
 function ScopedMediaDownloadButton({ media, title, prompt, taskId, accountId, label = '下载', iconOnly = false, className, disabled }: Props & { accountId: string }) {
+  const tx = useUiText()
   const lock = useRef(false)
   const mounted = useRef(true)
   const controller = useRef<AbortController | null>(null)
@@ -33,5 +35,5 @@ function ScopedMediaDownloadButton({ media, title, prompt, taskId, accountId, la
       if (mounted.current) { if (!result.ok) setError(result.message); else setSuccess(true) }
     } finally { lock.current = false; if (mounted.current) setBusy(false) }
   }
-  return <span className="inline-flex max-w-full flex-col items-start gap-1"><button type="button" disabled={busy || disabled || !accountId} aria-label={busy ? `正在导出${title}` : `${label}${iconOnly ? title : ''}`} onClick={() => void download()} title={busy ? '正在处理导出…' : label} className={className}>{busy ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />}{!iconOnly && <span>{busy ? '正在导出…' : label}</span>}</button>{error && <span role="alert" className="max-w-64 rounded-md bg-destructive/10 p-2 text-xs text-destructive">{error}</span>}{success && <span role="status" className="sr-only">已开始下载 {title}</span>}</span>
+  return <span className="inline-flex max-w-full flex-col items-start gap-1"><button type="button" disabled={busy || disabled || !accountId} aria-label={busy ? tx("正在导出{0}", [title]) : `${tx(label)}${iconOnly ? title : ''}`} onClick={() => void download()} title={busy ? tx('正在处理导出…') : tx(label)} className={className}>{busy ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />}{!iconOnly && <span>{busy ? tx('正在导出…') : tx(label)}</span>}</button>{error && <span role="alert" className="max-w-64 rounded-md bg-destructive/10 p-2 text-xs text-destructive">{error}</span>}{success && <span role="status" className="sr-only">{tx("已开始下载 ")}{title}</span>}</span>
 }
