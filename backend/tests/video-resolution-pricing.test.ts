@@ -50,3 +50,21 @@ test('the submission resolver uses resolution prices without a model-wide fallba
   assert.equal((await resolveProvider(ctx,'video',{config:{model:'video',videoSeconds:6,vquality:'480p'},references:[image]},undefined,'synthetic-user')).cost,'6.0000');
   assert.equal((await resolveProvider(ctx,'video',{config:{model:'video',videoSeconds:6,vquality:'1080p'},references:[image]},undefined,'synthetic-user')).cost,'20.0000');
 });
+
+test('reference video changes the output rate without charging its own duration or count',()=>{
+  const profile={videoPricingTemplate:'reference-video-output',videoBillingUnit:'second',videoPricing:{resolutionPricing:{'480p':{generationRate:1,referenceVideoGenerationRate:2,referencePrices:{extraVideo:100,referenceVideoPerSecond:100}}}}};
+  validateVideoPolicySettings(profile);
+  assert.equal(videoBaseCost(undefined,profile,'480p',10),100000n);
+  assert.equal(videoBaseCost(undefined,profile,'480p',10,{hasReferenceVideo:true}),200000n);
+  for(const metadata of [[{type:'video',duration:1}],[{type:'video',duration:12}],[{type:'video',duration:1},{type:'video',duration:2}]])assert.equal(videoReferenceCost(metadata,profile,{quality:'480p',seconds:10}),0n);
+  assert.throws(()=>videoBaseCost(10000n,{...profile,videoPricing:{resolutionPricing:{'480p':{generationRate:1}}}},'480p',10,{hasReferenceVideo:true}),/参考视频生成/);
+  assert.equal(videoBaseCost(undefined,{...profile,videoPricing:{resolutionPricing:{'480p':{referenceVideoGenerationRate:0}}}},'480p',10,{hasReferenceVideo:true}),0n);
+  for(const row of [{referenceVideoGenerationRate:-1},{referenceVideoGenerationRate:'2'}])assert.throws(()=>validateVideoPolicySettings({videoPricing:{resolutionPricing:{'480p':row}}}));
+});
+
+test('the original short-band reference rate is reused as an output rate without mutating stored prices',()=>{
+  const profile={videoPricingTemplate:'reference-video-output',videoBillingUnit:'second',videoPricing:{resolutionPricing:{'480p':{generationRate:1,referenceDurationTiers:[{maxSeconds:15,prices:{referenceVideoPerSecond:2}},{maxSeconds:30,prices:{referenceVideoPerSecond:4}}]}}}};
+  const before=structuredClone(profile);
+  assert.equal(videoBaseCost(undefined,profile,'480p',16,{hasReferenceVideo:true}),320000n);
+  assert.deepEqual(profile,before);
+});

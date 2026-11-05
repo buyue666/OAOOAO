@@ -6,6 +6,7 @@ import {ControlButton} from './ui'
 import {formatVideoDurations, parseVideoDurationInput, type VideoDurationRule} from '@/lib/studio/video-duration'
 import {copyVideoResolutionParameters, durationRulesPatch, resolutionPricing, validVideoQuality, videoDurationRule, videoDurationValues, type ReferencePrices, type ResolutionPricing, type VideoPricing, type VideoProfile} from '@/lib/studio/video-profile'
 import {qualityLabel} from '@/lib/studio/studio-models'
+import {VideoGenerationPrices} from './video-generation-prices'
 
 type RefRule = {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number}
 export type ExtraVideoPriceField = {key: string; label: string; hint?: string; defaultValue?: number}
@@ -17,9 +18,15 @@ type Props = {
   longDurationMultiplier?: number
   extraPriceFields?: ExtraVideoPriceField[]
   showReferenceFieldMap?: boolean
+  defaultPricingTemplate?: string
+  pricingTemplates?: Array<{value: string; label: string}>
+  featureSwitches?: Array<{key: string; label: string; hint?: string}>
 }
 
-export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRate, defaultFreeCounts = {}, longDurationMultiplier = 1, extraPriceFields = [], showReferenceFieldMap = true}: Props) {
+export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRate, defaultFreeCounts = {}, longDurationMultiplier = 1, extraPriceFields = [], showReferenceFieldMap = true, defaultPricingTemplate = 'standard', pricingTemplates = [{value: 'standard', label: '通用'}, {value: 'reference-video-output', label: '按参考视频区分输出价'}], featureSwitches = []}: Props) {
+  const template = String(profile.videoPricingTemplate || defaultPricingTemplate)
+  const conditional = template === 'reference-video-output'
+  profile = {...profile, videoPricingTemplate: template}
   const [custom, setCustom] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [sourceId, setSourceId] = useState('')
@@ -34,7 +41,7 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
   const source = selected.includes(sourceId) ? sourceId : selected[0] || ''
   const references = (profile.videoReferenceRules || {}) as Record<string, RefRule>
   const durationRules = (profile.videoDurationRules || {}) as Record<string, VideoDurationRule>
-  const update = (patch: VideoProfile) => onChange({videoBillingUnit: unit, ...patch})
+  const update = (patch: VideoProfile) => onChange({videoBillingUnit: unit, videoPricingTemplate: template, ...patch})
   const setRow = (quality: string, patch: Partial<ResolutionPricing>) => {
     const row = resolutionPricing(profile, quality, fallbackGenerationRate)
     update({videoPricing: {...pricing, resolutionPricing: {...pricing.resolutionPricing, [quality]: {...row, ...patch}}}})
@@ -56,7 +63,7 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
   const priceField = (label: string, value: number | undefined, change: (text: string) => void, hint?: string) => <AdminField label={label} hint={hint}><AdminInput aria-label={label} type="number" min="0" step="0.0001" value={value ?? ''} placeholder="未配置" onChange={event => change(event.target.value)} /></AdminField>
   const inputPriceFields: Array<{key: keyof ReferencePrices; label: string}> = [
     ...(profile.supportsReferenceImage ? [{key: 'extraImage' as const, label: '超额图片 · 积分/张'}] : []),
-    ...(profile.supportsVideoReference ? [{key: 'referenceVideoPerSecond' as const, label: '参考视频 · 积分/秒'}, {key: 'extraVideo' as const, label: '超额视频 · 积分/个'}] : []),
+    ...(profile.supportsVideoReference && !conditional ? [{key: 'referenceVideoPerSecond' as const, label: '参考视频 · 积分/秒'}, {key: 'extraVideo' as const, label: '超额视频 · 积分/个'}] : []),
     ...(profile.supportsAudioReference ? [{key: 'referenceAudioPerSecond' as const, label: '参考音频 · 积分/秒'}, {key: 'extraAudio' as const, label: '超额音频 · 积分/个'}] : []),
   ]
   const referenceFields = (quality: string, prices: ReferencePrices, change: (value: ReferencePrices) => void, segment = '') => <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -66,8 +73,9 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
   </div>
 
   return <section className="w-full min-w-0 space-y-5 rounded-xl border border-border bg-muted/15 p-4" data-testid="video-capability-editor">
-    <div><p className="text-sm font-semibold">视频能力与计费</p><p className="mt-1 text-xs leading-5 text-muted-foreground">按输出清晰度分别设置生成价格和输入素材价格，总价随生成时长与素材用量计算。</p></div>
-    <AdminField label="视频计费方式"><AdminSelect value={unit} onChange={event => update({videoBillingUnit: event.target.value})}><option value="second">按生成秒数</option><option value="request">按次生成</option><option value="duration">按清晰度与指定时长定价</option></AdminSelect></AdminField>
+    <div><p className="text-sm font-semibold">视频能力与计费</p><p className="mt-1 text-xs leading-5 text-muted-foreground">按输出清晰度设置价格；价格模板决定参考素材如何影响生成费用。</p></div>
+    <div className="grid gap-3 sm:grid-cols-2"><AdminField label="价格定价模板"><AdminSelect aria-label="价格定价模板" value={template} onChange={event => update({videoPricingTemplate: event.target.value, ...(event.target.value === 'reference-video-output' ? {videoBillingUnit: 'second'} : {})})}>{pricingTemplates.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</AdminSelect></AdminField><AdminField label="视频计费方式"><AdminSelect value={unit} onChange={event => update({videoBillingUnit: event.target.value})}><option value="second">按生成秒数</option><option value="request">按次生成</option><option value="duration">按清晰度与指定时长定价</option></AdminSelect></AdminField></div>
+    {featureSwitches.length > 0 && <fieldset className="space-y-2 rounded-lg border border-border p-3"><legend className="text-xs font-semibold">功能开关</legend>{featureSwitches.map(feature => <label key={feature.key} className="flex min-h-11 items-center gap-3 text-xs"><input type="checkbox" aria-label={feature.label} checked={profile[feature.key] === true} onChange={event => update({[feature.key]: event.target.checked})} /><span>{feature.label}{feature.hint && <span className="mt-1 block leading-5 text-muted-foreground">{feature.hint}</span>}</span></label>)}</fieldset>}
     <fieldset className="space-y-2 border-t border-border pt-4"><legend className="text-xs font-semibold">首尾帧功能</legend>
       <div className="flex flex-wrap gap-5 text-xs">
         <label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={Boolean(profile.supportsFirstFrame)} disabled={profile.nativeFirstFrame === false} onChange={event => update({supportsFirstFrame: event.target.checked, ...(event.target.checked ? {supportsReferenceImage: true} : {supportsLastFrame: false})})} />开启首帧</label>
@@ -101,7 +109,7 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
             }} /></AdminField>
             {rule.mode === 'range' && <AdminField label="步长（秒）"><AdminInput aria-label={`${quality} 时长步长`} type="number" min="1" value={rule.step || 1} onChange={event => setDuration(quality, {...rule, step: Number(event.target.value)})} /></AdminField>}
           </div>
-          <div className="space-y-3 border-t border-border pt-3"><p className="text-xs font-semibold">生成视频价格</p>{unit !== 'duration' ? <div className="max-w-sm">{priceField(`${quality} 生成价格 · 积分/${unit === 'second' ? '秒' : '次'}`, row.generationRate ?? undefined, text => setRow(quality, {generationRate: text.trim() ? Number(text) : null}), '0 为免费；留空表示未配置，生成前必须填写')}</div> : <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-4">{allowed.map(seconds => <div key={seconds}>{priceField(`${quality} ${seconds} 秒 · 积分/次`, row.generationDurationRates?.[seconds], text => {const next = {...row.generationDurationRates}; if (text.trim()) next[seconds] = Number(text); else delete next[seconds]; setRow(quality, {generationDurationRates: next})}, '此时长的完整生成价格')}</div>)}</div>}</div>
+          <div className="space-y-3 border-t border-border pt-3"><p className="text-xs font-semibold">生成视频价格</p><VideoGenerationPrices quality={quality} row={row} unit={unit} allowed={allowed} conditional={conditional} longMultiplier={longDurationMultiplier} onChange={patch => setRow(quality, patch)} /></div>
           {inputPriceFields.length > 0 && <div className="space-y-3 border-t border-border pt-3"><div><p className="text-xs font-semibold">输入素材价格 · {qualityLabel(quality)} 输出</p><p className="mt-1 text-xs leading-5 text-muted-foreground">按生成结果的清晰度计价。免费数量与素材上限在下方统一设置。</p></div>
             <label className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" aria-label={`${quality} 按生成时长分段设置输入素材价格`} checked={Boolean(tiers)} onChange={event => {
               if (!event.target.checked) {setRow(quality, {referenceDurationTiers: undefined}); return}
@@ -123,7 +131,7 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
         const nativeMax = Number(profile[type === 'image' ? 'maxReferenceImages' : type === 'video' ? 'maxReferenceVideos' : 'maxReferenceAudios']) || 0, rule = references[type] || {}, free = rule.freeCount ?? defaultFreeCounts[type] ?? 0
         const setRule = (key: keyof RefRule, value: number) => update({videoReferenceRules: {...references, [type]: {...rule, freeCount: free, [key]: value}}})
         const limit = (field: keyof RefRule, title: string, hint?: string) => <AdminField label={title} hint={hint}><AdminInput aria-label={`${label} ${title}`} type="number" min="0" step={field.endsWith('Seconds') ? '0.001' : '1'} value={field === 'freeCount' ? free : rule[field] ?? 0} onChange={event => setRule(field, Number(event.target.value))} /></AdminField>
-        return <fieldset key={type} className="space-y-3 rounded-lg border border-border bg-background p-3"><label className="flex min-h-11 items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={Boolean(profile[flag])} onChange={event => update({[flag]: event.target.checked, ...(type === 'image' && !event.target.checked ? {supportsFirstFrame: false, supportsLastFrame: false} : {})})} />{label}</label>{Boolean(profile[flag]) && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{limit('maxCount', '数量上限（个）', nativeMax ? `上游上限 ${nativeMax} 个` : '0 表示不额外限制')}{limit('freeCount', '免费数量（个）')}{type !== 'image' && <>{limit('maxItemSeconds', '单个最长时长（秒）')}{limit('maxTotalSeconds', '合计最长时长（秒）')}</>}</div>}</fieldset>
+        return <fieldset key={type} className="space-y-3 rounded-lg border border-border bg-background p-3"><label className="flex min-h-11 items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={Boolean(profile[flag])} onChange={event => update({[flag]: event.target.checked, ...(type === 'image' && !event.target.checked ? {supportsFirstFrame: false, supportsLastFrame: false} : {})})} />{label}</label>{Boolean(profile[flag]) && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{limit('maxCount', '数量上限（个）', nativeMax ? `上游上限 ${nativeMax} 个` : '0 表示不额外限制')}{!(conditional && type === 'video') && limit('freeCount', '免费数量（个）')}{type !== 'image' && <>{limit('maxItemSeconds', '单个最长时长（秒）')}{limit('maxTotalSeconds', '合计最长时长（秒）')}</>}</div>}</fieldset>
       })}
     </div>
   </section>

@@ -134,3 +134,11 @@ Video resolution pricing
   media durations, and calculate in wallet precision. Quotes create no paid jobs
   or wallet operations. Bulk resolution edits copy only selected targets and
   intersect the source duration rule with each target's native limits.
+- `videoPricingTemplate: reference-video-output` selects between ordinary
+  generation and `referenceVideoGenerationRate` using verified reference video
+  presence. Both rates apply to output seconds for per-second billing. Video
+  input duration/count prices are ignored in this template, including free-count
+  settings; duration and count limits still apply. Exact-duration billing uses
+  `referenceVideoGenerationDurationRates`. Missing or cleared conditional prices
+  block quotes, while explicit zero is free. Older input-video rates are read as
+  the conditional output rate without rewriting saved settings.

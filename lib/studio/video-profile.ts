@@ -10,7 +10,9 @@ export type ReferencePrices = {
 export type ReferencePriceTier = {maxSeconds: number; prices: ReferencePrices}
 export type ResolutionPricing = {
   generationRate?: number | null
+  referenceVideoGenerationRate?: number | null
   generationDurationRates?: Record<string, number>
+  referenceVideoGenerationDurationRates?: Record<string, number>
   referencePrices?: ReferencePrices
   referenceDurationTiers?: ReferencePriceTier[]
   additionalPrices?: Record<string, number>
@@ -31,6 +33,7 @@ export function resolutionPricing(profile: VideoProfile, quality: string, fallba
   return {
     ...row,
     generationRate: Object.hasOwn(row, 'generationRate') ? row.generationRate : pricing.resolutionRates?.[quality] ?? fallbackRate,
+    ...(profile.videoPricingTemplate === 'reference-video-output' ? {referenceVideoGenerationRate: Object.hasOwn(row, 'referenceVideoGenerationRate') ? row.referenceVideoGenerationRate : row.referenceDurationTiers ? row.referenceDurationTiers[0]?.prices.referenceVideoPerSecond : referencePrices.referenceVideoPerSecond} : {}),
     generationDurationRates: row.generationDurationRates ?? pricing.durationRates?.[quality],
     referencePrices,
   }
@@ -75,6 +78,7 @@ export function copyVideoResolutionParameters(profile: VideoProfile, source: str
       : {mode: 'list', values: allowed}
     const row = structuredClone(sourcePrices)
     if (row.generationDurationRates) row.generationDurationRates = Object.fromEntries(Object.entries(row.generationDurationRates).filter(([seconds]) => allowed.includes(Number(seconds))))
+    if (row.referenceVideoGenerationDurationRates) row.referenceVideoGenerationDurationRates = Object.fromEntries(Object.entries(row.referenceVideoGenerationDurationRates).filter(([seconds]) => allowed.includes(Number(seconds))))
     if (row.referenceDurationTiers) {
       const max = allowed.at(-1)!
       row.referenceDurationTiers = row.referenceDurationTiers.filter((tier, index, tiers) => index === 0 || tiers[index - 1].maxSeconds < max).map(tier => ({...tier, maxSeconds: Math.min(tier.maxSeconds, max)}))

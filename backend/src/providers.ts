@@ -41,7 +41,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   const price=(binding.requestAlias?settings.modelPointCosts?.[binding.requestAlias]:undefined)??settings.modelPointCosts?.[binding.upstreamModel]??settings.modelPointCosts?.[model.id];
   const defaults=settings.generationDefaults||{};const profile=binding.capabilityProfile||{};
   const resolution=String(input.config?.vquality||profile.videoQualities?.[0]||'');
-  const videoRate=kind==='video'&&profile.videoBillingUnit&&(profile.videoBillingUnit==='duration'||profile.videoPricing?.resolutionRates?.[resolution]!==undefined||profile.videoPricing?.resolutionPricing?.[resolution]!==undefined);
+  const videoRate=kind==='video'&&profile.videoBillingUnit&&(profile.videoBillingUnit==='duration'||profile.videoPricingTemplate==='reference-video-output'||profile.videoPricing?.resolutionRates?.[resolution]!==undefined||profile.videoPricing?.resolutionPricing?.[resolution]!==undefined);
   if(price===undefined&&!videoRate)throw httpError(503,'Model price must be configured before generation');
   let cost=creditUnits(price??0);const multipliers=settings.generationPointMultipliers||{};
   if(kind==='video')for(const ref of input.references||[]){

@@ -23,6 +23,7 @@ export function videoInputMode(input:Json):string{
 }
 export function validateVideoPolicySettings(profile:Json){
   const integer=(value:any,min:number,max:number)=>Number.isInteger(value)&&value>=min&&value<=max;
+  if(profile.videoPricingTemplate!==undefined&&!['standard','reference-video-output'].includes(profile.videoPricingTemplate))fail('视频价格模板无效');
   if(profile.videoBillingUnit!==undefined&&!['second','request','duration'].includes(profile.videoBillingUnit))fail('视频计费方式无效');
   for(const flag of ['supportsFirstFrame','supportsLastFrame','supportsReferenceImage','supportsVideoReference','supportsAudioReference'])if(profile[flag]!==undefined&&typeof profile[flag]!=='boolean')fail('视频能力开关必须是布尔值');
   if(profile.supportsLastFrame===true&&profile.supportsFirstFrame===false)fail('开启尾帧前需要开启首帧');
@@ -69,12 +70,13 @@ export function validateVideoPolicySettings(profile:Json){
         for(const price of Object.values(value)){if(typeof price!=='number')fail('输入素材价格必须为数字');validate(price);}
       };
       for(const [quality,candidate] of Object.entries(resolutionPricing) as [string,Json][]){
-        if(!quality||quality.length>32||!candidate||typeof candidate!=='object'||Array.isArray(candidate)||Object.keys(candidate).some(key=>!['generationRate','generationDurationRates','referencePrices','referenceDurationTiers','additionalPrices'].includes(key)))fail('清晰度价格配置无效');
+        if(!quality||quality.length>32||!candidate||typeof candidate!=='object'||Array.isArray(candidate)||Object.keys(candidate).some(key=>!['generationRate','referenceVideoGenerationRate','generationDurationRates','referenceVideoGenerationDurationRates','referencePrices','referenceDurationTiers','additionalPrices'].includes(key)))fail('清晰度价格配置无效');
         const row=candidate as Json;
         if(row.generationRate!==undefined&&row.generationRate!==null){if(typeof row.generationRate!=='number')fail('生成价格必须为数字');validate(row.generationRate);}
-        if(row.generationDurationRates!==undefined){
-          if(!row.generationDurationRates||typeof row.generationDurationRates!=='object'||Array.isArray(row.generationDurationRates)||Object.keys(row.generationDurationRates).some(key=>!integer(Number(key),1,3600)))fail('指定时长价格无效');
-          validate(row.generationDurationRates);
+        if(row.referenceVideoGenerationRate!==undefined&&row.referenceVideoGenerationRate!==null){if(typeof row.referenceVideoGenerationRate!=='number')fail('参考视频生成价格必须为数字');validate(row.referenceVideoGenerationRate);}
+        for(const key of ['generationDurationRates','referenceVideoGenerationDurationRates'])if(row[key]!==undefined){
+          if(!row[key]||typeof row[key]!=='object'||Array.isArray(row[key])||Object.keys(row[key]).some(seconds=>!integer(Number(seconds),1,3600)))fail('指定时长价格无效');
+          validate(row[key]);
         }
         if(row.referencePrices!==undefined)referencePrices(row.referencePrices);
         if(row.additionalPrices!==undefined){
@@ -125,12 +127,14 @@ export function videoResolutionPrices(profile:Json,quality:string):Json{
   const pricing=profile.videoPricing||{};
   return {...pricing,...pricing.resolutionPricing?.[quality]?.additionalPrices};
 }
-export function videoBaseCost(base:bigint|undefined,profile:Json,quality:string,seconds:number):bigint{
+export function videoBaseCost(base:bigint|undefined,profile:Json,quality:string,seconds:number,context:{hasReferenceVideo?:boolean}={}):bigint{
   const prices=profile.videoPricing||{},mode=profile.videoBillingUnit||'second';
   const row=prices.resolutionPricing?.[quality]||{};
-  const price=mode==='duration'?(row.generationDurationRates??prices.durationRates?.[quality])?.[String(seconds)]:Object.hasOwn(row,'generationRate')?row.generationRate:prices.resolutionRates?.[quality];
+  const withVideo=profile.videoPricingTemplate==='reference-video-output'&&context.hasReferenceVideo;
+  const referenceRate=Object.hasOwn(row,'referenceVideoGenerationRate')?row.referenceVideoGenerationRate:row.referenceDurationTiers?row.referenceDurationTiers[0]?.prices.referenceVideoPerSecond:(row.referencePrices??prices).referenceVideoPerSecond;
+  const price=mode==='duration'?(withVideo?row.referenceVideoGenerationDurationRates:row.generationDurationRates??prices.durationRates?.[quality])?.[String(seconds)]:withVideo?referenceRate:Object.hasOwn(row,'generationRate')?row.generationRate:prices.resolutionRates?.[quality];
   if(mode==='duration'&&price===undefined)throw httpError(503,'请先配置此清晰度和时长的视频积分价格');
-  if(price===null||(price===undefined&&base===undefined))throw httpError(503,`请先配置 ${quality||'当前清晰度'} 的视频生成价格`);
+  if(price===null||(price===undefined&&(base===undefined||withVideo)))throw httpError(503,`请先配置 ${quality||'当前清晰度'} 的${withVideo?'参考视频生成':'视频生成'}价格`);
   const rate=price===undefined?base:creditUnits(price);
   return mode==='second'?rate!*BigInt(seconds):rate!;
 }
@@ -142,6 +146,7 @@ export function videoReferenceCost(metadata:Json[],profile:Json,context:{quality
   const multiplier=tiers?10000n:creditUnits(context.multiplier??1);
   let total=0n;
   for(const type of ['image','video','audio']){
+    if(type==='video'&&profile.videoPricingTemplate==='reference-video-output')continue;
     const items=metadata.filter(item=>item.type===type),rule=profile.videoReferenceRules?.[type]||{};
     const free=rule.freeCount??context.defaultFreeCounts?.[type]??0;
     const billed=items.slice(free);if(!billed.length)continue;
@@ -174,6 +179,6 @@ export async function prepareVideoPolicy(ctx:Context,input:Json,profile:Json,bas
   validateReferenceDurations(metadata,profile);
   validateVideoInput({...input,references:metadata},profile);
   const quality=String(config.vquality||profile.videoQualities?.[0]||''),seconds=Number(config.videoSeconds||profile.defaultVideoSeconds||profile.durationSeconds?.[0]||4);
-  const subtotal=videoBaseCost(base,profile,quality,seconds)+videoReferenceCost(metadata,profile,{quality,seconds});
+  const subtotal=videoBaseCost(base,profile,quality,seconds,{hasReferenceVideo:metadata.some(item=>item.type==='video')})+videoReferenceCost(metadata,profile,{quality,seconds});
   return {cost:creditDecimal(subtotal),snapshot:{referenceMetadata:metadata}};
 }
