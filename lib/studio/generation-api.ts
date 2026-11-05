@@ -199,9 +199,10 @@ function projectTaskContext(input: { projectId?: string; episodeId?: string; sho
   }).filter(([, value]) => value !== undefined && value !== ''))
 }
 
-export async function quoteVideoGeneration(input: Pick<VideoGenerationInput, 'model' | 'ratio' | 'quality' | 'seconds' | 'references'>) {
+export async function quoteVideoGeneration(input: Pick<VideoGenerationInput, 'model' | 'ratio' | 'quality' | 'seconds' | 'references'>,signal?:AbortSignal) {
   const result = await generate<{ points: number; estimated: boolean }>('/api/video-generation-tasks/quote', {
     method: 'POST',
+    signal,
     body: JSON.stringify({
       prompt: '费用预估',
       config: { model: input.model, size: input.ratio, vquality: input.quality, videoSeconds: String(input.seconds || 4) },

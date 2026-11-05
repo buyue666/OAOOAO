@@ -57,6 +57,14 @@ export async function ownedMedia(ctx: Context, userId: string, id: string, clien
   if (!result.rowCount) throw httpError(404,'Media not found');
   return {bytes:await readFile(mediaPath(ctx.config.mediaRoot,id)),mimeType:result.rows[0].mime_type};
 }
+/** Authorize a local reference without reading its entire video on each quote. */
+export async function ownedMediaInfo(ctx:Context,userId:string,id:string,client?:PoolClient){
+  const result=await(client||ctx.db).query('SELECT mime_type,byte_count,sha256 FROM oaooao_media WHERE id=$1 AND user_id=$2 AND (persistent OR expires_at>now())',[id,userId]);
+  if(!result.rowCount)throw httpError(404,'Media not found');
+  const file=mediaPath(ctx.config.mediaRoot,id),info=await stat(file,{bigint:true}),row=result.rows[0];
+  if(!info.isFile()||info.size!==BigInt(row.byte_count))throw httpError(422,'参考素材已变化，请重新上传');
+  return{file,mimeType:String(row.mime_type),bytes:Number(info.size),sha256:String(row.sha256),fingerprint:[info.dev,info.ino,info.size,info.mtimeNs,info.ctimeNs].join(':')};
+}
 export async function readReference(ctx: Context, userId: string, reference: Record<string,unknown>) {
   if (typeof reference.dataUrl==='string') { const bytes=decodeDataUrl(reference.dataUrl); return {bytes,mimeType:sniffMedia(bytes)}; }
   const raw = String(reference.url || '');

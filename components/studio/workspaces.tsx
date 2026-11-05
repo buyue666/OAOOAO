@@ -22,6 +22,7 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import {PromptReferenceInput} from './prompt-reference-input'
+import {scheduleVideoQuote} from '@/lib/studio/video-quote'
 import {VideoDurationSlider} from './video-duration-slider'
 import {orderedPromptReferences, serializePromptReferences, type PromptReference} from '@/lib/studio/prompt-references'
 import {selectableVideoDurations,videoReferenceLimit,videoReferenceUploadLimit,videoLibrarySelectionLimit} from '@/lib/studio/video-policy'
@@ -1832,18 +1833,18 @@ export function VideoWorkspace() {
   }, [referenceSelectionLimit])
 
   const settings: GenerationSettings = { modelId: model?.id ?? modelId, ratio, quality, duration, mode }
-  const quoteKey = JSON.stringify([model?.id, mode, ratio, quality, duration, selectedRefs, firstFrameRef, lastFrameRef, uploads.map(i => [i.id, i.status]), firstFrameUploads.map(i => [i.id, i.status]), lastFrameUploads.map(i => [i.id, i.status]), videoRefUploads.map(i => [i.id, i.status]), audioRefUploads.map(i => [i.id, i.status])])
+  const quoteKey = JSON.stringify([state.user.id, model?.id, mode, ratio, quality, duration, selectedRefs, firstFrameRef, lastFrameRef, sourceVideoRef, sourceVideoUploads.map(i => [i.id, i.status]), uploads.map(i => [i.id, i.status]), firstFrameUploads.map(i => [i.id, i.status]), lastFrameUploads.map(i => [i.id, i.status]), videoRefUploads.map(i => [i.id, i.status]), audioRefUploads.map(i => [i.id, i.status])])
   useEffect(() => {
     if (!videoPolicy || !model || state.backendStatus !== 'connected') return
-    let active = true
-    const timer = setTimeout(() => { void (async () => {
-      try {
+    return scheduleVideoQuote({
+      load: async(signal) => {
         const references = await resolveVideoReferences()
-        const data = await quoteVideoGeneration({ model: model.id, ratio, quality, seconds: Number.parseInt(duration, 10), references })
-        if (active) setQuote({ key: quoteKey, points: data.points })
-      } catch (error) { if (active) setQuote({ key: quoteKey, error: error instanceof Error ? error.message : '费用预估失败' }) }
-    })() }, 450)
-    return () => { active = false; clearTimeout(timer) }
+        signal.throwIfAborted()
+        return await quoteVideoGeneration({ model: model.id, ratio, quality, seconds: Number.parseInt(duration, 10), references },signal)
+      },
+      onSuccess: data => setQuote({ key: quoteKey, points: data.points }),
+      onError: error => setQuote({ key: quoteKey, error: error instanceof Error ? error.message : '费用预估失败' }),
+    })
     // quoteKey contains all parameters and selected media affecting the price.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteKey, state.backendStatus])

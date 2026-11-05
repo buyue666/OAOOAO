@@ -1,7 +1,8 @@
 /** Video capabilities and fixed-precision pricing shared by quotes and submission. */
 import {httpError} from './core.js';
 import {creditDecimal,creditUnits} from './wallet.js';
-import {readReference,probeReference,MAX_MEDIA_BYTES} from './media.js';
+import {probeReference,MAX_MEDIA_BYTES} from './media.js';
+import {inspectReference} from './reference-inspection.js';
 import type {Context} from './core.js';
 type Json=Record<string,any>;
 const fail=(message:string):never=>{throw httpError(400,message);};
@@ -177,20 +178,14 @@ export function videoReferenceCost(metadata:Json[],profile:Json,context:{quality
 
 /** Inspect owned/public reference bytes before charging; never trust client durations. */
 export async function prepareVideoPolicy(ctx:Context,input:Json,profile:Json,base:bigint|undefined,userId?:string){
-  const config=input.config||{},metadata:Json[]=[];
-  for(const reference of input.references||[]){
+  const config=input.config||{};
+  const metadata:Json[]=await Promise.all((input.references||[]).map(async(reference:Json)=>{
     if(!userId)throw httpError(401,'参考素材校验需要登录账号');
-    const media=await readReference(ctx,userId,reference),type=media.mimeType.split('/')[0];
+    const media=await inspectReference(ctx,userId,reference,probeReference),type=media.type;
     if(type!==(reference.type||'image'))fail('参考素材类型与实际文件不一致');
-    if(media.bytes.length>MAX_MEDIA_BYTES)fail('单个参考素材不得超过 24 MiB');
-    let duration=0;
-    if(type!=='image'){
-      const info=await probeReference(media.bytes);
-      if(!info.streams.some((stream:Json)=>stream.codec_type===type))fail('参考素材没有可用的媒体流');
-      duration=info.duration;
-    }
-    metadata.push({type,duration,bytes:media.bytes.length,role:reference.role});
-  }
+    if(media.bytes>MAX_MEDIA_BYTES)fail('单个参考素材不得超过 24 MiB');
+    return{...media,role:reference.role};
+  }));
   validateReferenceDurations(metadata,profile);
   validateVideoInput({...input,references:metadata},profile);
   const quality=String(config.vquality||profile.videoQualities?.[0]||''),seconds=Number(config.videoSeconds||profile.defaultVideoSeconds||profile.durationSeconds?.[0]||4);

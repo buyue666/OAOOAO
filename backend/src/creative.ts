@@ -7,7 +7,7 @@ import { adjustWallet, getWallet, getPlanSummary, creditUnits } from './wallet.j
 import { getSettings } from './settings.js';
 import { assertPlanGenerationAllowed } from './entitlements.js';
 import { resolveProvider, type GenerationKind, type Json } from './providers.js';
-import { registerMedia, validateLibraryMedia, encoderAvailable, ownedMedia, decodeDataUrl } from './media.js';
+import { registerMedia, validateLibraryMedia, encoderAvailable, ownedMedia, ownedMediaInfo, decodeDataUrl } from './media.js';
 import { cancelJob, finishJob, jobEvent, startWorker } from './worker.js';
 
 const ok=(data:unknown)=>({code:0,data});
@@ -65,7 +65,7 @@ function generationInput(kind:GenerationKind,raw:unknown):Json{
 async function verifyContext(ctx:Context,client:PoolClient,userId:string,input:Json){
   if(input.context?.projectId){const row=await client.query('SELECT id FROM oaooao_projects WHERE id=$1 AND user_id=$2',[input.context.projectId,userId]);if(!row.rowCount)throw httpError(404,'Project not found');}
   if(input.context?.parentTaskId){const row=await client.query('SELECT id FROM oaooao_generation_jobs WHERE id=$1 AND user_id=$2',[input.context.parentTaskId,userId]);if(!row.rowCount)throw httpError(404,'Parent task not found');}
-  for(const ref of input.references||[]){if(typeof ref.url!=='string')continue;let url:URL;try{url=new URL(ref.url,ctx.config.origin);}catch{throw httpError(400,'Invalid reference URL');}if(url.origin===new URL(ctx.config.origin).origin){const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);if(!match)throw httpError(400,'Unsupported local reference');await ownedMedia(ctx,userId,match[1],client);}}
+  for(const ref of input.references||[]){if(typeof ref.url!=='string')continue;let url:URL;try{url=new URL(ref.url,ctx.config.origin);}catch{throw httpError(400,'Invalid reference URL');}if(url.origin===new URL(ctx.config.origin).origin){const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);if(!match)throw httpError(400,'Unsupported local reference');await ownedMediaInfo(ctx,userId,match[1],client);}}
   const mask=input.edit?.mask;
   if(mask&&typeof mask.url==='string'){
     let url:URL;try{url=new URL(mask.url,ctx.config.origin);}catch{throw httpError(400,'Invalid edit mask URL');}
