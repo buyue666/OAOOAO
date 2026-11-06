@@ -4,16 +4,11 @@ import { MediaDownloadButton } from './media-download-button'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  CheckSquare2,
   Clock3,
   Copy,
-  FolderPlus,
   Image as ImageIcon,
   LoaderCircle,
   RefreshCw,
-  Search,
-  Trash2,
-  Upload,
   Video,
   WandSparkles,
   X,
@@ -59,6 +54,9 @@ import { assetCategoryLabels, assetCategoryOf } from '@/lib/studio/reference-ass
 import { useUiText } from '@/lib/studio/i18n'
 import { filterAssetLibrary, selectVisibleAssets, type AssetMediaFilter, type AssetCategoryFilter, type AssetSort } from '@/lib/studio/asset-library'
 import { AssetLibraryCard, AssetLibraryEmpty, AssetLibraryModal, AssetLibraryNavigation, AssetLibraryPreview, AssetLibraryRow, AssetLibrarySelectionPanel, AssetLibraryViewControl } from './asset-library-ui'
+import { AssetIcons } from './asset-library-icons'
+
+const { Select: CheckSquare2, Project: FolderPlus, Search, Delete: Trash2, Upload } = AssetIcons
 
 /**
  * 把后端素材库记录转换成素材条目。
@@ -378,11 +376,14 @@ export function AssetsPage() {
     <div data-asset-library className="mx-auto w-full max-w-[1720px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 xl:px-10" onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setUploadOpen(true); setDragActive(true) } }}>
       <input ref={fileRef} type="file" tabIndex={-1} multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/ogg,audio/mp4" className="sr-only" aria-label={tx('选择上传文件')} onChange={onFiles} disabled={uploading} />
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-start gap-3.5">
+          <span className="mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl bg-studio-accent/8 text-studio-accent"><AssetIcons.Collection className="size-7" /></span>
+          <div className="min-w-0">
           <div className="flex items-center gap-3"><h1 className="text-2xl font-semibold tracking-tight text-foreground">{tx('创作资产')}</h1><span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] tabular-nums text-muted-foreground">{tx('已载入 {0} 项', [mergedAssets.length])}</span></div>
           <p className="mt-2 text-sm text-muted-foreground">{tx('整理灵感素材，让每一次创作都有迹可循。')}</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2"><Link href="/works" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><Clock3 className="size-4" />{tx('生成记录')}</Link><ControlButton variant="primary" className="min-h-11 rounded-xl px-4" disabled={uploading} onClick={() => { setNotice(''); setUploadOpen(true) }}><Upload className="size-4" />{tx(uploading ? '上传中…' : '上传素材')}</ControlButton></div>
+        <div className="flex items-center gap-2"><Link href="/works" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><AssetIcons.History className="size-[18px]" />{tx('生成记录')}</Link><ControlButton variant="primary" className="min-h-11 rounded-xl px-4" disabled={uploading} onClick={() => { setNotice(''); setUploadOpen(true) }}><Upload className="size-[18px]" />{tx(uploading ? '上传中…' : '上传素材')}</ControlButton></div>
       </header>
       <div className="grid min-w-0 gap-5 lg:grid-cols-[184px_minmax(0,1fr)] lg:gap-7 xl:grid-cols-[200px_minmax(0,1fr)] xl:gap-8">
         <AssetLibraryNavigation assets={mergedAssets} media={mediaFilter} category={categoryFilter} onMediaChange={setMediaFilter} onCategoryChange={setCategoryFilter} />

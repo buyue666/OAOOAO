@@ -124,6 +124,7 @@ test('asset menus finish their exit before opening a dialog and preserve default
     '@/lib/studio/i18n': { useUiText: () => value => value }, '@/lib/studio/reference-assets': { assetCategoryLabels: {} },
     '@/lib/studio/asset-library': {}, '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') },
     './ui': {}, './media-download-button': {}, './asset-library-motion.module.css': { default: {} },
+    './asset-library-icons': { AssetIcons: new Proxy({}, { get: () => () => null }) },
   }
   const code = ts.transpileModule(readFileSync(new URL('../components/studio/asset-library-ui.tsx', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
   new Function('require', 'module', 'exports', code)(name => { assert.ok(name in imports, name); return imports[name] }, module, module.exports)

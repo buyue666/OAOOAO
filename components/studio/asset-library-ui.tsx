@@ -4,7 +4,7 @@ import type { ComponentProps, ComponentType, ReactNode } from 'react'
 import { useId, useRef } from 'react'
 import Link from 'next/link'
 import { DropdownMenu } from 'radix-ui'
-import { AudioLines, Box, ChevronRight, FileImage, Film, FolderOpen, Grid2X2, Layers3, List, MoreHorizontal, Mountain, Palette, Pencil, Shirt, Sparkles, Trash2, UserRound } from 'lucide-react'
+import { ChevronRight, Sparkles } from 'lucide-react'
 import { useUiText } from '@/lib/studio/i18n'
 import type { Asset, AssetCategory } from '@/lib/studio/types'
 import { assetCategoryLabels } from '@/lib/studio/reference-assets'
@@ -13,6 +13,9 @@ import { cn } from '@/lib/utils'
 import { MediaThumb, Modal, ControlButton } from './ui'
 import { MediaDownloadButton } from './media-download-button'
 import motion from './asset-library-motion.module.css'
+import { AssetIcons } from './asset-library-icons'
+
+const { Audio: AudioLines, Prop: Box, Image: FileImage, Video: Film, Folder: FolderOpen, Grid: Grid2X2, General: Layers3, List, More: MoreHorizontal, Scene: Mountain, Style: Palette, Edit: Pencil, Garment: Shirt, Delete: Trash2, Character: UserRound } = AssetIcons
 
 // Motion Prompt #049 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#049
 const dialogMotion = { backdropClassName: motion.dialogBackdrop, surfaceClassName: motion.dialogSurface, exitMs: 280 }
@@ -36,7 +39,7 @@ export function AssetLibrarySelectionPanel({ open, children }: { open: boolean; 
 }
 
 const mediaOptions = [
-  { value: 'all', label: '全部素材', icon: Grid2X2 },
+  { value: 'all', label: '全部素材', icon: AssetIcons.Collection },
   { value: 'image', label: '图片', icon: FileImage },
   { value: 'video', label: '视频', icon: Film },
   { value: 'audio', label: '音频', icon: AudioLines },
@@ -55,7 +58,7 @@ export function AssetLibraryNavigation({ assets, media, category, onMediaChange,
     return <section aria-label={tx(label)}>
       <h2 className="mb-3 px-3 text-[11px] font-medium tracking-wide text-muted-foreground">{tx(label)}</h2>
       <div className="space-y-1">{options.map(option => <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)} className={cn('flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent', motion.navigationChoice, value === option.value ? 'bg-studio-accent/10 font-semibold text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
-        <option.icon className="size-4 shrink-0" /><span className="flex-1">{tx(option.label)}</span><span className={cn('min-w-6 rounded-md px-1.5 py-0.5 text-center text-[11px] tabular-nums', value === option.value ? 'bg-studio-accent/10' : 'bg-muted text-muted-foreground')}>{count[option.value]}</span>
+        <option.icon className="size-5 shrink-0" /><span className="flex-1">{tx(option.label)}</span><span className={cn('min-w-6 rounded-md px-1.5 py-0.5 text-center text-[11px] tabular-nums', value === option.value ? 'bg-studio-accent/10' : 'bg-muted text-muted-foreground')}>{count[option.value]}</span>
       </button>)}</div>
     </section>
   }
@@ -79,7 +82,7 @@ export function AssetLibraryMenu({ asset, onRename, onDelete, onPreview }: { ass
   function select(action: () => void) { pendingAction.current = action }
   const itemClass = 'flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-3 text-sm outline-none data-[highlighted]:bg-muted'
   return <DropdownMenu.Root modal={false} onOpenChange={open => { if (open) pendingAction.current = null }}><DropdownMenu.Trigger asChild><button ref={triggerRef} type="button" aria-label={tx('{0} 的更多操作', [asset.title])} title={tx('更多操作')} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"><MoreHorizontal className="size-4" /></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content sideOffset={6} collisionPadding={12} align="end" onCloseAutoFocus={event => { const action = pendingAction.current; if (action) { event.preventDefault(); pendingAction.current = null; triggerRef.current?.focus(); action() } }} className={cn('z-[70] min-w-44 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg', motion.menu)}>
-    <DropdownMenu.Item className={itemClass} onSelect={() => select(onPreview)}><FileImage className="size-4" />{tx('预览素材')}</DropdownMenu.Item>
+    <DropdownMenu.Item className={itemClass} onSelect={() => select(onPreview)}><AssetIcons.Preview className="size-[18px]" />{tx('预览素材')}</DropdownMenu.Item>
     <DropdownMenu.Item className={itemClass} onSelect={() => select(onRename)}><Pencil className="size-4" />{tx('编辑名称与分类')}</DropdownMenu.Item>
     <DropdownMenu.Separator className="my-1 h-px bg-border" />
     <DropdownMenu.Item className={cn(itemClass, 'text-destructive')} onSelect={() => select(onDelete)}><Trash2 className="size-4" />{tx('删除素材')}</DropdownMenu.Item>
@@ -104,8 +107,8 @@ export function AssetLibraryCard({ asset, selected, selectionMode, onToggle, onR
       {selectionMode && <label className="absolute left-1 top-1 flex size-11 cursor-pointer items-center justify-center"><input type="checkbox" checked={selected} onChange={onToggle} className="size-5 rounded border-border accent-studio-accent" aria-label={tx('选择 {0}', [asset.title])} /></label>}
     </div>
     <div className="px-1.5 pb-0.5 pt-2">
-      <div className="flex min-w-0 items-center gap-1"><p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={asset.title}>{asset.title}</p><button type="button" onClick={onRename} aria-label={tx('编辑 {0} 的名称与分类', [asset.title])} title={tx('编辑名称与分类')} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil className="size-3.5" /></button></div>
-      <div className="flex min-h-9 min-w-0 items-center gap-2"><span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{tx(assetCategoryLabels[category])}{asset.size ? ` · ${asset.size}` : ''}</span><AssetLibraryMenu asset={asset} onRename={onRename} onDelete={onDelete} onPreview={onPreview} /></div>
+      <div className="flex min-w-0 items-center gap-1"><p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={asset.title}>{asset.title}</p><button type="button" onClick={onRename} aria-label={tx('编辑 {0} 的名称与分类', [asset.title])} title={tx('编辑名称与分类')} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-studio-accent"><Pencil className="size-[17px]" /></button></div>
+      <div className="flex min-h-9 min-w-0 items-center gap-2"><span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={`${tx(assetCategoryLabels[category])}${asset.size ? ` · ${asset.size}` : ''}`}>{tx(assetCategoryLabels[category])}{asset.size ? ` · ${asset.size}` : ''}</span><AssetLibraryMenu asset={asset} onRename={onRename} onDelete={onDelete} onPreview={onPreview} /></div>
     </div>
   </article>
 }
