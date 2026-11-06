@@ -127,6 +127,69 @@ test('search fields have an accessible name and only the composite field owns th
   assert.equal(input.props['data-focus-managed'], true)
 })
 
+test('creative navigation provides direct tool entry and exactly one active primary destination', () => {
+  const { studioPrimaryNav, isNavItemActive } = loadComponent('../components/studio/studio-nav.tsx', {}, {
+    'next/navigation': { useRouter: () => ({ push() {} }) },
+    './ui': { Tooltip: 'Tooltip' },
+  })
+  for (const path of ['/studio', '/image', '/video', '/agent', '/projects', '/assets']) {
+    assert.ok(studioPrimaryNav.some((item) => item.href === path), `${path} has a direct navigation entry`)
+    assert.equal(studioPrimaryNav.filter((item) => isNavItemActive(path, item)).length, 1)
+  }
+  assert.equal(studioPrimaryNav.filter((item) => isNavItemActive('/projects/example/canvas', item)).length, 1)
+})
+
+test('shared page headings preserve an h1, a description and the real action controls', () => {
+  const { PageHeader } = loadComponent('../components/studio/ui.tsx')
+  const action = jsx('button', { type: 'button', children: '新建项目' })
+  const tree = PageHeader({ eyebrow: '创作空间', title: '我的项目', description: '接着上次的灵感继续创作。', actions: action })
+  const nodes = all(tree)
+  assert.equal(tree.type, 'header')
+  assert.equal(nodes.filter((node) => node.type === 'h1').length, 1)
+  assert.equal(nodes.find((node) => node.type === 'h1').props.children, '我的项目')
+  assert.ok(nodes.includes(action))
+  assert.ok(nodes.some((node) => node.props?.children === '接着上次的灵感继续创作。'))
+})
+
+function loadWorkspaceKit() {
+  return loadComponent('../components/studio/workspace-kit.tsx', { useId: () => 'workspace-test' }, {
+    './ui': { ControlButton: 'ControlButton', IconAction: 'IconAction', MediaThumb: 'MediaThumb', Modal: 'Modal', Notice: 'Notice', StatusBadge: 'StatusBadge', Tooltip: 'Tooltip' },
+  })
+}
+
+test('workspace layout keeps one mounted parameter form and one result stage at every breakpoint', () => {
+  const { WorkspaceShell } = loadWorkspaceKit()
+  const params = jsx('input', { id: 'preserved-prompt', defaultValue: '保留创作草稿' })
+  const stage = jsx('div', { 'data-result-stage': true })
+  const tree = WorkspaceShell({ title: '图片生成', description: '创作工具说明', params, stage, onSubmit() {}, submitLabel: '生成图片' })
+  const nodes = all(tree)
+  assert.equal(tree.type, 'form')
+  assert.equal(nodes.filter((node) => node.type === 'form').length, 1)
+  assert.equal(nodes.filter((node) => node === params).length, 1)
+  assert.equal(nodes.filter((node) => node === stage).length, 1)
+  assert.equal(nodes.find((node) => node.type === 'h1').props.children, '图片生成')
+  const panel = nodes.find((node) => node.props?.className?.includes('workspace-params-panel'))
+  assert.ok(all(panel).some((node) => node.props?.className?.includes('md:flex')))
+})
+
+test('creative option grids support wrapping arrow navigation and a single tab stop', () => {
+  const { OptionGrid } = loadWorkspaceKit()
+  const options = [{ value: '1:1', label: '方形' }, { value: '16:9', label: '横屏' }, { value: '9:16', label: '竖屏' }]
+  for (const [value, key, expected] of [['1:1', 'ArrowRight', '16:9'], ['9:16', 'ArrowRight', '1:1'], ['1:1', 'ArrowLeft', '9:16'], ['16:9', 'Home', '1:1'], ['1:1', 'End', '9:16']]) {
+    let selected, focused
+    const tree = OptionGrid({ label: '画面比例', value, options, onChange: (next) => { selected = next } })
+    const buttons = all(tree).filter((node) => node.props?.role === 'radio')
+    assert.equal(buttons.filter((button) => button.props.tabIndex === 0).length, 1)
+    tree.props.onKeyDown({ key, nativeEvent: {}, preventDefault() {}, currentTarget: { querySelectorAll: () => buttons.map((button, index) => ({ focus: () => { focused = options[index].value } })) } })
+    assert.equal(selected, expected)
+    assert.equal(focused, expected)
+  }
+  let changed = false
+  const tree = OptionGrid({ label: '画面比例', value: '1:1', options, onChange: () => { changed = true } })
+  for (const nativeEvent of [{ isComposing: true }, { keyCode: 229 }]) tree.props.onKeyDown({ key: 'ArrowRight', nativeEvent })
+  assert.equal(changed, false)
+})
+
 test('new animations retain their reduced-motion fallback and source attribution', () => {
   const landing = readFileSync(new URL('../components/landing-page.module.css', import.meta.url), 'utf8')
   const global = readFileSync(new URL('../app/globals.css', import.meta.url), 'utf8')
