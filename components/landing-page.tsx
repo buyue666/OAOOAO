@@ -36,9 +36,45 @@ function useReducedMotion() {
   return reduced
 }
 
-function useProgress(ref: RefObject<HTMLElement | null>, reveal = false) {
+function useLandingReveal(ref: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const elements = ref.current?.querySelectorAll<HTMLElement>('[data-landing-reveal]')
+    if (!elements?.length || !('IntersectionObserver' in window)) return
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        const element = entry.target as HTMLElement
+        element.dataset.landingReveal = 'visible'
+        observer.unobserve(element)
+      }
+    }, { rootMargin: '0px 0px -15% 0px' })
+    const revealAll = () => {
+      if (!preference.matches) return
+      observer.disconnect()
+      elements.forEach((element) => { element.dataset.landingReveal = 'visible' })
+    }
+    for (const element of elements) {
+      if (preference.matches || element.getBoundingClientRect().top < window.innerHeight * 0.85) {
+        element.dataset.landingReveal = 'visible'
+      } else {
+        element.dataset.landingReveal = 'pending'
+        observer.observe(element)
+      }
+    }
+    preference.addEventListener('change', revealAll)
+    return () => {
+      observer.disconnect()
+      preference.removeEventListener('change', revealAll)
+      elements.forEach((element) => { element.dataset.landingReveal = 'visible' })
+    }
+  }, [ref])
+}
+
+function useProgress(ref: RefObject<HTMLElement | null>, disabled = false) {
   const [progress, setProgress] = useState(0)
   useEffect(() => {
+    if (disabled) return
     let frame = 0
     const update = () => {
       frame = 0
@@ -46,7 +82,7 @@ function useProgress(ref: RefObject<HTMLElement | null>, reveal = false) {
       if (!element) return
       const rect = element.getBoundingClientRect()
       const height = window.innerHeight
-      const next = reveal ? clamp((height * 0.9 - rect.top) / (height * 0.6)) : clamp(-rect.top / Math.max(1, rect.height - height))
+      const next = clamp(-rect.top / Math.max(1, rect.height - height))
       setProgress((previous) => Math.abs(previous - next) < 0.0001 ? previous : next)
     }
     const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update) }
@@ -61,7 +97,7 @@ function useProgress(ref: RefObject<HTMLElement | null>, reveal = false) {
       window.removeEventListener('resize', schedule)
       if (frame) window.cancelAnimationFrame(frame)
     }
-  }, [ref, reveal])
+  }, [ref, disabled])
   return progress
 }
 
@@ -69,18 +105,32 @@ function Header() {
   const { locale, t, toggleLocale } = useLocale()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
-  const [ready, setReady] = useState(false)
+  const [activeHref, setActiveHref] = useState('')
   const ref = useRef<HTMLElement>(null)
   const toggle = useRef<HTMLButtonElement>(null)
   useEffect(() => {
-    const update = () => setScrolled(window.scrollY > 50)
+    let frame = 0
+    const update = () => {
+      frame = 0
+      setScrolled(window.scrollY > 50)
+      const line = window.innerHeight * 0.4
+      const current = navigation.find((item) => {
+        const section = document.getElementById(item.href.slice(1))
+        if (!section) return false
+        const rect = section.getBoundingClientRect()
+        return rect.top <= line && rect.bottom > line
+      })
+      setActiveHref(current?.href ?? '')
+    }
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update) }
     update()
-    window.addEventListener('scroll', update, { passive: true })
-    return () => window.removeEventListener('scroll', update)
-  }, [])
-  useEffect(() => {
-    const timer = window.setTimeout(() => setReady(true), 260)
-    return () => window.clearTimeout(timer)
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
   }, [])
   useEffect(() => {
     if (!open) return
@@ -97,10 +147,10 @@ function Header() {
       desktop.removeEventListener('change', closeOnDesktop)
     }
   }, [open])
-  return <header ref={ref} className={styles.header} data-ready={ready} data-scrolled={scrolled} data-open={open}>
+  return <header ref={ref} className={styles.header} data-ready="true" data-scrolled={scrolled} data-open={open}>
     <div className={styles.headerRow}>
       <a href="#hero" className={styles.logo} aria-label="返回首页" onClick={() => setOpen(false)}><SiteBrand tone="light" imageClassName="h-6 max-w-[112px]" /></a>
-      <nav className={styles.desktopNav} aria-label="首页导航">{navigation.map((item) => <a key={item.href} href={item.href}>{t(item.key)}</a>)}</nav>
+      <nav className={styles.desktopNav} aria-label="首页导航">{navigation.map((item) => <a key={item.href} href={item.href} aria-current={activeHref === item.href ? 'location' : undefined}>{t(item.key)}</a>)}</nav>
       <div className={styles.headerActions}><button type="button" className={styles.localeToggle} onClick={toggleLocale} aria-label={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')} title={locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')}><Languages size={15} /></button><Link href="/studio" className={styles.headerCta}>{t('enterCreation')}</Link></div>
       <button ref={toggle} type="button" className={styles.menuToggle} aria-label={open ? '关闭菜单' : '打开菜单'} aria-expanded={open} aria-controls="landing-mobile-menu" onClick={() => setOpen(!open)}>{open ? <X size={22} /> : <Menu size={22} />}</button>
     </div>
@@ -111,8 +161,8 @@ function Header() {
 function Hero() {
   const { t } = useLocale()
   const ref = useRef<HTMLElement>(null)
-  const progress = useProgress(ref)
   const reduced = useReducedMotion()
+  const progress = useProgress(ref, reduced)
   const imageProgress = reduced ? 0 : clamp((progress - 0.2) / 0.8)
   const parallaxProgress = reduced ? 0 : clamp(progress / 0.8)
   const textOpacity = reduced ? 1 : clamp(1 - (progress - 0.08) / 0.24)
@@ -122,7 +172,7 @@ function Hero() {
     {(['left', 'center', 'right'] as const).map((side) => side === 'center' ? <div key={side} className={styles.heroCenter} style={{ width: (100 - imageProgress * 80) + '%' }}>
       <Image src="/media/generated/ai-creative-hero-background-platform-v1.png" alt="" aria-hidden="true" fill preload sizes="100vw" className={styles.heroBackground} style={{ transform: `scale(1.06) translateY(${backgroundShift}%)` }} />
       <Image src="/media/generated/ai-creative-hero-user-v3.png" alt="旷野中进行绘画与影像记录的 OAO 创作现场" data-hero-foreground width={1536} height={1024} preload sizes="100vw" className={styles.heroForeground} style={{ transform: `translate(-50%, ${foregroundShift}%)` }} />
-      <div className={styles.heroMessage} style={{ opacity: textOpacity }}><span className={styles.heroEyebrow}>{t('heroEyebrow')}</span><h1>{t('heroCaption').split('\n').map((line) => <span key={line}>{line}<br /></span>)}</h1><p>{t('heroDescription')}</p><div className={styles.heroActions}><Link href="/studio" className={styles.heroPrimary}>{t('heroPrimary')} <ArrowRight size={17} /></Link><a href="#create" className={styles.heroSecondary}>{t('heroSecondary')}</a></div></div>
+      <div className={styles.heroMessage} style={{ opacity: textOpacity }}><span className={styles.heroEyebrow}>{t('heroEyebrow')}</span><h1>{t('heroCaption').split('\n').map((line) => <span key={line}>{line}</span>)}</h1><p>{t('heroDescription')}</p><div className={styles.heroActions}><Link href="/studio" className={styles.heroPrimary}>{t('heroPrimary')} <ArrowRight size={17} /></Link><a href="#create" className={styles.heroSecondary}>{t('heroSecondary')}</a></div></div>
     </div> : <div key={side} className={styles.heroSides} style={{ width: imageProgress * 40 + '%', gap: imageProgress * 8, opacity: imageProgress, transform: 'translate(' + (side === 'left' ? -100 + imageProgress * 100 : 100 - imageProgress * 100) + '%, ' + (-imageProgress * 15) + '%)' }}>
       {(side === 'left' ? [1, 2] : [3, 4]).map((number) => <div key={number} className={styles.heroPanel}><Image src={(side === 'left' ? ['/media/generated/landing-image-v1.png', '/media/generated/landing-agent-v1.png'] : ['/media/generated/landing-canvas-v1.png', '/media/generated/landing-video-v1.png'])[number - (side === 'left' ? 1 : 3)]} alt={['图片创作视觉参考', 'Agent 创意组织参考', '自由画布视觉参考', '视频创作视觉参考'][number - 1]} fill sizes="20vw" className={styles.cover} /></div>)}
     </div>)}
@@ -131,8 +181,8 @@ function Hero() {
 
 function PlatformIntro() {
   const { t } = useLocale()
-  const capabilities = [{ number: '01', icon: ImageIcon, title: t('platformImage') }, { number: '02', icon: Video, title: t('platformVideo') }, { number: '03', icon: FileText, title: t('platformStory') }, { number: '04', icon: Bot, title: t('platformAgent') }]
-  return <section id="create" className={styles.platformIntro} aria-label="OAO 平台能力"><div className={styles.introCopy}><span className={styles.sectionEyebrow}>{t('platformLabel')}</span><h2>{t('platformTitle').split('\n').map((line) => <span key={line}>{line}<br /></span>)}</h2><p>{t('platformDescription')}</p><Link href="/studio" className={styles.textLink}>{t('openWorkbench')} <ArrowRight size={17} /></Link></div><div className={styles.capabilityList}>{capabilities.map(({ number, icon: Icon, title }) => <div className={styles.capabilityRow} key={number}><span>{number}</span><Icon size={20} strokeWidth={1.7} /><strong>{title}</strong><ArrowRight size={17} /></div>)}</div></section>
+  const capabilities = [{ number: '01', icon: ImageIcon, title: t('platformImage'), href: '/image' }, { number: '02', icon: Video, title: t('platformVideo'), href: '/video' }, { number: '03', icon: FileText, title: t('platformStory'), href: '/drama' }, { number: '04', icon: Bot, title: t('platformAgent'), href: '/agent' }]
+  return <section id="create" className={styles.platformIntro} aria-label="OAO 平台能力"><div data-landing-reveal className={styles.introCopy}><span className={styles.sectionEyebrow}>{t('platformLabel')}</span><h2>{t('platformTitle').split('\n').map((line) => <span key={line}>{line}<br /></span>)}</h2><p>{t('platformDescription')}</p><Link href="/studio" className={styles.textLink}>{t('openWorkbench')} <ArrowRight size={17} aria-hidden="true" /></Link></div><div data-landing-reveal className={styles.capabilityList}>{capabilities.map(({ number, icon: Icon, title, href }) => <Link href={href} className={styles.capabilityRow} key={number}><span aria-hidden="true">{number}</span><Icon size={20} strokeWidth={1.7} aria-hidden="true" /><strong>{title}</strong><ArrowRight size={17} aria-hidden="true" /></Link>)}</div></section>
 }
 
 function Capabilities() {
@@ -145,28 +195,38 @@ function Capabilities() {
     { name: t('canvasCreation'), description: isChinese ? '把素材、节点与想法放在一张画布上。' : 'Keep references, nodes and ideas on one canvas.', image: '/media/generated/landing-canvas-v1.png', href: '/canvas', Icon: LayoutPanelTop, accent: 'canvas' },
     { name: t('dramaCreation'), description: isChinese ? '从人物、场景到镜头，组织完整短剧。' : 'Shape characters, scenes and shots into a short drama.', image: '/media/generated/landing-drama-v1.png', href: '/drama', Icon: Clapperboard, accent: 'drama' },
   ]
-  return <section id="models" className={styles.capabilities} aria-label="创作能力"><div className={styles.sectionHeading}><div><span className={styles.sectionEyebrow}>{t('landingModels')}</span><h2>{t('capabilityTitle')}</h2><p>{t('capabilityDescription')}</p></div><Link href="/studio" className={styles.outlineLink}>{t('viewAllCreation')} <ArrowRight size={17} /></Link></div><div className={styles.capabilityGrid}>{items.map(({ name, description, image, href, Icon, accent }) => <Link href={href} key={href} className={styles.capabilityCard} data-accent={accent}><div className={styles.capabilityImage}><Image src={image} alt={name} fill sizes="(max-width: 767px) 84vw, 30vw" className={styles.cover} /></div><div className={styles.capabilityMeta}><div className={styles.capabilityTitle}><Icon size={18} /><h3>{name}</h3></div><p>{description}</p><ArrowRight size={18} aria-hidden="true" /></div></Link>)}</div></section>
+  return <section id="models" className={styles.capabilities} aria-label="创作能力"><div data-landing-reveal className={styles.sectionHeading}><div><span className={styles.sectionEyebrow}>{t('landingModels')}</span><h2>{t('capabilityTitle')}</h2><p>{t('capabilityDescription')}</p></div><Link href="/studio" className={styles.outlineLink}>{t('viewAllCreation')} <ArrowRight size={17} /></Link></div><div data-landing-reveal className={styles.capabilityGrid}>{items.map(({ name, description, image, href, Icon, accent }) => <Link href={href} key={href} className={styles.capabilityCard} data-accent={accent}><div className={styles.capabilityImage}><Image src={image} alt="" fill sizes="(max-width: 767px) 84vw, 30vw" className={styles.cover} /></div><div className={styles.capabilityMeta}><div className={styles.capabilityTitle}><Icon size={18} /><h3>{name}</h3></div><p>{description}</p><ArrowRight size={18} aria-hidden="true" /></div></Link>)}</div></section>
 }
 
 function Workflow() {
   const { t } = useLocale()
   const steps = [{ number: '01', title: t('workflowIdea'), description: t('workflowIdeaDescription'), Icon: Sparkles }, { number: '02', title: t('workflowShape'), description: t('workflowShapeDescription'), Icon: LayoutPanelTop }, { number: '03', title: t('workflowFinish'), description: t('workflowFinishDescription'), Icon: ArrowRight }]
-  return <section className={styles.workflow} aria-label="创作流程"><div className={styles.workflowIntro}><span className={styles.sectionEyebrow}>{t('startWithIdea')}</span><h2>{t('workflowTitle')}</h2><p>{t('workflowDescription')}</p></div><div className={styles.workflowSteps}>{steps.map(({ number, title, description, Icon }) => <div className={styles.workflowStep} key={number}><div className={styles.stepTop}><span>{number}</span><Icon size={20} /></div><h3>{title}</h3><p>{description}</p></div>)}</div></section>
+  return <section className={styles.workflow} aria-label="创作流程"><div data-landing-reveal className={styles.workflowIntro}><span className={styles.sectionEyebrow}>{t('startWithIdea')}</span><h2>{t('workflowTitle')}</h2><p>{t('workflowDescription')}</p></div><div className={styles.workflowSteps}>{steps.map(({ number, title, description, Icon }) => <div className={styles.workflowStep} key={number}><div className={styles.stepTop}><span>{number}</span><Icon size={20} /></div><h3>{title}</h3><p>{description}</p></div>)}</div></section>
 }
 
 function Gallery() {
   const { t } = useLocale()
   const ref = useRef<HTMLElement>(null)
-  const progress = useProgress(ref)
   const reduced = useReducedMotion()
-  const stack = reduced ? 1 : clamp(progress * scenes.length)
-  return <section id="gallery" ref={ref} className={styles.gallery} aria-label="OAO 作品展示"><div className={styles.galleryIntro}><span className={styles.sectionEyebrow}>{t('landingWorks')}</span><h2>{t('worksTitle')}</h2><p>{t('worksDescription')}</p></div><div className={styles.galleryStage}><div className={styles.galleryStack}>{scenes.map((scene, index) => { const visible = clamp(stack - index); return <figure key={scene.src} className={styles.galleryFrame} style={{ zIndex: scenes.length - index, opacity: reduced || index === 0 ? 1 : visible, transform: reduced ? `rotate(${(index - 1.5) * 2}deg)` : `translateY(${(1 - visible) * 80}%) rotate(${(index - 1.5) * 2}deg)` }}><Image src={scene.src} alt={scene.alt} fill sizes="(max-width: 767px) 92vw, 48vw" className={styles.cover} /><figcaption><span>0{index + 1}</span>{scene.title}</figcaption></figure> })}</div></div></section>
+  const progress = useProgress(ref, reduced)
+  const stack = progress * (scenes.length - 1)
+  const activeIndex = Math.round(stack)
+  return <section id="gallery" ref={ref} className={styles.gallery} aria-label="OAO 作品展示">
+    <div data-landing-reveal className={styles.galleryIntro}><span className={styles.sectionEyebrow}>{t('landingWorks')}</span><h2>{t('worksTitle')}</h2><p>{t('worksDescription')}</p></div>
+    <div className={styles.galleryStage}>
+      <div className={styles.galleryStack}>{scenes.map((scene, index) => {
+        const visible = index === 0 ? 1 : clamp(stack - index + 1)
+        return <figure key={scene.src} className={styles.galleryFrame} data-gallery-frame={index} data-active={activeIndex === index} style={{ zIndex: index + 1, opacity: reduced ? 1 : visible, transform: reduced ? undefined : `translateY(${(1 - visible) * 30}%) rotate(${(index - 1.5) * 2}deg)` }}><Image src={scene.src} alt={scene.alt} fill sizes="(max-width: 767px) 92vw, 48vw" className={styles.cover} /><figcaption><span>0{index + 1}</span>{scene.title}</figcaption></figure>
+      })}</div>
+      <div className={styles.galleryPagination} aria-hidden="true">{scenes.map((scene, index) => <span key={scene.src} data-active={activeIndex === index} />)}</div>
+    </div>
+  </section>
 }
 
 function CreationRoutes() {
   const { t } = useLocale()
   const items = [[t('imageCreation'), '01', '/image'], [t('videoCreation'), '02', '/video'], [t('canvasCreation'), '03', '/canvas'], [t('dramaCreation'), '04', '/drama']]
-  return <section className={styles.routes} aria-label="创作入口"><div className={styles.routesHeader}><span className={styles.sectionEyebrow}>{t('ecosystemTitle')}</span><p>{t('ecosystemDescription')}</p></div><div className={styles.routeList}>{items.map(([title, number, href]) => <Link href={href} key={href} className={styles.routeRow}><span>{number}</span><h3>{title}</h3><ArrowRight size={22} /></Link>)}</div></section>
+  return <section className={styles.routes} aria-label="创作入口"><div data-landing-reveal className={styles.routesHeader}><span className={styles.sectionEyebrow}>{t('ecosystemTitle')}</span><p>{t('ecosystemDescription')}</p></div><div className={styles.routeList}>{items.map(([title, number, href]) => <Link href={href} key={href} className={styles.routeRow}><span>{number}</span><h3>{title}</h3><ArrowRight size={22} /></Link>)}</div></section>
 }
 
 function Editorial() {
@@ -183,5 +243,7 @@ function About() {
 }
 
 export function LandingPage() {
-  return <main className={styles.landing} data-landing-version="oao-zh-v9-ai-platform"><HomepageAnnouncement placement="landing" /><Header /><Hero /><PlatformIntro /><Capabilities /><Workflow /><Gallery /><CreationRoutes /><Editorial /><About /><SiteFooter /></main>
+  const ref = useRef<HTMLElement>(null)
+  useLandingReveal(ref)
+  return <main ref={ref} className={styles.landing} data-landing-version="oao-zh-v9-ai-platform"><HomepageAnnouncement placement="landing" /><Header /><Hero /><PlatformIntro /><Capabilities /><Workflow /><Gallery /><CreationRoutes /><Editorial /><About /><SiteFooter /></main>
 }

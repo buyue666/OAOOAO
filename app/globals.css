@@ -594,7 +594,7 @@
   box-shadow: var(--studio-home-shadow);
 }
 
-/* 页面级表面：统一后台卡片、侧栏面板与列表容器的层级，不改变首页的独有创作区。 */
+/* 页面级表面���统一后台卡片、侧栏面板与列表容器的层级，不改变首页的独有创作区。 */
 @layer components {
   .studio-surface {
     border: 1px solid var(--border);
@@ -864,6 +864,12 @@
     box-shadow: var(--lg-shadow-2);
   }
 
+  /* Motion Prompt #060 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#060 */
+  /* The bezier approximates the reference's cubic ease-in-out without a spring overshoot. */
+  .studio-segmented-indicator {
+    transition: transform 250ms cubic-bezier(0.645, 0.045, 0.355, 1), width 250ms cubic-bezier(0.645, 0.045, 0.355, 1);
+  }
+
   .studio-control {
     border-radius: var(--radius-md);
     transition:
@@ -960,6 +966,7 @@
 }
 
 .studio-nav-item {
+  position: relative;
   border-radius: var(--radius-md);
   transition:
     background-color var(--lg-dur-base) var(--lg-ease-out),
@@ -967,13 +974,31 @@
     box-shadow var(--lg-dur-base) var(--lg-ease-out);
 }
 
-.studio-nav-item:hover {
+.studio-nav-item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: calc(50% - 7px);
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--studio-accent);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.studio-nav-item:is(:hover, :focus-visible) {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .studio-nav-item[data-active='true'] {
   background: color-mix(in srgb, var(--studio-accent) 10%, transparent);
   color: var(--studio-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--studio-accent) 12%, transparent);
+}
+
+.studio-nav-item[data-active='true']::before {
+  opacity: 1;
 }
 
 .studio-nav-item[data-active='true']:hover {
@@ -1041,6 +1066,54 @@
   background: transparent;
 }
 
+.studio-home-assistant,
+.studio-home-entry,
+.studio-home-direction {
+  transition: border-color 200ms ease, background-color 200ms ease, box-shadow 240ms var(--lg-ease-out), transform 240ms var(--lg-ease-out);
+}
+
+.studio-home-assistant {
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 24%, var(--border));
+  background: var(--card);
+  box-shadow: var(--lg-shadow-1);
+}
+
+.studio-home-entry {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--muted) 28%, var(--card));
+}
+
+.studio-home-entry-icon {
+  color: var(--studio-accent);
+  background: color-mix(in srgb, var(--studio-accent) 10%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--studio-accent) 10%, transparent);
+}
+
+.studio-home-assistant:is(:hover, :focus-visible),
+.studio-home-entry:is(:hover, :focus-visible),
+.studio-home-direction:is(:hover, :focus-visible) {
+  border-color: color-mix(in srgb, var(--studio-accent) 35%, var(--border));
+  background: var(--card);
+  box-shadow: var(--lg-shadow-2);
+}
+
+.studio-home-entry-switch {
+  border: 0;
+  box-shadow: none;
+}
+
+.studio-home-entry-switch > button {
+  min-height: 40px;
+  padding-inline: 14px;
+  font-size: 13px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .studio-home-assistant:hover,
+  .studio-home-entry:hover,
+  .studio-home-direction:hover { transform: translateY(-2px); }
+}
+
 .studio-home-prompt {
   border: 1px solid var(--lg-edge);
   border-radius: var(--radius-2xl);
@@ -1069,15 +1142,24 @@
 
 
 @media (prefers-reduced-motion: reduce) {
-  .studio-home-prompt { transition: none; }
-  .studio-home-shortcut { transition: none; }
-  .studio-home-shortcut:hover { transform: none; }
+  .studio-home-prompt,
+  .studio-home-shortcut,
+  .studio-home-assistant,
+  .studio-home-entry,
+  .studio-home-direction,
+  .studio-segmented-indicator,
+  .studio-nav-item,
+  .studio-nav-item::before { transition: none; }
+  .studio-home-shortcut:hover,
+  .studio-home-assistant:hover,
+  .studio-home-entry:hover,
+  .studio-home-direction:hover { transform: none; }
 }
 
 /* --------------------------------------------------------------------------
    界面质感偏好：`data-studio-skin="minimal"` 表示"减少透明"，
    把玻璃表面退化为实心并关闭环境光。这是**真实生效**的设置项，
-   与系统级 `prefers-reduced-transparency` 走同一条退化路径。
+   与系统级 `prefers-reduced-transparency` 走同一���退化路径。
    -------------------------------------------------------------------------- */
 
 .studio-app-shell[data-studio-skin='minimal'] {

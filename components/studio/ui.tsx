@@ -179,7 +179,7 @@ export function SearchField({ value, onChange, placeholder = '搜索' }: { value
   return (
     <label className="studio-search-field studio-field flex h-8 min-w-0 items-center gap-2 border border-border bg-card px-2.5 text-muted-foreground transition-colors duration-150 focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15">
       <Search className="size-4 shrink-0" aria-hidden="true" />
-      <input className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <input data-focus-managed aria-label={placeholder} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
   )
 }
@@ -291,7 +291,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
 }
 
 /** 分段控制器：选中指示器用 transform 平滑移动，不改变任何元素尺寸。 */
-export function SegmentedControl({ value, onChange, options, className }: { value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode }>; className?: string }) {
+export function SegmentedControl({ value, onChange, options, className, label = '切换视图', id }: { value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode }>; className?: string; label?: string; id?: string }) {
   const tx = useUiText()
   const listRef = useRef<HTMLDivElement>(null)
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null)
@@ -312,11 +312,18 @@ export function SegmentedControl({ value, onChange, options, className }: { valu
   }, [options, value])
 
   return (
-    <div ref={listRef} className={cn('studio-segmented studio-scroll-x relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-muted p-0.5 shadow-sm', className)} role="tablist">
+    <div ref={listRef} aria-label={tx(label)} className={cn('studio-segmented studio-scroll-x relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-muted p-0.5 shadow-sm', className)} role="tablist" onKeyDown={(event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || !options.length) return
+    event.preventDefault()
+    const current = Math.max(0, options.findIndex((option) => option.value === value))
+    const index = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + options.length) % options.length
+    onChange(options[index].value)
+    listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus()
+  }}>
       {indicator && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute top-0.5 bottom-0.5 left-0 rounded bg-card shadow-sm transition-[transform,width] duration-200 ease-out"
+          className="studio-segmented-indicator pointer-events-none absolute top-0.5 bottom-0.5 left-0 rounded bg-card shadow-sm"
           style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
         />
       )}
@@ -324,9 +331,12 @@ export function SegmentedControl({ value, onChange, options, className }: { valu
         <button
           key={option.value}
           type="button"
-          role="tab"
-          aria-selected={value === option.value}
-          onClick={() => onChange(option.value)}
+  role="tab"
+  id={id ? `${id}-${option.value}` : undefined}
+  aria-controls={id ? `${id}-panel-${option.value}` : undefined}
+  aria-selected={value === option.value}
+  tabIndex={value === option.value ? 0 : -1}
+  onClick={() => onChange(option.value)}
           className={cn('relative z-10 inline-flex h-7 shrink-0 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', value === option.value ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
         >
           {option.icon}
