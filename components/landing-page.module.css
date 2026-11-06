@@ -30,7 +30,7 @@
 .landing [data-landing-reveal='visible'] { opacity: 1; translate: none; }
 .landing [data-landing-reveal]:focus-within { opacity: 1; translate: none; transition-duration: 0s; }
 
-.header { position: fixed; z-index: 50; top: 16px; left: 50%; width: min(92%, 920px); opacity: 1; transform: translate(-50%, 0); border: 1px solid rgb(255 255 255 / 74%); border-radius: 12px; background: rgb(255 255 255 / 94%); box-shadow: 0 4px 20px rgb(20 25 30 / 8%); backdrop-filter: blur(18px); transition: background-color 240ms ease, box-shadow 240ms ease; }
+.header { position: fixed; z-index: 50; top: 16px; left: 50%; width: min(92%, 1120px); opacity: 1; transform: translate(-50%, 0); border: 1px solid #dfe5df; border-radius: 8px; background: rgb(255 255 255 / 96%); box-shadow: 0 4px 24px rgb(20 35 28 / 6%); backdrop-filter: blur(18px); transition: background-color 240ms ease, box-shadow 240ms ease; }
 .landing:has(> :global(.oao-announcement-bar)) .header { top: 80px; }
 .header:is([data-scrolled='true'], [data-open='true'], :focus-within) { background: rgb(255 255 255 / 97%); box-shadow: 0 10px 30px rgb(20 25 30 / 12%); }
 .headerRow { min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 20px; gap: 24px; }
@@ -66,7 +66,8 @@
 .heroMessage h1 > span + span { margin-top: 8px; }
 .heroMessage p { max-width: 360px; margin-top: 24px; color: #283236; font-size: 15px; line-height: 1.8; text-shadow: 0 1px 1px rgb(255 255 255 / 42%); }
 .heroActions { display: flex; align-items: center; gap: 18px; margin-top: 28px; }
-.heroPrimary { padding: 13px 18px; }
+.heroPrimary { padding: 13px 20px; background: var(--brand); }
+.heroPrimary:hover { background: #215f59; }
 .heroSecondary, .textLink, .outlineLink { display: inline-flex; align-items: center; gap: 8px; color: #3e464b; font-size: 14px; font-weight: 600; }
 .heroSecondary:hover, .textLink:hover, .outlineLink:hover { color: #28736c; }
 .heroScrollHint { position: absolute; z-index: 4; right: clamp(24px, 7vw, 110px); bottom: 34px; display: inline-flex; align-items: center; gap: 10px; color: #394247; font-size: 12px; font-weight: 700; writing-mode: vertical-rl; transition: opacity 180ms linear; }
@@ -93,8 +94,9 @@
 .outlineLink { padding: 12px 16px; border: 1px solid #dce0df; border-radius: 8px; white-space: nowrap; transition: border-color 180ms ease, background-color 180ms ease; }
 .outlineLink:hover { border-color: #28736c; background: #f3f8f6; }
 .capabilityGrid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
-.capabilityCard { grid-column: span 4; overflow: hidden; border: 1px solid #e0e3e3; border-radius: 12px; background: #fff; box-shadow: 0 2px 6px rgb(25 40 38 / 3%); transition: transform 240ms var(--ease-out), box-shadow 240ms var(--ease-out), border-color 240ms ease; }
-.capabilityCard:nth-child(4), .capabilityCard:nth-child(5) { grid-column: span 6; }
+.capabilityCard { grid-column: span 4; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); box-shadow: 0 2px 6px rgb(25 40 38 / 3%); transition: transform 240ms var(--ease-out), box-shadow 240ms var(--ease-out), border-color 240ms ease; }
+.capabilityCard:nth-child(-n+2) { grid-column: span 6; }
+.capabilityCard:nth-child(-n+2) .capabilityImage { aspect-ratio: 16 / 9; }
 .capabilityCard:is(:hover, :focus-visible) { border-color: #b8cdc4; box-shadow: 0 10px 26px rgb(25 40 38 / 9%); }
 @media (hover: hover) and (pointer: fine) {
   .capabilityCard:hover { transform: translateY(-4px); }

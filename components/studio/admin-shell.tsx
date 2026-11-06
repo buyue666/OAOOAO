@@ -268,11 +268,12 @@ function AdminConsole({ section, onNavigate, children }: { section: AdminSection
           <AdminNavList section={section} items={items} onNavigate={navigate} />
         </Modal>
 
-        <main className="mx-auto w-full max-w-[1600px] px-4 py-5 md:px-7 md:py-7">
-          <div className="mb-6 border-b border-border pb-5">
-            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">{meta.title}</h1>
+        <main className="studio-page-container max-w-[1600px]">
+          <header className="studio-page-header mb-7">
+            <p className="studio-eyebrow mb-3">管理后台</p>
+            <h1 className="font-semibold">{meta.title}</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{meta.description}</p>
-          </div>
+          </header>
           <AdminWorkbench>
             <div key={section} className="motion-page mt-5">{children}</div>
           </AdminWorkbench>
@@ -322,7 +323,7 @@ function AdminModuleSearch({ items, onNavigate }: { items: ReadonlyArray<AdminNa
         onFocus={() => setFocused(true)}
         onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); setFocused(true) }}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
           if (event.key === 'ArrowDown' && matches.length) { event.preventDefault(); setActiveIndex((value) => (value + 1) % matches.length) }
           if (event.key === 'ArrowUp' && matches.length) { event.preventDefault(); setActiveIndex((value) => (value - 1 + matches.length) % matches.length) }
           if (event.key === 'Enter' && matches[activeIndex]) { event.preventDefault(); open(matches[activeIndex][0]) }
@@ -362,7 +363,7 @@ function AdminNavList({ section, items, onNavigate }: { section: AdminSection; i
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     'flex h-10 w-full items-center gap-3 rounded-lg px-2.5 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    active ? 'bg-studio-accent/10 font-semibold text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    active ? 'bg-studio-accent/10 font-medium text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )}
                 >
                   <Icon className={cn('size-4 shrink-0', active && 'text-studio-accent')} />{label}

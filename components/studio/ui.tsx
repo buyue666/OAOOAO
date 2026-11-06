@@ -27,8 +27,8 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
         variant === 'glass' && 'lg-button-glass text-foreground',
         variant === 'ghost' && 'border-transparent bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
         variant === 'danger' && 'border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15',
-        size === 'sm' && 'h-7 px-2.5 text-xs',
-        size === 'md' && 'h-8 px-3',
+        size === 'sm' && 'h-8 px-3 text-xs',
+        size === 'md' && 'h-9 px-3.5',
         size === 'lg' && 'h-10 px-4',
         className,
       )}
@@ -122,13 +122,11 @@ export function StatusBadge({ children, tone = 'neutral', className, solid = fal
  */
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
   return (
-    <header className="studio-page-header flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <header className="studio-page-header flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        {eyebrow && (
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-studio-accent">{eyebrow}</p>
-        )}
-        <h1 className="text-balance text-xl font-semibold tracking-[-0.035em] text-foreground md:text-2xl">{title}</h1>
-        {description && <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>}
+        {eyebrow && <p className="studio-eyebrow mb-3">{eyebrow}</p>}
+        <h1 className="text-balance font-semibold text-foreground">{title}</h1>
+        {description && <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </header>
@@ -149,7 +147,7 @@ export function SectionHeading({ title, description, action }: { title: string; 
 
 export function StatBlock({ label, value, detail, tone = 'neutral' }: { label: string; value: string; detail?: string; tone?: Tone }) {
   return (
-    <div className="lg-raised min-w-0 p-4">
+    <div className="studio-stat-block lg-raised min-w-0">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn('mt-1.5 text-2xl font-semibold tracking-[-0.035em] tabular-nums', tone === 'accent' && 'text-studio-accent', tone === 'warning' && 'text-studio-warn')}>{value}</p>
       {detail && <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>}
@@ -177,9 +175,9 @@ export function MediaThumb({ src, poster, alt, fallback, kind = 'image', classNa
 
 export function SearchField({ value, onChange, placeholder = '搜索' }: { value: string; onChange: (value: string) => void; placeholder?: string }) {
   return (
-    <label className="studio-search-field studio-field flex h-8 min-w-0 items-center gap-2 border border-border bg-card px-2.5 text-muted-foreground transition-colors duration-150 focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15">
+    <label className="studio-search-field studio-field flex h-10 min-w-0 items-center gap-2.5 border border-border bg-card px-3 text-muted-foreground transition-colors duration-150 focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15">
       <Search className="size-4 shrink-0" aria-hidden="true" />
-      <input data-focus-managed aria-label={placeholder} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <input data-focus-managed aria-label={placeholder} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
   )
 }

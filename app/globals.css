@@ -491,29 +491,29 @@
 /* 浅色主题：中性灰白工作区，黑色承担主要操作与选中态 */
 :root {
   color-scheme: light;
-  --background: #f4f5f7;
-  --foreground: #111214;
+  --background: #f7f8f6;
+  --foreground: #1c2522;
   --card: #ffffff;
-  --card-foreground: #111214;
+  --card-foreground: #1c2522;
   --popover: #ffffff;
-  --popover-foreground: #111214;
-  --primary: #111214;
+  --popover-foreground: #1c2522;
+  --primary: #1c2522;
   --primary-foreground: #ffffff;
-  --secondary: #eceef1;
-  --secondary-foreground: #111214;
-  --muted: #eceef1;
+  --secondary: #eef1ed;
+  --secondary-foreground: #1c2522;
+  --muted: #eef1ed;
   /* 次要文字需在所有浅色表面上达到 WCAG AA 4.5:1：#5b5f69 在白底、雾白底与灰色面板上均不低于 5.4:1。 */
   --muted-foreground: #5b5f69;
-  --accent: #eceef1;
-  --accent-foreground: #111214;
+  --accent: #eef1ed;
+  --accent-foreground: #1c2522;
   --destructive: #b42318;
   --destructive-foreground: #ffffff;
   --success: #15803d;
-  --border: #dfe2e7;
-  --input: #d0d4da;
-  --ring: #0f766e;
+  --border: #dfe5df;
+  --input: #cdd6cf;
+  --ring: #28736c;
   --radius: 0.5rem;
-  --studio-accent: #0f766e;
+  --studio-accent: #28736c;
   --studio-accent-foreground: #ffffff;
   --studio-warn: #92400e;
   /* 媒体预览 / 画布保留独立深色场景，不把深色扩散到浅色工作区 */
@@ -594,8 +594,98 @@
   box-shadow: var(--studio-home-shadow);
 }
 
-/* 页面级表面���统一后台卡片、侧栏面板与列表容器的层级，不改变首页的独有创作区。 */
+/* 页面级表面�����统一后台卡片、侧栏面板与列表容器的层级，不改变首页的独有创作区。 */
 @layer components {
+  .studio-page-container {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding: clamp(24px, 3vw, 40px) clamp(20px, 3vw, 40px) 64px;
+  }
+
+  .studio-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--studio-accent);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: .08em;
+  }
+
+  .studio-eyebrow::before {
+    content: '';
+    width: 14px;
+    height: 2px;
+    flex: none;
+    border-radius: 2px;
+    background: currentColor;
+  }
+
+  .studio-filter-bar {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    padding: 16px;
+  }
+
+  .studio-collection-card {
+    transition: border-color var(--lg-dur-base) var(--lg-ease-out), box-shadow var(--lg-dur-base) var(--lg-ease-out);
+  }
+
+  .studio-collection-card:focus-within {
+    border-color: color-mix(in srgb, var(--studio-accent) 45%, var(--border));
+  }
+
+  .studio-collection-card img {
+    transition: transform var(--lg-dur-panel) var(--lg-ease-out);
+  }
+
+  .studio-account-nav {
+    align-self: start;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--card);
+    padding: 8px;
+  }
+
+  .studio-auth-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    padding: clamp(24px, 4vw, 40px);
+    box-shadow: 0 12px 48px color-mix(in srgb, var(--foreground) 4%, transparent);
+  }
+
+  .studio-auth-heading > p:first-child {
+    color: var(--studio-accent);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+  }
+
+  .studio-stat-block {
+    padding: 20px;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .studio-collection-card:hover {
+      border-color: color-mix(in srgb, var(--studio-accent) 35%, var(--border));
+      box-shadow: var(--lg-shadow-3);
+    }
+    .studio-collection-card:hover img { transform: scale(1.025); }
+  }
+
+  @media (max-width: 480px) {
+    .studio-auth-card { padding: 24px 20px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .studio-collection-card, .studio-collection-card img { transition: none; }
+    .studio-collection-card:hover img { transform: none; }
+  }
+
   .studio-surface {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -1017,19 +1107,19 @@
    -------------------------------------------------------------------------- */
 
 .studio-page-header {
-  border-bottom: 0;
-  padding-bottom: 0;
-  gap: var(--lg-gap-3);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 24px;
+  gap: 20px;
 }
 
 .studio-page-header h1 {
-  font-size: clamp(1.375rem, 1.6vw, 1.75rem);
-  font-weight: 650;
-  letter-spacing: -0.035em;
-  line-height: 1.2;
+  font-size: clamp(1.5rem, 2.1vw, 1.875rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
 }
 
-.studio-page-header p {
+.studio-page-header p:not(.studio-eyebrow) {
   color: var(--muted-foreground);
   max-width: 62ch;
 }
@@ -2364,8 +2454,8 @@
   overflow: hidden;
   border: 1px solid var(--lg-edge);
   border-radius: var(--radius-lg);
-  background: var(--lg-glass-base);
-  box-shadow: var(--lg-shadow-2), inset 0 1px 0 var(--lg-highlight-soft);
+  background: var(--card);
+  box-shadow: var(--lg-shadow-1);
 }
 .workspace-submit-bar { background: var(--lg-pane-bg); }
 .prompt-reference-textarea, .prompt-reference-mirror { box-sizing: border-box; padding: .75rem; border: 0; font: inherit; letter-spacing: inherit; tab-size: 2; white-space: pre-wrap; overflow-wrap: break-word; }
@@ -2394,7 +2484,7 @@
 .admin-config-group > summary { list-style: none; }
 .admin-config-group > summary::-webkit-details-marker { display: none; }
 .admin-config-group > summary::after { content: '展开'; margin-left: auto; flex: none; font-size: 11px; font-weight: 400; color: var(--muted-foreground); }
-.admin-config-group[open] > summary::after { content: '收起'; }
+.admin-config-group[open] > summary::after { content: '���起'; }
 .admin-config-group > summary:hover { background: var(--muted); }
 .admin-config-group > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: .5rem; }
 .admin-config-group > summary > .admin-config-chevron { transform: rotate(-90deg); }
@@ -2436,11 +2526,11 @@
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-desktop-submit > p { margin: 0; flex: 1; }
   .studio-workspace-shell[data-panel-position='fullscreen'][data-panel-minimized='false'] .workspace-desktop-submit > button { margin: 0 0 0 auto; width: auto; min-width: 12rem; }
 }
-@media (min-width: 1280px) {
+@media (min-width: 768px) {
   .workspace-params-panel { grid-area: params; }
   .workspace-results-panel { grid-area: results; }
   .workspace-layout-grid { grid-template-areas: 'params results'; }
-  .studio-workspace-shell[data-panel-position='right'] .workspace-layout-grid { grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: 'results params'; }
+  .studio-workspace-shell[data-panel-position='right'] .workspace-layout-grid { grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); grid-template-areas: 'results params'; }
   .studio-workspace-shell:is([data-panel-position='top'], [data-panel-position='bottom']) .workspace-layout-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'params' 'results'; }
   .studio-workspace-shell[data-panel-position='bottom'] .workspace-layout-grid { grid-template-areas: 'results' 'params'; }
   .studio-workspace-shell:is([data-panel-position='top'], [data-panel-position='bottom']) .workspace-params-scroll > div { max-width: 1000px; margin-inline: auto; }
@@ -3263,7 +3353,7 @@
 .oao-canvas-editor .oao-node-card.is-process {
   border-color: #3b3b3b !important;
   background: #151515 !important;
-  box-shadow: 14px 14px 0 #0d0d0d, 0 0 0 1px #242424;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 24%), 0 0 0 1px #242424;
 }
 .oao-canvas-editor .oao-node-card.is-process::before {
   position: absolute;
@@ -3278,7 +3368,7 @@
 .oao-canvas-editor .oao-node-card.is-media {
   border-radius: 4px !important;
   border-color: #d7d7d7 !important;
-  box-shadow: 12px 12px 0 #0d0d0d, 0 0 0 1px #363636;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 28%), 0 0 0 1px #363636;
 }
 .oao-canvas-editor .oao-node-card.is-group {
   border-radius: 4px !important;

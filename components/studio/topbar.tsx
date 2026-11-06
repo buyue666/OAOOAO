@@ -108,7 +108,11 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <button type="button" onClick={onMenuClick} aria-label={tx("打开导航")} className={cn(iconButtonClass, 'lg:hidden')}>
           <Menu className="size-5" aria-hidden="true" />
         </button>
-        <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground" aria-current="page">{pageTitle}</p>
+        <nav aria-label={tx('页面位置')} className="flex min-w-0 items-center gap-2.5 text-sm">
+          <Link href="/studio" className="hidden shrink-0 rounded text-xs text-muted-foreground transition-colors hover:text-foreground md:block">{tx('创作工作台')}</Link>
+          <span aria-hidden="true" className="hidden text-border md:block">/</span>
+          <span className="truncate font-medium text-foreground" aria-current="page">{pageTitle}</span>
+        </nav>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">

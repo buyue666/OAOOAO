@@ -110,16 +110,16 @@ export function WorksPage() {
   const visibleCount = groupedVisible.reduce((count, group) => count + group.items.length, 0)
 
   if (state === 'unauthenticated') {
-    return (<div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10"><PageHeader eyebrow="作品" title="我的作品" description="生成结果、项目关系和发布状态都在这里继续管理。" /><Notice tone="warning"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" /><span className="min-w-0 flex-1">登录后才会显示属于你的作品。</span><Link href="/login?next=/works" className="shrink-0 text-[11px] underline">前往登录</Link></Notice></div>)
+    return (<div className="studio-page-container flex flex-col gap-7"><PageHeader eyebrow="作品" title="我的作品" description="生成结果、项目关系和发布状态都在这里继续管理。" /><Notice tone="warning"><LockKeyhole className="mt-0.5 size-3.5 shrink-0" /><span className="min-w-0 flex-1">登录后才会显示属于你的作品。</span><Link href="/login?next=/works" className="shrink-0 text-[11px] underline">前往登录</Link></Notice></div>)
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
+    <div className="studio-page-container flex flex-col gap-7">
       <PageHeader eyebrow="作品" title="我的作品" description="生成结果按日期归档，可按模型、时间或关键词快速查找。" actions={(<><ControlButton variant="secondary" onClick={() => { setLoading(true); void reload().finally(() => setLoading(false)) }} disabled={loading || state === 'loading'}><RefreshCw className={cn('size-4', (loading || state === 'loading') && 'animate-spin')} />刷新</ControlButton><Link href="/image" className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Sparkles className="size-4" />开始新创作</Link></>)} />
       {message && <Notice tone="warning">{message}</Notice>}
       {truncated && <Notice tone="neutral">记录较多，当前只读取了最近一批结果。继续翻页会加载更多。</Notice>}
-      <div className="flex flex-col gap-3 border-b border-border pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} /><span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visibleCount} 件作品`}</span></div><div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_150px] lg:grid-cols-[minmax(0,1fr)_180px_150px_150px]"><SearchField value={search} onChange={setSearch} placeholder="搜索标题、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">开始</span><input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} aria-label="开始日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">结束</span><input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} aria-label="结束日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label></div><p className="text-[11px] text-muted-foreground">按开始日期至结束日期筛选，包含两端当天。</p></div>
-      {state === 'loading' && !works.length ? <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取生成结果</div> : state === 'error' && !works.length ? <Notice tone="warning"><span className="min-w-0 flex-1">作品暂时无法读取：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice> : !visibleCount ? <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center"><p className="text-sm font-medium">没有符合条件的作品</p><p className="max-w-sm text-xs leading-5 text-muted-foreground">尝试清空搜索词或调整模型、时间筛选。</p></div> : <div className="flex flex-col gap-7">{groupedVisible.map((group) => <section key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3"><h2 className="text-sm font-semibold text-foreground">{group.label}</h2><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div><div className="grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 lg:grid-cols-4">{group.items.map((work) => <WorkCard key={work.groupId ?? work.id} work={work} />)}</div></section>)}</div>}
+      <div className="studio-filter-bar flex flex-col gap-4"><div className="flex flex-wrap items-center justify-between gap-3"><SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} /><span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visibleCount} 件作品`}</span></div><div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_150px] lg:grid-cols-[minmax(0,1fr)_180px_150px_150px]"><SearchField value={search} onChange={setSearch} placeholder="搜索标题、提示词或模型" /><select aria-label="按模型筛选作品" value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-10 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">开始</span><input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} aria-label="开始日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">结束</span><input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} aria-label="结束日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label></div><p className="text-[11px] text-muted-foreground">按开始日期至结束日期筛选，包含两端当天。</p></div>
+      {state === 'loading' && !works.length ? <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取生成结果</div> : state === 'error' && !works.length ? <Notice tone="warning"><span className="min-w-0 flex-1">作品暂时无法读取：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice> : !visibleCount ? <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center"><span className="mb-2 flex size-12 items-center justify-center rounded-lg border border-border bg-card text-studio-accent"><ImageIcon className="size-5" aria-hidden="true" /></span><p className="text-base font-medium">{works.length ? '没有符合条件的作品' : '你的作品，从这里开始'}</p><p className="max-w-sm text-sm leading-6 text-muted-foreground">{works.length ? '尝试清空搜索词或调整模型、时间筛选。' : '完成的图片与视频会自动归档，随时预览、下载或继续创作。'}</p>{!works.length && <Link href="/image" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-foreground px-4 text-sm font-medium text-background">开始第一次创作<ArrowUpRight className="size-4" aria-hidden="true" /></Link>}</div> : <div className="flex flex-col gap-7">{groupedVisible.map((group) => <section key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3"><h2 className="text-sm font-semibold text-foreground">{group.label}</h2><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div><div className="grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 lg:grid-cols-4">{group.items.map((work) => <WorkCard key={work.groupId ?? work.id} work={work} />)}</div></section>)}</div>}
     </div>
   )
 }
@@ -187,7 +187,7 @@ function WorkCard({ work }: { work: StudioWork }) {
   }
 
   return (
-    <article className="studio-surface studio-surface-interactive group overflow-hidden">
+    <article className="studio-surface studio-collection-card group overflow-hidden">
       {work.kind === 'audio' ? <div className="flex aspect-[4/3] items-center justify-center bg-muted p-4"><audio src={work.src} controls preload="none" aria-label={work.title} className="w-full" /></div> : <MediaThumb
         src={resultAssets[0].url}
         poster={resultAssets[0].poster}
@@ -304,7 +304,7 @@ export function GalleryPage() {
   }, [filter, page, revision])
 
   return (
-    <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
+    <div className="studio-page-container flex flex-col gap-7">
       <PageHeader eyebrow="发现" title="广场" description="浏览已审核并发布的图片与视频作品。" actions={<SegmentedControl value={filter} onChange={(value) => { setFilter(value); setPage(1) }} options={[{ value: '精选', label: '精选' }, { value: '全部', label: '全部' }, { value: 'image', label: '图片' }, { value: 'video', label: '视频' }]} />} />
       {message && <Notice tone="warning">{message}</Notice>}
       {loadState === 'loading' ? (
@@ -345,11 +345,11 @@ export function AccountPage() {
   const [notice, setNotice] = useState('')
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   return (
-    <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
+    <div className="studio-page-container flex max-w-[1320px] flex-col gap-7">
       <PageHeader eyebrow="账户" title="账户与套餐" description="管理个人信息、安全、积分和消费记录。" actions={rechargeEnabled ? <div className="flex flex-wrap gap-2"><Link href="/credits?returnTo=%2Faccount" className="inline-flex h-9 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted"><CircleDollarSign className="size-4" />购买积分</Link><Link href="/plans?returnTo=%2Faccount" className="inline-flex h-9 items-center gap-2 rounded-lg border border-foreground bg-foreground px-3 text-sm font-medium text-background shadow-[var(--lg-shadow-2)] transition-opacity duration-150 hover:opacity-90"><CircleDollarSign className="size-4" />购买套餐</Link></div> : undefined} />
       <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* 账户分区导航：桌面为纵向列表，移动端横向滚动；选中态与侧栏导航保持同一语言。 */}
-        <nav className="flex gap-1 overflow-x-auto lg:flex-col" data-mobile-scroll aria-label="账户分区">
+        <nav className="studio-account-nav flex gap-1 overflow-x-auto lg:flex-col" data-mobile-scroll aria-label="账户分区">
           {[{ id: 'profile', label: '资料与安全', icon: UserRound }, { id: 'credits', label: '积分与消费', icon: CircleDollarSign }, { id: 'orders', label: '订单记录', icon: Package }, { id: 'invite', label: '邀请好友', icon: Users }].map(({ id, label, icon: Icon }) => (
             <button
               type="button"
@@ -470,7 +470,10 @@ function ProfilePanel({ state, onNotice }: { state: ReturnType<typeof useStudio>
           action={connected ? <ControlButton variant="secondary" size="sm" onClick={() => setEditing((value) => !value)} disabled={busy}><Pencil className="size-3.5" />{editing ? '取消编辑' : '编辑'}</ControlButton> : <Link href="/login?next=/account" className="text-xs underline">前往登录</Link>}
         />
         <div className="mt-5 flex items-center gap-4">
-          <img src={state.user.avatar} alt={state.user.name} className="size-16 rounded-full object-cover" />
+          <span aria-hidden="true" className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-studio-accent/15 bg-studio-accent/8 text-xl font-semibold text-studio-accent">
+            {state.user.name.slice(0, 2).toUpperCase()}
+            {state.user.avatar && <img src={state.user.avatar} alt="" className="absolute inset-0 size-full object-cover" onError={(event) => { event.currentTarget.hidden = true }} />}
+          </span>
           <div>
             <p className="text-base font-semibold text-foreground">{connected ? state.user.name : '未登录'}</p>
             <p className="mt-1 text-sm text-muted-foreground">{connected ? (state.user.email || '未设置邮箱') : '登录后显示账户邮箱'}</p>
@@ -843,7 +846,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
+    <div className="studio-settings-page studio-page-container flex max-w-[1200px] flex-col gap-7">
       <PageHeader eyebrow="偏好设置" title="设置" description="选择默认模型，管理存储空间与账户偏好。" />
       <AccountModelDefaults key={state.user.id} />
       <StorageUsageLink detail />
@@ -868,11 +871,11 @@ export function SettingsPage() {
         </div>
       </div>
       <div className="studio-surface p-5">
-        <SectionHeading title="界面质感" description="当前统一使用液态玻璃结构，导航、浮层与创作输入区保持同一套透光层级。" />
-        <div className="mt-4 flex items-center gap-3 border-t border-border pt-4 text-sm">
-          <span className="size-3 rounded-full bg-studio-accent shadow-[0_0_0_5px_color-mix(in_srgb,var(--studio-accent)_14%,transparent)]" aria-hidden="true" />
-          <span className="font-medium text-foreground">液态玻璃</span>
-          <span className="text-xs text-muted-foreground">已固定为当前界面风格</span>
+        <SectionHeading title="界面设计" description="页面使用清晰的实色表面与统一控件，轻量动效尊重系统的减少动态效果偏好。" />
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-4 text-sm">
+          <span className="size-2 rounded-full bg-studio-accent" aria-hidden="true" />
+          <span className="font-medium text-foreground">统一的创作工作台</span>
+          <span className="text-xs text-muted-foreground">实色表面 · 轻量动效 · 明暗主题</span>
         </div>
       </div>
       {notice && <Notice tone={noticeTone === 'success' ? 'accent' : 'warning'}>{noticeTone === 'success' && <Check className="mt-0.5 size-3.5 shrink-0" />}{notice}</Notice>}

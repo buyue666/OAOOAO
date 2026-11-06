@@ -25,11 +25,11 @@ export function HomePage() {
   const [brief, setBrief] = useState('')
 
   return (
-    <div className="studio-home mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-16 pt-7 sm:px-6 lg:px-8 lg:pt-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="studio-home studio-page-container flex max-w-[1280px] flex-col gap-8">
+      <header className="studio-home-heading flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground">{brand.title} {tx(" · 创作空间")}</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">{tx("今天，做点什么？")}</h1>
+          <p className="studio-eyebrow">{brand.title} {tx(" · 创作空间")}</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.025em] text-foreground sm:text-4xl">{tx("今天，做点什么？")}</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">{tx("从一张图开始，或把一个想法发展成完整作品。")}</p>
         </div>
         <Link href="/works" className="inline-flex items-center gap-2 rounded-md py-2 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
@@ -90,11 +90,14 @@ export function HomePage() {
 function QuickEntry({ href, title, description, details, icon: Icon }: { href: string; title: string; description: string; details: string; icon: LucideIcon }) {
   const tx = useUiText()
   return (
-    <Link href={href} className="studio-home-entry group flex min-h-44 flex-col rounded-xl border p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-      <span className="flex items-center justify-between"><span className="studio-home-entry-icon flex size-10 items-center justify-center rounded-xl"><Icon className="size-5" aria-hidden="true" /></span><ArrowRight className="size-4 text-muted-foreground motion-safe:transition-transform motion-safe:group-hover:translate-x-1" aria-hidden="true" /></span>
-      <span className="mt-5 text-base font-semibold">{title}</span>
-      <span className="mt-1 text-sm text-muted-foreground">{description}</span>
-      <span className="mt-4 text-xs leading-5 text-muted-foreground">{tx(details)}</span>
+    <Link href={href} className="studio-home-entry group flex min-h-48 overflow-hidden rounded-lg border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+      <span className="flex min-w-0 flex-1 flex-col p-5">
+        <span className="flex items-center justify-between gap-3"><span className="studio-home-entry-icon flex size-9 items-center justify-center rounded-lg"><Icon className="size-[18px]" aria-hidden="true" /></span><ArrowRight className="size-4 text-muted-foreground motion-safe:transition-transform motion-safe:group-hover:translate-x-1" aria-hidden="true" /></span>
+        <span className="mt-4 text-base font-semibold">{title}</span>
+        <span className="mt-1 text-sm leading-6 text-muted-foreground">{description}</span>
+        <span className="mt-3 text-[11px] leading-5 text-muted-foreground">{tx(details)}</span>
+      </span>
+      <span className="relative w-[29%] shrink-0 overflow-hidden border-l border-border bg-muted"><img src={href === '/image' ? '/media/generated/landing-image-v1.png' : '/media/generated/landing-video-v1.png'} alt="" loading="lazy" decoding="async" className="absolute inset-0 size-full object-cover motion-safe:transition-transform motion-safe:duration-300 motion-safe:group-hover:scale-105" /></span>
     </Link>
   )
 }

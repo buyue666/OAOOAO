@@ -25,7 +25,7 @@ function SidebarContent() {
       data-collapsed={collapsed ? 'true' : 'false'}
       className={cn(
         'studio-sidebar fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r transition-[width] duration-200 ease-out lg:flex',
-        collapsed ? 'w-16' : 'w-56',
+        collapsed ? 'w-16' : 'w-60',
       )}
     >
       <div className={cn('flex h-14 shrink-0 items-center', collapsed ? 'justify-center px-3' : 'justify-between px-3')}>
@@ -49,9 +49,12 @@ function SidebarContent() {
         </button>
       </div>
 
-      <nav aria-label={tx("主导航")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto border-t border-sidebar-border p-2 pt-3">
-        {studioPrimaryNav.map((item) => (
-          <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
+      <nav aria-label={tx("主导航")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3 pt-5">
+        {!collapsed && <p className="mb-2 px-3 text-[10px] font-medium tracking-[0.08em] text-muted-foreground">{tx('创作工作台')}</p>}
+        {studioPrimaryNav.map((item, index) => (
+          <div key={item.href} className={index === 4 ? 'mt-4 border-t border-sidebar-border pt-4' : undefined}>
+            <StudioNavLink item={item} pathname={pathname} collapsed={collapsed} />
+          </div>
         ))}
       </nav>
 

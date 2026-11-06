@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { ControlButton, EmptyState, Modal, type Tone } from './ui'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 
 /* ------------------------------ 状态与错误 ------------------------------ */
 
@@ -37,7 +38,7 @@ export function AdminLoading({ label = '正在加载', rows = 4 }: { label?: str
     <div className="studio-surface overflow-hidden" role="status" aria-live="polite">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" />{label}</div>
       <div className="divide-y divide-border">
-        {Array.from({ length: rows }).map((_, index) => <div key={index} className="flex items-center gap-3 px-4 py-3.5"><span className="h-3 w-28 animate-pulse rounded bg-muted" /><span className="h-3 w-40 animate-pulse rounded bg-muted" /><span className="ml-auto h-3 w-16 animate-pulse rounded bg-muted" /></div>)}
+        {Array.from({ length: rows }).map((_, index) => <div key={index} className="flex items-center gap-3 px-4 py-4"><Skeleton className="h-3 w-28 motion-reduce:animate-none" /><Skeleton className="h-3 w-40 motion-reduce:animate-none" /><Skeleton className="ml-auto h-3 w-16 motion-reduce:animate-none" /></div>)}
       </div>
     </div>
   )
@@ -73,7 +74,7 @@ export function AdminRow({ children, className }: { children: ReactNode; classNa
 }
 
 export function AdminCell({ children, className, colSpan }: { children: ReactNode; className?: string; colSpan?: number }) {
-  return <td colSpan={colSpan} className={cn('px-4 py-3', className)}>{children}</td>
+  return <td colSpan={colSpan} className={cn('px-4 py-4 text-[13px] leading-5', className)}>{children}</td>
 }
 
 export function TableMessageRow({ colSpan, loading, empty, error }: { colSpan: number; loading: boolean; empty: string; error?: string }) {
@@ -143,7 +144,7 @@ export function useConfirm() {
   return { confirm, dialog, busy }
 }
 
-/* ------------------------- 主从布局：详情停靠与抽屉 ------------------------- */
+/* ------------------------- 主从布局：��情停靠与抽屉 ------------------------- */
 
 /**
  * 桌面端（≥1280px）详情面板停靠在主从布局右侧，列表与详情同时可见；
@@ -423,7 +424,7 @@ export function AdminKpiStrip({ label, items }: { label: string; items: AdminKpi
       {items.map((item) => (
         <div key={item.label} className="flex min-w-0 flex-col gap-2 bg-card p-4">
           <dt className="text-xs text-muted-foreground">{item.label}</dt>
-          <dd className={cn('text-xl font-semibold tabular-nums tracking-tight', item.tone === 'success' && 'text-success', item.tone === 'danger' && 'text-destructive', item.tone === 'warning' && 'text-studio-warn')}>{item.value}</dd>
+          <dd className={cn('text-2xl font-semibold tabular-nums tracking-tight', item.tone === 'success' && 'text-success', item.tone === 'danger' && 'text-destructive', item.tone === 'warning' && 'text-studio-warn')}>{item.value}</dd>
           {item.detail && <dd className="truncate text-xs text-muted-foreground" title={item.detail}>{item.detail}</dd>}
         </div>
       ))}

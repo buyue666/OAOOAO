@@ -31,7 +31,7 @@ export function CanvasIndexPage({ projects, loadError }: { projects: CanvasSumma
   }
 
   return (
-    <main className="h-full min-h-0 overflow-y-auto bg-black text-white">
+    <main className="studio-canvas-library h-full min-h-0 overflow-y-auto bg-studio-ink text-studio-ink-foreground">
       <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
         <nav aria-label="画布导航" className="flex items-center gap-5 text-sm text-neutral-300">
           <Link href="/studio" className="inline-flex items-center gap-2 rounded-lg hover:text-white"><ArrowLeft className="size-4" aria-hidden="true" />返回创作首页</Link>
@@ -40,7 +40,8 @@ export function CanvasIndexPage({ projects, loadError }: { projects: CanvasSumma
         <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
           <div>
             <p className="text-[11px] tracking-[0.2em] text-neutral-500 uppercase">自由画布</p>
-            <h1 className="mt-2 text-2xl font-semibold">我的画布</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.025em]">我的画布</h1>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-studio-ink-muted">把参考、想法与生成结果放在一起，从任意节点继续创作。</p>
           </div>
           <button
             type="button"
@@ -123,7 +124,7 @@ function CanvasCard({ project, onChanged }: { project: CanvasSummary; onChanged:
   }
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/12 bg-neutral-950 transition-colors hover:border-white/35">
+    <article className="flex h-full flex-col overflow-hidden rounded-lg border border-white/12 bg-neutral-950 transition-colors hover:border-white/35">
       <Link href={`/canvas/${project.id}`} aria-label={`打开画布 ${project.title}`} className="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white">
         <div className="flex aspect-[16/9] items-center justify-center overflow-hidden bg-black" style={project.cover?.kind === 'image' ? undefined : DOT_GRID}>
           {project.cover?.kind === 'image' ? (

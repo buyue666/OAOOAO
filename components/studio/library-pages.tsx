@@ -173,7 +173,7 @@ export function AssetsPage() {
    * 真实上传。
    *
    * 流程：文件 → `/api/reference-assets`（persistent）→ 拿到服务器 key + url
-   * → 登记到 `/api/library-assets`。两步都必须成功才算上传完成；
+   * → 登记到 `/api/library-assets`。两步都必须成功才��上传完成；
    * 任一步失败都如实报错，绝不显示成「已上传」。
    */
   function uploadKind(file: File): 'image' | 'video' | 'audio' | null {
@@ -373,18 +373,15 @@ export function AssetsPage() {
   const deleteAssetView = mergedAssets.find((asset) => asset.id === deleteId)
 
   return (
-    <div data-asset-library className="mx-auto w-full max-w-[1720px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 xl:px-10" onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setUploadOpen(true); setDragActive(true) } }}>
+    <div data-asset-library className="studio-page-container max-w-[1600px]" onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setUploadOpen(true); setDragActive(true) } }}>
       <input ref={fileRef} type="file" tabIndex={-1} multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/ogg,audio/mp4" className="sr-only" aria-label={tx('选择上传文件')} onChange={onFiles} disabled={uploading} />
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3.5">
-          <span className="mt-0.5 flex size-11 shrink-0 items-center justify-center rounded-xl bg-studio-accent/8 text-studio-accent"><AssetIcons.Collection className="size-7" /></span>
-          <div className="min-w-0">
-          <div className="flex items-center gap-3"><h1 className="text-2xl font-semibold tracking-tight text-foreground">{tx('创作资产')}</h1><span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] tabular-nums text-muted-foreground">{tx('已载入 {0} 项', [mergedAssets.length])}</span></div>
-          <p className="mt-2 text-sm text-muted-foreground">{tx('整理灵感素材，让每一次创作都有迹可循。')}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2"><Link href="/works" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><AssetIcons.History className="size-[18px]" />{tx('生成记录')}</Link><ControlButton variant="primary" className="min-h-11 rounded-xl px-4" disabled={uploading} onClick={() => { setNotice(''); setUploadOpen(true) }}><Upload className="size-[18px]" />{tx(uploading ? '上传中…' : '上传素材')}</ControlButton></div>
-      </header>
+      <div className="mb-7">
+        <PageHeader eyebrow={tx('工作空间')} title={tx('创作资产')} description={tx('整理灵感素材，让每一次创作都有迹可循。')} actions={<>
+          <span className="hidden text-xs tabular-nums text-muted-foreground xl:inline">{tx('已载入 {0} 项', [mergedAssets.length])}</span>
+          <Link href="/works" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><AssetIcons.History className="size-4" aria-hidden="true" />{tx('生成记录')}</Link>
+          <ControlButton variant="primary" size="lg" disabled={uploading} onClick={() => { setNotice(''); setUploadOpen(true) }}><Upload className="size-4" aria-hidden="true" />{tx(uploading ? '上传中…' : '上传素材')}</ControlButton>
+        </>} />
+      </div>
       <div className="grid min-w-0 gap-5 lg:grid-cols-[184px_minmax(0,1fr)] lg:gap-7 xl:grid-cols-[200px_minmax(0,1fr)] xl:gap-8">
         <AssetLibraryNavigation assets={mergedAssets} media={mediaFilter} category={categoryFilter} onMediaChange={setMediaFilter} onCategoryChange={setCategoryFilter} />
         <section className="min-w-0" aria-label={tx('素材列表')}>
@@ -431,7 +428,7 @@ export function AssetsPage() {
         )}
       >
         <Notice tone="warning">
-          将删除所选文件、对应素材库记录及生成记录中的结果文件，删除后无法恢复。项目、历史版本或进行中任务仍在使用的文件会保留并说明原因；实际清理成功后释放容量。
+          将删除所选文件、对应素材库记录及生成记录中的结果文件���删除后无法恢复。项目、历史版本或进行中任务仍在使用的文件会保留并说明原因；实际清理成功后释放容量。
         </Notice>
       </AssetLibraryModal>
       <AssetLibraryModal
@@ -448,7 +445,7 @@ export function AssetsPage() {
       >
         <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
           名称
-          <input autoFocus value={renameTitle} maxLength={250} onChange={(event) => setRenameTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void renameAsset() } }} className="studio-field w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
+          <input autoFocus value={renameTitle} maxLength={250} onChange={(event) => setRenameTitle(event.target.value)} onKeyDown={(event) => { if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return; if (event.key === 'Enter') { event.preventDefault(); void renameAsset() } }} className="studio-field w-full border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" />
         </label>
         <label className="mt-3 flex flex-col gap-1.5 text-xs text-muted-foreground">
           素材分类

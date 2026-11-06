@@ -4,8 +4,11 @@ import { useUiText } from '@/lib/studio/i18n'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import {
+  Bot,
   ChevronDown,
   FolderOpen,
+  Image as ImageIcon,
+  Video,
   History,
   LayoutGrid,
   Library,
@@ -33,7 +36,10 @@ export interface StudioToolNavItem extends StudioNavItem {
 }
 
 export const studioPrimaryNav: readonly StudioNavItem[] = [
-  { label: '开始创作', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent', '/image', '/video'] },
+  { label: '开始创作', href: '/studio', icon: LayoutGrid, matches: ['/studio'] },
+  { label: '图片生成', href: '/image', icon: ImageIcon, matches: ['/image'] },
+  { label: '视频生成', href: '/video', icon: Video, matches: ['/video'] },
+  { label: '创作助手', href: '/agent', icon: Bot, matches: ['/agent'] },
   { label: '我的项目', href: '/projects', icon: FolderOpen, matches: ['/projects', '/drama', '/canvas'] },
   { label: '创作资产', href: '/assets', icon: Library, matches: ['/assets'] },
 ]

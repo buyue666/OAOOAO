@@ -92,7 +92,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
         transform / contain���ǻ���ڲ��� fixed ������sticky ������ portal ����
         �����µİ����飬���²˵��������빤����ʾ��λ��
       */}
-      <div className={cn('relative z-10 min-h-dvh transition-[padding] duration-200 ease-out', state.sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-56')}>
+      <div className={cn('relative z-10 min-h-dvh transition-[padding] duration-200 ease-out', state.sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-60')}>
         <Topbar onMenuClick={() => setMobileNavOpen(true)} />
         <main className="min-h-[calc(100dvh-60px)]">
           {/* ·���л�ʱ������΢���벢���ƣ��������ۼƲ���ƫ�� */}

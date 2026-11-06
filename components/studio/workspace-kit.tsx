@@ -49,6 +49,8 @@ export function WorkspaceShell({
   creditsPending = false,
   submitDisabled,
   notice,
+  title = '生成工作台',
+  description,
   paramsTitle = '创作参数',
   paramsHint,
   submitHint,
@@ -62,6 +64,8 @@ export function WorkspaceShell({
   creditsPending?: boolean
   submitDisabled?: boolean
   notice?: ReactNode
+  title?: string
+  description?: string
   paramsTitle?: string
   paramsHint?: string
   submitHint?: string
@@ -88,14 +92,18 @@ export function WorkspaceShell({
   const displayedCredits = creditsPending ? tx('待估算') : tx('{0} 积分', [credits])
 
   return (
-    <form onSubmit={onSubmit} data-panel-position={dock} data-panel-minimized={minimized} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && dock === 'fullscreen') { event.preventDefault(); movePanel(previousDock.current) } }} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-4 px-4 pt-5 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-5 md:gap-5 md:px-8 md:pt-6 xl:h-[calc(100dvh-60px)] xl:overflow-hidden xl:px-10 xl:pb-6">
-      <div className="workspace-layout-grid relative grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+    <form onSubmit={onSubmit} data-panel-position={dock} data-panel-minimized={minimized} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && dock === 'fullscreen') { event.preventDefault(); movePanel(previousDock.current) } }} className="studio-workspace-shell mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-4 pt-5 pb-[calc(7rem+env(safe-area-inset-bottom))] sm:px-5 md:h-[calc(100dvh-56px)] md:overflow-hidden md:px-6 md:py-6 xl:px-8">
+      <header className="workspace-heading flex shrink-0 flex-wrap items-end justify-between gap-3" data-workspace-ready>
+        <div><p className="studio-eyebrow mb-2">{tx('创作工具')}</p><h1 className="text-xl font-semibold tracking-[-0.025em]">{tx(title)}</h1></div>
+        {description && <p className="max-w-md text-xs leading-5 text-muted-foreground">{tx(description)}</p>}
+      </header>
+      <div className="workspace-layout-grid relative grid min-h-0 flex-1 gap-5 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="workspace-params-panel order-1 min-h-0 min-w-0">
-          <button type="button" onClick={() => setParamsOpen((value) => !value)} aria-expanded={paramsOpen} aria-controls={paramsId} className="studio-surface flex min-h-12 w-full items-center justify-between gap-3 px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 xl:hidden">
+          <button type="button" onClick={() => setParamsOpen((value) => !value)} aria-expanded={paramsOpen} aria-controls={paramsId} className="studio-surface flex min-h-12 w-full items-center justify-between gap-3 px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 md:hidden">
             <span>{tx(paramsTitle)}<span className="ml-2 text-xs font-normal text-muted-foreground">{paramsOpen ? tx('收起设置') : tx('展开开始创作')}</span></span>
             <ChevronDown className={cn('size-4 shrink-0 transition-transform', paramsOpen && 'rotate-180')} aria-hidden="true" />
           </button>
-          <div id={paramsId} className={cn('workspace-params-glass mt-3 h-full min-h-0 flex-col xl:mt-0 xl:flex', paramsOpen ? 'flex' : 'hidden')}>
+          <div id={paramsId} className={cn('workspace-params-glass mt-3 h-full min-h-0 flex-col md:mt-0 md:flex', paramsOpen ? 'flex' : 'hidden')}>
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
               <h2 className="text-xs font-semibold text-foreground" title={paramsHint}>{tx(paramsTitle)}</h2>
               <div className="flex items-center gap-1">
@@ -107,7 +115,7 @@ export function WorkspaceShell({
               </div>
             </div>
             <div id={`${paramsId}-body`} className="workspace-params-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4" hidden={minimized}><div className="workspace-params-content">{params}</div></div>
-            <div className={cn('workspace-desktop-submit hidden shrink-0 border-t border-border px-4 py-3 xl:block', minimized && 'workspace-submit-hidden')}>
+            <div className={cn('workspace-desktop-submit hidden shrink-0 border-t border-border px-4 py-3 md:block', minimized && 'workspace-submit-hidden')}>
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-muted-foreground">{tx("预计消耗")}</span>
                 <span className="font-semibold tabular-nums text-studio-accent" aria-live="polite">{displayedCredits}</span>
@@ -120,7 +128,7 @@ export function WorkspaceShell({
           </div>
         </aside>
 
-        <section className="workspace-results-panel order-2 min-h-0 min-w-0 overscroll-contain xl:overflow-y-auto xl:pr-1" inert={dock === 'fullscreen' && !minimized}>
+        <section className="workspace-results-panel order-2 min-h-0 min-w-0 overscroll-contain md:overflow-y-auto md:pr-1" inert={dock === 'fullscreen' && !minimized}>
           {stageToolbar}
           {stage}
           {notice}
@@ -129,7 +137,7 @@ export function WorkspaceShell({
       </div>
 
       {/* 移动端吸底提交条：玻璃表面，始终可操作。 */}
-      <div className="workspace-submit-bar fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 xl:hidden">
+      <div className="workspace-submit-bar fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,.12)] sm:px-5 md:hidden">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] text-muted-foreground">{tx("预计消耗")}</p>
           <p className="text-sm font-semibold tabular-nums text-studio-accent" aria-live="polite">{displayedCredits}</p>
@@ -199,8 +207,16 @@ export function OptionGrid({
 }) {
   const tx = useUiText()
   return (
-    <div className={cn('grid gap-1.5', columns === 3 ? 'grid-cols-3' : 'grid-cols-2')} role="radiogroup" aria-label={label}>
-      {options.map((option) => {
+    <div className={cn('grid gap-1.5', columns === 3 ? 'grid-cols-3' : 'grid-cols-2')} role="radiogroup" aria-label={label} onKeyDown={(event) => {
+      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || !options.length) return
+      const current = Math.max(0, options.findIndex((option) => option.value === value))
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : ['ArrowRight', 'ArrowDown'].includes(event.key) ? (current + 1) % options.length : ['ArrowLeft', 'ArrowUp'].includes(event.key) ? (current - 1 + options.length) % options.length : null
+      if (next === null) return
+      event.preventDefault()
+      onChange(options[next].value)
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus()
+    }}>
+      {options.map((option, index) => {
         const selected = option.value === value
         return (
           <button
@@ -208,6 +224,7 @@ export function OptionGrid({
             type="button"
             role="radio"
             aria-checked={selected}
+            tabIndex={selected || (index === 0 && !options.some((item) => item.value === value)) ? 0 : -1}
             onClick={() => onChange(option.value)}
             className={cn(
               'flex min-h-9 min-w-0 flex-col items-start justify-center gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60',
@@ -617,7 +634,7 @@ export function ReferencePicker({
    * 现在：
    *  - 非空 → 交给 `onSearch`（由调用方驱动服务端 keyword 查询）；
    *  - 空   → `onSearch('')` 恢复完整列表；
-   *  - 两者都重置本地分页游标，避免停在上一次的「加载更多」位置。
+   *  - ��者都重置本地分页游标，避免停在上一次的「加载更多」位置。
    */
   const submitSearch = (value: string) => {
     const next = value.trim()
@@ -803,11 +820,11 @@ export function ResultStage({
         <SegmentedControl value={view} onChange={onViewChange} options={viewOptions} />
       </div>
 
-      <div className="relative overflow-hidden rounded-xl border border-border bg-muted/30 p-2 shadow-sm sm:p-3">
+      <div className="workspace-stage-frame relative overflow-hidden rounded-lg border border-border bg-card p-2 sm:p-3">
         <div className="relative h-[clamp(240px,48dvh,560px)] min-w-0 sm:h-[clamp(280px,52dvh,580px)]" data-testid="result-stage-viewport" aria-busy={active || undefined}>
           {!showContent && !active && status !== 'failed' ? (
-            <div className="flex size-full flex-col items-center justify-center rounded-lg border border-dashed border-border px-5 text-center" role="status">
-              <span className="mb-5 flex size-14 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground shadow-sm"><ImageIcon className="size-6" aria-hidden="true" /></span>
+            <div className="workspace-stage-empty flex size-full flex-col items-center justify-center rounded-md bg-background/70 px-5 text-center" role="status">
+              <span className="mb-5 flex size-14 items-center justify-center rounded-lg border border-border bg-card text-studio-accent"><ImageIcon className="size-6" aria-hidden="true" /></span>
               <p className="text-sm font-medium text-foreground">{tx("让灵感在这里成形")}</p>
               <p className="mt-2 max-w-72 text-xs leading-6 text-muted-foreground">{tx(emptyHint)}</p>
               <div className="mt-6 flex items-center gap-2 text-[10px] text-muted-foreground" aria-hidden="true"><span className="rounded-full border border-border px-2 py-1">{tx("01 描述创意")}</span><span>→</span><span className="rounded-full border border-border px-2 py-1">{tx("02 设置参数")}</span><span>→</span><span className="rounded-full border border-border px-2 py-1">{tx("03 生成")}</span></div>

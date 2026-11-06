@@ -9,7 +9,7 @@ import { resolveLinkedDramaProjectId } from '@/lib/studio/drama-link'
 import { useStudio } from '@/lib/studio/store'
 import { cn } from '@/lib/utils'
 import { CreativeProjectStarter } from './creative-project-starter'
-import { MediaThumb } from './ui'
+import { ControlButton, MediaThumb, PageHeader } from './ui'
 
 type ProjectRow = {
   id: string
@@ -100,18 +100,15 @@ export function CreativeProjectsPage() {
   const hasErrors = current && snapshot.errors.length > 0
 
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 pb-16 pt-7 sm:px-6 lg:px-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div><p className="text-xs font-medium text-muted-foreground">创作空间</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">我的项目</h1><p className="mt-2 text-sm leading-6 text-muted-foreground">让提纲、参考与镜头留在一起，随时接着创作。</p></div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/canvas" className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"><PanelsTopLeft className="size-4" aria-hidden="true" />画布管理</Link>
-          <button type="button" aria-expanded={createOpen} aria-controls="creative-project-create" onClick={() => setCreateOpen((value) => !value)} className="inline-flex min-h-10 items-center gap-2 rounded-md bg-foreground px-4 text-sm font-medium text-background hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">{createOpen ? <X className="size-4" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}{createOpen ? '收起创建' : '新建作品项目'}</button>
-        </div>
-      </header>
+    <div className="studio-page-container flex flex-col gap-7">
+      <PageHeader eyebrow="创作空间" title="我的项目" description="让提纲、参考与镜头留在一起，随时接着创作。" actions={<>
+        <Link href="/canvas" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"><PanelsTopLeft className="size-4" aria-hidden="true" />画布管理</Link>
+        <ControlButton size="lg" variant="primary" aria-expanded={createOpen} aria-controls="creative-project-create" onClick={() => setCreateOpen((value) => !value)}>{createOpen ? <X className="size-4" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}{createOpen ? '收起创建' : '新建作品项目'}</ControlButton>
+      </>} />
 
       <section id="creative-project-create" hidden={!createOpen} className="studio-surface"><CreativeProjectStarter /></section>
 
-      <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="studio-filter-bar flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div role="group" aria-label="项目类型" className="flex flex-wrap gap-1">{filters.map((item) => <button key={item.value} type="button" aria-pressed={filter === item.value} onClick={() => setFilter(item.value)} className={cn('min-h-9 rounded-md px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70', filter === item.value ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/50')}>{item.label}</button>)}</div>
         <div className="flex items-center gap-2"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-3"><Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><input aria-label="搜索项目名称" placeholder="搜索项目名称" value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 min-w-0 w-full bg-transparent text-sm outline-none sm:w-52" /></label><button type="button" disabled={loading} aria-label="刷新项目列表" onClick={() => { if (!connected) void refreshSession(); setRevision((value) => value + 1) }} className="flex size-10 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-50"><RefreshCw className={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" /></button></div>
       </div>
@@ -124,7 +121,7 @@ export function CreativeProjectsPage() {
         <ul aria-label="项目列表" className="grid gap-4 min-[480px]:grid-cols-2 xl:grid-cols-3">
           {visible.map((project) => {
             const Icon = project.kind === 'creative' ? Clapperboard : PanelsTopLeft
-            return <li key={`${project.kind}-${project.id}`} className="studio-surface min-w-0 overflow-hidden"><Link href={project.href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"><MediaThumb src={project.cover?.url} kind={project.cover?.kind} alt="" fallback={project.title} loading="lazy" className="aspect-[16/10] w-full" /><span className="flex flex-col gap-3 p-4"><span className="flex items-center justify-between gap-3"><span className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs text-muted-foreground"><Icon className="size-3.5" aria-hidden="true" />{project.kind === 'creative' ? '创作项目' : '自由画布'}</span><ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></span><span className="truncate text-base font-semibold">{project.title}</span><span className="text-xs text-muted-foreground">{updatedLabel(project.updatedAt)}</span></span></Link>{project.canvases.length > 0 && <details className="border-t border-border px-4 py-3"><summary className="cursor-pointer text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">关联画布 · {project.canvases.length}</summary><ul className="mt-2 flex flex-col gap-1">{project.canvases.map((canvas) => <li key={canvas.id}><Link href={`/canvas/${encodeURIComponent(canvas.id)}`} className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"><PanelsTopLeft className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="truncate">{canvas.title}</span></Link></li>)}</ul></details>}</li>
+            return <li key={`${project.kind}-${project.id}`} className="studio-surface studio-collection-card min-w-0 overflow-hidden"><Link href={project.href} className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"><MediaThumb src={project.cover?.url} kind={project.cover?.kind} alt="" fallback={project.title} loading="lazy" className="aspect-[16/10] w-full" /><span className="flex flex-col gap-3 p-4"><span className="flex items-center justify-between gap-3"><span className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs text-muted-foreground"><Icon className="size-3.5" aria-hidden="true" />{project.kind === 'creative' ? '创作项目' : '自由画布'}</span><ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" /></span><span className="truncate text-base font-semibold">{project.title}</span><span className="text-xs text-muted-foreground">{updatedLabel(project.updatedAt)}</span></span></Link>{project.canvases.length > 0 && <details className="border-t border-border px-4 py-3"><summary className="cursor-pointer text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">关联画布 · {project.canvases.length}</summary><ul className="mt-2 flex flex-col gap-1">{project.canvases.map((canvas) => <li key={canvas.id}><Link href={`/canvas/${encodeURIComponent(canvas.id)}`} className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"><PanelsTopLeft className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="truncate">{canvas.title}</span></Link></li>)}</ul></details>}</li>
           })}
         </ul>
       ) : !hasErrors && (

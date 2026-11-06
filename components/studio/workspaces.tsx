@@ -775,7 +775,7 @@ export function ImageWorkspace() {
    *      → 回落到演示素材会凭空冒出 8 张本地图，让人以为「搜索没生效」；
    *   c) 正在按新关键词重新加载 → 此时**必须保留服务端来源**，不能切回演示素材。
    *
-   * 实测踩到两处：(b) 搜索不存在的关键词后仍旧显示 8 条；
+   * 实测踩到两处：(b) 搜索不存在的关键词后��旧显示 8 条；
    * (c) 搜索触发的 loading 窗口里切回演示素材，
    *     导致归属校验池瞬间不含已选素材，**把用户的已选清空了**。
    *
@@ -930,7 +930,7 @@ export function ImageWorkspace() {
       void serverLibrary.reload()
       void serverWorksResult.reload()
       /**
-       * 组合结果**应用前**重新核对批次：刷新期间新选的素材由更新的批次负责，
+       * 组合结���**应用前**重新核对批次：刷新期间新选的素材由更新的批次负责，
        * 本批次不得据此判定删除（否则新选择会被误删）。
        */
       applyEvidence(batch, libraryEvidence, workEvidence)
@@ -1220,7 +1220,7 @@ export function ImageWorkspace() {
    * 切换某个候选素材的已选状态（图片工作台）。
    *
    * 传入**完整候选对象**而不是 id：选中时就把地址快照下来，
-   * 之后搜索/分页/空结果都不再影响已选（这是本轮缺陷的修复要点）。
+   * 之后搜索/分页/空结果都不再影响已选���这是本轮缺陷的修复要点）。
    * `toggleSelection` 同时负责去重与按上限截断。
    */
   function toggleReference(asset: Asset) {
@@ -1486,6 +1486,8 @@ export function ImageWorkspace() {
         credits={credits}
         submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
         submitHint={submitBlock || (!prompt.trim() ? tx('先写下你想生成的画面。') : undefined)}
+        title={tx('图片生成')}
+        description={tx('从一句描述、一张参考，开始你的视觉探索。')}
         paramsTitle={tx("图片参数")}
         paramsHint={model ? tx("{0} · {1} 张", [model.shortName, count]) : tx('暂无可用模型')}
       />
@@ -1937,7 +1939,7 @@ export function VideoWorkspace() {
      *
      * 反查的写法会让"当前搜索结果里没有的已选素材"解析失败并被静默丢弃
      * （本轮缺陷：选 A → 搜索 B → 提交时 A 不见了）。
-     * 各角色的 type 由素材自身类型决定（视频素材作为源视频、图片作为帧/参考）。
+     * 各角色的 type 由素材自身类型决定（视频素材作为源视频、图片作为���/参考）。
      */
     const asReference = (
       item: SelectedReference,
@@ -2279,6 +2281,8 @@ export function VideoWorkspace() {
         creditsPending={Boolean(videoPolicy && quoteBlock)}
         submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
         submitHint={submitBlock || (!prompt.trim() ? tx('先描述主体动作与镜头运动。') : undefined)}
+        title={tx('视频生成')}
+        description={tx('让画面拥有时间、运动与镜头语言。')}
         paramsTitle={tx("视频参数")}
         paramsHint={model ? `${model.shortName} · ${duration}` : tx('暂无可用模型')}
       />

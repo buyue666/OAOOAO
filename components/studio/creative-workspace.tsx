@@ -20,6 +20,7 @@ import { DirectorAgent } from './director-agent'
 import { CreativeProjectCanvas } from './creative-project-canvas'
 import { CreativeProjectAssets } from './creative-project-assets'
 import { ControlButton, MediaThumb, PageHeader } from './ui'
+import { cn } from '@/lib/utils'
 
 const tabs = [{ id: 'shots', label: '镜头' }, { id: 'canvas', label: '画布' }, { id: 'assets', label: '主体与参考' }, { id: 'delivery', label: '交付' }] as const
 type View = typeof tabs[number]['id']
@@ -358,14 +359,14 @@ export function CreativeWorkspace({ projectId, initialView }: { projectId: strin
   const generationDisabled = disabled || dirty || Boolean(blockedTask) || orphanTasks.length > 0 || candidateLoading || Boolean(candidateError)
   const missingTaskPointer = episode.shots.some((item) => (['queued', 'running'].includes(item.storyboardStatus ?? '') && !item.storyboardTaskId) || (['queued', 'running'].includes(item.generationStatus ?? '') && !item.generationTaskId))
 
-  return <div className="mx-auto max-w-[1700px] space-y-6 p-4 md:p-8" data-testid="creative-workspace">
+  return <div className="studio-page-container flex max-w-[1600px] flex-col gap-6" data-testid="creative-workspace">
     <Link href="/projects" className="inline-flex items-center gap-2 text-xs text-muted-foreground"><ArrowLeft className="size-3.5" />我的项目</Link>
-    <div className="rounded-2xl border border-cyan-400/15 bg-gradient-to-br from-cyan-500/7 via-transparent to-violet-500/7 p-5 md:p-6"><PageHeader eyebrow="创作项目" title={project.title} description={project.summary || '从参考和镜头开始，逐步完成这件作品。'} actions={<>
+    <div className="min-w-0"><PageHeader eyebrow="创作项目" title={project.title} description={project.summary || '从参考和镜头开始，逐步完成这件作品。'} actions={<>
       <span className="text-xs text-muted-foreground" aria-live="polite">{busy ? '正在处理…' : dirty ? '有未保存修改' : '已保存到项目'}</span>
-      <button type="button" aria-expanded={assistantOpen} aria-controls="project-creative-assistant" onClick={() => { setAssistantVisited(true); setAssistantOpen((value) => !value) }} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-md shadow-violet-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:transition-transform motion-safe:hover:-translate-y-0.5"><Bot className="size-4" aria-hidden="true" />创作助手<ChevronDown className={`size-3.5 motion-safe:transition-transform ${assistantOpen ? 'rotate-180' : ''}`} aria-hidden="true" /></button>
+      <button type="button" aria-expanded={assistantOpen} aria-controls="project-creative-assistant" onClick={() => { setAssistantVisited(true); setAssistantOpen((value) => !value) }} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60"><Bot className="size-4" aria-hidden="true" />创作助手<ChevronDown className={`size-3.5 motion-safe:transition-transform ${assistantOpen ? 'rotate-180' : ''}`} aria-hidden="true" /></button>
       <ControlButton variant="primary" disabled={!dirty || disabled} onClick={() => void action(async () => { await persist(draft); setNotice('项目已保存。') })}><Save className="size-4" />保存修改</ControlButton>
-    </>} /><p className="mt-4 flex items-center gap-2 text-xs leading-5 text-muted-foreground"><Sparkles className="size-3.5 shrink-0 text-violet-500" aria-hidden="true" />助手可结合当前剧本与选中镜头，帮你完善想法、补充信息或准备生成计划。</p></div>
-    <div id="project-creative-assistant" hidden={!assistantOpen}>{assistantVisited && <div className="h-[min(760px,85dvh)] min-h-[480px] overflow-hidden rounded-2xl border border-violet-400/25 bg-card shadow-lg shadow-violet-950/5"><DirectorAgent projectId={project.id} projectContext={dramaAssistantContext(draft, episode, shot, dirty)} /></div>}</div>
+    </>} /><p className="mt-4 flex items-center gap-2 text-xs leading-5 text-muted-foreground"><Sparkles className="size-3.5 shrink-0 text-studio-accent" aria-hidden="true" />助手可结合当前剧本与选中镜头，帮你完善想法、补充信息或准备生成计划。</p></div>
+    <div id="project-creative-assistant" hidden={!assistantOpen}>{assistantVisited && <div className="h-[min(760px,85dvh)] min-h-[480px] overflow-hidden rounded-lg border border-border bg-card shadow-[var(--lg-shadow-1)]"><DirectorAgent projectId={project.id} projectContext={dramaAssistantContext(draft, episode, shot, dirty)} /></div>}</div>
     {error && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">{error}</div>}
     {draftBackupError && <p role="alert" className="text-sm text-destructive">{draftBackupError}</p>}
     {draftBackup && !dirty && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3 text-sm" role="status"><span>{draftBackup.baseUpdatedAt === project.updatedAt ? '找到这个账号在当前标签页中未保存的草稿。' : '找到旧草稿，但服务器项目已经更新。请下载备份后手动合并，避免覆盖新内容。'}</span><ControlButton disabled={busy || waiting || renderingAny || conflict || draftBackup.baseUpdatedAt !== project.updatedAt} onClick={() => {
@@ -389,7 +390,7 @@ export function CreativeWorkspace({ projectId, initialView }: { projectId: strin
       setNotice('已清除没有任务编号的旧状态，没有提交生成。')
     })}>清除无编号状态</ControlButton></div>}
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border">
-      <nav className="flex flex-wrap gap-1" aria-label="项目视图">{tabs.map((tab) => <button type="button" key={tab.id} aria-pressed={view === tab.id} onClick={() => setView(tab.id)} className={`rounded-t-lg border-b-2 px-4 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${view === tab.id ? 'border-cyan-500 bg-cyan-500/7 text-cyan-700 dark:text-cyan-300' : 'border-transparent text-muted-foreground hover:bg-muted'}`}>{tab.label}</button>)}</nav>
+      <nav className="flex flex-wrap gap-1" aria-label="项目视图">{tabs.map((tab) => <button type="button" key={tab.id} aria-pressed={view === tab.id} onClick={() => setView(tab.id)} className={cn('rounded-t-lg border-b-2 px-4 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', view === tab.id ? 'border-studio-accent bg-studio-accent/5 font-medium text-studio-accent' : 'border-transparent text-muted-foreground hover:bg-muted')}>{tab.label}</button>)}</nav>
       <label className="flex items-center gap-2 pb-2 text-xs text-muted-foreground">分集<select aria-label="当前分集" className="max-w-52 rounded border border-border bg-background px-2 py-1 text-foreground" value={activeEpisodeId} onChange={(event) => { setEpisodeId(event.target.value); setShotId(''); setPlanOpen(false) }}>{draft.episodes.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
     </div>
     {view === 'assets' ? <CreativeProjectAssets project={draft} disabled={disabled || dirty} onSave={async (next) => { await action(async () => { await persist(next); setNotice('主体与参考已保存。') }, true) }} /> : view === 'delivery' ? <Delivery project={draft} episode={episode} disabled={disabled || dirty} renderAvailable={renderAvailable} renderCheckError={renderCheckError} onRender={() => void action(async () => {
@@ -402,7 +403,7 @@ export function CreativeWorkspace({ projectId, initialView }: { projectId: strin
       if (token !== scopeGeneration.current || account !== identityRef.current || current?.id !== targetProjectId) return
       await persist({ ...current, episodes: current.episodes.map((item) => item.id === targetEpisodeId ? { ...item, renderTask: task } : item) })
       setNotice('成片任务已提交，可在这里查看结果。')
-    })} /> : <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+    })} /> : <div className="grid min-w-0 gap-6 md:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-5">
         {view === 'canvas' ? <CreativeProjectCanvas project={draft} episode={episode} selectedShotId={activeShotId} onSelectShot={(id) => { setShotId(id); setPlanOpen(false) }} /> : <>
           <details className="rounded-xl border border-border bg-card p-4"><summary className="cursor-pointer text-sm font-medium">创作描述与剧本</summary><textarea aria-label="项目剧本" className={`${field} mt-3 min-h-32`} disabled={disabled} value={episode.script} onChange={(event) => { setDraft({ ...draft, episodes: draft.episodes.map((item) => item.id === episode.id ? { ...item, script: event.target.value, scriptRichContent: undefined } : item) }); setDirty(true) }} /></details>
@@ -437,7 +438,7 @@ export function CreativeWorkspace({ projectId, initialView }: { projectId: strin
           })}</div>}
         </section>}
       </div>
-      <aside className="h-fit space-y-4 rounded-xl border border-border bg-card p-5 xl:sticky xl:top-20" aria-label="镜头创作">
+      <aside className="flex h-fit flex-col gap-4 rounded-lg border border-border bg-card p-5 md:sticky md:top-20" aria-label="镜头创作">
         <h2 className="flex items-center gap-2 font-medium"><Sparkles className="size-4" />镜头创作</h2>
         <p className="text-xs text-muted-foreground">{shot ? `当前对象：${shot.title}` : '先添加并选择一个镜头'}</p>
         <div className="grid grid-cols-2 gap-2"><ControlButton variant={kind === 'image' ? 'primary' : 'secondary'} onClick={() => { setKind('image'); setPlanOpen(false) }}><ImageIcon className="size-4" />画面候选</ControlButton><ControlButton variant={kind === 'video' ? 'primary' : 'secondary'} onClick={() => { setKind('video'); setPlanOpen(false) }}><Film className="size-4" />让画面动起来</ControlButton></div>

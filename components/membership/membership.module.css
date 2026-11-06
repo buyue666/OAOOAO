@@ -33,7 +33,7 @@
 .browseGroup button:hover:not([aria-pressed="true"]) { color: #eee; background: #ffffff0a; }
 .previewNotice { margin: 0 auto 22px; text-align: center; color: #b5c5de; font-size: 12px; }
 .planGrid { display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 12px; width: 100%; max-width: min(100%, calc(var(--plan-count, 5) * 280px + (var(--plan-count, 5) - 1) * 12px)); margin-inline: auto; }
-.offerCard { --offer-paper: #11171d; --offer-accent: #5ee3bc; --offer-deep: #143d36; --offer-line: color-mix(in srgb, var(--offer-accent) 42%, #1b2027); display: flex; flex: 1 1 228px; flex-direction: column; min-width: 0; max-width: 280px; overflow-wrap: anywhere; border: 1px solid var(--offer-line); border-radius: 18px; background: radial-gradient(ellipse at 92% 0%, color-mix(in srgb, var(--offer-accent) 17%, transparent), transparent 56%), linear-gradient(155deg, var(--offer-deep), var(--offer-paper) 76%); color: #f5f5f5; color-scheme: dark; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--offer-accent) 20%, transparent); transition: border-color 160ms ease, transform 160ms ease; }
+.offerCard { --offer-paper: #11171d; --offer-accent: #5ee3bc; --offer-deep: #143d36; --offer-line: color-mix(in srgb, var(--offer-accent) 42%, #1b2027); display: flex; flex: 1 1 228px; flex-direction: column; min-width: 0; max-width: 280px; overflow-wrap: anywhere; border: 1px solid var(--offer-line); border-radius: 8px; background: radial-gradient(ellipse at 92% 0%, color-mix(in srgb, var(--offer-accent) 17%, transparent), transparent 56%), linear-gradient(155deg, var(--offer-deep), var(--offer-paper) 76%); color: #f5f5f5; color-scheme: dark; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--offer-accent) 20%, transparent); transition: border-color 160ms ease, transform 160ms ease; }
 .offerCard:hover { border-color: color-mix(in srgb, var(--offer-accent) 70%, #1b2027); transform: translateY(-2px); }
 .offerCard[data-tone="advanced"], .toneSwatch[data-tone="advanced"] { --offer-accent: #8dbaff; --offer-deep: #1c345e; }
 .offerCard[data-tone="premium"], .toneSwatch[data-tone="premium"] { --offer-accent: #c0a0ff; --offer-deep: #392553; }
@@ -60,7 +60,7 @@
 .previousCost { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; color: #a0a5ad; font-size: 12px; }
 .previousCost span { color: var(--offer-accent); font-weight: 650; }
 .paymentNote { margin: 4px 0 0; color: #b8c3ce; font-size: 11px; line-height: 1.65; }
-.offerAction { width: 100%; min-height: 42px; height: auto; margin-top: auto; padding: 10px 12px; border: 1px solid var(--offer-accent); border-radius: 999px; color: #101820; background: var(--offer-accent); font-weight: 650; white-space: normal; cursor: pointer; }
+.offerAction { width: 100%; min-height: 42px; height: auto; margin-top: auto; padding: 10px 12px; border: 1px solid var(--offer-accent); border-radius: 8px; color: #101820; background: var(--offer-accent); font-weight: 650; white-space: normal; cursor: pointer; }
 .offerBody .offerAction { margin-top: 18px; }
 .offerAction:hover:not(:disabled) { filter: brightness(1.08); }
 .offerAction:disabled { opacity: .58; cursor: default; }
@@ -73,10 +73,10 @@
 .entitlementBlock small { display: block; margin-top: 3px; color: #a0a5ad; font-size: 11px; }
 .foldHint { margin: 16px 0 0; color: #a0a5ad; font-size: 11px; }
 .moreBenefitsButton { display: block; min-height: 44px; margin: 24px auto 0; padding: 10px 22px; border: 1px solid #40526a; border-radius: 12px; background: #152236; color: #d2e0f1; font: inherit; font-size: 13px; cursor: pointer; }
-.catalogState { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 240px; padding: 32px 20px; border: 1px dashed #344255; border-radius: 20px; text-align: center; color: #c2d0e3; font-size: 14px; }
+.catalogState { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 240px; padding: 32px 20px; border: 1px dashed #344255; border-radius: 12px; text-align: center; color: #c2d0e3; font-size: 14px; }
 .catalogState p { margin: 0; }
 .catalogState > span { font-size: 12px; color: var(--membership-muted); }
-.campaignPanel { display: flex; align-items: center; gap: 18px; max-width: 1160px; margin: 0 auto 24px; border: 1px solid #344255; border-radius: 18px; padding: 16px; background: #142033; overflow-wrap: anywhere; }
+.campaignPanel { display: flex; align-items: center; gap: 18px; max-width: 1160px; margin: 0 auto 24px; border: 1px solid #344255; border-radius: 8px; padding: 16px; background: #142033; overflow-wrap: anywhere; }
 .campaignPanel img { width: 80px; height: 80px; flex: 0 0 80px; border-radius: 10px; object-fit: cover; }
 .campaignPanel p { margin: 0 0 5px; font-weight: 650; }
 .campaignPanel span { color: var(--membership-muted); font-size: 13px; }
@@ -90,7 +90,7 @@
 .questionRow { border-top: 1px solid #344255; padding: 16px 0; font-size: 14px; }
 .questionRow summary { cursor: pointer; }
 .questionRow p { color: var(--membership-muted); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.reviewPanel { width: min(540px, calc(100vw - 32px)); max-width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; border: 1px solid #344255; border-radius: 20px; }
+.reviewPanel { width: min(540px, calc(100vw - 32px)); max-width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; border: 1px solid #344255; border-radius: 12px; }
 .reviewSummary { display: grid; gap: 12px; margin: 4px 0; padding: 18px; border: 1px solid #344255; border-radius: 12px; background: #142033; font-size: 13px; }
 .reviewSummary > div { display: flex; justify-content: space-between; gap: 16px; }
 .reviewSummary dt { flex: 0 0 auto; color: var(--membership-muted); }

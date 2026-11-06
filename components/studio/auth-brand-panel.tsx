@@ -15,7 +15,7 @@ const capabilities = ['图片生成', '视频生成', '短剧制作', '自由画
  */
 export function AuthBrandPanel() {
   return (
-    <aside aria-label="产品介绍" className="relative hidden min-h-dvh overflow-hidden bg-[#0b0c0e] text-white lg:flex lg:flex-col">
+    <aside aria-label="产品介绍" className="relative hidden min-h-dvh overflow-hidden bg-studio-ink text-studio-ink-foreground lg:flex lg:flex-col">
       <Image
         src="/media/generated/auth-ai-canvas-v1.png"
         alt=""
@@ -34,7 +34,7 @@ export function AuthBrandPanel() {
       <div className="relative mt-auto flex flex-col gap-10 px-12 pb-12">
         <div className="flex max-w-xl flex-col gap-3">
           <p className="text-xs font-medium text-white/70">从想法到作品</p>
-          <h2 className="text-balance text-3xl font-semibold leading-[1.2] tracking-[-0.03em]">图片、视频与短剧，在同一个工作台完成</h2>
+          <h2 className="text-balance text-3xl font-medium leading-[1.35] tracking-[-0.02em] xl:text-4xl">图片、视频与短剧，在同一个工作台完成</h2>
           <p className="max-w-md text-sm leading-7 text-white/80">导演 Agent 会把想法拆成可执行的步骤，你只需要确认方向。</p>
         </div>
 

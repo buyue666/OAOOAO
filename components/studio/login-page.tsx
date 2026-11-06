@@ -248,7 +248,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
   const codeDisabled = busy || sendingCode || cooldown > 0 || !email.trim()
 
   return (
-    <main className="grid min-h-dvh bg-background text-foreground lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+    <main className="studio-auth-page grid min-h-dvh bg-background text-foreground lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <AuthBrandPanel />
 
       <section className="flex min-h-dvh flex-col">
@@ -260,8 +260,8 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
         </header>
 
         <div className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-10 lg:px-14">
-          <div className="mx-auto flex w-full max-w-[400px] flex-col gap-6">
-            <div className="flex flex-col gap-2">
+          <div className="studio-auth-card mx-auto flex w-full max-w-[464px] flex-col gap-6">
+            <div className="studio-auth-heading flex flex-col gap-2">
               <p className="text-xs font-medium text-muted-foreground">{eyebrow}</p>
               <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">{title}</h1>
               <p className="text-sm leading-6 text-muted-foreground">{description}</p>
