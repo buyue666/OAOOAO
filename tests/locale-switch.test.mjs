@@ -59,7 +59,9 @@ test('English copy formats owned prices and durations without translating interp
 
 test('navigation and page titles respond to English while preserving user project names',()=>{
   const nav=load('components/studio/studio-nav.tsx',{...base,'next/link':({children,...props})=>React.createElement('a',props,children),'next/navigation':{useRouter:()=>({push(){}})}})
-  const result=html(nav.StudioNavLink,{item:nav.studioPrimaryNav[2],pathname:'/assets'})
+  const assetItem=nav.studioPrimaryNav.find(item=>item.href==='/assets')
+  assert.ok(assetItem)
+  const result=html(nav.StudioNavLink,{item:assetItem,pathname:'/assets'})
   assert.match(result,/Creative assets/);assert.doesNotMatch(result,/创作资产/)
   assert.equal(nav.localizedStudioPageTitle('/video',undefined,englishText),'Video generation')
   assert.equal(nav.localizedStudioPageTitle('/projects/one/shots','参考图片',englishText),'参考图片 · Shots')

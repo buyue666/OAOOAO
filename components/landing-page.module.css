@@ -166,7 +166,7 @@
 
 
 @media (min-width: 768px) and (max-width: 1199px) {
-  .heroMessage { width: min(380px, 40vw); }
+  .heroMessage { width: min(380px, 44vw); }
   .heroMessage h1 { font-size: 48px; }
   .platformIntro, .workflow, .routes { gap: 60px; }
   .capabilityCard { grid-column: span 6; }
