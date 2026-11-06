@@ -57,6 +57,7 @@ export type SessionSettings = {
   generationConcurrency?: Record<string, number>
   generationDefaults?: SessionGenerationDefaults
   defaultModels?: { textModel: string; imageModel: string; videoModel: string; audioModel: string }
+  userDefaultModels?: Partial<Record<'textModel'|'imageModel'|'videoModel'|'audioModel',string>>
   logicalModels?: Array<{
     id: string
     name: string
@@ -66,6 +67,7 @@ export type SessionSettings = {
       id: string
       channelId: string
       upstreamModel: string
+      requestAlias?: string
       enabled: boolean
       priority: number
       capabilityProfile?: {

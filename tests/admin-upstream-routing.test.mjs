@@ -14,6 +14,23 @@ const pricing=compile(read('../lib/studio/upstream-pricing.ts'))
 const aliases=compile(read('../lib/studio/model-alias.ts'))
 const nodes=node=>node&&typeof node==='object'?[node,...[node.props?.children].flat(Infinity).flatMap(nodes)]:[]
 const text=node=>typeof node==='string'?node:node&&typeof node==='object'?[node.props?.children].flat(Infinity).map(text).join(''):''
+test('channel editor exposes the result-storage switch and submits its choice without changing peer channels',async()=>{
+  const saved=[],channel={id:'cdn',name:'CDN',baseUrl:'https://provider.example/v1',models:['image'],enabled:true,storeGeneratedMedia:false},peer={...channel,id:'peer',storeGeneratedMedia:true}
+  const component=compile(read('../components/studio/admin-channels.tsx')+'\nexport {ChannelEditor}',{
+    react:{useState:value=>[typeof value==='function'?value():value,()=>{}],useCallback:fn=>fn},
+    'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'lucide-react':new Proxy({},{get:(_,key)=>key}),
+    '@/lib/studio/upstream-pricing':pricing,'@/lib/studio/model-alias':aliases,'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},
+    '@/lib/studio/admin-api':{saveChannels:async value=>saved.push(value)},'./ui':{ControlButton:'Button',StatusBadge:'Badge'},'./video-profile-editor':{},'./model-icon':{},'./lobe-icon-picker':{},'./admin-shell':{},'./admin-kit':new Proxy({},{get:(_,key)=>key}),
+  }).ChannelEditor
+  const tree=component({channel,existingChannels:[channel,peer],onClose(){},onSaved(){}}),switcher=nodes(tree).find(node=>node.type==='input'&&node.props.name==='storeGeneratedMedia')
+  assert.equal(switcher.props.role,'switch');assert.equal(switcher.props.defaultChecked,false);assert.ok(text(tree).includes('生成结果转存 R2'))
+  const original=global.FormData
+  global.FormData=class { constructor(value){this.value=value} get(key){return this.value[key]??null} }
+  try{
+    await nodes(tree).find(node=>node.type==='form').props.onSubmit({preventDefault(){},currentTarget:{baseUrl:channel.baseUrl,name:channel.name,enabled:'on',storeGeneratedMedia:'on'}})
+    assert.equal(saved[0][0].storeGeneratedMedia,true);assert.deepEqual(saved[0][1],peer);assert.equal(channel.storeGeneratedMedia,false)
+  }finally{global.FormData=original}
+})
 function harness(){
   let cursor=0;const slots=[],saved=[]
   const react={useState:initial=>{const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],value=>slots[i]=typeof value==='function'?value(slots[i]):value]},useMemo:fn=>fn()}

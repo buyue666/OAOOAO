@@ -5,6 +5,10 @@ import { httpError, safeFetch, type Context } from './core.js';
 import { getSettings } from './settings.js';
 import { creditDecimal, creditUnits } from './wallet.js';
 import { readReference, saveMedia, MAX_MEDIA_BYTES, renderShots } from './media.js';
+import { accountModelDefaults, availableDefault } from './account-preferences.js';
+import { assertStorageAvailable } from './storage-quota.js';
+import { storageConfig, assertStorageConfigured } from './object-storage.js';
+import { saveGeneratedMedia } from './generated-media.js';
 
 export type GenerationKind='text'|'image'|'video'|'audio'|'render';
 export type Json=Record<string,any>;
@@ -21,18 +25,22 @@ export type ProviderSelection={model:string;channelId:string;upstreamModel:strin
 const protocols=new Set(['openai','openai-compatible','openai-chat','openai-images','openai-audio','openai-video','ciyuan-async']);
 function moneyProduct(a:bigint,b:unknown){return a*creditUnits(typeof b==='number'||typeof b==='string'?b:1)/10000n;}
 export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json,client?:PoolClient,userId?:string):Promise<ProviderSelection>{
-  if(kind!=='text'){
-    const storage=(await (client||ctx.db).query("SELECT value FROM oaooao_settings WHERE id='object-storage'")).rows[0]?.value;
-    if(storage?.enabled)throw httpError(503,'Configured object storage is not supported by the creative media adapter');
-  }
-  if(kind==='render')return {model:'ffmpeg',channelId:'local',upstreamModel:'ffmpeg',config:{protocol:'ffmpeg'},cost:'0.0000'};
-  const settings=await getSettings(ctx,client);const wanted=String(input.config?.model||settings.defaultModels?.[kind+'Model']||'');
+  const preflightStorage=async()=>{
+    const storage=await storageConfig(ctx);if(storage.enabled)assertStorageConfigured(storage);
+    if(userId)await assertStorageAvailable(ctx,userId,1,client);
+  };
+  if(kind==='render'){await preflightStorage();return {model:'ffmpeg',channelId:'local',upstreamModel:'ffmpeg',config:{protocol:'ffmpeg'},cost:'0.0000'};}
+  const settings=await getSettings(ctx,client),chosen=userId?await accountModelDefaults(ctx,userId,client):{};
+  const saved=chosen[kind+'Model'];
+  const wanted=String(input.config?.model||(saved&&availableDefault(settings,kind+'Model',saved)?saved:settings.defaultModels?.[kind+'Model'])||'');
   const model=(settings.logicalModels||[]).find((m:Json)=>m.enabled&&m.capability===kind&&(m.id===wanted||(m.aliases||[]).includes(wanted)||(m.bindings||[]).some((b:Json)=>b.requestAlias===wanted)));
   if(!model)throw httpError(503,`No enabled ${kind} model is configured`);
   const routeAlias=(model.bindings||[]).some((b:Json)=>b.requestAlias===wanted);
   const binding=[...(model.bindings||[])].filter((b:Json)=>b.enabled&&(!routeAlias||b.requestAlias===wanted)).sort((a:Json,b:Json)=>a.priority-b.priority).find((b:Json)=>settings.systemChannels?.some((c:Json)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none')));
   if(!binding)throw httpError(503,'No authenticated provider channel is available');
   const channel=settings.systemChannels.find((c:Json)=>c.id===binding.channelId);
+  const storeGeneratedMedia=channel.storeGeneratedMedia!==false;
+  if(kind!=='text'&&storeGeneratedMedia)await preflightStorage();
   const protocol=channel.advancedConfig?.protocol||channel.apiFormat||'openai';
 
   if(!protocols.has(protocol))throw httpError(503,`Configured protocol ${protocol} is not supported by this backend`);
@@ -114,7 +122,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   // Persist the selected capability snapshot with the job.  Queued jobs must
   // keep using the exact size map that was validated at submission time even
   // if an administrator edits the model binding before the worker runs.
-  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey,capabilityProfile:profile,...videoSnapshot},cost:creditDecimal(cost)};
+  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey,capabilityProfile:profile,...videoSnapshot,storeGeneratedMedia},cost:creditDecimal(cost)};
 }
 function multipart(fields:Record<string,string>,files:Array<{name:string;data:Buffer;mime:string}>){
   const boundary='oaooao'+randomUUID().replaceAll('-','');const chunks:Buffer[]=[];
@@ -196,23 +204,14 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     const media=await saveMedia(ctx,job.user_id,Buffer.from(await response.arrayBuffer()));
     return{type:'complete',result:{url:media.url,mimeType:media.mimeType}};
   }
-  /** Persist image data returned by either a synchronous response or a
-   * completed 词元 async task.  The upstream URL is temporary, so always
-   * download it before storing the media in our own media service. */
+  /** URL results follow the channel snapshot; binary-only output needs storage. */
   const persistImageData=async(data:Json,maxResults=1)=>{
     const results=[];
     if(!Array.isArray(data.data)||!data.data.length)throw new ProviderFailure('Provider returned no usable image output');
     // Some edit endpoints ignore n=1 when multiple references are attached.
     // Keep stored results aligned with the requested output count.
     for(const item of data.data.slice(0, Math.max(1, Math.trunc(maxResults)))){
-      let bytes:Buffer;
-      if(typeof item?.b64_json==='string'&&item.b64_json.trim())bytes=Buffer.from(item.b64_json,'base64');
-      else if(typeof item?.url==='string'&&item.url.trim()){
-        const image=await transport(item.url,{maxBytes:MAX_MEDIA_BYTES,timeoutMs:30000});
-        if(!image.ok)throw new ProviderFailure('Generated image could not be persisted');
-        bytes=Buffer.from(await image.arrayBuffer());
-      } else throw new ProviderFailure('Provider returned an invalid image output');
-      const media=await saveMedia(ctx,job.user_id,bytes);results.push({url:media.url,mimeType:media.mimeType});
+      const media=await saveGeneratedMedia(ctx,job.user_id,job.provider_config,'image',item||{},transport);results.push(media);
     }
     return{results,remoteUrl:results[0].url};
   };
@@ -289,6 +288,8 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     if(data.status==='failed')throw new ProviderFailure('Video provider confirmed generation failure',true);
     const upstreamId=String(data.id||job.upstream_id||'');if(!upstreamId)throw new ProviderFailure('Provider did not return a video identifier');
     if(data.status==='completed'){
+      const url=data.video_url||data.url||data.output?.url;
+      if(typeof url==='string'&&url.trim())return {type:'complete',result:await saveGeneratedMedia(ctx,job.user_id,job.provider_config,'video',{url},transport)};
       const response=await request(`/videos/${encodeURIComponent(upstreamId)}/content`);const media=await saveMedia(ctx,job.user_id,Buffer.from(await response.arrayBuffer()));
       return{type:'complete',result:{url:media.url}};
     }

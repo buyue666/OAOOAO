@@ -108,7 +108,8 @@ test('actual entitlement checkboxes default legacy plans to all kinds and preser
   const render = () => h.render(() => PointsSection({ settings, canUpstream: false, saving: false, onSave: patch => writes.push(patch) }))
   const boxes = () => all(render()).filter(node => node.type === 'label' && all(node).some(child => child.type === 'input') && features.ENTITLEMENT_GENERATION_KINDS.some(kind => node.props.children.includes(kind.label)))
   assert.equal(boxes().length, 5)
-  for (const node of all(render()).filter(node => node.type === 'AdminInput' && node.props.type === 'number')) assert.equal(node.props.value, 0)
+  for (const field of all(render()).filter(node=>node.type==='AdminField'&&node.props.label?.includes('容量'))){const input=all(field).find(node=>node.type==='AdminInput');assert.equal(input.props.value,10)}
+  for (const field of all(render()).filter(node=>node.type==='AdminField'&&/每日/.test(node.props.label))){const input=all(field).find(node=>node.type==='AdminInput');assert.equal(input.props.value,0)}
   for (const box of boxes()) { const input = all(box).find(node => node.type === 'input'); assert.equal(input.props.checked, true); input.props.onChange({ target: { checked: false } }) }
   render().props.onSubmit({ preventDefault() {} })
   assert.deepEqual(writes[0].entitlements.plans[0].allowedGenerationKinds, [])

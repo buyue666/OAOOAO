@@ -331,6 +331,7 @@ function UserEditor({ user, canGrant, onClose, onSaved }: { user?: AdminUser; ca
         status: data.get('status') === 'disabled' ? 'disabled' : 'active',
         role,
         planId: value('planId') || undefined,
+        storageQuotaBytes: value('storageQuotaGB')===''?null:Math.round(Number(value('storageQuotaGB'))*1024**3),
       }
       if (pointsText) {
         const points = Number(pointsText)
@@ -380,6 +381,7 @@ function UserEditor({ user, canGrant, onClose, onSaved }: { user?: AdminUser; ca
               {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}
             </AdminSelect>
           </AdminField>
+          <AdminField label="单独设置存储容量（GB）" hint="留空沿用会员方案；0 表示不限。修改不会删除已有文件。"><AdminInput name="storageQuotaGB" type="number" min="0" step="0.01" defaultValue={user?.storageQuotaBytes==null?'':user.storageQuotaBytes/1024**3} placeholder="沿用会员方案" /></AdminField>
           <AdminField label="重置密码" hint="留空表示不修改密码。"><AdminInput name="password" type="password" minLength={8} autoComplete="new-password" placeholder="不修改请留空" /></AdminField>
           {!isNew && <AdminField label="角色">
             <AdminSelect value={role} onChange={(event) => setRole(event.target.value as 'admin' | 'user')} disabled={!canGrant}>

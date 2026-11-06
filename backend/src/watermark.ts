@@ -4,8 +4,9 @@ import {join,resolve,dirname,sep} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawn} from 'node:child_process';
 import type {FastifyInstance} from 'fastify';
-import {httpError,iso,object,rateLimit,transaction,type Context} from './core.js';
+import {httpError,iso,object,rateLimit,safeFetch,transaction,type Context} from './core.js';
 import {MAX_MEDIA_BYTES,ownedMedia,mediaPath} from './media.js';
+import {readExternalResult} from './generated-media.js';
 
 export const WATERMARK_POLICY_VERSION='ai-watermark-v1';
 const LABEL='OAOOAO | AI generated';
@@ -108,7 +109,7 @@ export async function labelMedia(bytes:Buffer,mimeType:string):Promise<{bytes:Bu
   }finally{const target=resolve(directory),root=resolve(tmpdir());if(!target.startsWith(root+sep)||!target.includes('oaooao-export-'))throw new Error('Unsafe export temporary directory');await rm(target,{recursive:true,force:true});}
 }
 const extensions:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','video/mp4':'mp4','video/webm':'webm','audio/wav':'wav','audio/ogg':'ogg','audio/flac':'flac','audio/aac':'aac','audio/mpeg':'mp3'};
-export async function registerWatermark(app:FastifyInstance,ctx:Context){
+export async function registerWatermark(app:FastifyInstance,ctx:Context,transport:typeof safeFetch=safeFetch){
   const active=new Set<string>();
   app.get('/api/account/watermark-preference',async request=>{const user=await ctx.requireUser(request);return {watermark:await watermarkPreference(ctx,user.id)};});
   app.patch('/api/account/watermark-preference',async request=>{
@@ -136,6 +137,19 @@ export async function registerWatermark(app:FastifyInstance,ctx:Context){
       const output=applied?await labelMedia(source.bytes,source.mimeType):{...source,extension:extensions[source.mimeType]||'bin'};
       if(generated)await ctx.db.query('INSERT INTO oaooao_watermark_events(id,user_id,event_type,media_id,policy_version) VALUES($1,$2,$3,$4,$5)',[randomUUID(),user.id,applied?'export_with_label':'export_without_label',id,WATERMARK_POLICY_VERSION]);
       return reply.type(output.mimeType).header('Content-Disposition',`attachment; filename="OAOOAO-${id}.${output.extension}"`).header('X-OAO-AI-Generated',String(generated)).header('X-OAO-Watermark-Applied',String(applied)).header('Cache-Control','private, no-store').send(output.bytes);
+    }finally{active.delete(user.id);}
+  });
+  app.post('/api/account/media/export',async(request,reply)=>{
+    const user=await ctx.requireUser(request),body=object(request.body);
+    if(typeof body.url!=='string'||Object.keys(body).some(key=>key!=='url'))throw httpError(400,'请指定当前账户的生成结果链接');
+    await rateLimit(ctx,`media-export:${user.id}`,20,60);
+    if(active.has(user.id)||active.size>=2)throw httpError(429,'正在导出其他素材，请稍后重试');
+    active.add(user.id);
+    try{
+      const source=await readExternalResult(ctx,user.id,body.url,transport),preference=await watermarkPreference(ctx,user.id),applied=source.mimeType.startsWith('audio/')?false:preference.enabled;
+      const output=applied?await labelMedia(source.bytes,source.mimeType):{...source,extension:extensions[source.mimeType]||'bin'};
+      await ctx.db.query('INSERT INTO oaooao_watermark_events(id,user_id,event_type,policy_version) VALUES($1,$2,$3,$4)',[randomUUID(),user.id,applied?'export_with_label':'export_without_label',WATERMARK_POLICY_VERSION]);
+      return reply.type(output.mimeType).header('Content-Disposition',`attachment; filename="OAOOAO-${source.jobId}.${output.extension}"`).header('X-OAO-AI-Generated','true').header('X-OAO-Watermark-Applied',String(applied)).header('Cache-Control','private, no-store').send(output.bytes);
     }finally{active.delete(user.id);}
   });
 }

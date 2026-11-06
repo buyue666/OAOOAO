@@ -1,10 +1,10 @@
 import type { ObjectStorageSettings, ObjectStorageUpdateInput } from './admin-types'
 
-export const CREATIVE_STORAGE_NOTICE = '当前生成素材保存在服务器，对象存储写入尚未接入。'
+export const CREATIVE_STORAGE_NOTICE = '支持 Cloudflare R2 与 S3 兼容存储。启用后新素材保存到对象存储，已有素材仍从原位置读取。'
 
 export function storageUpdateInput(draft: ObjectStorageSettings, accessKeyId: string, secretAccessKey: string): ObjectStorageUpdateInput {
-  if (draft.enabled) throw new Error('对象存储写入尚未接入，不能保存启用状态。请明确取消“启用外部存储”后再保存；现有配置不会自动改变。')
   return {
+    provider: draft.provider || 's3',
     enabled: draft.enabled,
     endpoint: draft.endpoint,
     region: draft.region,
@@ -26,7 +26,8 @@ export function storageTestMessage(payload: unknown): string {
   const result = record(outer.data) ?? outer
   if (result.ok !== true || result.bucketAccessible !== true) throw new Error('服务端未确认存储桶可访问')
   const write = result.writeVerified === true ? '服务端报告写入已验证' : result.writeVerified === false ? '未验证写入权限' : '服务端未返回写入验证状态'
-  return `已保存配置的存储桶可访问；${write}。生成素材的对象存储写入仍未接入。`
+  if(result.writeVerified===true&&result.readVerified===true&&result.deleteVerified===true)return '存储桶访问、上传、读取和删除检测均通过，测试文件已清理。'
+  return `已保存配置的存储桶可访问；${write}。`
 }
 
 export function assertStorageSaved(payload: unknown, expected: ObjectStorageUpdateInput) {

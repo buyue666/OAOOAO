@@ -55,6 +55,7 @@ export type AdminUser = {
   planId?: string
   planName?: string
   hasActivePlan?: boolean
+  storageQuotaBytes?: number|null
   pointsBalance: number
   permanentPointsBalance?: number
   dailyPointsBalance?: number
@@ -86,6 +87,7 @@ export type AdminUserListPayload = {
 }
 
 export type AdminUserUpdateInput = {
+  storageQuotaBytes?: number|null
   username?: string
   displayName?: string
   email?: string
@@ -287,6 +289,8 @@ export type SystemChannel = {
   apiFormat?: string
   models: string[]
   enabled: boolean
+  /** 关闭后直接使用渠道返回的公开链接；仅二进制输出仍保存。缺省沿用保存行为。 */
+  storeGeneratedMedia?: boolean
   advancedConfig?: SystemChannelAdvancedConfig
   hasApiKey?: boolean
   hasWebhookSecret?: boolean
@@ -422,8 +426,8 @@ export type DataLifecycleSettings = {
 }
 export type EntitlementPlanLimits = Record<'dailyPointSpend' | 'dailyApiCalls' | 'dailyImages' | 'dailyVideos' | 'dailyAudio' | 'dailyText', number>
 export type EntitlementGenerationKind = 'text' | 'image' | 'video' | 'audio' | 'render'
-export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[]; allowedGenerationKinds?: EntitlementGenerationKind[] }
-export type EntitlementSettings = { enabled: boolean; defaultPlanId: string; plans: EntitlementPlan[] }
+export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[]; allowedGenerationKinds?: EntitlementGenerationKind[]; storageQuotaBytes?: number }
+export type EntitlementSettings = { enabled: boolean; defaultPlanId: string; plans: EntitlementPlan[]; defaultStorageQuotaBytes?: number }
 export type GenerationPointMultipliers = { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
 
 export type WechatOfficialSettings = {
@@ -512,6 +516,7 @@ export type AdminPaymentConfigSummary = {
 }
 
 export type ObjectStorageSettings = {
+  provider?: 'r2'|'s3'
   enabled: boolean
   endpoint: string
   region: string
@@ -524,6 +529,7 @@ export type ObjectStorageSettings = {
 }
 
 export type ObjectStorageUpdateInput = {
+  provider?: 'r2'|'s3'
   enabled: boolean
   endpoint: string
   region: string

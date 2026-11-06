@@ -19,6 +19,7 @@ export interface AppUser {
   role: string; adminPermissions: string[]; enabled: boolean;
   bio?: string; avatarUrl?: string; emailVerified?: boolean; planId?: string;
   createdAt?: string; updatedAt?: string; lastLoginAt?: string;
+  storageQuotaBytes?: number | null;
 }
 export interface AuditRecord {
   actorId?: string; action: string; targetType?: string; targetId?: string;
@@ -56,7 +57,7 @@ export function userFromRow(row: Record<string, any>): AppUser {
   return {id: row.id, username: row.username, email: row.email, displayName: row.display_name,
     role: row.role, adminPermissions: row.admin_permissions || [], enabled: row.enabled,
     bio: row.bio, avatarUrl: row.avatar_url, emailVerified: row.email_verified, planId: row.plan_id,
-    createdAt: iso(row.created_at), updatedAt: iso(row.updated_at), lastLoginAt: iso(row.last_login_at)};
+    createdAt: iso(row.created_at), updatedAt: iso(row.updated_at), lastLoginAt: iso(row.last_login_at),storageQuotaBytes:row.storage_quota_bytes==null?null:Number(row.storage_quota_bytes)};
 }
 export async function transaction<T>(db: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await db.connect();

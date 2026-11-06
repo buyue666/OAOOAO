@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { httpError, transaction, type Context } from './core.js';
 import { adjustWallet } from './wallet.js';
 import { invokeProvider, ProviderFailure, type Json, type ProviderResult } from './providers.js';
+import { cleanupStoredMedia } from './account-storage.js';
 
 export async function jobEvent(client:PoolClient,jobId:string,type:string,data:Json){
   await client.query('INSERT INTO oaooao_agent_events(run_id,event_type,data) SELECT id,$2,$3 FROM oaooao_agent_runs WHERE job_id=$1 OR id IN (SELECT run_id FROM oaooao_agent_steps WHERE job_id=$1)',[jobId,type,data]);
@@ -64,7 +65,7 @@ export async function processNextJob(ctx:Context,execute:Executor=invokeProvider
 export function startWorker(ctx:Context){
   let stopped=false;let active:Promise<unknown>|undefined;
   let maintenanceAt=0;
-  const tick=()=>{if(stopped||active)return;active=(async()=>{await processNextJob(ctx);if(Date.now()-maintenanceAt>60000){maintenanceAt=Date.now();const {runCommerceMaintenance}=await import('./commerce.js');await runCommerceMaintenance(ctx);const {expireCreditBatches}=await import('./wallet.js');await expireCreditBatches(ctx);}})().catch(()=>undefined).finally(()=>{active=undefined;});};
+  const tick=()=>{if(stopped||active)return;active=(async()=>{await processNextJob(ctx);if(Date.now()-maintenanceAt>60000){maintenanceAt=Date.now();const {runCommerceMaintenance}=await import('./commerce.js');await runCommerceMaintenance(ctx);const {expireCreditBatches}=await import('./wallet.js');await expireCreditBatches(ctx);await cleanupStoredMedia(ctx);}})().catch(()=>undefined).finally(()=>{active=undefined;});};
   const timer=setInterval(tick,1000);timer.unref();tick();
   return async()=>{stopped=true;clearInterval(timer);await active;};
 }

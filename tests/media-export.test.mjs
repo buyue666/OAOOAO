@@ -50,10 +50,23 @@ test('actual download posts to the export service and uses the transformed MIME;
     assert.deepEqual(await downloadMedia({ url: `/api/media/${id}`, kind: 'video' }, '视频'), { ok: false, message: '无法添加标识' })
     assert.equal(calls.length, 2)
     assert.equal((await downloadMedia({ url: 'https://unverified.test/video.mp4', kind: 'video' }, '旧作品')).ok, false)
-    assert.equal(calls.length, 2)
+    assert.equal(calls.length, 3)
+    assert.equal(calls[2][0], '/api/account/media/export')
+    assert.deepEqual(JSON.parse(calls[2][1].body), { url: 'https://unverified.test/video.mp4' })
     assert.deepEqual(anchors, ['作品.jpg'])
   } finally { global.window = oldWindow; global.document = oldDocument; global.fetch = oldFetch }
 })
+
+test('CDN downloads use the authenticated export service and retain account-switch checks', async () => withDownloads(async ({ anchors, calls }) => {
+  const url = 'https://cdn.example.test/generated/image.webp'
+  global.fetch = async (target, options) => {
+    if (target === '/api/auth/session') return Response.json({ user: { id: 'account-a' } })
+    calls.push([target, options]); return new Response(new Blob(['synthetic'], { type: 'image/webp' }))
+  }
+  assert.deepEqual(await downloadMedia({ url, kind: 'image' }, 'CDN作品', { accountId: 'account-a' }), { ok: true, filename: 'CDN作品.webp' })
+  assert.equal(calls.length, 1); assert.equal(calls[0][0], '/api/account/media/export'); assert.equal(calls[0][1].credentials, 'include')
+  assert.deepEqual(JSON.parse(calls[0][1].body), { url }); assert.deepEqual(anchors, ['CDN作品.webp'])
+}))
 
 async function withDownloads(run) {
   const oldWindow = global.window, oldDocument = global.document, oldFetch = global.fetch

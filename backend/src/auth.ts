@@ -9,6 +9,8 @@ import { getWallet, setPermanentBalance, assignAdminPlan, getPlanSummary } from 
 import { recordReferral } from './commerce.js';
 import { registerWechatOfficial } from './wechat.js';
 import type {WechatQrProvider} from './wechat-protocol.js';
+import { registerAccountPreferences, userSessionSettings } from './account-preferences.js';
+import { validStorageQuota } from './storage-quota.js';
 
 export function normalizeEmail(value:unknown, optional=false): string | null {
   if(optional&&(value===undefined||value===''))return null;
@@ -51,11 +53,12 @@ async function consumeCode(ctx:Context,client:PoolClient,email:string,purpose:st
 async function codeAttempt(ctx:Context,email:string,purpose:string,ip:string){await rateLimit(ctx,`code:${email}:${purpose}`,10,600);await rateLimit(ctx,`code-ip:${ip}`,60,600);}
 
 export async function registerAuth(app:FastifyInstance,ctx:Context,options:{wechatProvider?:WechatQrProvider}={}){
+  await registerAccountPreferences(app,ctx);
   const dummyHash=await bcrypt.hash(randomBytes(24).toString('base64'),12);
   app.get('/api/auth/session',async request=>{
-    const settings=publicSettings(await getSettings(ctx));let user:AppUser|null=null;
+    const fullSettings=await getSettings(ctx);let user:AppUser|null=null;
     if(request.cookies[ctx.config.sessionCookieName]){try{user=await ctx.requireUser(request);}catch(error){if((error as any).statusCode!==401)throw error;}}
-    return {user:user?await viewUser(ctx,user):null,settings,install:{ready:true}};
+    return {user:user?await viewUser(ctx,user):null,settings:user?await userSessionSettings(ctx,user.id,fullSettings):publicSettings(fullSettings),install:{ready:true}};
   });
   app.post('/api/auth/login',async(request,reply)=>{
     const body=object(request.body),username=string(body.username,'username or email',320);const password=typeof body.password==='string'?body.password:'';
@@ -134,7 +137,8 @@ export async function registerAuth(app:FastifyInstance,ctx:Context,options:{wech
   });
   async function writeUser(request:any,isNew:boolean){
     const actor=await ctx.requireUser(request,'users.manage'),body=object(request.body),id=isNew?randomUUID():string(request.params.id,'user ID',200);
-    const allowed=['username','displayName','email','password','role','adminPermissions','status','pointsBalance','planId'];for(const key of Object.keys(body))if(!allowed.includes(key))throw httpError(400,'Unknown user field');
+    const allowed=['username','displayName','email','password','role','adminPermissions','status','pointsBalance','planId','storageQuotaBytes'];for(const key of Object.keys(body))if(!allowed.includes(key))throw httpError(400,'Unknown user field');
+    if(body.storageQuotaBytes!==undefined&&body.storageQuotaBytes!==null&&!validStorageQuota(body.storageQuotaBytes))throw httpError(400,'存储容量必须是有效的字节数，或留空沿用会员方案');
     if(body.role!==undefined&&!['admin','user'].includes(body.role))throw httpError(400,'Invalid role');if(body.status!==undefined&&!['active','disabled'].includes(body.status))throw httpError(400,'Invalid status');if(body.adminPermissions!==undefined)permissions(body.adminPermissions);
     if(body.pointsBalance!==undefined&&(typeof body.pointsBalance!=='number'||!Number.isFinite(body.pointsBalance)||body.pointsBalance<0))throw httpError(400,'Invalid points balance');
     const passwordHash=body.password?await bcrypt.hash(validatePassword(body.password),12):null;if(isNew&&!passwordHash)throw httpError(400,'Password is required');
@@ -148,6 +152,7 @@ export async function registerAuth(app:FastifyInstance,ctx:Context,options:{wech
       if(previous?.role==='admin'&&previous.enabled&&previous.admin_permissions.includes('administrators.manage')&&(!enabled||role!=='admin'||!adminPermissions.includes('administrators.manage'))){const other=await client.query("SELECT id FROM oaooao_users WHERE id<>$1 AND role='admin' AND enabled=true AND admin_permissions ? 'administrators.manage' LIMIT 1",[id]);if(!other.rowCount)throw httpError(409,'At least one active administrator with administrator-management permission is required');}
       const email=body.email===undefined?previous?.email||null:normalizeEmail(body.email,true);
       const {rows}=await client.query(`INSERT INTO oaooao_users(id,username,email,display_name,password_hash,role,admin_permissions,enabled,plan_id) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9) ON CONFLICT(id) DO UPDATE SET username=$2,email=$3,display_name=$4,password_hash=$5,role=$6,admin_permissions=$7::jsonb,enabled=$8,plan_id=$9,email_verified=CASE WHEN oaooao_users.email IS DISTINCT FROM $3 THEN false ELSE oaooao_users.email_verified END,updated_at=now() RETURNING *`,[id,username,email,body.displayName===undefined?previous?.display_name||username:string(body.displayName,'display name',120),passwordHash||previous?.password_hash,role,JSON.stringify(adminPermissions),enabled,body.planId===undefined?previous?.plan_id||null:string(body.planId,'plan ID',100,true)||null]);
+      if(body.storageQuotaBytes!==undefined){await client.query('UPDATE oaooao_users SET storage_quota_bytes=$2 WHERE id=$1',[id,body.storageQuotaBytes]);rows[0].storage_quota_bytes=body.storageQuotaBytes;}
       if(passwordHash||!enabled||role!==previous?.role||body.adminPermissions!==undefined)await client.query('DELETE FROM oaooao_sessions WHERE user_id=$1',[id]);
       if(body.pointsBalance!==undefined)await setPermanentBalance(ctx,id,`admin:${randomUUID()}`,body.pointsBalance,{actorId:actor.id,kind:'admin_adjustment'},client);
       if(body.planId!==undefined&&body.planId!==(previous?.plan_id||''))await assignAdminPlan(ctx,id,`admin-plan:${randomUUID()}`,body.planId||null,client);

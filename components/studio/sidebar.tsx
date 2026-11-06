@@ -9,6 +9,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { cn } from '@/lib/utils'
 import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
+import { StorageUsageLink } from './storage-usage'
 
 function SidebarContent() {
   const tx = useUiText()
@@ -55,6 +56,7 @@ function SidebarContent() {
       </nav>
 
       <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2">
+        {state.backendStatus==='connected'&&<StorageUsageLink collapsed={collapsed} />}
         <nav aria-label={tx("创作记录与工具")} className="mb-1 flex flex-col gap-1 border-b border-sidebar-border pb-2">
           {studioSecondaryNav.map((item) => (
             <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />

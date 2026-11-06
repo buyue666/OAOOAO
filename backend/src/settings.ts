@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
 import nodemailer from 'nodemailer';
-import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { verifyStorage } from './object-storage.js';
+import { validStorageQuota } from './storage-quota.js';
 import { type Context, hasPermission, httpError, object, pagination, publicAddress, safeFetch, string, transaction, iso } from './core.js';
 import {creditUnits} from './wallet.js';
 import {hasSiteCommercePolicy,resolveCommercePolicy} from './commerce-policy.js';
@@ -159,6 +160,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
       if(ids.has(channel.id))throw httpError(400,'Duplicate channel ID');ids.add(channel.id);
       if(!Array.isArray(channel.models)||channel.models.length>2000||channel.models.some((m:any)=>typeof m!=='string'||m.length>200))throw httpError(400,'Invalid channel models');
       if(typeof channel.enabled!=='boolean')throw httpError(400,'Invalid channel enabled state');
+      if(channel.storeGeneratedMedia!==undefined&&typeof channel.storeGeneratedMedia!=='boolean')throw httpError(400,'生成结果转存开关必须为开启或关闭');
       const old=current.systemChannels.find((c:any)=>c.id===channel.id);
       if(old&&new URL(channel.baseUrl).origin!==new URL(old.baseUrl).origin){
         if(old.apiKey&&!channel.apiKey&&channel.clearApiKey!==true)throw httpError(400,'切换渠道域名需要填写新的 API Key，或勾选清空旧密钥。');
@@ -166,7 +168,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
       }
       const advanced=channel.advancedConfig || {};
       if(/password|api.?key|secret|authorization/i.test(JSON.stringify(Object.keys(advanced))))throw httpError(400,'Credentials must use designated secret fields');
-      return {id:channel.id,name:channel.name,baseUrl:channel.baseUrl,models:channel.models,enabled:channel.enabled,apiFormat:channel.apiFormat||'openai',advancedConfig:advanced,
+      return {id:channel.id,name:channel.name,baseUrl:channel.baseUrl,models:channel.models,enabled:channel.enabled,storeGeneratedMedia:channel.storeGeneratedMedia??old?.storeGeneratedMedia??true,apiFormat:channel.apiFormat||'openai',advancedConfig:advanced,
         apiKey:preserveSecret(ctx,channel,old,'apiKey','clearApiKey'),webhookSecret:preserveSecret(ctx,channel,old,'webhookSecret','clearWebhookSecret')};
     });
   }
@@ -234,7 +236,8 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
   for(const capability of ['text','image','video','audio']){const id=next.defaultModels[`${capability}Model`];if(id&&!next.logicalModels.some((m:any)=>m.id===id&&m.capability===capability&&m.enabled))throw httpError(400,'Default model must be an enabled model of matching capability');}
   if(typeof next.entitlements.enabled!=='boolean'||!Array.isArray(next.entitlements.plans))throw httpError(400,'Invalid entitlement plans');
   const planIds=new Set<string>();
-  for(const plan of next.entitlements.plans){validatePlanGenerationKinds(plan);string(plan.id,'plan ID');string(plan.name,'plan name');if(planIds.has(plan.id)||typeof plan.enabled!=='boolean')throw httpError(400,'Plan IDs must be unique and enabled must be boolean');planIds.add(plan.id);validNumber(plan.dailyPoints,'plan daily points');creditUnits(plan.dailyPoints);for(const [key,value]of Object.entries(object(plan.limits))){validNumber(value,'plan limit');if(key==='dailyPointSpend')creditUnits(value as number);else if(!Number.isInteger(value))throw httpError(400,'Daily plan count limits must be integers');}}
+  if(next.entitlements.defaultStorageQuotaBytes!==undefined&&!validStorageQuota(next.entitlements.defaultStorageQuotaBytes))throw httpError(400,'默认存储容量必须是有效的字节数');
+  for(const plan of next.entitlements.plans){validatePlanGenerationKinds(plan);if(plan.storageQuotaBytes!==undefined&&!validStorageQuota(plan.storageQuotaBytes))throw httpError(400,'会员存储容量必须是有效的字节数');string(plan.id,'plan ID');string(plan.name,'plan name');if(planIds.has(plan.id)||typeof plan.enabled!=='boolean')throw httpError(400,'Plan IDs must be unique and enabled must be boolean');planIds.add(plan.id);validNumber(plan.dailyPoints,'plan daily points');creditUnits(plan.dailyPoints);for(const [key,value]of Object.entries(object(plan.limits))){validNumber(value,'plan limit');if(key==='dailyPointSpend')creditUnits(value as number);else if(!Number.isInteger(value))throw httpError(400,'Daily plan count limits must be integers');}}
   if(next.entitlements.enabled&&!next.entitlements.plans.some((plan:any)=>plan.id===next.entitlements.defaultPlanId&&plan.enabled))throw httpError(400,'An enabled default entitlement plan is required');
   if(Object.hasOwn(patch,'checkIn')||Object.hasOwn(patch,'entitlements'))next.checkIn=validateCheckInSettings(next.checkIn,planIds);
   return next;
@@ -254,7 +257,7 @@ export async function sendMail(ctx:Context,mail:Settings,to:string,subject:strin
 }
 export async function getObjectStorageSettings(ctx:Context) {
   const {rows}=await ctx.db.query('SELECT value,updated_at FROM oaooao_settings WHERE id=$1',['object-storage']);
-  return {...{enabled:false,endpoint:'',region:'us-east-1',bucket:'',prefix:'oaooao',forcePathStyle:true},...rows[0]?.value,updatedAt:iso(rows[0]?.updated_at)} as Settings;
+  return {...{enabled:false,provider:'s3',endpoint:'',region:'us-east-1',bucket:'',prefix:'oaooao',forcePathStyle:true},...rows[0]?.value,updatedAt:iso(rows[0]?.updated_at)} as Settings;
 }
 function storagePublic(value:Settings) {const {accessKeyId,secretAccessKey,...rest}=value;return {...rest,hasAccessKeyId:Boolean(accessKeyId),hasSecretAccessKey:Boolean(secretAccessKey)};}
 
@@ -274,24 +277,25 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
   app.patch('/api/admin/object-storage',async request=>{
     const user=await ctx.requireUser(request,'system.manage'),body=object(request.body);
     validUrl(body.endpoint,'storage endpoint');if(typeof body.enabled!=='boolean'||typeof body.forcePathStyle!=='boolean')throw httpError(400,'Invalid storage settings');
+    if(body.provider!==undefined&&!['s3','r2'].includes(body.provider))throw httpError(400,'存储类型无效');
+    if(body.provider==='r2'&&body.endpoint&&!/^https:\/\/[a-f0-9]{32}(?:\.[a-z]+)?\.r2\.cloudflarestorage\.com\/?$/.test(body.endpoint))throw httpError(400,'请填写 Cloudflare R2 的 S3 API 服务地址');
     if(body.enabled&&(!body.endpoint||!body.bucket))throw httpError(400,'Storage endpoint and bucket required');
     if(typeof body.prefix!=='string'||body.prefix.includes('..')||body.prefix.includes('\\'))throw httpError(400,'Invalid storage prefix');
     const value=await transaction(ctx.db,async client=>{
       const {rows}=await client.query('SELECT value FROM oaooao_settings WHERE id=$1 FOR UPDATE',['object-storage']);const old=rows[0]?.value||{};
+      if((old.endpoint!==body.endpoint||old.bucket!==body.bucket||body.clearAccessKeyId||body.clearSecretAccessKey)&&(await client.query("SELECT 1 FROM oaooao_media WHERE storage_backend='s3' LIMIT 1")).rowCount)throw httpError(409,'现有素材仍使用此存储桶，请先迁移或清理素材后再更换连接；可直接轮换同一桶的密钥');
       if((old.endpoint?new URL(old.endpoint).origin:'')!==(body.endpoint?new URL(body.endpoint).origin:'')){
         if(old.accessKeyId&&!body.accessKeyId&&body.clearAccessKeyId!==true)throw httpError(400,'Changing the storage origin requires a new access key ID or clearing the saved key');
         if(old.secretAccessKey&&!body.secretAccessKey&&body.clearSecretAccessKey!==true)throw httpError(400,'Changing the storage origin requires a new secret access key or clearing the saved key');
       }
-      const next={enabled:body.enabled,endpoint:body.endpoint,region:string(body.region,'region',100),bucket:string(body.bucket,'bucket',200,true),prefix:body.prefix,forcePathStyle:body.forcePathStyle,accessKeyId:preserveSecret(ctx,body,old,'accessKeyId','clearAccessKeyId'),secretAccessKey:preserveSecret(ctx,body,old,'secretAccessKey','clearSecretAccessKey')};await client.query('UPDATE oaooao_settings SET value=$2::jsonb,updated_at=now() WHERE id=$1',['object-storage',JSON.stringify(next)]);await ctx.audit({actorId:user.id,action:'storage.update',targetType:'settings',targetId:'object-storage'},client);return next;
+      const next={enabled:body.enabled,provider:body.provider||old.provider||'s3',endpoint:body.endpoint,region:string(body.region,'region',100),bucket:string(body.bucket,'bucket',200,true),prefix:body.prefix,forcePathStyle:body.forcePathStyle,accessKeyId:preserveSecret(ctx,body,old,'accessKeyId','clearAccessKeyId'),secretAccessKey:preserveSecret(ctx,body,old,'secretAccessKey','clearSecretAccessKey')};if(next.enabled&&(!next.accessKeyId||!next.secretAccessKey))throw httpError(400,'启用对象存储前请配置访问密钥');await client.query('UPDATE oaooao_settings SET value=$2::jsonb,updated_at=now() WHERE id=$1',['object-storage',JSON.stringify(next)]);await ctx.audit({actorId:user.id,action:'storage.update',targetType:'settings',targetId:'object-storage'},client);return next;
     });return {code:0,data:storagePublic(value)};
   });
   app.post('/api/admin/object-storage',async request=>{
     const user=await ctx.requireUser(request,'system.manage'),stored=await getObjectStorageSettings(ctx);
-    if(!stored.enabled||!stored.endpoint||!stored.bucket||!stored.accessKeyId||!stored.secretAccessKey)throw httpError(503,'Object storage is not fully configured');
-    const client=new S3Client({endpoint:stored.endpoint,region:stored.region,forcePathStyle:stored.forcePathStyle,credentials:{accessKeyId:ctx.decrypt(stored.accessKeyId),secretAccessKey:ctx.decrypt(stored.secretAccessKey)},maxAttempts:1,
-      requestHandler:{async handle(req:any){const url=new URL(`${req.protocol}//${req.hostname}${req.port?`:${req.port}`:''}${req.path}`);for(const [key,value]of Object.entries(req.query||{}))url.searchParams.set(key,String(value));const response=await safeFetch(url,{method:req.method,headers:req.headers,maxBytes:1024*1024});return {response:{statusCode:response.status,headers:Object.fromEntries(response.headers),body:new Uint8Array(await response.arrayBuffer())}};}}});
-    try{await client.send(new HeadBucketCommand({Bucket:stored.bucket}));}catch{throw httpError(502,'Object storage connectivity or bucket access could not be verified');}finally{client.destroy();}
-    await ctx.audit({actorId:user.id,action:'storage.test',targetType:'settings',targetId:'object-storage'});return {code:0,data:{ok:true,bucketAccessible:true,writeVerified:false}};
+    if(!stored.endpoint||!stored.bucket||!stored.accessKeyId||!stored.secretAccessKey)throw httpError(503,'Object storage is not fully configured');
+    const result=await verifyStorage(ctx,stored as any);
+    await ctx.audit({actorId:user.id,action:'storage.test',targetType:'settings',targetId:'object-storage'});return {code:0,data:result};
   });
   app.post('/api/admin/models',async request=>{
     await ctx.requireUser(request,'upstream.manage');const body=object(request.body),settings=await getSettings(ctx);const saved=settings.systemChannels.find((c:any)=>c.id===body.channelId);
@@ -322,7 +326,7 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
     const invalidPlans=planProducts.filter(product=>!settings.entitlements.enabled||!settings.entitlements.plans.some((plan:any)=>plan.id===product.plan_id&&plan.enabled));
     items.push({id:'plan-products',title:'套餐与权益关联',level:invalidPlans.length?'error':'ok',detail:invalidPlans.length?`${invalidPlans.length} 个已上架套餐缺少已启用的权益方案，系统已阻止购买。`:'已上架套餐均有关联的权益方案。'});
     const storage=await getObjectStorageSettings(ctx);
-    items.push({id:'creative-storage',title:'生成素材存储',level:storage.enabled?'error':'warning',detail:storage.enabled?'外部存储已设为启用，但生成素材的对象存储写入尚未接通，当前会阻止相关生成。请在对象存储设置中检查。':'当前生成素材使用服务器持久化目录；对象存储连接检测不等于已支持外部存储写入。'});
+    items.push({id:'creative-storage',title:'生成素材存储',level:'warning',detail:storage.enabled?'新素材使用已配置的对象存储；请在对象存储设置中完成读写删除检测，并核对实际上传。':'新素材使用服务器持久化目录，可在对象存储设置中接入 Cloudflare R2。'});
     items.push({id:'wechat-login',title:'微信扫码登录',level:'warning',detail:settings.wechatOfficial?.enabled&&wechatConfigured(settings.wechatOfficial)?'凭证已配置。请在微信公众平台设置回调与服务器白名单，并用真实微信完成扫码、绑定和登录验收。':'微信扫码登录尚未开启或凭证不完整，可在系统设置的“微信登录”中配置。'});
     items.push({id:'remaining-capabilities',title:'尚未接通的能力',level:'warning',detail:'当前不支持剪映官方草稿格式导出、自动邀请风控、可执行代码型技能及多因素认证。支付宝、微信支付和 Stripe 的直接支付协议也尚未接通；可配置易支付聚合收款。'});
     const errors=items.filter(i=>i.level==='error').length,warnings=items.filter(i=>i.level==='warning').length;return {code:0,data:{passed:errors===0,errors,warnings,checkedAt:new Date().toISOString(),items}};

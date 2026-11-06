@@ -2,7 +2,7 @@
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {httpError,type Context} from './core.js';
-import {ownedMediaInfo,readReference,sniffMedia,MAX_MEDIA_BYTES} from './media.js';
+import {ownedMedia,ownedMediaInfo,readReference,sniffMedia,MAX_MEDIA_BYTES} from './media.js';
 
 type Probe=(bytes:Buffer)=>Promise<{duration:number;streams:Array<{codec_type?:string}>}>;
 export type ReferenceInspection={type:string;duration:number;bytes:number};
@@ -48,7 +48,7 @@ export async function inspectReference(ctx:Context,userId:string,reference:Recor
     if(media.bytes>MAX_MEDIA_BYTES)throw httpError(400,'单个参考素材不得超过 24 MiB');
     const key=JSON.stringify([userId,id,media.sha256,media.mimeType,media.fingerprint]);
     return remember(cache,key,async()=>{
-      const bytes=await readFile(media.file);
+      const bytes=media.file?await readFile(media.file):(await ownedMedia(ctx,userId,id)).bytes;
       if(bytes.length!==media.bytes||createHash('sha256').update(bytes).digest('hex')!==media.sha256)throw httpError(422,'参考素材已变化，请重新上传');
       const mimeType=sniffMedia(bytes);
       if(mimeType!==media.mimeType)throw httpError(400,'参考素材类型与实际文件不一致');

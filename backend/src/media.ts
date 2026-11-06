@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
-import { httpError, safeFetch, type Context } from './core.js';
+import { httpError, safeFetch, transaction, type Context } from './core.js';
+import { storageConfig, assertStorageConfigured, objectLocation, putObject, getObject, headObject, downloadObjectUrl, type ObjectLocation } from './object-storage.js';
+import { assertStorageAvailable, lockStorage } from './storage-quota.js';
 
 export const MAX_MEDIA_BYTES = 24 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
@@ -39,29 +41,47 @@ export function decodeDataUrl(value: string): Buffer {
   sniffMedia(data); return data;
 }
 export async function saveMedia(ctx: Context, userId: string, bytes: Buffer, persistent = true) {
-  const storage=(await ctx.db.query("SELECT value FROM oaooao_settings WHERE id='object-storage'")).rows[0]?.value;
-  if(storage?.enabled)throw httpError(503,'Configured object storage is not supported by the creative media adapter');
   const mimeType = sniffMedia(bytes);
   if (!bytes.length || bytes.length > (mimeType.startsWith('video/')?MAX_VIDEO_BYTES:MAX_MEDIA_BYTES)) throw httpError(413, 'Media exceeds storage limit'); const id = randomUUID(); const token = randomBytes(32).toString('base64url');
-  await mkdir(ctx.config.mediaRoot, { recursive: true });
-  const target = mediaPath(ctx.config.mediaRoot,id); const temp = target + '.tmp';
-  await writeFile(temp, bytes, { flag: 'wx' }); await rename(temp,target);
+  const {storage,location}=await transaction(ctx.db,async client=>{
+    const storage=await storageConfig(ctx,client),location=storage.enabled?objectLocation(storage,userId,id):{};
+    if(storage.enabled)assertStorageConfigured(storage);
+    await lockStorage(client,userId);await assertStorageAvailable(ctx,userId,bytes.length,client);
+    // Persist a cleanup record before external I/O. A crash never leaves an untracked object.
+    await client.query("INSERT INTO oaooao_media(id,user_id,mime_type,byte_count,sha256,persistent,access_token_hash,expires_at,storage_backend,storage_location,delete_requested_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '2 hours',$8,$9,now()+interval '10 minutes')",[id,userId,mimeType,bytes.length,digest(bytes),persistent,digest(token),storage.enabled?'s3':'local',location]);
+    return {storage,location};
+  });
   try {
-    await ctx.db.query('INSERT INTO oaooao_media(id,user_id,mime_type,byte_count,sha256,persistent,access_token_hash,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval \'1 hour\')',[id,userId,mimeType,bytes.length,digest(bytes),persistent,digest(token)]);
-  } catch (error) { await rm(target,{force:true}); throw error; }
+    if(storage.enabled)await putObject(ctx,storage,location as ObjectLocation,bytes,mimeType);
+    else {
+      await mkdir(ctx.config.mediaRoot,{recursive:true});const target=mediaPath(ctx.config.mediaRoot,id),temp=target+'.tmp';
+      await writeFile(temp,bytes,{flag:'wx'});await rename(temp,target);
+    }
+    await ctx.db.query('UPDATE oaooao_media SET delete_requested_at=null WHERE id=$1',[id]);
+  } catch(error) { // The worker retries removal; reserved bytes remain accounted for until then.
+    await ctx.db.query('UPDATE oaooao_media SET delete_requested_at=now() WHERE id=$1',[id]);
+    throw error;
+  }
   const url = `/api/reference-assets/${id}`;
   return { key:id, url, upstreamUrl:`${ctx.config.origin}${url}?token=${encodeURIComponent(token)}`, bytes:bytes.length, mimeType };
 }
 export async function ownedMedia(ctx: Context, userId: string, id: string, client?:PoolClient): Promise<{bytes:Buffer; mimeType:string}> {
-  const result = await (client||ctx.db).query('SELECT * FROM oaooao_media WHERE id=$1 AND user_id=$2 AND (persistent OR expires_at>now())',[id,userId]);
+  const result = await (client||ctx.db).query('SELECT * FROM oaooao_media WHERE id=$1 AND user_id=$2 AND delete_requested_at IS NULL AND (persistent OR expires_at>now())',[id,userId]);
   if (!result.rowCount) throw httpError(404,'Media not found');
-  return {bytes:await readFile(mediaPath(ctx.config.mediaRoot,id)),mimeType:result.rows[0].mime_type};
+  const row=result.rows[0];
+  return {bytes:row.storage_backend==='s3'?await getObject(ctx,row.storage_location):await readFile(mediaPath(ctx.config.mediaRoot,id)),mimeType:row.mime_type};
 }
 /** Authorize a local reference without reading its entire video on each quote. */
 export async function ownedMediaInfo(ctx:Context,userId:string,id:string,client?:PoolClient){
-  const result=await(client||ctx.db).query('SELECT mime_type,byte_count,sha256 FROM oaooao_media WHERE id=$1 AND user_id=$2 AND (persistent OR expires_at>now())',[id,userId]);
+  const result=await(client||ctx.db).query('SELECT * FROM oaooao_media WHERE id=$1 AND user_id=$2 AND delete_requested_at IS NULL AND (persistent OR expires_at>now())',[id,userId]);
   if(!result.rowCount)throw httpError(404,'Media not found');
-  const file=mediaPath(ctx.config.mediaRoot,id),info=await stat(file,{bigint:true}),row=result.rows[0];
+  const row=result.rows[0];
+  if(row.storage_backend==='s3'){
+    const info=await headObject(ctx,row.storage_location);
+    if(info.ContentLength!==Number(row.byte_count))throw httpError(422,'参考素材已变化，请重新上传');
+    return {file:null,mimeType:String(row.mime_type),bytes:Number(row.byte_count),sha256:String(row.sha256),fingerprint:[info.ETag,info.ContentLength,info.LastModified?.getTime()].join(':')};
+  }
+  const file=mediaPath(ctx.config.mediaRoot,id),info=await stat(file,{bigint:true});
   if(!info.isFile()||info.size!==BigInt(row.byte_count))throw httpError(422,'参考素材已变化，请重新上传');
   return{file,mimeType:String(row.mime_type),bytes:Number(info.size),sha256:String(row.sha256),fingerprint:[info.dev,info.ino,info.size,info.mtimeNs,info.ctimeNs].join(':')};
 }
@@ -75,14 +95,28 @@ export async function readReference(ctx: Context, userId: string, reference: Rec
   if (!response.ok) throw httpError(400,'Reference could not be downloaded');
   const bytes = Buffer.from(await response.arrayBuffer()); return {bytes,mimeType:sniffMedia(bytes)};
 }
+export async function ownedExternalResult(ctx:Context,userId:string,raw:string,kind?:string){
+  let url:URL;try{url=new URL(raw);}catch{throw httpError(400,'无效的上游媒体链接');}
+  if(url.protocol!=='https:'||url.username||url.password||url.hash||raw.length>16000)throw httpError(400,'无效的上游媒体链接');
+  const result=await ctx.db.query("SELECT id,kind FROM oaooao_generation_jobs WHERE user_id=$1 AND kind IN ('image','video','audio') AND ($2::text IS NULL OR kind=$2) AND status='success' AND (result @> $3::jsonb OR result @> $4::jsonb OR result @> $5::jsonb) LIMIT 1",[userId,kind??null,JSON.stringify({url:raw}),JSON.stringify({remoteUrl:raw}),JSON.stringify({results:[{url:raw}]})]);
+  if(!result.rowCount)throw httpError(404,'未找到当前账户对应的生成结果');
+  return {...result.rows[0],url:raw};
+}
 export async function validateLibraryMedia(ctx: Context, userId: string, input: Record<string,any>) {
   if (input.kind==='text') return;
   const data=input.data||{}; const id=String(data.storageKey||data.key||'');
   const raw=String(data.serverUrl||data.url||data.remoteUrl||data.dataUrl||'');
   let parsed:URL;try{parsed=new URL(raw||`/api/reference-assets/${id}`,ctx.config.origin);}catch{throw httpError(400,'Invalid library media URL');}
+  if(parsed.origin!==new URL(ctx.config.origin).origin&&parsed.protocol==='https:'&&!parsed.username&&!parsed.password&&!parsed.hash){
+    // Only accept this account's completed provider outputs, never an arbitrary URL
+    // or a result belonging to another account. A CDN link need not be reuploaded.
+    await ownedExternalResult(ctx,userId,raw,input.kind);
+    const {storageKey:_,key:__,...externalData}=data;
+    input.data={...externalData,url:raw,serverUrl:raw};return;
+  }
   if(parsed.origin!==new URL(ctx.config.origin).origin || !/^\/api\/(?:media|reference-assets|generation-log-assets)\/[a-f0-9-]{36}$/i.test(parsed.pathname)) throw httpError(400,'Library media must be uploaded to this account first');
   const mediaId=parsed.pathname.split('/').pop()!;
-  const found=await ctx.db.query('SELECT mime_type FROM oaooao_media WHERE id=$1 AND user_id=$2 AND persistent=true',[mediaId,userId]);
+  const found=await ctx.db.query('SELECT mime_type FROM oaooao_media WHERE id=$1 AND user_id=$2 AND persistent=true AND delete_requested_at IS NULL',[mediaId,userId]);
   if(!found.rowCount) throw httpError(404,'Persistent media not found');
   if(!String(found.rows[0].mime_type).startsWith(input.kind+'/')) throw httpError(400,'Asset kind does not match media');
   input.data={...data,storageKey:mediaId,url:`/api/reference-assets/${mediaId}`,serverUrl:`/api/reference-assets/${mediaId}`};
@@ -164,12 +198,18 @@ export async function registerMedia(app: FastifyInstance, ctx: Context) {
   });
   for(const route of ['/api/media/:id','/api/reference-assets/:id','/api/generation-log-assets/:id'])app.get(route,async(request,reply)=>{
     const {id}=request.params as {id:string};mediaPath(ctx.config.mediaRoot,id);
-    const row=(await ctx.db.query('SELECT *,expires_at>now() token_valid FROM oaooao_media WHERE id=$1',[id])).rows[0];
+    const row=(await ctx.db.query('SELECT *,expires_at>now() token_valid FROM oaooao_media WHERE id=$1 AND delete_requested_at IS NULL',[id])).rows[0];
     if(!row)throw httpError(404,'Media not found');
     const token=String((request.query as any).token||'');
     const valid=token.length>0&&token.length<256&&row.access_token_hash&&row.token_valid&&timingSafeEqual(Buffer.from(digest(token)),Buffer.from(row.access_token_hash));
     if(!valid){const user=await ctx.requireUser(request);if(user.id!==row.user_id||(!row.persistent&&!row.token_valid))throw httpError(404,'Media not found');}
     reply.header('X-Content-Type-Options','nosniff').header('Cache-Control','private, no-store').type(row.mime_type);
+    if(row.storage_backend==='s3'){
+      // Image/video elements use direct R2 delivery. Same-origin JS fetches and
+      // canvas CORS reads retain their origin without requiring a public bucket or CORS changes.
+      if(request.headers['sec-fetch-dest']!=='empty'&&request.headers['sec-fetch-mode']!=='cors')return reply.redirect(await downloadObjectUrl(ctx,row.storage_location));
+      return reply.send(await getObject(ctx,row.storage_location));
+    }
     return reply.send(await readFile(mediaPath(ctx.config.mediaRoot,id)));
   });
 }

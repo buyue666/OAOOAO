@@ -26,6 +26,8 @@ import { cn } from '@/lib/utils'
 import { addMediaToProject } from '@/lib/studio/project-media'
 import { MediaDownloadButton } from './media-download-button'
 import { AccountWechat } from './account-wechat'
+import { AccountModelDefaults } from './account-model-defaults'
+import { StorageUsageLink } from './storage-usage'
 import { writeReuseParams } from '@/lib/studio/reuse-params'
 import { writeWorkHandoff } from '@/lib/studio/work-handoff'
 import { formatPointsExpiry } from '@/lib/studio/check-in-rules'
@@ -842,7 +844,9 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
-      <PageHeader eyebrow="偏好设置" title="设置" description="管理主题、界面质感与账户同步。" />
+      <PageHeader eyebrow="偏好设置" title="设置" description="选择默认模型，管理存储空间与账户偏好。" />
+      <AccountModelDefaults key={state.user.id} />
+      <StorageUsageLink detail />
       <AccountWechat key={state.user.id} />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="studio-surface p-5">

@@ -17,6 +17,19 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 const plain = value => JSON.parse(JSON.stringify(value))
 const asset = (id, kind) => ({ id, kind, title: id, createdAt: '2026-10-14T00:00:00Z' })
 
+test('personal defaults select a logical models request alias and save explicit user changes', async () => {
+  const calls=[],state={user:{id:'synthetic-user'},backendStatus:'connected',liveModels:[{id:'image-route',name:'图片',capability:'image'},{id:'other-route',name:'另一图片',capability:'image'}],sessionSettings:{defaultModels:{imageModel:'logical-image'},logicalModels:[{id:'logical-image',capability:'image',bindings:[{enabled:true,requestAlias:'image-route'}]}]}}
+  const api=compile(read('../components/studio/account-model-defaults.tsx'),{
+    react:{useState:value=>[value,()=>{}],useRef:value=>({current:value}),useEffect(){}},'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'lucide-react':{Check:'Check',LoaderCircle:'Loader'},
+    '@/lib/studio/api':{request:async(path,options)=>calls.push([path,JSON.parse(options.body)])},'@/lib/studio/store':{useStudio:()=>({state,refreshSession:async()=>{}})},'./model-icon':{ModelIcon:'ModelIcon'},'./ui':{ModelNote:'ModelNote',Notice:'Notice',SectionHeading:'Heading'},'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},
+  })
+  const all=node=>node&&typeof node==='object'?[node,...[node.props?.children].flat(Infinity).flatMap(all)]:[]
+  const tree=all(api.AccountModelDefaults()),radios=tree.filter(node=>node.type==='input'&&node.props.type==='radio')
+  assert.equal(radios[0].props.checked,true);assert.equal(radios[1].props.checked,false)
+  await radios[1].props.onChange();await new Promise(resolve=>setImmediate(resolve))
+  assert.deepEqual(plain(calls),[['/api/account/model-defaults',{imageModel:'other-route'}]])
+})
+
 test('media library excludes skills at the request boundary and continues every media page', async () => {
   const records = [...Array.from({ length: 130 }, (_, n) => asset(`skill-${n}`, 'text')), ...Array.from({ length: 62 }, (_, n) => asset(`image-${n}`, 'image')), asset('video', 'video'), asset('audio', 'audio')]
   const requests = []
@@ -69,12 +82,12 @@ test('rapid media pagination clicks start only one request per source', async ()
 const storageHelpers = compile(read('../lib/studio/object-storage-status.ts'))
 const savedStorage = { enabled: false, endpoint: 'https://storage.example', region: 'region', bucket: 'bucket', prefix: 'existing/prefix', forcePathStyle: true, hasAccessKeyId: true, hasSecretAccessKey: true }
 
-test('storage never enables an unsupported writer or silently changes existing configuration', () => {
+test('storage enables the implemented writer only on explicit save and preserves saved secrets', () => {
   const existing = { ...savedStorage, enabled: true }
-  assert.throws(() => storageHelpers.storageUpdateInput(existing, '', ''), /不能保存启用状态/)
+  assert.equal(storageHelpers.storageUpdateInput(existing, '', '').enabled,true)
   assert.equal(existing.enabled, true)
   const input = storageHelpers.storageUpdateInput(savedStorage, '', '')
-  assert.deepEqual(plain(input), { enabled: false, endpoint: savedStorage.endpoint, region: 'region', bucket: 'bucket', prefix: 'existing/prefix', forcePathStyle: true })
+  assert.deepEqual(plain(input), { provider:'s3', enabled: false, endpoint: savedStorage.endpoint, region: 'region', bucket: 'bucket', prefix: 'existing/prefix', forcePathStyle: true })
   assert.equal('accessKeyId' in input, false); assert.equal('secretAccessKey' in input, false)
   assert.equal(storageHelpers.storageUpdateInput(savedStorage, 'new-id', 'new-secret').secretAccessKey, 'new-secret')
 })
@@ -107,8 +120,8 @@ function storageFixture(initial, { badAck = false, testResult = { code: 0, data:
   const full = ts.createSourceFile('settings.tsx', read('../components/studio/admin-settings.tsx'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const declaration = full.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'StorageSection')
   assert.ok(declaration)
-  const imports = `import { useState, useRef, useEffect } from 'react'; import { assertStorageSaved, CREATIVE_STORAGE_NOTICE, storageTestMessage, storageUpdateInput } from './helpers'; import { updateObjectStorage, testObjectStorage } from './api'; import { AdminEmpty, AdminNotice, AdminSectionCard, StatusBadge, AdminField, AdminInput, ControlButton, Cloud, Save } from './ui';`
-  const controls = Object.fromEntries(['AdminEmpty', 'AdminNotice', 'AdminSectionCard', 'StatusBadge', 'AdminField', 'AdminInput', 'ControlButton', 'Cloud', 'Save'].map(name => [name, name]))
+  const imports = `import { useState, useRef, useEffect } from 'react'; import { assertStorageSaved, CREATIVE_STORAGE_NOTICE, storageTestMessage, storageUpdateInput } from './helpers'; import { updateObjectStorage, testObjectStorage } from './api'; import { AdminEmpty, AdminNotice, AdminSectionCard, StatusBadge, AdminField, AdminInput, AdminSelect, ControlButton, Cloud, Save } from './ui';`
+  const controls = Object.fromEntries(['AdminEmpty', 'AdminNotice', 'AdminSectionCard', 'StatusBadge', 'AdminField', 'AdminInput', 'AdminSelect', 'ControlButton', 'Cloud', 'Save'].map(name => [name, name]))
   const api = compile(imports + '\nexport ' + declaration.getText(full), {
     react, 'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }, './helpers': storageHelpers, './ui': controls,
     './api': { updateObjectStorage: async input => { writes.push(input); return badAck ? { code: 0, data: {} } : { code: 0, data: input } }, testObjectStorage: async () => { tests++; return testResult } },
@@ -120,29 +133,31 @@ function storageFixture(initial, { badAck = false, testResult = { code: 0, data:
   return { writes, messages, errors, button, find, tests: () => tests, reloads: () => reloads }
 }
 
-test('actual settings handlers require explicit disable and confirmed save while preserving stored keys', async () => {
+test('actual settings handlers support explicit enable and disable with confirmed saves and preserved keys', async () => {
   const f = storageFixture({ ...savedStorage, enabled: true })
   assert.equal(f.writes.length, 0)
   const checkbox = f.find(node => node.type === 'input' && node.props.type === 'checkbox')
   assert.equal(checkbox.props.checked, true)
   await f.button('保存存储配置').props.onClick()
   await new Promise(resolve => setImmediate(resolve))
-  assert.equal(f.writes.length, 0); assert.match(f.errors.at(-1), /不能保存启用状态/)
+  assert.equal(f.writes.length, 1); assert.equal(f.writes[0].enabled,true)
   checkbox.props.onChange({ target: { checked: false } })
   await f.button('保存存储配置').props.onClick()
   await new Promise(resolve => setImmediate(resolve))
-  assert.equal(f.writes.length, 1); assert.equal(f.writes[0].enabled, false)
+  assert.equal(f.writes.length, 2); assert.equal(f.writes[1].enabled, false)
   assert.equal('accessKeyId' in f.writes[0], false); assert.equal('secretAccessKey' in f.writes[0], false)
-  assert.equal(f.reloads(), 1); assert.match(f.messages.at(-1), /配置已保存，保持未启用/)
+  assert.equal(f.reloads(), 2); assert.match(f.messages.at(-1), /新素材继续使用服务器存储/)
 })
 
 test('actual settings detector cannot turn HeadBucket into a write-success message', async () => {
   const f = storageFixture({ ...savedStorage, enabled: true })
-  await f.button('检测已保存的桶').props.onClick()
+  await f.button('检测上传、读取与删除').props.onClick()
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(f.tests(), 1); assert.equal(f.writes.length, 0)
   assert.match(f.messages.at(-1), /未验证写入权限/)
-  assert.equal(storageFixture(savedStorage).button('检测已保存的桶').props.disabled, true)
+  assert.equal(storageFixture(savedStorage).button('检测上传、读取与删除').props.disabled, false)
+  const verified=storageFixture(savedStorage,{testResult:{code:0,data:{ok:true,bucketAccessible:true,writeVerified:true,readVerified:true,deleteVerified:true}}})
+  await verified.button('检测上传、读取与删除').props.onClick();await new Promise(resolve=>setImmediate(resolve));assert.match(verified.messages.at(-1),/上传、读取和删除检测均通过/)
   const missing = storageFixture(savedStorage, { badAck: true })
   await missing.button('保存存储配置').props.onClick()
   await new Promise(resolve => setImmediate(resolve))

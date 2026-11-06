@@ -213,6 +213,7 @@ export function AdminChannelsPanel() {
                     <AdminCell className="max-w-[280px]">
                       <p className="truncate font-medium">{channel.name || channel.id}</p>
                       <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{channel.baseUrl || '未配置地址'}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">{channel.storeGeneratedMedia === false ? '结果直连上游' : '结果转存已开启'}</p>
                     </AdminCell>
                     <AdminCell className="text-xs">{channel.advancedConfig?.protocol || channel.apiFormat || 'auto'}</AdminCell>
                     <AdminCell className="max-w-[240px]">
@@ -381,6 +382,7 @@ function ChannelEditor({ channel, existingChannels, onClose, onSaved }: { channe
       apiFormat: channel?.apiFormat || 'openai',
       models,
       enabled: data.get('enabled') !== null,
+      storeGeneratedMedia: data.get('storeGeneratedMedia') !== null,
       clearApiKey: clearApiKey || undefined,
       advancedConfig: {
         ...(channel?.advancedConfig || {}),
@@ -485,6 +487,10 @@ function ChannelEditor({ channel, existingChannels, onClose, onSaved }: { channe
             </AdminSelect>
           </AdminField>
           <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" name="enabled" defaultChecked={channel?.enabled ?? true} />启用该渠道</label>
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:col-span-2">
+            <input type="checkbox" name="storeGeneratedMedia" role="switch" aria-describedby="channel-storage-hint" defaultChecked={channel?.storeGeneratedMedia !== false} className="mt-0.5 size-4 shrink-0 accent-studio-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" />
+            <span className="min-w-0"><span className="block text-sm font-medium">生成结果转存 R2</span><span id="channel-storage-hint" className="mt-1 block text-xs leading-5 text-muted-foreground">开启后，将生成结果保存到系统配置的存储（已启用 R2 时使用 R2）。关闭后直接使用渠道返回的图片、视频链接，不占用本站容量；上游链接的有效期由渠道决定。只返回文件数据时仍会保存并占用容量。</span></span>
+          </label>
           {channel?.hasApiKey && (
             <label className="flex items-center gap-2 text-xs text-muted-foreground sm:col-span-2">
               <input type="checkbox" checked={clearApiKey} onChange={(event) => setClearApiKey(event.target.checked)} />清空已保存的 API Key（更换地址且不需要密钥时使用）

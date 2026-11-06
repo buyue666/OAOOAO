@@ -61,6 +61,8 @@ import {
 } from '@/lib/studio/account-api'
 import { useServerHistory, useServerWorks } from '@/lib/studio/use-account-data'
 import { useMediaLibrary } from '@/lib/studio/use-media-library'
+import { deleteAccountAssets, formatStorageBytes, mediaIdFromUrl, useStoredMedia } from '@/lib/studio/account-storage'
+import { StorageUsageLink } from './storage-usage'
 import { bumpAccountData } from '@/lib/studio/account-data-sync'
 import { addMediaToProject, removeMediaFromProject } from '@/lib/studio/project-media'
 import { cn } from '@/lib/utils'
@@ -149,8 +151,11 @@ export function AssetsPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [notice, setNotice] = useState('')
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteMany,setDeleteMany] = useState(false)
+  const [deleting,setDeleting] = useState(false)
+  const deleteLock = useRef(false)
   const [renameId, setRenameId] = useState<string | null>(null)
-  const [renameSource, setRenameSource] = useState<'library' | 'generation'>('library')
+  const [renameSource, setRenameSource] = useState<'library' | 'generation' | 'stored'>('library')
   const [renameTitle, setRenameTitle] = useState('')
   const [renameCategory, setRenameCategory] = useState<AssetCategory>('general')
   const [renaming, setRenaming] = useState(false)
@@ -167,6 +172,8 @@ export function AssetsPage() {
    */
   const serverWorks = useServerWorks({ pageSize: 50 })
   const serverLibrary = useMediaLibrary()
+  const storedMedia = useStoredMedia()
+  const storedAssets = useMemo<Asset[]>(()=>storedMedia.media.map(item=>({id:`stored-${item.id}`,kind:item.mimeType.split('/')[0] as 'image'|'video'|'audio',category:'general',title:`${item.mimeType.startsWith('image/')?'图片':item.mimeType.startsWith('video/')?'视频':'音频'} ${item.id.slice(0,8)}`,src:item.url,fallback:'素材',tags:[item.persistent?'存储文件':'临时素材'],size:formatStorageBytes(item.bytes),status:'可用',projectIds:[],referencedBy:[],createdAt:item.createdAt})),[storedMedia.media])
   const serverAssets = useMemo(() => serverWorks.works.map(workToAsset), [serverWorks.works])
   const libraryAssets = useMemo(() => serverLibrary.assets.map(libraryAssetToAsset), [serverLibrary.assets])
   // 服务端结果优先：后端已经有的结果不再显示重复的本地副本。
@@ -174,8 +181,8 @@ export function AssetsPage() {
     if (state.backendStatus !== 'connected') return state.assets
     const seen = new Set<string>()
     const dedupe = (asset: Asset) => { const key = asset.src || `id:${asset.id}`; return seen.has(key) ? false : (seen.add(key), true) }
-    return [...libraryAssets, ...serverAssets].filter(dedupe)
-  }, [libraryAssets, serverAssets, state.backendStatus, state.assets])
+    return [...libraryAssets, ...serverAssets, ...storedAssets].filter(dedupe)
+  }, [libraryAssets, serverAssets, storedAssets, state.backendStatus, state.assets])
   const visible = useMemo(() => mergedAssets.filter((asset) => {
     const definition = assetFilters.find((item) => item.value === filter)
     const categoryMatch = definition?.kind === 'character' || definition?.kind === 'scene' || definition?.kind === 'prop' || definition?.kind === 'style' || definition?.kind === 'garment'
@@ -186,7 +193,8 @@ export function AssetsPage() {
   }), [mergedAssets, filter, search])
 
   function toggle(id: string) {
-    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+    if (!selected.includes(id) && selected.length >= 100) { setNotice('每次最多选择 100 项素材'); return }
+    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id].slice(0,100))
   }
 
   /**
@@ -339,22 +347,19 @@ export function AssetsPage() {
   }
 
   async function deleteAsset() {
-    if (!deleteId) return
-    const asset = mergedAssets.find((item) => item.id === deleteId)
-    setDeleteId(null)
-    if (!asset) return
-    // 后端素材库记录才走删除接口；生成结果属于作品，不在素材库里删除。
-    if (serverLibrary.assets.some((item) => item.id === asset.id)) {
-      try {
-        await deleteLibraryAsset(asset.id)
-        bumpAccountData()
-        setNotice(`已删除素材「${asset.title}」。`)
-      } catch (reason) {
-        setNotice(`删除失败：${reason instanceof Error ? reason.message : '未知错误'}`)
-      }
-      return
-    }
-    setNotice('生成结果属于「我的作品」，请在作品页删除。素材库里删除的是上传的素材。')
+    if(deleteLock.current)return
+    const chosen=mergedAssets.filter(item=>(deleteId?[deleteId]:selected).includes(item.id))
+    if(!chosen.length)return
+    deleteLock.current=true;setDeleting(true)
+    try {
+      const result=await deleteAccountAssets({mediaIds:[...new Set(chosen.map(item=>mediaIdFromUrl(item.src)).filter((id):id is string=>Boolean(id)))],libraryIds:chosen.filter(item=>serverLibrary.assets.some(saved=>saved.id===item.id)).map(item=>item.id),externalUrls:[...new Set(chosen.filter(item=>!mediaIdFromUrl(item.src)&&item.src?.startsWith('https://')).map(item=>item.src!))]})
+      const kept=new Set(result.skipped.map(item=>item.id))
+      setSelected(current=>current.filter(id=>{const item=chosen.find(item=>item.id===id);return !item||kept.has(mediaIdFromUrl(item.src)||item.src||'')}))
+      const pending=result.storage.pendingDeletionBytes
+      setNotice(`已释放 ${formatStorageBytes(result.freedBytes)}。${pending?`另有 ${formatStorageBytes(pending)} 正在清理，完成后释放容量。`:''}${result.skipped.length?`保留 ${result.skipped.length} 个正在使用的文件：${[...new Set(result.skipped.map(item=>item.reason))].join('；')}。`:''}`)
+      setDeleteId(null);setDeleteMany(false);bumpAccountData()
+    }catch(reason){setNotice(`删除失败：${reason instanceof Error?reason.message:'未知错误'}`)}
+    finally{deleteLock.current=false;setDeleting(false)}
   }
 
   async function renameAsset() {
@@ -366,6 +371,10 @@ export function AssetsPage() {
         const separator = rawId.lastIndexOf('-')
         await renameGenerationLog(separator > 0 ? rawId.slice(0, separator) : rawId, renameTitle, renameCategory)
         await serverWorks.reload()
+      } else if(renameSource==='stored') {
+        const item=storedMedia.media.find(item=>`stored-${item.id}`===renameId)
+        if(!item)throw new Error('素材已更新，请刷新后重试')
+        await createLibraryAsset({kind:item.mimeType.split('/')[0] as 'image'|'video'|'audio',title:renameTitle.trim(),source:'stored-media',data:{storageKey:item.id,serverUrl:item.url,url:item.url,bytes:item.bytes,mimeType:item.mimeType,assetRole:renameCategory}})
       } else {
         await renameLibraryAsset(renameId, renameTitle, renameCategory)
         await serverLibrary.reload()
@@ -382,7 +391,7 @@ export function AssetsPage() {
 
   function openRename(asset: Asset) {
     setRenameId(asset.id)
-    setRenameSource(serverLibrary.assets.some((item) => item.id === asset.id) ? 'library' : 'generation')
+    setRenameSource(serverLibrary.assets.some((item) => item.id === asset.id) ? 'library' : asset.id.startsWith('stored-')?'stored':'generation')
     setRenameTitle(asset.title)
     setRenameCategory(asset.category ?? 'general')
   }
@@ -402,9 +411,11 @@ export function AssetsPage() {
             <ControlButton variant="secondary" disabled={uploading} onClick={() => fileRef.current?.click()}><Upload className="size-4" />{uploading ? '上传中…' : '上传素材'}</ControlButton>
             {selected.length > 0 && <ControlButton variant="primary" disabled={projectBusy} onClick={() => void addToProject()}><FolderPlus className="size-4" />{projectBusy ? '处理中…' : `加入项目（${selected.length}）`}</ControlButton>}
             {selected.length > 0 && <ControlButton variant="ghost" disabled={projectBusy} onClick={() => void removeReference(selected[0])}>移除引用</ControlButton>}
+            {selected.length>0&&<ControlButton variant="danger" disabled={deleting||selected.length>100} onClick={()=>setDeleteMany(true)}><Trash2 className="size-4"/>删除所选（{selected.length}）</ControlButton>}
           </>
         )}
       />
+      <StorageUsageLink detail />
       <section
         aria-label="上传素材"
         onDragEnter={(event) => { event.preventDefault(); setDragActive(true) }}
@@ -451,6 +462,8 @@ export function AssetsPage() {
         当前筛选显示 {visible.length} 项。已载入素材库媒体 {libraryAssets.length} 项{serverLibrary.totalKnown ? ` / 共 ${serverLibrary.total} 项` : '（总数尚未确认）'}，生成结果 {serverAssets.length} 项；重复地址合并显示。
         {(serverLibrary.hasMore || serverWorks.truncated) && '搜索与筛选仅针对已载入内容。'}
       </p>
+      {storedMedia.error&&<Notice tone="warning">存储文件读取失败：{storedMedia.error}</Notice>}
+      {visible.length>0&&<div className="flex min-h-11 flex-wrap items-center gap-3 text-xs"><label className="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" className="size-4 accent-studio-accent" checked={visible.length>0&&visible.slice(0,100).every(item=>selected.includes(item.id))} onChange={event=>setSelected(current=>event.target.checked?visible.slice(0,100).map(item=>item.id):current.filter(id=>!visible.some(item=>item.id===id)))}/>选择当前已显示素材（最多 100 项）</label><span className="text-muted-foreground">已选 {selected.length} 项</span>{selected.length>0&&<button className="min-h-11 px-2 underline" onClick={()=>setSelected([])}>取消选择</button>}</div>}
       {/* 首次读取素材库时给出加载反馈（此前完全没有提示，页面看起来像"已经空了"）。 */}
       {serverLibrary.state === 'loading' && serverLibrary.assets.length === 0 && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
@@ -482,21 +495,21 @@ export function AssetsPage() {
         </div>
       )}
       {serverLibrary.hasMore && <div className="flex justify-center"><ControlButton variant="secondary" onClick={() => void serverLibrary.loadMore()} disabled={serverLibrary.loadingMore || serverLibrary.state === 'loading'}>{serverLibrary.loadingMore ? '正在加载…' : '加载更多素材'}</ControlButton></div>}
+      {storedMedia.hasMore&&<div className="flex justify-center"><ControlButton variant="secondary" disabled={storedMedia.loading} onClick={()=>void storedMedia.loadMore()}>{storedMedia.loading?'正在加载…':'加载更多存储文件'}</ControlButton></div>}
       <Modal
-        open={Boolean(deleteId)}
-        onClose={() => setDeleteId(null)}
-        title="删除素材"
-        description={deleteAssetView?.title}
+        open={Boolean(deleteId)||deleteMany}
+        onClose={() => {if(!deleting){setDeleteId(null);setDeleteMany(false)}}}
+        title={deleteMany?`删除所选 ${selected.length} 项素材`:'删除素材'}
+        description={deleteMany?'删除文件以释放存储空间':deleteAssetView?.title}
         footer={(
           <>
-            <ControlButton variant="ghost" onClick={() => setDeleteId(null)}>取消</ControlButton>
-            <ControlButton variant="danger" onClick={() => void deleteAsset()}>确认删除</ControlButton>
+            <ControlButton variant="ghost" disabled={deleting} onClick={() => {setDeleteId(null);setDeleteMany(false)}}>取消</ControlButton>
+            <ControlButton variant="danger" disabled={deleting} onClick={() => void deleteAsset()}>{deleting?'正在删除…':'确认删除并释放空间'}</ControlButton>
           </>
         )}
       >
         <Notice tone="warning">
-          这里删除的是**素材库记录**；素材文件若仍被其他项目引用，系统会保留文件，不会影响那些项目。
-          只想解除本项目的使用请用「移除引用」。
+          将删除所选文件、对应素材库记录及生成记录中的结果文件，删除后无法恢复。项目、历史版本或进行中任务仍在使用的文件会保留并说明原因；实际清理成功后释放容量。
         </Notice>
       </Modal>
       <Modal

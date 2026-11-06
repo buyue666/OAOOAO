@@ -1,5 +1,13 @@
 /** Authored interface copy only; never applied to prompts, file names, or saved user content. */
 export const studioEnglish: Readonly<Record<string, string>> = {
+  '存储空间':'Storage',
+  '管理存储空间':'Manage storage',
+  '已用容量':'Storage used',
+  '不限容量':'Unlimited',
+  '正在读取容量':'Loading storage usage',
+  '容量读取失败':'Could not load storage usage',
+  '上传素材与生成结果共用容量':'Uploads and generated results share this quota',
+  '等待清理':'pending cleanup',
   "创作工具子菜单": "Creative tools submenu",
   "工作台侧栏": "Workspace sidebar",
   "返回工作台": "Back to workspace",

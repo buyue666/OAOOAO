@@ -130,7 +130,9 @@ export async function downloadMedia(media: DeliverableMedia, title: string, opti
   const filename = safeDownloadName(nameSource, resolveDownloadExtension(media), fallbackName)
   try {
     const exportPath = mediaExportPath(media.url, window.location.origin)
-    if (!exportPath && media.kind !== 'audio') return { ok: false, message: '此历史文件尚无可验证的导出来源，请联系站点客服核对媒体迁移。' }
+    let externalExport = false
+    try { const url = new URL(media.url); externalExport = !exportPath && url.protocol === 'https:' && !url.username && !url.password && !url.hash && url.origin !== window.location.origin } catch {}
+    if (!exportPath && !externalExport && media.kind !== 'audio') return { ok: false, message: '此历史文件尚无可验证的导出来源，请联系站点客服核对媒体迁移。' }
     const assertActive = () => { if (options.signal?.aborted) throw new Error('导出已取消') }
     const currentAccount = async () => {
       assertActive()
@@ -145,7 +147,7 @@ export async function downloadMedia(media: DeliverableMedia, title: string, opti
     // of a potentially long export and never hand an old account's bytes to the browser.
     const accountId = await currentAccount()
     if (options.accountId !== undefined && options.accountId !== accountId) return { ok: false, message: '账户已切换，请刷新当前页面后重新下载。' }
-    const response = await fetch(exportPath || media.url, { method: exportPath ? 'POST' : 'GET', credentials: exportPath ? 'include' : 'same-origin', cache: 'no-store', signal: options.signal })
+    const response = await fetch(exportPath || (externalExport ? '/api/account/media/export' : media.url), { method: exportPath || externalExport ? 'POST' : 'GET', credentials: exportPath || externalExport ? 'include' : 'same-origin', ...(externalExport ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: media.url }) } : {}), cache: 'no-store', signal: options.signal })
     assertActive()
     if (!response.ok) {
       const payload = await response.json().catch(() => null)

@@ -34,7 +34,7 @@ test('independent creative security review: storage, price controls, references 
       await assert.rejects(createJob(ctx,users[0].id,'image',imageInput,'storage-unavailable'),{statusCode:503});
       assert.equal((await getWallet(ctx,users[0].id)).pointsBalance,100);
       const upload=await app.inject({method:'POST',url:'/api/reference-assets',headers:users[0].headers,payload:{dataUrl:'data:image/png;base64,'+pixel.toString('base64'),persistent:true,type:'image'}});
-      assert.equal(upload.statusCode,503);assert.match(upload.json().msg,/object storage/i);
+      assert.equal(upload.statusCode,503);assert.match(upload.json().msg,/对象存储配置不完整/);
       assert.equal(Number((await ctx.db.query('SELECT count(*) FROM oaooao_media')).rows[0].count),0);
       await ctx.db.query("UPDATE oaooao_settings SET value='{}' WHERE id='object-storage'");
     });

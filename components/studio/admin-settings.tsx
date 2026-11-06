@@ -385,11 +385,12 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
   const [plans, setPlans] = useState(settings.entitlements.plans.map((plan) => ({ ...plan, limits: { ...plan.limits }, features: [...(plan.features ?? [])], allowedGenerationKinds: allowedGenerationKinds(plan) })))
   const [entitlementsEnabled, setEntitlementsEnabled] = useState(settings.entitlements.enabled)
   const [defaultPlanId, setDefaultPlanId] = useState(settings.entitlements.defaultPlanId)
+  const [defaultStorageQuotaBytes,setDefaultStorageQuotaBytes] = useState(settings.entitlements.defaultStorageQuotaBytes ?? 10*1024**3)
   const [limits, setLimits] = useState(settings.generationCostControl)
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const entitlements = { enabled: entitlementsEnabled, defaultPlanId, plans }
+    const entitlements = { enabled: entitlementsEnabled, defaultPlanId, defaultStorageQuotaBytes, plans }
     const summary: string[] = []
     if (JSON.stringify(entitlements) !== JSON.stringify(settings.entitlements)) summary.push('套餐权益')
     if (canUpstream && JSON.stringify(limits) !== JSON.stringify(settings.generationCostControl)) summary.push('生成成本控制')
@@ -412,6 +413,7 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
       <AdminSectionCard title="权益方案" description="用户所属套餐决定每日积分与各类调用上限。未开通或已到期用户使用默认方案；调用上限为 0 表示不限，每日赠送为 0 表示不赠送。">
         <fieldset disabled={saving} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-4">
+            <AdminField label="默认存储容量（GB）" hint="未配置会员容量时使用；0 表示不限。"><AdminInput type="number" min="0" step="0.01" value={defaultStorageQuotaBytes/1024**3} onChange={event=>setDefaultStorageQuotaBytes(Math.round(Number(event.target.value)*1024**3))}/></AdminField>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={entitlementsEnabled} onChange={(event) => setEntitlementsEnabled(event.target.checked)} />启用套餐权益限制</label>
             <AdminField label="默认方案" className="w-40">
               <AdminSelect value={defaultPlanId} onChange={(event) => setDefaultPlanId(event.target.value)}>
@@ -428,6 +430,7 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <AdminField label="方案名称"><AdminInput value={plan.name} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, name: event.target.value } : item))} /></AdminField>
+                  <AdminField label="存储容量（GB）" hint="上传与生成结果共用；0 表示不限。降额不删除已有文件，超额后不能新增。"><AdminInput type="number" min="0" step="0.01" value={(plan.storageQuotaBytes??defaultStorageQuotaBytes)/1024**3} onChange={event=>setPlans(current=>current.map((item,position)=>position===index?{...item,storageQuotaBytes:Math.round(Number(event.target.value)*1024**3)}:item))}/></AdminField>
                   <AdminField label="每日赠送积分"><AdminInput type="number" min="0" value={plan.dailyPoints ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, dailyPoints: Number(event.target.value) || 0 } : item))} /></AdminField>
                   <AdminField label="每日积分消耗上限"><AdminInput type="number" min="0" value={plan.limits.dailyPointSpend ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyPointSpend: Number(event.target.value) || 0 } } : item))} /></AdminField>
                   <AdminField label="每日图片上限"><AdminInput type="number" min="0" value={plan.limits.dailyImages ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyImages: Number(event.target.value) || 0 } } : item))} /></AdminField>
@@ -443,6 +446,7 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
               </div>
             ))}
             {!plans.length && <AdminEmpty title="暂无权益方案" description="系统尚未返回任何套餐方案定义。" />}
+            <ControlButton type="button" variant="secondary" onClick={()=>{const id=crypto.randomUUID();setPlans(current=>[...current,{id,name:'新会员方案',enabled:true,dailyPoints:0,storageQuotaBytes:defaultStorageQuotaBytes,limits:{dailyPointSpend:0,dailyApiCalls:0,dailyImages:0,dailyVideos:0,dailyAudio:0,dailyText:0},features:[],allowedGenerationKinds:ENTITLEMENT_GENERATION_KINDS.map(item=>item.value)}]);if(!defaultPlanId)setDefaultPlanId(id)}}>新增会员方案</ControlButton>
           </div>
         </fieldset>
       </AdminSectionCard>
@@ -612,7 +616,7 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
       const result = await updateObjectStorage(input)
       assertStorageSaved(result, input)
       setAccessKeyId(''); setSecretAccessKey('')
-      onMessage('对象存储配置已保存，保持未启用。' + CREATIVE_STORAGE_NOTICE)
+      onMessage(draft.enabled?'对象存储已启用，新上传和生成素材将保存到已配置的存储桶。':'对象存储配置已保存，新素材继续使用服务器存储。')
       onReload()
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : '对象存储配置保存失败')
@@ -632,18 +636,18 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
 
   return (
     <div className="flex flex-col gap-4">
-      <AdminNotice tone="warning">{CREATIVE_STORAGE_NOTICE} 可以保存连接参数供后续使用，当前不能启用对象存储写入。密钥留空表示保留已保存值。</AdminNotice>
-      {storage.enabled && <AdminNotice tone="danger">已保存的配置仍标记为启用，当前版本会因此拒绝上传与媒体生成。页面不会自动更改它；如需恢复服务器存储，请取消下方勾选并明确保存。</AdminNotice>}
-      <AdminSectionCard title="对象存储（OSS / S3）" description="连接检测使用已保存配置，只核对服务端返回的桶访问与写入验证状态，不会保存当前表单。" action={<div className="flex gap-2"><StatusBadge tone={storage.enabled ? 'warning' : 'muted'}>{storage.enabled ? '已配置启用 · 当前不支持' : '未启用'}</StatusBadge></div>}>
+      <AdminNotice>{CREATIVE_STORAGE_NOTICE} 私有桶通过短时签名链接下载。密钥留空保留原值，仅加密保存在此部署中。</AdminNotice>
+      <AdminSectionCard title="对象存储 · Cloudflare R2 / S3" description="保存后可执行读写删除检测。检测会上传并清理一个小测试文件，不修改当前表单。" action={<StatusBadge tone={storage.enabled?'success':'muted'}>{storage.enabled?'已启用':'未启用'}</StatusBadge>}>
         <div className="mb-4 flex flex-wrap gap-2">
           <StatusBadge tone={storage.hasAccessKeyId ? 'success' : 'muted'}>访问密钥标识 {storage.hasAccessKeyId ? '已配置' : '未配置'}</StatusBadge>
           <StatusBadge tone={storage.hasSecretAccessKey ? 'success' : 'muted'}>访问密钥 {storage.hasSecretAccessKey ? '已配置' : '未配置'}</StatusBadge>
           <span className="text-xs text-muted-foreground">最近更新：{storage.updatedAt ? new Date(storage.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '-'}</span>
         </div>
         <fieldset disabled={busy || checking} className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.enabled} disabled={!storage.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />启用外部存储（暂不支持，可取消已有启用状态）</label>
+          <AdminField label="存储服务"><AdminSelect value={draft.provider||'s3'} onChange={event=>setDraft({...draft,provider:event.target.value as 's3'|'r2',...(event.target.value==='r2'?{region:'auto',forcePathStyle:true}:{})})}><option value="r2">Cloudflare R2</option><option value="s3">S3 兼容存储</option></AdminSelect></AdminField>
+          <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />启用对象存储，保存新素材</label>
           <label className="flex items-center gap-2 self-end text-sm"><input type="checkbox" checked={draft.forcePathStyle} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} />使用路径式访问（Path Style）</label>
-          <AdminField label="服务地址（Endpoint）"><AdminInput value={draft.endpoint} onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} placeholder="https://s3.example.com" /></AdminField>
+          <AdminField label="服务地址（Endpoint）" hint={draft.provider==='r2'?'使用 R2 控制台中的 S3 API 地址，地域填 auto。':''}><AdminInput value={draft.endpoint} onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} placeholder={draft.provider==='r2'?'https://<账户ID>.r2.cloudflarestorage.com':'https://s3.example.com'} /></AdminField>
           <AdminField label="地域（Region）"><AdminInput value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></AdminField>
           <AdminField label="存储桶（Bucket）"><AdminInput value={draft.bucket} onChange={(event) => setDraft({ ...draft, bucket: event.target.value })} /></AdminField>
           <AdminField label="对象前缀"><AdminInput value={draft.prefix} onChange={(event) => setDraft({ ...draft, prefix: event.target.value })} /></AdminField>
@@ -651,9 +655,9 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
           <AdminField label="访问密钥（Secret Access Key）" hint={storage.hasSecretAccessKey ? '已保存，留空表示不修改。' : '尚未保存。'}><AdminInput type="password" value={secretAccessKey} onChange={(event) => setSecretAccessKey(event.target.value)} autoComplete="new-password" placeholder={storage.hasSecretAccessKey ? '留空表示不修改' : ''} /></AdminField>
         </fieldset>
       </AdminSectionCard>
-      {!storage.enabled && <p className="text-xs text-muted-foreground">当前仅能检测已保存且标记启用的既有配置。无需为了检测而启用存储；连接参数可先保存。</p>}
+      <p className="text-xs text-muted-foreground">可先保存并检测连接参数，再启用。已有对象未清理前不能更换存储桶，避免素材失联。</p>
       <div className="flex flex-wrap justify-end gap-2">
-        <ControlButton variant="secondary" onClick={() => void check()} disabled={busy || checking || !storage.enabled}><Cloud className="size-3.5" />{checking ? '检测中' : '检测已保存的桶'}</ControlButton>
+        <ControlButton variant="secondary" onClick={() => void check()} disabled={busy || checking || !storage.bucket}><Cloud className="size-3.5" />{checking ? '检测中' : '检测上传、读取与删除'}</ControlButton>
         <ControlButton variant="primary" onClick={() => void save()} disabled={busy || checking}><Save className="size-3.5" />{busy ? '保存中' : '保存存储配置'}</ControlButton>
       </div>
     </div>
