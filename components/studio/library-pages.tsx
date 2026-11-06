@@ -8,9 +8,7 @@ import {
   Clock3,
   Copy,
   FolderPlus,
-  Grid2X2,
   Image as ImageIcon,
-  List,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -60,7 +58,7 @@ import type { AssetCategory, Asset, Task, TaskStatus } from '@/lib/studio/types'
 import { assetCategoryLabels, assetCategoryOf } from '@/lib/studio/reference-assets'
 import { useUiText } from '@/lib/studio/i18n'
 import { filterAssetLibrary, selectVisibleAssets, type AssetMediaFilter, type AssetCategoryFilter, type AssetSort } from '@/lib/studio/asset-library'
-import { AssetLibraryCard, AssetLibraryEmpty, AssetLibraryNavigation, AssetLibraryPreview, AssetLibraryRow } from './asset-library-ui'
+import { AssetLibraryCard, AssetLibraryEmpty, AssetLibraryModal, AssetLibraryNavigation, AssetLibraryPreview, AssetLibraryRow, AssetLibrarySelectionPanel, AssetLibraryViewControl } from './asset-library-ui'
 
 /**
  * 把后端素材库记录转换成素材条目。
@@ -122,7 +120,7 @@ export function AssetsPage() {
   const [mediaFilter, setMediaFilter] = useState<AssetMediaFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState<AssetCategoryFilter>('all')
   const [sort, setSort] = useState<AssetSort>('newest')
-  const [view, setView] = useState('grid')
+  const [view, setView] = useState<'grid' | 'list'>('grid')
   const [selectionMode, setSelectionMode] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null)
@@ -378,7 +376,7 @@ export function AssetsPage() {
 
   return (
     <div data-asset-library className="mx-auto w-full max-w-[1720px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8 xl:px-10" onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); setUploadOpen(true); setDragActive(true) } }}>
-      <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/ogg,audio/mp4" className="sr-only" aria-label={tx('选择上传文件')} onChange={onFiles} disabled={uploading} />
+      <input ref={fileRef} type="file" tabIndex={-1} multiple accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/ogg,audio/mp4" className="sr-only" aria-label={tx('选择上传文件')} onChange={onFiles} disabled={uploading} />
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3"><h1 className="text-2xl font-semibold tracking-tight text-foreground">{tx('创作资产')}</h1><span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] tabular-nums text-muted-foreground">{tx('已载入 {0} 项', [mergedAssets.length])}</span></div>
@@ -392,8 +390,8 @@ export function AssetsPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             <label className="flex h-11 min-w-0 flex-1 basis-52 items-center gap-2.5 rounded-xl border border-border bg-card px-3.5 text-muted-foreground focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15"><Search className="size-4 shrink-0" aria-hidden="true" /><span className="sr-only">{tx('搜索素材')}</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder={tx('搜索名称、标签或引用位置')} className="w-full min-w-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" />{search && <button type="button" onClick={() => setSearch('')} aria-label={tx('清空搜索')} className="-mr-2 flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted"><X className="size-4" /></button>}</label>
             <label className="shrink-0"><span className="sr-only">{tx('排序方式')}</span><select value={sort} onChange={event => setSort(event.target.value as AssetSort)} className="h-11 rounded-xl border border-border bg-card px-3 text-sm text-foreground"><option value="newest">{tx('最新添加')}</option><option value="oldest">{tx('最早添加')}</option><option value="name">{tx('按名称排序')}</option></select></label>
-            <div role="group" aria-label={tx('素材展示方式')} className="flex h-11 shrink-0 rounded-xl border border-border bg-card p-1">{[{ value: 'grid', label: '缩略图', icon: Grid2X2 }, { value: 'list', label: '列表', icon: List }].map(option => <button key={option.value} type="button" aria-label={tx(option.label)} title={tx(option.label)} aria-pressed={view === option.value} onClick={() => setView(option.value)} className={cn('flex w-11 items-center justify-center rounded-lg transition-colors', view === option.value ? 'bg-muted text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}><option.icon className="size-4" /></button>)}</div>
-            <ControlButton className="min-h-11 rounded-xl" aria-pressed={selectionMode} disabled={projectBusy || deleting} onClick={() => { setSelectionMode(current => !current); setSelected([]) }} variant={selectionMode ? 'primary' : 'secondary'}><CheckSquare2 className="size-4" />{tx(selectionMode ? '退出多选' : '批量选择')}</ControlButton>
+            <AssetLibraryViewControl value={view} onChange={setView} />
+            <ControlButton className="min-h-11 rounded-xl" aria-pressed={selectionMode} aria-expanded={selectionMode} aria-controls="asset-selection-panel" disabled={projectBusy || deleting} onClick={() => { setSelectionMode(current => !current); setSelected([]) }} variant={selectionMode ? 'primary' : 'secondary'}><CheckSquare2 className="size-4" />{tx(selectionMode ? '退出多选' : '批量选择')}</ControlButton>
           </div>
           <div className="mb-5 mt-4 flex min-h-8 flex-wrap items-center justify-between gap-2 border-b border-border/70 pb-4">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span aria-live="polite">{tx('显示 {0} 项', [visible.length])}</span>{mediaFilter !== 'all' && <button type="button" aria-label={tx('清除素材类型筛选')} onClick={() => setMediaFilter('all')} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-studio-accent/8 px-2 text-studio-accent">{tx(mediaFilter === 'image' ? '图片' : mediaFilter === 'video' ? '视频' : '音频')}<X className="size-3" /></button>}{categoryFilter !== 'all' && <button type="button" aria-label={tx('清除用途分类筛选')} onClick={() => setCategoryFilter('all')} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-studio-accent/8 px-2 text-studio-accent">{tx(assetCategoryLabels[categoryFilter])}<X className="size-3" /></button>}{filtered && <button type="button" className="min-h-8 px-1 underline underline-offset-4 hover:text-foreground" onClick={clearFilters}>{tx('清除筛选')}</button>}</div>
@@ -405,21 +403,21 @@ export function AssetsPage() {
             {serverWorks.message && <Notice tone="warning">{tx('生成结果读取失败：{0}。下方仅显示已获取到的内容。', [serverWorks.message])}</Notice>}
             {storedMedia.error && <Notice tone="warning">{tx('存储文件读取失败：{0}', [storedMedia.error])}</Notice>}
           </div>
-          {selectionMode && <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-studio-accent/20 bg-studio-accent/5 px-3 py-2.5 text-xs">
+          <AssetLibrarySelectionPanel open={selectionMode}><div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-studio-accent/20 bg-studio-accent/5 px-3 py-2.5 text-xs">
             <label className="flex min-h-11 cursor-pointer items-center gap-2"><input type="checkbox" disabled={!visible.length} checked={visible.length > 0 && visible.slice(0, 100).every(item => selected.includes(item.id))} onChange={event => { if (event.target.checked && new Set([...selected, ...visible.map(item => item.id)]).size > 100) setNotice(tx('每次最多选择 100 项素材')); setSelected(current => selectVisibleAssets(current, visible.map(item => item.id), event.target.checked)) }} className="size-4 accent-studio-accent" />{tx('选择当前结果')}</label><span className="mr-auto text-muted-foreground" aria-live="polite">{tx('已选 {0} / 100 项', [selected.length])}</span>
             {selected.length > 0 && <><ControlButton className="min-h-11" variant="ghost" onClick={() => setSelected([])}>{tx('取消选择')}</ControlButton><ControlButton className="min-h-11" variant="secondary" disabled={projectBusy || deleting} onClick={() => void addToProject()}><FolderPlus className="size-3.5" />{tx(projectBusy ? '处理中…' : '加入项目')}</ControlButton>{selected.length === 1 && <ControlButton className="min-h-11" variant="ghost" disabled={projectBusy || deleting} onClick={() => void removeReference(selected[0])}>{tx('移除引用')}</ControlButton>}<ControlButton className="min-h-11" variant="danger" disabled={deleting || projectBusy} onClick={() => setDeleteMany(true)}><Trash2 className="size-3.5" />{tx('删除所选（{0}）', [selected.length])}</ControlButton></>}
-          </div>}
+          </div></AssetLibrarySelectionPanel>
           {visible.length === 0 && (serverLibrary.state === 'loading' || serverWorks.state === 'loading' || storedMedia.loading) ? <div role="status" className="flex min-h-80 items-center justify-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" />{tx('正在读取素材库…')}</div> : visible.length === 0 ? <AssetLibraryEmpty filtered={filtered} unavailable={serverLibrary.state === 'error' || serverWorks.state === 'error' || Boolean(storedMedia.error)} onRetry={() => bumpAccountData()} onReset={clearFilters} onUpload={() => { setNotice(''); setUploadOpen(true) }} /> : view === 'grid' ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">{visible.map(asset => <AssetLibraryCard key={asset.id} asset={asset} selected={selected.includes(asset.id)} selectionMode={selectionMode} onToggle={() => toggle(asset.id)} onDelete={() => setDeleteId(asset.id)} onRename={() => openRename(asset)} onPreview={() => setPreviewAsset(asset)} />)}</div> : <div className="overflow-hidden rounded-2xl border border-border bg-card">{visible.map(asset => <AssetLibraryRow key={asset.id} asset={asset} selected={selected.includes(asset.id)} selectionMode={selectionMode} onToggle={() => toggle(asset.id)} onDelete={() => setDeleteId(asset.id)} onRename={() => openRename(asset)} onPreview={() => setPreviewAsset(asset)} />)}</div>}
           {(serverLibrary.hasMore || storedMedia.hasMore) && <div className="mt-6 flex flex-wrap justify-center gap-3">{serverLibrary.hasMore && <ControlButton className="min-h-11" variant="secondary" onClick={() => void serverLibrary.loadMore()} disabled={serverLibrary.loadingMore || serverLibrary.state === 'loading'}>{tx(serverLibrary.loadingMore ? '正在加载…' : '加载更多素材')}</ControlButton>}{storedMedia.hasMore && <ControlButton className="min-h-11" variant="secondary" disabled={storedMedia.loading} onClick={() => void storedMedia.loadMore()}>{tx(storedMedia.loading ? '正在加载…' : '加载更多存储文件')}</ControlButton>}</div>}
         </section>
       </div>
-      <Modal open={uploadOpen} onClose={() => { if (!uploading) { setUploadOpen(false); setDragActive(false) } }} title={tx('上传素材')} description={tx('一次上传，在图片、视频与项目创作中随时引用。')} className="max-w-xl">
+      <AssetLibraryModal open={uploadOpen} onClose={() => { if (!uploading) { setUploadOpen(false); setDragActive(false) } }} title={tx('上传素材')} description={tx('一次上传，在图片、视频与项目创作中随时引用。')} className="max-w-xl">
         <label className="mb-5 flex flex-col gap-2 text-sm font-medium text-foreground">{tx('上传至分类')}<select value={uploadCategory} disabled={uploading} onChange={event => setUploadCategory(event.target.value as AssetCategory)} className="h-11 rounded-xl border border-border bg-card px-3 text-sm font-normal">{Object.entries(assetCategoryLabels).map(([value, label]) => <option key={value} value={value}>{tx(label)}</option>)}</select><span className="text-xs font-normal leading-5 text-muted-foreground">{tx('上传后也可在素材卡片中修改名称与分类。')}</span></label>
         <section aria-label={tx('文件上传区')} onDragEnter={event => { event.preventDefault(); event.stopPropagation(); setDragActive(true) }} onDragOver={event => event.preventDefault()} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false) }} onDrop={onDrop} className={cn('flex min-h-56 flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-8 text-center transition-colors', dragActive ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-muted/30')}><span className="mb-4 flex size-12 items-center justify-center rounded-xl border border-border bg-card text-studio-accent">{uploading ? <LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" /> : <Upload className="size-5" />}</span><p className="text-sm font-medium text-foreground">{tx('拖拽文件到这里')}</p><p className="mt-2 text-xs leading-5 text-muted-foreground">{tx('支持图片、视频与音频，可一次选择多个文件。')}</p><ControlButton variant="secondary" className="mt-5 min-h-11 rounded-xl px-5" disabled={uploading} onClick={() => fileRef.current?.click()}>{tx(uploading ? '上传中…' : '选择文件')}</ControlButton></section>
         {notice && <p role="status" className="mt-4 text-xs leading-5 text-muted-foreground">{notice}</p>}
-      </Modal>
+      </AssetLibraryModal>
       <AssetLibraryPreview asset={previewAsset} onClose={() => setPreviewAsset(null)} onRename={openRename} />
-      <Modal
+      <AssetLibraryModal
         open={Boolean(deleteId)||deleteMany}
         onClose={() => {if(!deleting){setDeleteId(null);setDeleteMany(false)}}}
         title={deleteMany?`删除所选 ${selected.length} 项素材`:'删除素材'}
@@ -434,8 +432,8 @@ export function AssetsPage() {
         <Notice tone="warning">
           将删除所选文件、对应素材库记录及生成记录中的结果文件，删除后无法恢复。项目、历史版本或进行中任务仍在使用的文件会保留并说明原因；实际清理成功后释放容量。
         </Notice>
-      </Modal>
-      <Modal
+      </AssetLibraryModal>
+      <AssetLibraryModal
         open={Boolean(renameId)}
         onClose={() => { if (!renaming) setRenameId(null) }}
         title={renameSource === 'generation' ? '编辑生成资产' : '编辑素材'}
@@ -458,7 +456,7 @@ export function AssetsPage() {
           </select>
           <span className="text-[11px] leading-4 text-muted-foreground">分类会保存到素材库，用于筛选和后续选择参考素材。</span>
         </label>
-      </Modal>
+      </AssetLibraryModal>
     </div>
   )
 }

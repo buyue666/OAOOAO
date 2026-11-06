@@ -1,0 +1,65 @@
+/* Motion Prompt #049-072 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#049
+   UI kit port: use OAO surface/accent tokens; easeOutCubic is exact below.
+   easeInOutCubic is mapped to cubic-bezier(.65, 0, .35, 1). No looping motion. */
+
+/* Motion Prompt #060 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#060 */
+.viewSwitch { position: relative; isolation: isolate; }
+.viewIndicator {
+  position: absolute;
+  inset-block: 4px;
+  left: 4px;
+  width: 44px;
+  border-radius: var(--radius-lg);
+  background: var(--muted);
+  box-shadow: var(--lg-shadow-1);
+  pointer-events: none;
+  transition: transform 250ms cubic-bezier(.65, 0, .35, 1);
+}
+.viewSwitch[data-view='list'] .viewIndicator { transform: translateX(100%); }
+.viewChoice { position: relative; z-index: 1; transition: color 250ms cubic-bezier(.65, 0, .35, 1); }
+
+/* Motion Prompt #055 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#055 */
+.menu[data-state='open'] { animation: menuIn 280ms cubic-bezier(.333333, 1, .666667, 1); }
+.menu[data-state='closed'] { animation: menuOut 200ms cubic-bezier(.65, 0, .35, 1); pointer-events: none; }
+@keyframes menuIn { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes menuOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(6px); } }
+
+/* Motion Prompt #049 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#049
+   CSS starting-style + transitions allow an interrupted close to reverse smoothly. */
+.dialogBackdrop {
+  opacity: 1;
+  background: color-mix(in srgb, var(--studio-ink) 42%, transparent);
+  transition: opacity 320ms cubic-bezier(.333333, 1, .666667, 1);
+}
+.dialogSurface {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 320ms cubic-bezier(.333333, 1, .666667, 1), transform 320ms cubic-bezier(.333333, 1, .666667, 1);
+}
+@starting-style {
+  .dialogBackdrop[data-state='open'] { opacity: 0; }
+  .dialogBackdrop[data-state='open'] .dialogSurface { opacity: 0; transform: scale(.9); }
+}
+.dialogBackdrop[data-state='closed'] { opacity: 0; pointer-events: none; transition-duration: 280ms; transition-timing-function: cubic-bezier(.65, 0, .35, 1); }
+.dialogBackdrop[data-state='closed'] .dialogSurface { opacity: 0; transform: scale(.9); transition-duration: 280ms; transition-timing-function: cubic-bezier(.65, 0, .35, 1); }
+
+/* Motion Prompt #052 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#052
+   The disclosed content is the selection toolbar; its own height sets the travel. */
+.selectionPanel { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 320ms cubic-bezier(.65, 0, .35, 1), opacity 320ms cubic-bezier(.65, 0, .35, 1); }
+.selectionPanel[data-open='true'] { grid-template-rows: 1fr; opacity: 1; transition-duration: 350ms; }
+.selectionClip { min-height: 0; overflow: hidden; }
+
+/* Motion Prompt #072 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#072
+   Play the empty-state entrance once and hold: 350ms, 8px, linear. */
+.emptyContent { display: flex; flex-direction: column; align-items: center; animation: emptyIn 350ms linear both; }
+@keyframes emptyIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.card { transition: border-color 150ms, box-shadow 150ms, background-color 150ms; }
+.row { transition: background-color 150ms; }
+.navigationChoice { transition-duration: 150ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .viewIndicator, .viewChoice, .dialogBackdrop, .dialogSurface, .selectionPanel,
+  .card, .row, .navigationChoice { transition: none; }
+  .menu[data-state], .emptyContent { animation: none; }
+}

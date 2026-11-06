@@ -432,18 +432,34 @@ function useDialogBehavior(open: boolean, onClose: () => void) {
   return containerRef
 }
 
-export function Modal({ open, title, description, onClose, children, footer, className }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; className?: string }) {
+export function Modal({ open, title, description, onClose, children, footer, className, motion }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; className?: string; motion?: { backdropClassName: string; surfaceClassName: string; exitMs: number; titleId?: string } }) {
   const tx = useUiText()
   const containerRef = useDialogBehavior(open, onClose)
-  if (!open) return null
+  const [present, setPresent] = useState(open)
+  const animated = Boolean(motion)
+  const exitMs = motion?.exitMs ?? 0
+  // Keep the last open contents while a parent clears its preview/edit state.
+  const lastOpen = useRef({ title, description, children, footer, className })
+  if (open) lastOpen.current = { title, description, children, footer, className }
+  const display = !open && animated ? lastOpen.current : { title, description, children, footer, className }
+  const titleId = motion?.titleId ?? 'modal-title'
+  useEffect(() => {
+    if (open) { setPresent(true); return }
+    if (!animated || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setPresent(false); return }
+    if (!present) return
+    containerRef.current?.querySelectorAll('video, audio').forEach(element => (element as HTMLMediaElement).pause())
+    const timeout = window.setTimeout(() => setPresent(false), exitMs)
+    return () => window.clearTimeout(timeout)
+  }, [open, animated, exitMs, present, containerRef])
+  if (!open && !(animated && present)) return null
   if (typeof document === 'undefined') return null
   const portalRoot = document.querySelector<HTMLElement>('[data-studio-portal-root]') ?? document.body
   return createPortal(
-    <div className="studio-modal-backdrop motion-fade fixed inset-0 z-50 flex items-center justify-center bg-studio-ink/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={containerRef} tabIndex={-1} onKeyDown={event => {if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); onClose()}}} className={cn('studio-modal-surface lg-glass-overlay motion-panel flex max-h-[calc(100dvh-32px)] w-full max-w-lg flex-col overflow-hidden border border-border outline-none', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4"><div><h2 id="modal-title" className="text-base font-semibold tracking-[-0.01em] text-foreground">{title}</h2>{description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>}</div><IconAction label={tx("关闭")} onClick={onClose}><X /></IconAction></div>
-        <div className="min-h-0 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex max-h-32 flex-wrap items-center justify-end gap-2 overflow-y-auto border-t border-border bg-muted/40 px-4 py-3 sm:px-5">{footer}</div>}
+    <div data-state={open ? 'open' : 'closed'} aria-hidden={!open || undefined} inert={!open || undefined} className={cn('studio-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4', motion?.backdropClassName ?? 'motion-fade bg-studio-ink/55')} role="presentation" onMouseDown={(event) => { if (open && event.target === event.currentTarget) onClose() }}>
+      <section ref={containerRef} tabIndex={-1} onKeyDown={event => {if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); onClose()}}} className={cn('studio-modal-surface lg-glass-overlay flex max-h-[calc(100dvh-32px)] w-full max-w-lg flex-col overflow-hidden border border-border outline-none', motion?.surfaceClassName ?? 'motion-panel', display.className)} role="dialog" aria-modal={open || undefined} aria-labelledby={titleId}>
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4"><div><h2 id={titleId} className="text-base font-semibold tracking-[-0.01em] text-foreground">{display.title}</h2>{display.description && <p className="mt-1 text-xs leading-5 text-muted-foreground">{display.description}</p>}</div><IconAction label={tx("关闭")} onClick={onClose}><X /></IconAction></div>
+        <div className="min-h-0 overflow-y-auto px-5 py-4">{display.children}</div>
+        {display.footer && <div className="flex max-h-32 flex-wrap items-center justify-end gap-2 overflow-y-auto border-t border-border bg-muted/40 px-4 py-3 sm:px-5">{display.footer}</div>}
       </section>
     </div>,
     portalRoot,
