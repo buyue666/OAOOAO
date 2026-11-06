@@ -62,7 +62,6 @@ import {
 import { useServerHistory, useServerWorks } from '@/lib/studio/use-account-data'
 import { useMediaLibrary } from '@/lib/studio/use-media-library'
 import { deleteAccountAssets, formatStorageBytes, mediaIdFromUrl, useStoredMedia } from '@/lib/studio/account-storage'
-import { StorageUsageLink } from './storage-usage'
 import { bumpAccountData } from '@/lib/studio/account-data-sync'
 import { addMediaToProject, removeMediaFromProject } from '@/lib/studio/project-media'
 import { cn } from '@/lib/utils'
@@ -415,7 +414,6 @@ export function AssetsPage() {
           </>
         )}
       />
-      <StorageUsageLink detail />
       <section
         aria-label="上传素材"
         onDragEnter={(event) => { event.preventDefault(); setDragActive(true) }}
