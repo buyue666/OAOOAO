@@ -17,12 +17,13 @@ import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
 import { useCheckIn } from '@/lib/studio/use-check-in'
 import { checkInDisplay } from '@/lib/studio/check-in-rules'
 import { AccountWatermarkMenuItem } from './account-watermark'
+import { WorkspaceSwitcher } from './workspace-switcher'
 
 const creditChipClass = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)]'
 const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70'
 
 /**
- * 顶栏只承担三件事：当前页面名称、积分余额、通知与账户入口。
+ * 顶栏展示当前页面与空间、积分余额、通知与账户入口。
  * 主题与语言切换放进账户菜单，避免顶栏堆叠多个工具按钮。
  */
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
@@ -125,6 +126,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             <span className="tabular-nums">{creditsLabel}</span>
           </span>
         ))}
+
+        <WorkspaceSwitcher />
 
         <div className="relative" ref={notificationsRef}>
           <Tooltip label={tx("通知，{0} 条未读", [notificationCount])}>

@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation'
 import { Suspense, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
-import { WorkspaceSwitcher } from './workspace-switcher'
 import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 
 function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -42,7 +41,6 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
           </button>
         </div>
 
-        <div className="pt-3"><WorkspaceSwitcher onNavigate={onClose} /></div>
         <nav aria-label={tx("移动端主导航")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           {studioPrimaryNav.map((item) => (
             <StudioNavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
