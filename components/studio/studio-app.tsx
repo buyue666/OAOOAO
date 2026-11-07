@@ -10,6 +10,7 @@ import { Topbar } from './topbar'
 import { cn } from '@/lib/utils'
 import { HomepageAnnouncement } from '@/components/homepage-announcement'
 import { RETURN_PATH_KEY } from '@/lib/studio/return-path'
+import { isStudioPreview } from '@/lib/studio/preview-mode'
 
 function isProtectedStudioRoute(pathname: string) {
   return pathname === '/studio'
@@ -49,8 +50,9 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   const isWorkspace = pathname === '/image' || pathname === '/video'
   const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/')
   const isProtectedRoute = isProtectedStudioRoute(pathname)
-  const authChecking = isProtectedRoute && (!state.hydrated || state.backendStatus === 'checking')
-  const authRedirecting = isProtectedRoute && state.hydrated && (state.backendStatus === 'unauthenticated' || state.backendStatus === 'offline')
+  const authRequired = isProtectedRoute && !isStudioPreview()
+  const authChecking = authRequired && (!state.hydrated || state.backendStatus === 'checking')
+  const authRedirecting = authRequired && state.hydrated && (state.backendStatus === 'unauthenticated' || state.backendStatus === 'offline')
 
   useEffect(() => {
     if (!authRedirecting) return

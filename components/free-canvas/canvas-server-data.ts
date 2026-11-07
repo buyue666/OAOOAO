@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import type { CanvasBackendProject, CanvasSummary } from '@/lib/studio/api'
+import { isStudioPreview } from '@/lib/studio/preview-mode'
 
 type LoadOutcome<T> =
   | { kind: 'ok'; data: T }
@@ -56,7 +57,10 @@ async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>
 
 export async function loadCanvasSummaries(): Promise<{ projects: CanvasSummary[]; error: string | null }> {
   const outcome = await loadFromBackend<{ projects: CanvasSummary[] }>('/api/canvas/projects?page=1&pageSize=100')
-  if (outcome.kind === 'unauthorized') redirect('/login')
+  if (outcome.kind === 'unauthorized') {
+    if (isStudioPreview()) return { projects: [], error: null }
+    redirect('/login')
+  }
   if (outcome.kind !== 'ok') {
     return { projects: [], error: outcome.kind === 'error' ? outcome.message : '画布列表不存在' }
   }
@@ -65,7 +69,10 @@ export async function loadCanvasSummaries(): Promise<{ projects: CanvasSummary[]
 
 export async function loadCanvasProject(projectId: string): Promise<{ project: CanvasBackendProject | null; error: string | null }> {
   const outcome = await loadFromBackend<{ project: CanvasBackendProject }>(`/api/canvas/projects/${encodeURIComponent(projectId)}`)
-  if (outcome.kind === 'unauthorized') redirect('/login')
+  if (outcome.kind === 'unauthorized') {
+    if (isStudioPreview()) return { project: null, error: '免登录预览不读取个人画布，请登录后打开已保存的项目。' }
+    redirect('/login')
+  }
   if (outcome.kind === 'not-found') notFound()
   if (outcome.kind !== 'ok') return { project: null, error: outcome.kind === 'error' ? outcome.message : null }
   return { project: outcome.data.project, error: null }

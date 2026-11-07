@@ -64,10 +64,12 @@ test('project identifiers cannot turn a compatibility redirect into another rout
   await assert.rejects(RootPage({ params: Promise.resolve({ projectId: '../outside?x=1#fragment' }) }), (error) => error.destination === '/canvas/..%2Foutside%3Fx%3D1%23fragment')
 })
 
-async function canvasLoader(response) {
+async function canvasLoader(response, environment = 'production') {
+  const preview = await loadModule('../lib/studio/preview-mode.ts', {}, { process: { env: { NODE_ENV: environment } } })
   return loadModule('../components/free-canvas/canvas-server-data.ts', {
     'next/headers': { cookies: async () => ({ toString: () => 'synthetic-session=fixture' }) },
     'next/navigation': navigation,
+    '@/lib/studio/preview-mode': preview,
   }, { process: { env: { OAOAO_BACKEND_URL: 'http://synthetic.invalid' } }, fetch: async () => response })
 }
 
@@ -81,4 +83,24 @@ test('redirect destination respects authentication and does not substitute demo 
   await assert.rejects(unsigned.loadCanvasProject('canvas-test'), (error) => error.destination === '/login')
   const offline = await canvasLoader(new Response('{}', { status: 503 }))
   assert.deepEqual(await offline.loadCanvasProject('canvas-test'), { project: null, error: '画布服务返回 503' })
+})
+
+test('production canvas lists still require a real session', async () => {
+  const loader = await canvasLoader(new Response('{}', { status: 401 }))
+  await assert.rejects(loader.loadCanvasSummaries(), (error) => error.destination === '/login')
+})
+
+test('development preview can show the canvas list without exposing private projects', async () => {
+  const loader = await canvasLoader(new Response('{}', { status: 401 }), 'development')
+  assert.deepEqual(await loader.loadCanvasSummaries(), { projects: [], error: null })
+  const detail = await loader.loadCanvasProject('private-canvas')
+  assert.equal(detail.project, null)
+  assert.match(detail.error, /免登录预览.*登录/)
+})
+
+test('development preview preserves real backend errors and missing-project responses', async () => {
+  const offline = await canvasLoader(new Response('{}', { status: 503 }), 'development')
+  assert.deepEqual(await offline.loadCanvasSummaries(), { projects: [], error: '画布服务返回 503' })
+  const missing = await canvasLoader(new Response('{}', { status: 404 }), 'development')
+  await assert.rejects(missing.loadCanvasProject('unknown-canvas'), (error) => error.status === 404)
 })

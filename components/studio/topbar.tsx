@@ -8,7 +8,8 @@ import { Bell, CalendarCheck, Coins, Crown, Languages, LogIn, LogOut, Menu, Moon
 import { useStudio } from '@/lib/studio/store'
 import { logout } from '@/lib/studio/account-api'
 import { useLocale } from '@/lib/studio/i18n'
-import { Tooltip } from './ui'
+import { StatusBadge, Tooltip } from './ui'
+import { isStudioPreview } from '@/lib/studio/preview-mode'
 import { localizedStudioPageTitle } from './studio-nav'
 import { cn } from '@/lib/utils'
 import { AnnouncementList, useAnnouncements } from '@/components/site-announcements'
@@ -112,6 +113,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        {isStudioPreview() && !isConnected && <StatusBadge tone="muted">免登录预览</StatusBadge>}
         {isConnected && (rechargeEnabled ? (
           <a href="/credits" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={tx("{0}，查看积分超市", [creditsLabel])} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
             <Coins className="size-4 text-studio-accent" aria-hidden="true" />

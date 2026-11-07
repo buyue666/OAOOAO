@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { AuthBrandPanel } from './auth-brand-panel'
 import { AuthField, AuthInput, AuthPasswordInput } from './auth-fields'
 import { ControlButton, Notice } from './ui'
+import { isStudioPreview } from '@/lib/studio/preview-mode'
 
 export type AuthMode = 'login' | 'register' | 'reset'
 
@@ -383,6 +384,15 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
                 )}
               </ControlButton>
             </form>
+
+            {isStudioPreview() && (
+              <div className="flex flex-col gap-2 text-center">
+                <Link href={safeNextPath(searchParams.get('next') ?? '/studio')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+                  免登录预览<ArrowRight className="size-4" aria-hidden="true" />
+                </Link>
+                <p className="text-xs leading-5 text-muted-foreground">仅开发预览可用；生成、保存和个人数据仍需真实登录。</p>
+              </div>
+            )}
 
             {mode === 'login' && wechatLoginEnabled && (
               <section aria-label="微信扫码登录" className="flex flex-col gap-4">
