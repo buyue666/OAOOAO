@@ -9,6 +9,7 @@ import { AdminProductsPanel, AdminOrdersPanel } from './admin-commerce'
 import { AdminContentPanel } from './admin-content'
 import { AdminSettingsPanel } from './admin-settings'
 import { AdminAuditPanel } from './admin-audit'
+import { AdminTeamPlansPanel } from './admin-team-plans'
 import type { AdminSection } from '@/lib/studio/admin-types'
 
 /**
@@ -24,6 +25,7 @@ export function AdminDashboard({ section: rawSection = 'overview' }: { section?:
       {section === 'generation' && <AdminGenerationPanel />}
       {section === 'channels' && <AdminChannelsPanel />}
       {section === 'products' && <AdminProductsPanel />}
+      {section === 'team-plans' && <AdminTeamPlansPanel />}
       {section === 'orders' && <AdminOrdersPanel />}
       {section === 'content' && <AdminContentPanel />}
       {section === 'settings' && <AdminSettingsPanel />}

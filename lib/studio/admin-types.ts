@@ -38,7 +38,7 @@ export const ADMIN_PERMISSIONS: readonly AdminPermissionMeta[] = [
   { id: 'audit.read', label: '审计日志', description: '查看管理员操作与安全事件' },
 ] as const
 
-export type AdminSection = 'overview' | 'users' | 'generation' | 'channels' | 'products' | 'orders' | 'content' | 'settings' | 'audit'
+export type AdminSection = 'overview' | 'users' | 'generation' | 'channels' | 'products' | 'team-plans' | 'orders' | 'content' | 'settings' | 'audit'
 
 /* ---------------------------------- 用户 ---------------------------------- */
 

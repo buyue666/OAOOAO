@@ -233,7 +233,7 @@ export class StudioApiError extends Error {
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
-  if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
+  if (init.body && !(init.body instanceof FormData) && !headers.has('content-type')) headers.set('content-type', 'application/json')
   const response = await fetch(path, { ...init, headers, credentials: 'include', cache: 'no-store' })
   const text = await response.text()
   let payload: unknown = null

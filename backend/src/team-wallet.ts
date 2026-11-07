@@ -9,11 +9,11 @@ export async function teamWalletBalance(db: TeamDb, teamId: string) {
 }
 
 export async function teamBudget(db: TeamDb, teamId: string, userId: string) {
-  const row = (await db.query(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM') month,
+  const row = (await db.query(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM') AS budget_period,
     coalesce(sum(budget_delta) FILTER(WHERE actor_id=$2),0)::text spent,
     coalesce(sum(budget_delta),0)::text total
     FROM oaooao_team_credit_operations WHERE team_id=$1 AND budget_month=date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')::date`, [teamId, userId])).rows[0];
-  return { month: row.month, spent: row.spent as string, total: row.total as string };
+  return { month: row.budget_period, spent: row.spent as string, total: row.total as string };
 }
 
 export async function grantTeamCredits(ctx: Context, db: PoolClient, teamId: string, actorId: string, key: string, amount: CreditAmount, expiresAt: Date | null, reason: string, source = 'adjustment') {

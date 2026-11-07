@@ -81,7 +81,7 @@ export async function registerTeamGeneration(app: FastifyInstance, ctx: Context)
     const user = await ctx.requireUser(request), workspace = request.params as TeamWorkspace;
     await requireTeamProject(ctx.db, workspace.teamId, user.id, workspace.projectId);
     const rows = (await ctx.db.query('SELECT * FROM oaooao_generation_jobs WHERE team_id=$1 AND team_project_id=$2 ORDER BY created_at DESC,id LIMIT 50', [workspace.teamId, workspace.projectId])).rows;
-    return { tasks: rows.map(taskView) };
+    return { tasks: rows.map(row => ({ ...taskView(row), actorId: row.user_id })) };
   });
   app.post(root + '/:id/cancel', async request => {
     const user = await ctx.requireUser(request), { teamId, projectId, id } = request.params as TeamWorkspace & { id: string };

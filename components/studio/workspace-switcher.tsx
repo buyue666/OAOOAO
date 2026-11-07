@@ -1,45 +1,35 @@
 'use client'
 
-import { usePathname, useRouter } from 'next/navigation'
-import { Check, ChevronDown, House, Plus, Users } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { Check, Coins, House, Plus, Users } from 'lucide-react'
 import { teamIdFromPath, useTeamQuery } from '@/lib/studio/team-api'
-import { teamRoleLabels, type TeamSummary } from '@/lib/studio/team-types'
+import { teamNumber, teamRoleLabels, type TeamSummary } from '@/lib/studio/team-types'
 
-export function WorkspaceSwitcher() {
-  const pathname = usePathname()
-  const router = useRouter()
+export function WorkspaceCredits({ pathname }: { pathname: string }) {
   const teamId = teamIdFromPath(pathname)
-  const { data, error } = useTeamQuery<{ teams: TeamSummary[] }>('/api/teams')
+  const query = useTeamQuery<{ balance: number }>(teamId ? `/api/teams/${teamId}/usage` : null, 15000)
+  const label = query.data ? `团队 ${teamNumber(query.data.balance)} 积分` : query.error ? '团队积分暂不可用' : '正在读取团队积分…'
+  return <Link href={`/teams/${teamId}?tab=usage`} aria-label={`${label}，查看团队积分与容量`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)] hover:bg-muted"><Coins className="size-4 text-studio-accent" aria-hidden="true" /><span className="tabular-nums">{label}</span></Link>
+}
+
+export function WorkspaceSwitcher({ onSelect, active: open = true }: { onSelect?: () => void; active?: boolean }) {
+  const pathname = usePathname()
+  const teamId = teamIdFromPath(pathname)
+  const { data, error, isLoading, mutate } = useTeamQuery<{ teams: TeamSummary[] }>(open ? '/api/teams' : null)
   const active = data?.teams.find(team => team.id === teamId)
-  const Icon = teamId ? Users : House
   const workspaceName = active?.name ?? (teamId ? '团队空间' : '个人空间')
   const workspaceDescription = active ? `${teamRoleLabels[active.role]} · 团队钱包` : teamId ? '独立团队钱包' : '个人作品与个人钱包'
-
+  const itemClass = 'flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring aria-checked:bg-muted aria-checked:font-medium'
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" size="icon-lg" className="sm:w-auto sm:gap-2 sm:px-3" aria-label={`切换个人或团队空间，当前为${workspaceName}`} title={workspaceName} />}>
-        <Icon data-icon="inline-start" aria-hidden="true" />
-        <span className="hidden max-w-36 truncate sm:block">{workspaceName}</span>
-        <ChevronDown data-icon="inline-end" className="hidden sm:block" aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="min-w-60 max-w-[calc(100vw-1.5rem)]" align="end" side="bottom" sideOffset={8} aria-label="选择创作空间">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="flex flex-col gap-1">
-            <span className="truncate">{workspaceName}</span>
-            <span className="font-normal">{workspaceDescription}</span>
-          </DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => router.push('/studio')}><House />个人空间{!teamId && <Check className="ml-auto" />}</DropdownMenuItem>
-        </DropdownMenuGroup>
-        {!!data?.teams.length && <><DropdownMenuSeparator /><DropdownMenuGroup><DropdownMenuLabel>我的团队</DropdownMenuLabel>{data.teams.map(team => <DropdownMenuItem key={team.id} onClick={() => router.push(`/teams/${team.id}`)}><Users /><span className="max-w-44 truncate">{team.name}</span>{team.id === teamId && <Check className="ml-auto" />}</DropdownMenuItem>)}</DropdownMenuGroup></>}
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => router.push('/teams?create=1')}><Plus />创建团队</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push('/teams')}><Users />加入团队／管理团队</DropdownMenuItem>
-          {error && <DropdownMenuItem disabled>团队列表暂时不可用</DropdownMenuItem>}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div role="group" aria-label="切换个人或团队空间" className="my-2 border-y border-border py-2">
+      <div className="px-2.5 pb-2"><p className="text-[11px] font-medium text-muted-foreground">当前空间</p><p className="mt-1 break-words text-sm font-semibold">{workspaceName}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{workspaceDescription}</p></div>
+      <Link href="/studio" role="menuitemradio" aria-checked={!teamId} className={itemClass} onClick={onSelect}><House className="size-4 shrink-0 text-muted-foreground" />个人空间{!teamId && <Check className="ml-auto size-4" />}</Link>
+      <div className="max-h-48 overflow-y-auto">{data?.teams.map(team => <Link key={team.id} href={`/teams/${team.id}`} role="menuitemradio" aria-checked={team.id === teamId} className={itemClass} onClick={onSelect}><Users className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 break-words">{team.name}</span>{team.id === teamId && <Check className="size-4 shrink-0" />}</Link>)}</div>
+      {isLoading && <p role="status" className="px-2.5 py-2 text-xs text-muted-foreground">正在读取团队…</p>}
+      {error && <button type="button" role="menuitem" className={itemClass} onClick={() => void mutate()}>团队列表读取失败，点击重试</button>}
+      <Link href="/teams?create=1" role="menuitem" className={itemClass} onClick={onSelect}><Plus className="size-4 text-muted-foreground" />创建团队</Link>
+      <Link href="/teams" role="menuitem" className={itemClass} onClick={onSelect}><Users className="size-4 text-muted-foreground" />加入／管理团队</Link>
+    </div>
   )
 }

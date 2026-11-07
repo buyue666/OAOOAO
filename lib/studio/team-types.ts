@@ -15,6 +15,7 @@ export type TeamSummary = {
   reservedReviewers: number
   canDownload: boolean
   planName: string | null
+  modelIds: string[]
   subscriptionExpiresAt: string | null
   transferTo: string | null
   transferExpiresAt: string | null
@@ -81,5 +82,8 @@ export type TeamPlan = {
   taskLimit: number
   modelIds: string[]
 }
-export const formatTeamBytes = (bytes: number) => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} GB` : `${(bytes / 1024 ** 2).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} MB`
+export const formatTeamBytes = (bytes: number) => {
+  const unit = bytes >= 1024 ** 3 ? 3 : bytes >= 1024 ** 2 ? 2 : bytes >= 1024 ? 1 : 0
+  return `${(bytes / 1024 ** unit).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} ${['B', 'KB', 'MB', 'GB'][unit]}`
+}
 export const teamNumber = (value: number) => value.toLocaleString('zh-CN', { maximumFractionDigits: 4 })

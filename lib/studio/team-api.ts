@@ -1,7 +1,7 @@
 'use client'
 
 import useSWR, { useSWRConfig } from 'swr'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { request } from './api'
 import { useStudio } from './store'
 
@@ -26,16 +26,22 @@ export function useTeamAction() {
   const { mutate } = useSWRConfig()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
-  const run = useCallback(async <T,>(path: string, body?: unknown, method = 'POST'): Promise<T | undefined> => {
+  const busy = useRef(false)
+  const account = useRef(state.user.id)
+  account.current = state.user.id
+  const run = useCallback(async <T,>(path: string, body?: unknown, method = 'POST', headers?: HeadersInit): Promise<T | undefined> => {
+    if (busy.current) return
     setError('')
-    if (state.backendStatus !== 'connected') { setError('请先登录并连接后端服务。'); return }
+    if (state.backendStatus !== 'connected' || !state.user.id) { setError('请先登录并连接后端服务。'); return }
+    busy.current = true
     setPending(true)
     try {
-      const result = await request<T>(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
-      await mutate(key => Array.isArray(key) && key[0] === 'team' && key[1] === state.user.id)
+      const result = await request<T>(path, { method, headers, ...(body === undefined ? {} : { body: body instanceof FormData ? body : JSON.stringify(body) }) })
+      if (account.current !== state.user.id) return
+      await mutate(key => Array.isArray(key) && key[0] === 'team' && key[1] === state.user.id).catch(() => undefined)
       return result
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '操作未完成，请刷新后确认状态。'); return undefined }
-    finally { setPending(false) }
+    } catch (reason) { if (account.current === state.user.id) setError(reason instanceof Error ? reason.message : '操作未完成，请刷新后确认状态。'); return undefined }
+    finally { busy.current = false; setPending(false) }
   }, [mutate, state.backendStatus, state.user.id])
   return { run, pending, error, clearError: () => setError('') }
 }

@@ -4,7 +4,7 @@ import type { PoolClient } from 'pg';
 import { httpError, safeFetch, type Context } from './core.js';
 import { getSettings } from './settings.js';
 import { creditDecimal, creditUnits } from './wallet.js';
-import { readReference, saveMedia, MAX_MEDIA_BYTES, renderShots } from './media.js';
+import { readReference, MAX_MEDIA_BYTES, MAX_VIDEO_BYTES, renderShots } from './media.js';
 import { accountModelDefaults, availableDefault } from './account-preferences.js';
 import { assertStorageAvailable } from './storage-quota.js';
 import { assertTeamStorage } from './team-access.js';
@@ -186,7 +186,7 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   const key=ctx.decrypt(job.provider_config.apiKey);const base=String(job.provider_config.baseUrl).replace(/\/$/,'');const profile=job.provider_config.capabilityProfile||{};const protocol=String(job.provider_config.protocol||'openai');
   const request=async(path:string,body?:string|Buffer,contentType='application/json',method=body===undefined?'GET':'POST',extraHeaders:Record<string,string>={})=>{
     let response:Response;
-    try{if(method==='POST')onSubmit();response=await transport(base+path,{method,headers:{authorization:`Bearer ${key}`,...(body===undefined?{}:{'content-type':contentType}),...extraHeaders},body,timeoutMs:120000,maxBytes:MAX_MEDIA_BYTES*2});}
+    try{if(method==='POST')onSubmit();response=await transport(base+path,{method,headers:{authorization:`Bearer ${key}`,...(body===undefined?{}:{'content-type':contentType}),...extraHeaders},body,timeoutMs:120000,maxBytes:job.kind==='video'&&path.endsWith('/content')?MAX_VIDEO_BYTES:MAX_MEDIA_BYTES*2});}
     catch(error){
       if(!poll&&((error as any)?.statusCode===400||['ENOTFOUND','EAI_AGAIN'].includes((error as any)?.code)))throw new ProviderFailure('Provider destination was rejected before submission',true);
       throw new ProviderFailure('Provider connection result is unknown; manual verification may be required');
@@ -203,7 +203,7 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   }
   if(job.kind==='audio'){
     const response=await request('/audio/speech',JSON.stringify({model,input:input.prompt,voice:config.voice||'alloy',response_format:config.format||'mp3'}));
-    const media=await saveMedia(ctx,job.user_id,Buffer.from(await response.arrayBuffer()));
+    const media=await saveGeneratedMedia(ctx,job.user_id,job.provider_config,'audio',{bytes:Buffer.from(await response.arrayBuffer())},transport);
     return{type:'complete',result:{url:media.url,mimeType:media.mimeType}};
   }
   /** URL results follow the channel snapshot; binary-only output needs storage. */
@@ -292,7 +292,7 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     if(data.status==='completed'){
       const url=data.video_url||data.url||data.output?.url;
       if(typeof url==='string'&&url.trim())return {type:'complete',result:await saveGeneratedMedia(ctx,job.user_id,job.provider_config,'video',{url},transport)};
-      const response=await request(`/videos/${encodeURIComponent(upstreamId)}/content`);const media=await saveMedia(ctx,job.user_id,Buffer.from(await response.arrayBuffer()));
+      const response=await request(`/videos/${encodeURIComponent(upstreamId)}/content`);const media=await saveGeneratedMedia(ctx,job.user_id,job.provider_config,'video',{bytes:Buffer.from(await response.arrayBuffer())},transport);
       return{type:'complete',result:{url:media.url}};
     }
     if(!['queued','in_progress'].includes(data.status))throw new ProviderFailure('Provider returned an unknown video status');

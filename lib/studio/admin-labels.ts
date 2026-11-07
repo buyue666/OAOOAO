@@ -2,7 +2,7 @@
 export const adminValueLabels: Record<string, string> = {
   admin: '管理员', user: '普通用户', manual: '人工收款', epay: '易支付', alipay: '支付宝', wechat: '微信支付', stripe: 'Stripe',
   text: '文本', image: '图片', video: '视频', audio: '音频', render: '成片合成',
-  chat: '对话', agent: '创作助手', canvas: '自由画布', drama: '分镜项目', workbench: '创作工作台',
+  chat: '对话', agent: '创作助手', canvas: '自由画布', drama: '分镜项目', workbench: '创作工作台', team: '团队项目',
   registered: '已注册', qualified: '已达标', pending: '待处理', cooling: '冷静期中', cooling_off: '冷静期中',
   settled: '已结算', frozen: '已冻结', reversed: '已撤销', cancelled: '已取消', canceled: '已取消', rejected: '已驳回',
   open: '待处理', resolved: '已处理', report: '用户举报', appeal: '用户申诉', takedown: '下架复核',

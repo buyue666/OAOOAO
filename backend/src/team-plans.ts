@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { httpError, object, string, transaction, type Context } from './core.js';
+import { httpError, object, pagination, string, transaction, type Context } from './core.js';
 import { creditDecimal, creditUnits } from './wallet.js';
 import { assertTeamSeats, lockTeam, teamEvent, teamView, type TeamRow } from './team-access.js';
 import { grantTeamCredits } from './team-wallet.js';
@@ -50,8 +50,9 @@ export async function registerTeamPlans(app: FastifyInstance, ctx: Context) {
   });
   app.get('/api/admin/teams', async request => {
     await ctx.requireUser(request, 'billing.manage');
-    const rows = (await ctx.db.query("SELECT *, 'owner' AS role FROM oaooao_teams ORDER BY created_at DESC LIMIT 100")).rows;
-    return { teams: await Promise.all(rows.map(row => teamView(ctx.db, row))) };
+    const query = (request.query ?? {}) as Record<string,string>, page = pagination(query), keyword = string(query.keyword ?? '', '搜索内容', 100, true);
+    const rows = (await ctx.db.query("SELECT t.*, 'owner' AS role, count(*) OVER() total FROM oaooao_teams t JOIN oaooao_users u ON u.id=t.owner_id WHERE t.name ILIKE '%'||$1||'%' OR u.username ILIKE '%'||$1||'%' ORDER BY t.created_at DESC,t.id LIMIT $2 OFFSET $3", [keyword,page.pageSize,page.offset])).rows;
+    return { teams: await Promise.all(rows.map(row => teamView(ctx.db, row))), total: Number(rows[0]?.total ?? 0) };
   });
   app.post('/api/admin/teams/:teamId/subscription', async request => {
     const actor = await ctx.requireUser(request, 'billing.manage'), { teamId } = request.params as { teamId: string }, body = object(request.body);

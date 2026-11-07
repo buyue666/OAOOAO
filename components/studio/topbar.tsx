@@ -17,7 +17,7 @@ import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
 import { useCheckIn } from '@/lib/studio/use-check-in'
 import { checkInDisplay } from '@/lib/studio/check-in-rules'
 import { AccountWatermarkMenuItem } from './account-watermark'
-import { WorkspaceSwitcher } from './workspace-switcher'
+import { WorkspaceCredits, WorkspaceSwitcher } from './workspace-switcher'
 
 const creditChipClass = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)]'
 const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70'
@@ -48,6 +48,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   const { unread: notificationCount } = useAnnouncements()
   const creditsLabel = tx('{0} 积分', [state.credits.toLocaleString(locale)])
+  const teamSpace = /^\/teams\/[a-f0-9-]{36}(?:\/|$)/i.test(pathname)
   const checkIn = useCheckIn({ accountId: state.user.id, connected: isConnected, active: accountOpen, refreshSession })
   const checkInDetails = checkIn.status ? checkInDisplay(checkIn.status, locale) : null
   function capturePlansDestination(event: React.MouseEvent<HTMLAnchorElement>) {
@@ -115,7 +116,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {isStudioPreview() && !isConnected && <StatusBadge tone="muted">免登录预览</StatusBadge>}
-        {isConnected && (rechargeEnabled ? (
+        {isConnected && (teamSpace ? <WorkspaceCredits pathname={pathname} /> : rechargeEnabled ? (
           <a href="/credits" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={tx("{0}，查看积分超市", [creditsLabel])} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
             <Coins className="size-4 text-studio-accent" aria-hidden="true" />
             <span className="tabular-nums">{creditsLabel}</span>
@@ -126,8 +127,6 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             <span className="tabular-nums">{creditsLabel}</span>
           </span>
         ))}
-
-        <WorkspaceSwitcher />
 
         <div className="relative" ref={notificationsRef}>
           <Tooltip label={tx("通知，{0} 条未读", [notificationCount])}>
@@ -171,7 +170,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               <div className="border-b border-border px-2.5 pb-2.5 pt-1.5">
                 <p className="truncate text-sm font-semibold text-foreground">{state.user.name}</p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{state.user.email || tx('未设置邮箱')}</p>
-                <p className="mt-1.5 text-xs font-medium text-studio-accent">{creditsLabel} · {tx(state.user.plan)}</p>
+                <p className="mt-1.5 text-xs font-medium text-studio-accent">{teamSpace && '个人 '}{creditsLabel} · {tx(state.user.plan)}</p>
+                <WorkspaceSwitcher active={accountOpen} onSelect={() => setAccountOpen(false)} />
                 <div className="mt-3 rounded-lg border border-studio-accent/20 bg-studio-accent/5 p-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0"><p className="flex items-center gap-1 text-xs font-semibold"><CalendarCheck className="size-3.5" aria-hidden="true" />{tx("每日签到")}</p><p className="mt-1 text-[11px] text-muted-foreground">{checkInDetails?.title ?? (checkIn.loading ? tx('正在读取…') : tx('查看今日签到状态'))}</p></div>

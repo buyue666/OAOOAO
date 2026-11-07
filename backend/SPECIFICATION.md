@@ -72,6 +72,19 @@ implementers receive only requirements and client contracts.
   Public team plans explicitly report `purchaseEnabled: false`. Existing personal
   checkout and generation remain unchanged. Production cutover still requires
   migration, real auth/storage/provider checks and a review of configured prices.
+- Team and project detail routes expose role-scoped project, membership, usage,
+  asset and generation controls. Account-menu space switching follows the URL;
+  it does not convert personal resources or grant site administrators membership.
+  Administrator team listings support keyword search and scoped pagination.
+- All binary provider results, including speech and video-content downloads,
+  pass through the workspace-aware generated-media writer. Workers retain the
+  job's original team/project context when an actor leaves. Team storage exhaustion
+  never falls back to a personal quota. Video-content downloads use the video
+  byte ceiling. Personal jobs retain their existing storage ownership.
+- Team generation requires a server quote and explicit approval. A pending
+  submission snapshot is scoped to account/team/project in session storage;
+  unknown responses can be retried after a remount with the original idempotency
+  key and approved input. Quotes never create jobs or debit credits.
 
 ## Security and reliability requirements
 

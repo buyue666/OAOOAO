@@ -46,7 +46,7 @@ export async function teamView(db: TeamDb, row: TeamRow) {
   const plan = row.plan_id ? (await db.query('SELECT name FROM oaooao_team_plans WHERE id=$1', [row.plan_id])).rows[0] : null;
   return { id: row.id, name: row.name, role: row.role, ownerId: row.owner_id, seatLimit: row.seat_limit, reviewerLimit: row.reviewer_limit,
     ...await teamSeatCounts(db, row.id), canDownload: row.role !== 'reviewer' || row.can_download,
-    planName: plan?.name ?? null, subscriptionExpiresAt: row.subscription_expires_at?.toISOString() ?? null,
+    planName: plan?.name ?? null, modelIds: row.model_ids ?? [], subscriptionExpiresAt: row.subscription_expires_at?.toISOString() ?? null,
     transferTo: row.transfer_to ?? null, transferExpiresAt: row.transfer_expires_at?.toISOString() ?? null };
 }
 
