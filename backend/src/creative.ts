@@ -38,7 +38,7 @@ function textMessageContent(value:unknown){
     throw httpError(400,'Unsupported multimodal message part');
   });
 }
-function generationInput(kind:GenerationKind,raw:unknown):Json{
+export function generationInput(kind:GenerationKind,raw:unknown):Json{
   const body=object(raw);const config=body.config?object(body.config):{};let prompt=body.prompt;
   let messages;
   if(kind==='text'&&Array.isArray(body.messages)){messages=body.messages.map((m:unknown)=>{const v=object(m);if(!['user','assistant','system','developer'].includes(v.role))throw httpError(400,'Invalid text message role');return{role:v.role,content:textMessageContent(v.content)};});if(!messages.length||messages.length>100)throw httpError(400,'Invalid messages');prompt=messages.map((m:any)=>typeof m.content==='string'?m.content:m.content.filter((part:any)=>part.type==='text').map((part:any)=>part.text).join(' ')).join('\n');}
@@ -66,7 +66,7 @@ function generationInput(kind:GenerationKind,raw:unknown):Json{
 }
 async function verifyContext(ctx:Context,client:PoolClient,userId:string,input:Json){
   if(input.context?.projectId){const row=await client.query('SELECT id FROM oaooao_projects WHERE id=$1 AND user_id=$2',[input.context.projectId,userId]);if(!row.rowCount)throw httpError(404,'Project not found');}
-  if(input.context?.parentTaskId){const row=await client.query('SELECT id FROM oaooao_generation_jobs WHERE id=$1 AND user_id=$2',[input.context.parentTaskId,userId]);if(!row.rowCount)throw httpError(404,'Parent task not found');}
+  if(input.context?.parentTaskId){const row=await client.query('SELECT id FROM oaooao_generation_jobs WHERE id=$1 AND user_id=$2 AND team_id IS NULL',[input.context.parentTaskId,userId]);if(!row.rowCount)throw httpError(404,'Parent task not found');}
   for(const ref of input.references||[]){if(typeof ref.url!=='string')continue;let url:URL;try{url=new URL(ref.url,ctx.config.origin);}catch{throw httpError(400,'Invalid reference URL');}if(url.origin===new URL(ctx.config.origin).origin){const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);if(!match)throw httpError(400,'Unsupported local reference');await ownedMediaInfo(ctx,userId,match[1],client);}}
   const mask=input.edit?.mask;
   if(mask&&typeof mask.url==='string'){
@@ -92,7 +92,7 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
   if(!requestId||requestId.length>200||!Number.isSafeInteger(attemptNo)||attemptNo<1||attemptNo>1000)throw httpError(400,'Invalid submission identity');
   const execute=async(client:PoolClient)=>{
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`generation:${userId}`]);
-    const hash=inputHash(input);const existing=(await client.query('SELECT * FROM oaooao_generation_jobs WHERE user_id=$1 AND kind=$2 AND client_request_id=$3 AND attempt_no=$4',[userId,kind,requestId,attemptNo])).rows[0];
+    const hash=inputHash(input);const existing=(await client.query('SELECT * FROM oaooao_generation_jobs WHERE team_id IS NULL AND user_id=$1 AND kind=$2 AND client_request_id=$3 AND attempt_no=$4',[userId,kind,requestId,attemptNo])).rows[0];
     if(existing){if(existing.input_hash!==hash)throw httpError(409,'Submission identity was already used for different input');return existing;}
     // Serialize entitlement changes with new submissions, including free jobs.
     // Read the current plan only after this lock: a transaction that waited for
@@ -114,15 +114,15 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
     const totalLimit=settings.generationCostControl?.dailyTotalPointSpend;
     if(Number(totalLimit)>0){await client.query("SELECT pg_advisory_xact_lock(hashtextextended('generation:global-budget',0))");const total=(await client.query("SELECT coalesce(sum(cost),0)::text amount FROM oaooao_generation_jobs WHERE created_at>=date_trunc('day',now()) AND status NOT IN ('error','cancelled')")).rows[0].amount;if(creditUnits(total)+creditUnits(provider.cost)>creditUnits(totalLimit))throw httpError(429,'Global daily generation spending limit reached');}
     if(plan){
-      const counts=(await client.query("SELECT count(*) calls,count(*) FILTER(WHERE kind=$2) count,coalesce(sum(cost) FILTER(WHERE status NOT IN ('error','cancelled')),0)::text spend FROM oaooao_generation_jobs WHERE user_id=$1 AND created_at>=date_trunc('day',now())",[userId,kind])).rows[0];
+      const counts=(await client.query("SELECT count(*) calls,count(*) FILTER(WHERE kind=$2) count,coalesce(sum(cost) FILTER(WHERE status NOT IN ('error','cancelled')),0)::text spend FROM oaooao_generation_jobs WHERE team_id IS NULL AND user_id=$1 AND created_at>=date_trunc('day',now())",[userId,kind])).rows[0];
       const key:Record<string,string>={text:'dailyText',image:'dailyImages',video:'dailyVideos',audio:'dailyAudio'};const limits=plan.limits||{};
       if((Number(limits.dailyApiCalls)>0&&Number(counts.calls)>=Number(limits.dailyApiCalls))||(Number(limits[key[kind]])>0&&Number(counts.count)>=Number(limits[key[kind]])))throw httpError(429,'Daily plan generation limit reached');
       if(Number(limits.dailyPointSpend)>0&&creditUnits(counts.spend)+creditUnits(provider.cost)>creditUnits(limits.dailyPointSpend))throw httpError(429,'Daily plan spending limit reached');
     }
-    const active=Number((await client.query("SELECT count(*) FROM oaooao_generation_jobs WHERE user_id=$1 AND kind=$2 AND status IN ('pending','running','paused')",[userId,kind])).rows[0].count);
+    const active=Number((await client.query("SELECT count(*) FROM oaooao_generation_jobs WHERE team_id IS NULL AND user_id=$1 AND kind=$2 AND status IN ('pending','running','paused')",[userId,kind])).rows[0].count);
     const limit=Math.max(1,Number(settings.generationConcurrency?.[kind]||3));if(active>=limit)throw httpError(429,'Generation concurrency limit reached');
     const dayLimit=settings.generationCostControl?.dailyUserPointSpend;
-    if(Number(dayLimit)>0){const spent=(await client.query("SELECT coalesce(sum(cost),0)::text amount FROM oaooao_generation_jobs WHERE user_id=$1 AND created_at>=date_trunc('day',now()) AND status NOT IN ('error','cancelled')",[userId])).rows[0].amount;if(creditUnits(spent)+creditUnits(provider.cost)>creditUnits(dayLimit))throw httpError(429,'Daily generation spending limit reached');}
+    if(Number(dayLimit)>0){const spent=(await client.query("SELECT coalesce(sum(cost),0)::text amount FROM oaooao_generation_jobs WHERE team_id IS NULL AND user_id=$1 AND created_at>=date_trunc('day',now()) AND status NOT IN ('error','cancelled')",[userId])).rows[0].amount;if(creditUnits(spent)+creditUnits(provider.cost)>creditUnits(dayLimit))throw httpError(429,'Daily generation spending limit reached');}
     const id=randomUUID();
     if(Number(provider.cost)>0)await adjustWallet(ctx,userId,`generation:${id}:debit`,'-'+provider.cost,{kind:'generation',taskId:id,model:provider.model},client);
     return(await client.query('INSERT INTO oaooao_generation_jobs(id,user_id,kind,client_request_id,attempt_no,input_hash,input,model,channel_id,upstream_model,provider_config,cost) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',[id,userId,kind,requestId,attemptNo,hash,input,provider.model,provider.channelId,provider.upstreamModel,provider.config,provider.cost])).rows[0];
@@ -132,7 +132,7 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
 async function points(ctx:Context,userId:string,reply:FastifyReply){const w=await getWallet(ctx,userId);reply.header('x-vozeb-pro-points-remaining',w.pointsBalance).header('x-vozeb-pro-points-permanent',w.permanentPointsBalance).header('x-vozeb-pro-points-daily',w.dailyPointsBalance).header('x-oao-points-timed',w.timedPointsBalance);if(w.dailyPointsExpiresAt)reply.header('x-vozeb-pro-points-daily-expires-at',w.dailyPointsExpiresAt);if(w.timedPointsExpiresAt)reply.header('x-oao-points-timed-expires-at',w.timedPointsExpiresAt);}
 async function ownedJob(ctx:Context,request:FastifyRequest,id:string,manage=false){
   const user=await ctx.requireUser(request);const elevated=hasPermission(user,manage?'generation.manage':'generation.read');
-  const row=(await ctx.db.query(`SELECT * FROM oaooao_generation_jobs WHERE id=$1 AND (user_id=$2 OR $3)`,[id,user.id,elevated])).rows[0];if(!row)throw httpError(404,'Task not found');return{user,row};
+  const row=(await ctx.db.query(`SELECT * FROM oaooao_generation_jobs WHERE id=$1 AND ((user_id=$2 AND team_id IS NULL) OR $3)`,[id,user.id,elevated])).rows[0];if(!row)throw httpError(404,'Task not found');return{user,row};
 }
 function normalizeProject(kind:string,raw:Json,create=false){
   const doc={...raw};delete doc.id;delete doc.createdAt;delete doc.updatedAt;delete doc.userId;
@@ -248,13 +248,13 @@ export async function registerCreative(app:FastifyInstance,ctx:Context){
   }
   app.get('/api/generation-logs',async request=>{
     const user=await ctx.requireUser(request);const q=request.query as Json;const page=pagination(q);const values=[user.id,q.kind||'',q.status||''];
-    const selection=`SELECT id,created_at,to_jsonb(j) job,null::jsonb document FROM oaooao_generation_jobs j WHERE user_id=$1 AND ($2='' OR kind=$2) AND ($3='' OR status=$3)
+    const selection=`SELECT id,created_at,to_jsonb(j) job,null::jsonb document FROM oaooao_generation_jobs j WHERE team_id IS NULL AND user_id=$1 AND ($2='' OR kind=$2) AND ($3='' OR status=$3)
       UNION ALL SELECT id,created_at,null::jsonb job,document FROM oaooao_generation_history WHERE user_id=$1 AND ($2='' OR document->>'kind'=$2) AND ($3='' OR document->>'status'=$3)`;
     const rows=await ctx.db.query(`SELECT * FROM (${selection}) combined ORDER BY created_at DESC,id LIMIT $4 OFFSET $5`,[...values,page.pageSize,page.offset]);
     const total=Number((await ctx.db.query(`SELECT count(*) total FROM (${selection}) combined`,values)).rows[0].total);
     return{items:rows.rows.map(entry=>{if(entry.document)return{...entry.document,id:entry.id,createdAt:iso(entry.created_at)};const row=entry.job;const config=row.input?.config||{};return{...taskView(row),source:row.input.source,title:row.input.title||row.input.prompt.slice(0,80),summary:row.result?.content,category:['character','scene','prop','style','garment'].includes(row.input?.category)?row.input.category:'general',settings:{modelId:config.model||row.model,ratio:config.size,resolution:config.resolution,quality:config.quality,count:Number(config.n)||1},assets:generationAssets(row.result,row.kind),durationMs:row.finished_at?new Date(row.finished_at).getTime()-new Date(row.created_at).getTime():0,createdAt:iso(row.created_at)};}),total,page:page.page,pageSize:page.pageSize};
   });
-  app.patch('/api/generation-logs/:id',async request=>{const user=await ctx.requireUser(request);const body=object(request.body);const title=string(body.title,'title',250).trim();const category=body.category===undefined?undefined:string(body.category,'category',30).trim();if(!title|| (category!==undefined&&!['general','character','scene','prop','style','garment'].includes(category)))throw httpError(400,'Invalid generation title or category');const id=(request.params as any).id;const history=await ctx.db.query("UPDATE oaooao_generation_history SET document=jsonb_set(jsonb_set(document,'{title}',to_jsonb($3::text),true),'{category}',to_jsonb($4::text),true) WHERE id=$1 AND user_id=$2 RETURNING id",[id,user.id,title,category||'general']);if(history.rowCount)return ok({title,category:category||'general'});const job=await ctx.db.query("UPDATE oaooao_generation_jobs SET input=jsonb_set(jsonb_set(coalesce(input,'{}'::jsonb),'{title}',to_jsonb($3::text),true),'{category}',to_jsonb($4::text),true),updated_at=clock_timestamp() WHERE id=$1 AND user_id=$2 RETURNING id",[id,user.id,title,category||'general']);if(!job.rowCount)throw httpError(404,'Generation record not found');return ok({title,category:category||'general'});
+  app.patch('/api/generation-logs/:id',async request=>{const user=await ctx.requireUser(request);const body=object(request.body);const title=string(body.title,'title',250).trim();const category=body.category===undefined?undefined:string(body.category,'category',30).trim();if(!title|| (category!==undefined&&!['general','character','scene','prop','style','garment'].includes(category)))throw httpError(400,'Invalid generation title or category');const id=(request.params as any).id;const history=await ctx.db.query("UPDATE oaooao_generation_history SET document=jsonb_set(jsonb_set(document,'{title}',to_jsonb($3::text),true),'{category}',to_jsonb($4::text),true) WHERE id=$1 AND user_id=$2 RETURNING id",[id,user.id,title,category||'general']);if(history.rowCount)return ok({title,category:category||'general'});const job=await ctx.db.query("UPDATE oaooao_generation_jobs SET input=jsonb_set(jsonb_set(coalesce(input,'{}'::jsonb),'{title}',to_jsonb($3::text),true),'{category}',to_jsonb($4::text),true),updated_at=clock_timestamp() WHERE id=$1 AND user_id=$2 AND team_id IS NULL RETURNING id",[id,user.id,title,category||'general']);if(!job.rowCount)throw httpError(404,'Generation record not found');return ok({title,category:category||'general'});
   });
   if(ctx.config.workerEnabled){let stop:(()=>Promise<void>)|undefined;app.addHook('onReady',async()=>{stop=startWorker(ctx);});app.addHook('onClose',async()=>{await stop?.();});}
 }

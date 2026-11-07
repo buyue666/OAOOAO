@@ -1,5 +1,6 @@
 import { httpError, publicAddress, safeFetch, type Context } from './core.js';
 import { saveMedia, sniffMedia, ownedExternalResult, MAX_MEDIA_BYTES, MAX_VIDEO_BYTES } from './media.js';
+import { saveTeamAsset } from './team-assets.js';
 
 /** URL-only output never requires a download or consumes this account's quota. */
 export async function publicMediaUrl(raw:string):Promise<string> {
@@ -26,7 +27,7 @@ export async function saveGeneratedMedia(
   ctx:Context,userId:string,config:Record<string,any>,kind:'image'|'video'|'audio',
   source:{url?:string;b64_json?:string;bytes?:Buffer},transport:typeof safeFetch=safeFetch,
 ):Promise<{url:string;mimeType?:string}> {
-  if(config.storeGeneratedMedia===false&&source.url?.trim()&&!source.url.startsWith('data:'))
+  if(!ctx.workspace&&config.storeGeneratedMedia===false&&source.url?.trim()&&!source.url.startsWith('data:'))
     return {url:await publicMediaUrl(source.url)};
   let bytes=source.bytes;
   const limit=kind==='video'?MAX_VIDEO_BYTES:MAX_MEDIA_BYTES;
@@ -43,6 +44,10 @@ export async function saveGeneratedMedia(
     bytes=Buffer.from(await response.arrayBuffer());
   }
   if(!bytes?.length||!sniffMedia(bytes).startsWith(kind+'/'))throw httpError(502,'渠道返回的媒体类型与任务不符');
+  if(ctx.workspace){
+    const asset=await saveTeamAsset(ctx,ctx.workspace,userId,{title:kind==='image'?'团队生成图片':kind==='video'?'团队生成视频':'团队生成音频',bytes},true);
+    return {url:asset.url,mimeType:sniffMedia(bytes)};
+  }
   const stored=await saveMedia(ctx,userId,bytes);
   return {url:stored.url,mimeType:stored.mimeType};
 }

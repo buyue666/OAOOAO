@@ -8,6 +8,7 @@ import type { PoolClient } from 'pg';
 import { httpError, safeFetch, transaction, type Context } from './core.js';
 import { storageConfig, assertStorageConfigured, objectLocation, putObject, getObject, headObject, downloadObjectUrl, type ObjectLocation } from './object-storage.js';
 import { assertStorageAvailable, lockStorage } from './storage-quota.js';
+import { readTeamAsset } from './team-assets.js';
 
 export const MAX_MEDIA_BYTES = 24 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
@@ -89,6 +90,11 @@ export async function readReference(ctx: Context, userId: string, reference: Rec
   if (typeof reference.dataUrl==='string') { const bytes=decodeDataUrl(reference.dataUrl); return {bytes,mimeType:sniffMedia(bytes)}; }
   const raw = String(reference.url || '');
   const url = new URL(raw,ctx.config.origin);
+  if(ctx.workspace&&url.origin===new URL(ctx.config.origin).origin){
+    const match=/^\/api\/teams\/([^/]+)\/assets\/([a-f0-9-]{36})\/content$/i.exec(url.pathname);
+    if(!match||match[1]!==ctx.workspace.teamId||url.search)throw httpError(403,'参考素材不属于当前团队项目');
+    return readTeamAsset(ctx,ctx.workspace,match[2]);
+  }
   if (url.origin === new URL(ctx.config.origin).origin && /^\/api\/(?:media|reference-assets|generation-log-assets)\//.test(url.pathname)) return ownedMedia(ctx,userId,url.pathname.split('/').pop()!);
   if (!/^https?:$/.test(url.protocol) || !/^https?:\/\//.test(raw)) throw httpError(400,'Reference must be an owned asset or public HTTPS URL');
   const response = await safeFetch(url.toString(), {maxBytes:MAX_MEDIA_BYTES, timeoutMs:30000});
@@ -98,7 +104,7 @@ export async function readReference(ctx: Context, userId: string, reference: Rec
 export async function ownedExternalResult(ctx:Context,userId:string,raw:string,kind?:string){
   let url:URL;try{url=new URL(raw);}catch{throw httpError(400,'无效的上游媒体链接');}
   if(url.protocol!=='https:'||url.username||url.password||url.hash||raw.length>16000)throw httpError(400,'无效的上游媒体链接');
-  const result=await ctx.db.query("SELECT id,kind FROM oaooao_generation_jobs WHERE user_id=$1 AND kind IN ('image','video','audio') AND ($2::text IS NULL OR kind=$2) AND status='success' AND (result @> $3::jsonb OR result @> $4::jsonb OR result @> $5::jsonb) LIMIT 1",[userId,kind??null,JSON.stringify({url:raw}),JSON.stringify({remoteUrl:raw}),JSON.stringify({results:[{url:raw}]})]);
+  const result=await ctx.db.query("SELECT id,kind FROM oaooao_generation_jobs WHERE team_id IS NULL AND user_id=$1 AND kind IN ('image','video','audio') AND ($2::text IS NULL OR kind=$2) AND status='success' AND (result @> $3::jsonb OR result @> $4::jsonb OR result @> $5::jsonb) LIMIT 1",[userId,kind??null,JSON.stringify({url:raw}),JSON.stringify({remoteUrl:raw}),JSON.stringify({results:[{url:raw}]})]);
   if(!result.rowCount)throw httpError(404,'未找到当前账户对应的生成结果');
   return {...result.rows[0],url:raw};
 }

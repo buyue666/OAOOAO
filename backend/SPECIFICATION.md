@@ -33,6 +33,46 @@ implementers receive only requirements and client contracts.
   New schema source is owned by this implementation; legacy data is imported through
   an explicit normalized transfer format, not by executing legacy application code.
 
+## Team workspace contract
+
+- Additive migration `016-team-workspaces.sql` leaves historical personal rows in
+  the personal scope. Teams have independent membership, project ACLs, storage,
+  credit batches, budgets and audit events; site-admin roles never grant ordinary
+  team membership. Apply the migration with the matching backend release before
+  serving team requests. No production migration is performed by development tests.
+- `/api/teams` creates and lists real spaces. Invitations reserve creator/reviewer
+  capacity under a team row lock, expire after seven days, store only token hashes,
+  and are one use. Targeted email invitations require the verified matching email.
+  Creating an invitation returns a shareable link; it does not claim email delivery.
+- Projects default to restricted visibility. Owner/admin governance access is
+  explicit; other access requires current membership and a project assignment or
+  team visibility. Removing a member also removes project assignments. Ownership
+  transfer needs the target creator/admin to accept within 24 hours.
+- Team assets are separate physical copies, not references to a departing member's
+  personal files. Reads always check current membership/project access; a download
+  additionally checks reviewer permission. Preview access is not DRM and cannot
+  prevent screenshots or saving bytes already received. The worker retries failed
+  upload/deletion cleanup; pending files still consume team quota.
+- Team jobs bind actor, team, project and server price before enqueueing. The same
+  transaction checks subscription, allowed models, concurrency, task ceiling,
+  member UTC-calendar-month budget and available team batches. No personal-wallet
+  fallback exists. Personal task/history APIs exclude team jobs. A worker uses the
+  original team context even after the submitting member leaves.
+- Team debit/refund operations are idempotent. Expiring batches are spent first;
+  refunds restore original, still-valid allocations and the original budget month.
+  Expired credits never become permanent or extend their expiration.
+- Two team plan drafts are seeded without prices and disabled. Administrators with
+  commerce permission configure seat bounds, credits, total storage, concurrency,
+  model scope and task ceilings. Billing permission separately controls audited,
+  idempotent manual 30-day entitlement grants and credit adjustments. An active
+  period cannot be re-granted to farm full-period credits. Manual grants are not
+  payment confirmations and create no successful payment records.
+- Online team checkout, recurring billing, prorated seat increases, scheduled seat
+  reductions, shared canvas editing and comments are not exposed in this increment.
+  Public team plans explicitly report `purchaseEnabled: false`. Existing personal
+  checkout and generation remain unchanged. Production cutover still requires
+  migration, real auth/storage/provider checks and a review of configured prices.
+
 ## Security and reliability requirements
 
 - Server-side opaque session cookies, hashed session tokens, secure production cookie,

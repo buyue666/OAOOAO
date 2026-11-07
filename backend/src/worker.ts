@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { httpError, transaction, type Context } from './core.js';
 import { adjustWallet } from './wallet.js';
+import { refundTeamJob } from './team-wallet.js';
+import { cleanupTeamAssets } from './team-assets.js';
 import { invokeProvider, ProviderFailure, type Json, type ProviderResult } from './providers.js';
 import { cleanupStoredMedia } from './account-storage.js';
 
@@ -10,7 +12,10 @@ export async function jobEvent(client:PoolClient,jobId:string,type:string,data:J
 }
 export async function finishJob(ctx:Context,client:PoolClient,row:Json,status:'success'|'error'|'cancelled',result:Json|null,error:string|null){
   if(['success','error','cancelled'].includes(row.status))return row;
-  if(status!=='success'&&Number(row.cost)>0)await adjustWallet(ctx,row.user_id,`generation:${row.id}:refund`,row.cost,{kind:'generation_refund',taskId:row.id,refundOf:`generation:${row.id}:debit`},client);
+  if(status!=='success'&&Number(row.cost)>0){
+    if(row.team_id)await refundTeamJob(client,row);
+    else await adjustWallet(ctx,row.user_id,`generation:${row.id}:refund`,row.cost,{kind:'generation_refund',taskId:row.id,refundOf:`generation:${row.id}:debit`},client);
+  }
   const updated=(await client.query(`UPDATE oaooao_generation_jobs SET status=$2,phase='complete',result=$3,error=$4,needs_review=false,lease_owner=null,lease_until=null,finished_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1 RETURNING *`,[row.id,status,result,error])).rows[0];
   await jobEvent(client,row.id,'task.updated',{taskId:row.id,status,result,error});return updated;
 }
@@ -43,7 +48,7 @@ export async function processNextJob(ctx:Context,execute:Executor=invokeProvider
   if(!job)return false;
   let outcome:ProviderResult|undefined;let failure:unknown;
   const heartbeat=setInterval(()=>{void ctx.db.query("UPDATE oaooao_generation_jobs SET lease_until=now()+interval '5 minutes' WHERE id=$1 AND lease_owner=$2 AND status='running'",[job.id,workerId]).catch(()=>undefined);},30000);heartbeat.unref();
-  try{outcome=await execute(ctx,job,job.polling);}catch(error){failure=error;}finally{clearInterval(heartbeat);}
+  try{outcome=await execute(job.team_id?{...ctx,workspace:{teamId:job.team_id,projectId:job.team_project_id}}:ctx,job,job.polling);}catch(error){failure=error;}finally{clearInterval(heartbeat);}
   await transaction(ctx.db,async client=>{
     const current=(await client.query('SELECT * FROM oaooao_generation_jobs WHERE id=$1 FOR UPDATE',[job.id])).rows[0];
     if(current.lease_owner!==workerId||!['running','pending'].includes(current.status))return;
@@ -65,7 +70,7 @@ export async function processNextJob(ctx:Context,execute:Executor=invokeProvider
 export function startWorker(ctx:Context){
   let stopped=false;let active:Promise<unknown>|undefined;
   let maintenanceAt=0;
-  const tick=()=>{if(stopped||active)return;active=(async()=>{await processNextJob(ctx);if(Date.now()-maintenanceAt>60000){maintenanceAt=Date.now();const {runCommerceMaintenance}=await import('./commerce.js');await runCommerceMaintenance(ctx);const {expireCreditBatches}=await import('./wallet.js');await expireCreditBatches(ctx);await cleanupStoredMedia(ctx);}})().catch(()=>undefined).finally(()=>{active=undefined;});};
+  const tick=()=>{if(stopped||active)return;active=(async()=>{await processNextJob(ctx);if(Date.now()-maintenanceAt>60000){maintenanceAt=Date.now();const {runCommerceMaintenance}=await import('./commerce.js');await runCommerceMaintenance(ctx);const {expireCreditBatches}=await import('./wallet.js');await expireCreditBatches(ctx);await cleanupStoredMedia(ctx);await cleanupTeamAssets(ctx);}})().catch(()=>undefined).finally(()=>{active=undefined;});};
   const timer=setInterval(tick,1000);timer.unref();tick();
   return async()=>{stopped=true;clearInterval(timer);await active;};
 }

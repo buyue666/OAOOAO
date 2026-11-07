@@ -12,7 +12,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'OAO · AI 创作工作台',
-  description: '在一个工作台中完成 AI 图片、视频、短剧与导演 Agent 创作。',
+  description: '在一个工作台中完成 AI 图片、视频、短剧与导演 Agent 创作，支持独立的个人与团队空间、共享资产和团队预算。',
   icons: { icon: '/media/brand/oao-mark.png' },
 }
 

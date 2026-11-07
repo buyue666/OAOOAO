@@ -74,6 +74,7 @@ const rootTitles: Record<string, string> = {
   settings: '设置',
   plans: '套餐',
   tools: '创作工具',
+  teams: '团队空间',
 }
 
 const sectionTitles: Record<string, string> = {

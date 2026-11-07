@@ -1,0 +1,11 @@
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { default: EmbeddedPostgres } = await import(require.resolve('embedded-postgres', { paths: ['/tmp/oao-team-tests'] }));
+const server = new EmbeddedPostgres({ databaseDir: '/tmp/oao-team-tests/database', user: 'fixture', password: 'synthetic-tests-only', port: 55439, persistent: false, postgresFlags: ['-h', '127.0.0.1'], onLog: () => {}, onError: message => console.error(message) });
+await server.initialise();
+await server.start();
+console.log('Isolated PostgreSQL fixture ready on 127.0.0.1:55439');
+const close = async () => { await server.stop(); process.exit(0); };
+process.once('SIGTERM', close);
+process.once('SIGINT', close);
+setInterval(() => {}, 60000);

@@ -27,6 +27,7 @@ export interface AuditRecord {
 }
 export interface Context {
   db: Pool; config: AppConfig;
+  workspace?: { teamId: string; projectId: string };
   requireUser(request: FastifyRequest, permission?: string): Promise<AppUser>;
   audit(record: AuditRecord, client?: PoolClient): Promise<void>;
   encrypt(plaintext: string): string; decrypt(ciphertext: string): string;

@@ -93,6 +93,7 @@ export function PlansPage({ productKind = 'plan' }: { productKind?: 'plan' | 'po
         {state.backendStatus === 'connected' && state.user.role === 'admin' && <Link href="/admin/products">管理商品</Link>}
       </div>
     </div>
+    {!pointsStore && <nav aria-label="会员版本" className="mx-auto mb-5 flex w-fit gap-1 rounded-full border border-white/15 p-1 text-sm"><Link href={`/plans?returnTo=${encodeURIComponent(returnPath)}`} aria-current="page" className="rounded-full bg-white px-6 py-2 font-medium text-black">个人版</Link><Link href="/plans?edition=team" className="rounded-full px-6 py-2 text-zinc-300 hover:bg-white/10">团队版</Link></nav>}
     <nav aria-label="购买类型" className="mx-auto flex w-fit flex-wrap justify-center gap-1 rounded-full border border-white/15 bg-white/5 p-1 text-sm">
       <Link href={`/plans?returnTo=${encodeURIComponent(returnPath)}`} aria-current={!pointsStore ? 'page' : undefined} className={`rounded-full px-5 py-2 ${!pointsStore ? 'bg-white text-black' : 'text-zinc-300 hover:bg-white/10'}`}>会员套餐</Link>
       <Link href={`/credits?returnTo=${encodeURIComponent(returnPath)}`} aria-current={pointsStore ? 'page' : undefined} className={`rounded-full px-5 py-2 ${pointsStore ? 'bg-white text-black' : 'text-zinc-300 hover:bg-white/10'}`}>积分超市</Link>

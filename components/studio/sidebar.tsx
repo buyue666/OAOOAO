@@ -10,6 +10,7 @@ import { useStudio } from '@/lib/studio/store'
 import { cn } from '@/lib/utils'
 import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 import { StorageUsageLink } from './storage-usage'
+import { WorkspaceSwitcher } from './workspace-switcher'
 
 function SidebarContent() {
   const tx = useUiText()
@@ -49,6 +50,7 @@ function SidebarContent() {
         </button>
       </div>
 
+      <WorkspaceSwitcher collapsed={collapsed} />
       <nav aria-label={tx("主导航")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto border-t border-sidebar-border p-2 pt-3">
         {studioPrimaryNav.map((item) => (
           <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />

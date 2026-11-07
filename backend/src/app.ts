@@ -13,6 +13,11 @@ import { registerCheckIn } from './check-in.js';
 import { registerCommerce } from './commerce.js';
 import { registerContent } from './content.js';
 import { readMigrations } from './migrate.js';
+import { registerTeams } from './teams.js';
+import { registerTeamPlans } from './team-plans.js';
+import { registerTeamProjects } from './team-projects.js';
+import { registerTeamAssets } from './team-assets.js';
+import { registerTeamGeneration } from './team-generation.js';
 
 export function loadConfig(env:NodeJS.ProcessEnv=process.env):AppConfig {
   const origin=env.PUBLIC_ORIGIN||'http://localhost:3000';const production=env.NODE_ENV==='production';
@@ -72,7 +77,8 @@ export async function buildApp(options:BuildOptions={}):Promise<FastifyInstance 
   app.get('/health',live);app.get('/api/health/live',live);
   app.get('/ready',ready);app.get('/api/health/ready',ready);
   await registerAuth(app,ctx);await registerSettings(app,ctx);await registerSitePopups(app,ctx);await registerWatermark(app,ctx);await registerCheckIn(app,ctx);
-  if(!options.coreOnly){await registerCommerce(app,ctx);await registerContent(app,ctx);const {registerCreative}=await import('./creative.js');await registerCreative(app,ctx);}
+  await registerTeams(app,ctx);await registerTeamPlans(app,ctx);await registerTeamProjects(app,ctx);await registerTeamAssets(app,ctx);
+  if(!options.coreOnly){await registerCommerce(app,ctx);await registerContent(app,ctx);const {registerCreative}=await import('./creative.js');await registerCreative(app,ctx);await registerTeamGeneration(app,ctx);}
   if(ownedPool)app.addHook('onClose',async()=>{await db.end();});
   return app as unknown as FastifyInstance & {ctx:Context};
 }

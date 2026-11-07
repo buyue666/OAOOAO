@@ -34,6 +34,8 @@ function isProtectedStudioRoute(pathname: string) {
     || pathname.startsWith('/tools/')
     || pathname === '/account'
     || pathname === '/settings'
+    || pathname === '/teams'
+    || pathname.startsWith('/teams/')
 }
 
 export function StudioApp({ children }: { children: React.ReactNode }) {

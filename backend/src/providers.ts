@@ -7,6 +7,7 @@ import { creditDecimal, creditUnits } from './wallet.js';
 import { readReference, saveMedia, MAX_MEDIA_BYTES, renderShots } from './media.js';
 import { accountModelDefaults, availableDefault } from './account-preferences.js';
 import { assertStorageAvailable } from './storage-quota.js';
+import { assertTeamStorage } from './team-access.js';
 import { storageConfig, assertStorageConfigured } from './object-storage.js';
 import { saveGeneratedMedia } from './generated-media.js';
 
@@ -27,7 +28,8 @@ function moneyProduct(a:bigint,b:unknown){return a*creditUnits(typeof b==='numbe
 export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json,client?:PoolClient,userId?:string):Promise<ProviderSelection>{
   const preflightStorage=async()=>{
     const storage=await storageConfig(ctx);if(storage.enabled)assertStorageConfigured(storage);
-    if(userId)await assertStorageAvailable(ctx,userId,1,client);
+    if(ctx.workspace)await assertTeamStorage(ctx,ctx.workspace.teamId,1,client);
+    else if(userId)await assertStorageAvailable(ctx,userId,1,client);
   };
   if(kind==='render'){await preflightStorage();return {model:'ffmpeg',channelId:'local',upstreamModel:'ffmpeg',config:{protocol:'ffmpeg'},cost:'0.0000'};}
   const settings=await getSettings(ctx,client),chosen=userId?await accountModelDefaults(ctx,userId,client):{};
@@ -39,7 +41,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   const binding=[...(model.bindings||[])].filter((b:Json)=>b.enabled&&(!routeAlias||b.requestAlias===wanted)).sort((a:Json,b:Json)=>a.priority-b.priority).find((b:Json)=>settings.systemChannels?.some((c:Json)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none')));
   if(!binding)throw httpError(503,'No authenticated provider channel is available');
   const channel=settings.systemChannels.find((c:Json)=>c.id===binding.channelId);
-  const storeGeneratedMedia=channel.storeGeneratedMedia!==false;
+  const storeGeneratedMedia=!!ctx.workspace||channel.storeGeneratedMedia!==false;
   if(kind!=='text'&&storeGeneratedMedia)await preflightStorage();
   const protocol=channel.advancedConfig?.protocol||channel.apiFormat||'openai';
 
