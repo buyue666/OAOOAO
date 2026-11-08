@@ -2,7 +2,7 @@ import type { CommercePolicy } from '@/lib/studio/commerce-policy'
 
 export type MembershipAudience = 'creator' | 'team'
 export type BillingCycle = 'annual' | 'quarterly' | 'monthly' | 'once'
-export type PlanTone = 'standard' | 'advanced' | 'premium' | 'luxury' | 'ultimate'
+export type PlanTone = 'standard' | 'advanced' | 'premium' | 'luxury' | 'ultimate' | 'cyan' | 'coral' | 'slate' | 'aurora' | 'sunset' | 'ocean' | 'nebula'
 export type MembershipViewStatus = 'ready' | 'loading' | 'error'
 
 export interface CampaignBannerConfig {

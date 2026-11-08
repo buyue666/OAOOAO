@@ -28,14 +28,14 @@ import {
   type Paged,
 } from '@/lib/studio/admin-api'
 import type { BillingOrder, BillingProduct, CouponTemplate, FinanceSummary, PromotionCampaign, ReferralOverview, ReferralRelationship, ReferralReward } from '@/lib/studio/admin-types'
-import { discountLabelOf, objectValue, tones, toneLabels } from '@/lib/studio/membership'
+import { discountLabelOf, objectValue } from '@/lib/studio/membership'
 import { adminValueLabel } from '@/lib/studio/admin-labels'
-import membershipStyles from '@/components/membership/membership.module.css'
 import { draftToPayload, emptyDraft, linesToList, productToDraft, resolvePreviewPricing, resolvePromotionForAmount, validateDraft, type ProductDraft } from '@/lib/studio/product-draft'
 import { buildPromotionPayload, buildPromotionRemoval, findPromotionForProduct, promotionAmountFor, validatePromotionAmount } from '@/lib/studio/promotion-draft'
 import { diffProductDraft, hasSensitiveDiff, type DraftDiffEntry } from '@/lib/studio/product-diff'
 import { StudioApiError } from '@/lib/studio/api'
 import { ProductPreviewPanel } from './product-preview'
+import { PlanTonePicker } from './plan-tone-picker'
 import { ControlButton, Modal, StatusBadge } from './ui'
 import {
   AdminCell,
@@ -737,7 +737,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
                 onChange={(value) => patch({ sortOrder: value })}
               />
               {draft.productKind === 'plan' && <>
-                <Field label="关联权益方案 ID" error={errorFor('planId')} fieldId="planId" hint="需要后台已存在同名权益方案。"><AdminInput aria-label="关联权益方案 ID" value={draft.planId} onChange={(event) => patch({ planId: event.target.value })} /></Field>
+                <Field label="关联权益方案 ID" error={errorFor('planId')} fieldId="planId" hint="模型使用范围在「系统设置 → 计费与权益 → 对应方案 → 可用模型」配置。"><AdminInput aria-label="关联权益方案 ID" value={draft.planId} onChange={(event) => patch({ planId: event.target.value })} /></Field>
                 <NumberField
                   label="有效期（天）" fieldId="periodDays" testId="product-period"
                   error={errorFor('periodDays')}
@@ -762,12 +762,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
               {draft.productKind === 'points' && <p className="text-xs leading-5 text-muted-foreground">积分包在独立积分超市出售，所有账户均可购买，无需开通会员。支付确认后一次发放积分。</p>}
               <Field label="套餐分组标识" fieldId="groupId" hint={draft.productKind === 'points' ? '同一组积分包可配置不同积分档位；留空则单独展示。' : '同套餐的月付、季付、年付使用相同标识。'}><AdminInput aria-label="套餐分组标识" value={draft.display.groupId} onChange={(event) => patchDisplay({ groupId: event.target.value })} /></Field>
               <Field label="配色" fieldId="tone" hint="留空＝自动（按分组顺序分配，与用户页一致）">
-                <AdminSelect aria-label="配色" value={draft.display.tone} onChange={(event) => patchDisplay({ tone: event.target.value })}>
-                  {/* 空值表示「未设置 → 自动配色」，不能被强制替换成 standard。 */}
-                  <option value="">自动（按分组顺序）</option>
-                  {tones.map(tone => <option key={tone} value={tone}>{toneLabels[tone]}</option>)}
-                </AdminSelect>
-                <div className={membershipStyles.toneOptions} role="group" aria-label="商品配色快捷选择">{tones.map(tone => <button type="button" key={tone} className={membershipStyles.toneSwatch} data-tone={tone} title={toneLabels[tone]} aria-label={toneLabels[tone]} aria-pressed={draft.display.tone === tone} onClick={() => patchDisplay({ tone })} />)}</div>
+                <PlanTonePicker value={draft.display.tone} allowAutomatic onChange={tone => patchDisplay({ tone })} />
               </Field>
               <Field label="积分档位标识" error={errorFor('tierId')} fieldId="tierId"><AdminInput aria-label="积分档位标识" value={draft.display.tierId} onChange={(event) => patchDisplay({ tierId: event.target.value })} /></Field>
               <Field label="档位名称" fieldId="tierLabel" hint="建议 2–12 个字；过长会在卡片上换行或省略显示">

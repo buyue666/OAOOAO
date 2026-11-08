@@ -1,8 +1,10 @@
 import type { SessionSettings } from './api'
 import type { ModelConfig } from './types'
+import { modelsFromSession } from './studio-models'
 
 export function availableTeamModels(models: ModelConfig[], allowedIds: string[], settings?: SessionSettings) {
-  return models.filter(model => model.status === '可用' && (!allowedIds.length || allowedIds.some(id => {
+  const catalog = settings?.personalModelIds === undefined ? models : modelsFromSession({ ...settings, personalModelIds: undefined })
+  return catalog.filter(model => model.status === '可用' && (!allowedIds.length || allowedIds.some(id => {
     const logical = settings?.logicalModels?.find(item => item.id === id)
     return model.id === id || logical?.bindings.some(binding => binding.enabled && binding.requestAlias === model.id)
   })))

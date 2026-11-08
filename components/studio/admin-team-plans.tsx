@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { Pencil, Plus } from 'lucide-react'
 import { request } from '@/lib/studio/api'
-import { useStudio } from '@/lib/studio/store'
+import { TeamPlanCard } from '@/components/membership/team-plan-card'
+import membershipStyles from '@/components/membership/membership.module.css'
+import { PlanTonePicker } from './plan-tone-picker'
+import type { AdminSettings } from '@/lib/studio/admin-types'
+import { PlanModelControl } from './plan-model-control'
 import { newClientRequestId } from '@/lib/studio/generation-api'
 import { teamPlanPriceCents, teamPlanStorageBytes } from '@/lib/studio/team-admin'
 import { teamSubmissionUncertain } from '@/lib/studio/team-generation'
@@ -50,30 +54,46 @@ function TeamPlansAdmin() {
 }
 
 function TeamPlanEditor({ plan, onClose, onSaved }: { plan: TeamPlan; onClose: () => void; onSaved: () => void }) {
-  const { state } = useStudio()
+  const catalog = useTeamAdminQuery<{ settings: AdminSettings }>('/api/admin/settings')
   const [draft, setDraft] = useState(plan)
+  const [restricted, setRestricted] = useState(plan.modelIds.length > 0)
   const [price, setPrice] = useState(plan.priceCents === null ? '' : (plan.priceCents / 100).toFixed(2))
   const [capacity, setCapacity] = useState(String(plan.storageBytes / 1024 ** 3))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const lock = useRef(false)
-  const models = state.sessionSettings?.logicalModels?.filter(model => model.enabled) ?? []
-  const fields: Array<{ key: 'minSeats' | 'maxSeats' | 'reviewerLimit' | 'pointsPerSeat' | 'creditValidityDays' | 'teamConcurrency' | 'memberConcurrency' | 'taskLimit'; label: string; min: number; max: number; step?: string }> = [
-    { key: 'minSeats', label: '最低创作席位', min: 2, max: 100 }, { key: 'maxSeats', label: '最多创作席位', min: draft.minSeats, max: 100 }, { key: 'reviewerLimit', label: '团队审阅名额', min: 0, max: 500 },
-    { key: 'pointsPerSeat', label: '每席发放积分', min: 0, max: 100000000, step: '0.0001' }, { key: 'creditValidityDays', label: '积分有效天数', min: 1, max: 365 },
-    { key: 'teamConcurrency', label: '团队并发任务数', min: 1, max: 100 }, { key: 'memberConcurrency', label: '每位成员并发任务数', min: 1, max: draft.teamConcurrency }, { key: 'taskLimit', label: '单次任务积分上限', min: 0.0001, max: 100000000, step: '0.0001' },
+  const fields: Array<{ key: 'minSeats' | 'maxSeats' | 'reviewerLimit' | 'pointsPerSeat' | 'creditValidityDays' | 'teamConcurrency' | 'memberConcurrency' | 'taskLimit'; label: string; min: number; max: number; step?: string; group: 'price' | 'resources' }> = [
+    { key: 'pointsPerSeat', label: '每席发放积分', min: 0, max: 100000000, step: '0.0001', group: 'price' }, { key: 'creditValidityDays', label: '积分有效天数', min: 1, max: 365, group: 'price' },
+    { key: 'minSeats', label: '最低创作席位', min: 2, max: 100, group: 'resources' }, { key: 'maxSeats', label: '最多创作席位', min: draft.minSeats, max: 100, group: 'resources' }, { key: 'reviewerLimit', label: '团队审阅名额', min: 0, max: 500, group: 'resources' },
+    { key: 'teamConcurrency', label: '团队并发任务数', min: 1, max: 100, group: 'resources' }, { key: 'memberConcurrency', label: '每位成员并发任务数', min: 1, max: draft.teamConcurrency, group: 'resources' }, { key: 'taskLimit', label: '单次任务积分上限', min: 0.0001, max: 100000000, step: '0.0001', group: 'resources' },
   ]
-  return <AdminDrawer open title={`编辑 ${plan.name}`} description="套餐按 30 天人工开通，所有者占用一个创作席位。" onClose={() => { if (!busy) onClose() }} footer={<><ControlButton variant="secondary" disabled={busy} onClick={onClose}>取消</ControlButton><ControlButton variant="primary" type="submit" form="admin-team-plan" disabled={busy}>{busy ? '正在保存…' : '保存套餐'}</ControlButton></>}>
-    <form id="admin-team-plan" className="flex flex-col gap-5" onSubmit={async event => {
-      event.preventDefault(); if (lock.current) return; lock.current = true; setBusy(true); setError('')
-      try { const { id: _id, ...body } = draft; await request(`/api/admin/team-plans/${encodeURIComponent(plan.id)}`, { method: 'PATCH', body: JSON.stringify({ ...body, priceCents: teamPlanPriceCents(price), storageBytes: teamPlanStorageBytes(capacity) }) }); onSaved() }
+  const controls = (group: 'price' | 'resources') => fields.filter(field => field.group === group).map(field => <AdminField key={field.key} label={field.label}><AdminInput type="number" required min={field.min} max={field.max} step={field.step || '1'} value={draft[field.key]} onChange={event => setDraft({ ...draft, [field.key]: Number(event.target.value) })} /></AdminField>)
+  let previewPrice: number | null = null, previewCapacity = draft.storageBytes
+  try { previewPrice = teamPlanPriceCents(price) } catch {}
+  try { previewCapacity = teamPlanStorageBytes(capacity) } catch {}
+  const preview = { ...draft, priceCents: previewPrice, storageBytes: previewCapacity }
+  return <AdminDrawer open width="sm:max-w-[1180px]" title={`编辑套餐 ${plan.name}`} description="配置团队权益与套餐展示，右侧同步预览。按创作席位计费，所有者占一个席位。" onClose={() => { if (!busy) onClose() }} footer={<><ControlButton variant="secondary" disabled={busy} onClick={onClose}>取消</ControlButton><ControlButton variant="primary" type="submit" form="admin-team-plan" disabled={busy}>{busy ? '正在保存…' : '保存套餐'}</ControlButton></>}>
+    <form id="admin-team-plan" onSubmit={async event => {
+      event.preventDefault(); if (lock.current) return
+      if (restricted && !draft.modelIds.length) { setError('请至少选择一个模型，或切换为全部可用模型。'); return }
+      lock.current = true; setBusy(true); setError('')
+      try { const { id: _id, ...body } = draft; await request(`/api/admin/team-plans/${encodeURIComponent(plan.id)}`, { method: 'PATCH', body: JSON.stringify({ ...body, modelIds: restricted ? draft.modelIds : [], priceCents: teamPlanPriceCents(price), storageBytes: teamPlanStorageBytes(capacity), display: { ...body.display, benefits: body.display?.benefits?.map(item => item.trim()).filter(Boolean) } }) }); onSaved() }
       catch (reason) { setError(reason instanceof Error ? reason.message : '套餐保存失败。') }
       finally { lock.current = false; setBusy(false) }
-    }}><fieldset disabled={busy} className="flex flex-col gap-5"><AdminField label="套餐名称"><AdminInput required maxLength={80} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></AdminField><AdminField label="套餐说明"><AdminTextarea maxLength={2000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></AdminField>
-      <div className="grid gap-4 sm:grid-cols-2"><AdminField label="每席价格（元／30 天）" hint="留空表示尚未定价，完成定价后才能发布。"><AdminInput type="number" min="0.01" max="1000000" step="0.01" value={price} onChange={event => setPrice(event.target.value)} required={draft.enabled} /></AdminField><AdminField label="团队总容量（GB）" hint="团队共享的总容量，不按席位相乘。"><AdminInput type="number" min="0.000001" max="1048576" step="any" required value={capacity} onChange={event => setCapacity(event.target.value)} /></AdminField>{fields.map(field => <AdminField key={field.key} label={field.label}><AdminInput type="number" required min={field.min} max={field.max} step={field.step || '1'} value={draft[field.key]} onChange={event => setDraft({ ...draft, [field.key]: Number(event.target.value) })} /></AdminField>)}</div>
-      <fieldset className="rounded-lg border border-border p-4"><legend className="px-1 text-sm font-medium">可用模型</legend><p className="mb-3 text-xs text-muted-foreground">不勾选表示不额外限制；仍然只允许使用站点中已启用且有可用渠道的模型。</p><div className="grid gap-2 sm:grid-cols-2">{[...models.map(model => ({ id: model.id, name: model.name })), ...draft.modelIds.filter(id => !models.some(model => model.id === id)).map(id => ({ id, name: `${id}（已停用或不可用）` }))].map(model => <label key={model.id} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={draft.modelIds.includes(model.id)} onChange={event => setDraft({ ...draft, modelIds: event.target.checked ? [...draft.modelIds, model.id] : draft.modelIds.filter(id => id !== model.id) })} /><span className="break-words">{model.name}</span></label>)}</div></fieldset>
-      <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={draft.enabled} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />发布此套餐</label>
-    </fieldset>{error && <AdminError message={error} />}</form>
+    }} className="flex min-w-0 flex-col gap-5">
+      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <fieldset disabled={busy} className="flex min-w-0 flex-col gap-5">
+          <section className="space-y-4"><h3 className="text-sm font-semibold">套餐基础信息</h3><AdminField label="套餐名称"><AdminInput required maxLength={80} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></AdminField><AdminField label="套餐说明"><AdminTextarea maxLength={2000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></AdminField><label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={draft.enabled} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />发布此套餐</label></section>
+          <section className="space-y-4 border-t border-border pt-5"><h3 className="text-sm font-semibold">价格与积分</h3><div className="grid gap-4 sm:grid-cols-2"><AdminField label="每席价格（元／30 天）" hint="价格留空时不能发布。"><AdminInput type="number" min="0.01" max="1000000" step="0.01" value={price} onChange={event => setPrice(event.target.value)} required={draft.enabled} /></AdminField>{controls('price')}</div></section>
+          <section className="space-y-4 border-t border-border pt-5"><h3 className="text-sm font-semibold">席位与创作资源</h3><div className="grid gap-4 sm:grid-cols-2">{controls('resources')}<AdminField label="团队总容量（GB）" hint="由全体成员共享，不按席位相乘。"><AdminInput type="number" min="0.000001" max="1048576" step="any" required value={capacity} onChange={event => setCapacity(event.target.value)} /></AdminField></div></section>
+          {catalog.error && <AdminError message="模型目录读取失败，现有范围已保留。" retry={() => void catalog.mutate()} />}
+          <PlanModelControl models={catalog.data?.settings.logicalModels || []} value={restricted ? draft.modelIds : undefined} disabled={busy || catalog.isLoading || !!catalog.error} onChange={modelIds => { setRestricted(modelIds !== undefined); setDraft({ ...draft, modelIds: modelIds || [] }) }} />
+          <section className="space-y-4 border-t border-border pt-5"><div><h3 className="text-sm font-semibold">套餐页展示</h3><p className="mt-1 text-xs text-muted-foreground">与个人套餐使用同一套卡片配色和权益样式。</p></div><div className="grid gap-4 sm:grid-cols-2"><AdminField label="配色"><PlanTonePicker value={draft.display?.tone || 'standard'} onChange={tone => setDraft({ ...draft, display: { ...draft.display, tone: tone as NonNullable<TeamPlan['display']>['tone'] } })} /></AdminField><AdminField label="套餐角标" hint="留空时显示团队版。"><AdminInput maxLength={24} value={draft.display?.badge || ''} onChange={event => setDraft({ ...draft, display: { ...draft.display, badge: event.target.value } })} /></AdminField><AdminField label="补充展示权益（每行一项）" hint="仅补充展示文案，容量、席位、并发与模型权限仍以实际配置为准。" className="sm:col-span-2"><AdminTextarea rows={4} value={(draft.display?.benefits || []).join('\n')} onChange={event => setDraft({ ...draft, display: { ...draft.display, benefits: event.target.value.split('\n') } })} /></AdminField></div></section>
+        </fieldset>
+        <aside aria-label="团队套餐实时预览" className="min-w-0 rounded-xl border border-border bg-muted/20 p-4 xl:sticky xl:top-0"><div className="mb-3"><p className="text-sm font-semibold">套餐卡片预览</p><p className="mt-1 text-xs leading-5 text-muted-foreground">与用户页使用相同组件，可试算席位数量。</p></div><div className={`${membershipStyles.themeScope} ${membershipStyles.viewportScope} overflow-hidden rounded-[18px]`}><TeamPlanCard key={`${plan.id}:${draft.minSeats}:${draft.maxSeats}`} plan={preview} preview /></div></aside>
+      </div>
+      {error && <AdminError message={error} />}
+    </form>
   </AdminDrawer>
 }
 

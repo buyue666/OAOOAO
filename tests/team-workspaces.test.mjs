@@ -15,7 +15,8 @@ const all = node => node && typeof node === 'object' ? [node, ...[node.props?.ch
 const text = node => typeof node === 'string' ? node : node && typeof node === 'object' ? [node.props?.children].flat(Infinity).map(text).join('') : ''
 const controls = new Proxy({}, { has: () => true, get: (_, key) => String(key) })
 const teamHelpers = load('lib/studio/team-types.ts')
-const generationHelpers = load('lib/studio/team-generation.ts')
+const modelHelpers = load('lib/studio/studio-models.ts')
+const generationHelpers = load('lib/studio/team-generation.ts', { './studio-models': modelHelpers })
 const pricingHelpers = load('lib/studio/team-admin.ts')
 const videoHelpers = load('lib/studio/video-policy.ts')
 function hooks() {
@@ -110,7 +111,7 @@ test('team details expose management tabs by current role and do not mount priva
 test('the team admin module separates plan editors from billing operators', () => {
   for (const [permission, expected] of [['commerce.manage', 'plans'], ['billing.manage', 'teams']]) {
     const h = hooks()
-    const module = load('components/studio/admin-team-plans.tsx', { react: h.react, 'react/jsx-runtime': jsx, swr: {}, 'lucide-react': controls, '@/lib/studio/api': {}, '@/lib/studio/store': {}, '@/lib/studio/generation-api': {}, '@/lib/studio/team-admin': pricingHelpers, '@/lib/studio/team-generation': generationHelpers, '@/lib/studio/team-types': teamHelpers, './ui': controls, './admin-kit': controls, './admin-shell': { useAdminSession: () => ({ can: value => value === permission }) } })
+    const module = load('components/studio/admin-team-plans.tsx', { react: h.react, 'react/jsx-runtime': jsx, swr: {}, 'lucide-react': controls, '@/lib/studio/api': {}, '@/components/membership/team-plan-card': controls, '@/components/membership/membership.module.css': {}, './plan-model-control': controls, './plan-tone-picker': controls, '@/lib/studio/store': {}, '@/lib/studio/generation-api': {}, '@/lib/studio/team-admin': pricingHelpers, '@/lib/studio/team-generation': generationHelpers, '@/lib/studio/team-types': teamHelpers, './ui': controls, './admin-kit': controls, './admin-shell': { useAdminSession: () => ({ can: value => value === permission }) } })
     const tree = h.render(() => module.AdminTeamPlansPanel())
     const tabs = all(tree).find(node => node.type === 'AdminTabs')
     assert.deepEqual(tabs.props.items.map(item => item[0]), [expected]); assert.equal(tabs.props.value, expected)

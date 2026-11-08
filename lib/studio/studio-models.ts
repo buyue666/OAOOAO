@@ -69,6 +69,7 @@ const kindByCapability: Record<SessionLogicalModel['capability'], StudioMode> = 
 export function modelsFromSession(settings: SessionGenerationSettings | undefined): ModelConfig[] {
   const logicalModels = settings?.logicalModels ?? []
   const candidates = logicalModels
+    .filter((model) => settings?.personalModelIds === undefined || settings.personalModelIds.includes(model.id))
     .filter((model) => model.enabled && model.bindings.some((binding) => binding.enabled))
     .flatMap((model) => {
       const bindings = model.bindings.filter((binding) => binding.enabled)

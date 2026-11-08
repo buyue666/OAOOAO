@@ -102,7 +102,7 @@ test('actual entitlement checkboxes default legacy plans to all kinds and preser
   const h = hooks(), writes = []
   const source = ts.createSourceFile('settings.tsx', read('../components/studio/admin-settings.tsx'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const declaration = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'PointsSection').getText(source)
-  const imports = `import {useState} from 'react'; import {allowedGenerationKinds,ENTITLEMENT_GENERATION_KINDS} from './features'; import {${Object.keys(ui).join(',')}} from './ui';`
+  const imports = `import {useState} from 'react'; const PlanModelControl='PlanModelControl'; import {allowedGenerationKinds,ENTITLEMENT_GENERATION_KINDS} from './features'; import {${Object.keys(ui).join(',')}} from './ui';`
   const { PointsSection } = compile(`${imports} export ${declaration}`, { react: h.react, './features': features, './ui': ui, 'react/jsx-runtime': jsx })
   const settings = { entitlements: { enabled: true, defaultPlanId: 'legacy', plans: [{ id: 'legacy', name: '旧方案', enabled: true, dailyPoints: 0, limits: {}, features: ['keep-legacy-feature'] }] }, generationCostControl: {}, generationPointMultipliers: {}, modelPointCosts: {} }
   const render = () => h.render(() => PointsSection({ settings, canUpstream: false, saving: false, onSave: patch => writes.push(patch) }))

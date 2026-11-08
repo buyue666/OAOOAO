@@ -39,6 +39,14 @@
 .offerCard[data-tone="premium"], .toneSwatch[data-tone="premium"] { --offer-accent: #c0a0ff; --offer-deep: #392553; }
 .offerCard[data-tone="luxury"], .toneSwatch[data-tone="luxury"] { --offer-accent: #ffadcc; --offer-deep: #532d43; }
 .offerCard[data-tone="ultimate"], .toneSwatch[data-tone="ultimate"] { --offer-accent: #ffd17b; --offer-deep: #513c20; }
+.offerCard[data-tone="cyan"], .toneSwatch[data-tone="cyan"] { --offer-accent: #76dcf1; --offer-deep: #123944; }
+.offerCard[data-tone="coral"], .toneSwatch[data-tone="coral"] { --offer-accent: #ffb09c; --offer-deep: #4d2d29; }
+.offerCard[data-tone="slate"], .toneSwatch[data-tone="slate"] { --offer-accent: #c5d1df; --offer-deep: #2c3746; }
+.offerCard[data-tone="aurora"], .toneSwatch[data-tone="aurora"] { --offer-accent: #a1e8e3; --offer-deep: #203553; --offer-gradient: linear-gradient(135deg, #163f3b, #252c58 55%, #3d2850); --swatch-paint: linear-gradient(135deg, #63e2bb, #779be9 52%, #bc90e9); }
+.offerCard[data-tone="sunset"], .toneSwatch[data-tone="sunset"] { --offer-accent: #ffd1af; --offer-deep: #512f30; --offer-gradient: linear-gradient(135deg, #503423, #522c42 58%, #382744); --swatch-paint: linear-gradient(135deg, #ffcc72, #f5948c 52%, #d383b8); }
+.offerCard[data-tone="ocean"], .toneSwatch[data-tone="ocean"] { --offer-accent: #9ae3f1; --offer-deep: #173858; --offer-gradient: linear-gradient(135deg, #193252, #14444b 65%, #183e34); --swatch-paint: linear-gradient(135deg, #689fe9, #63ceda 56%, #5bd3ad); }
+.offerCard[data-tone="nebula"], .toneSwatch[data-tone="nebula"] { --offer-accent: #f0c6f7; --offer-deep: #3a2953; --offer-gradient: linear-gradient(135deg, #4c294c, #342e60 58%, #233b56); --swatch-paint: linear-gradient(135deg, #ed9fcd, #b49ae8 55%, #84b8ee); }
+.offerCard:is([data-tone="aurora"], [data-tone="sunset"], [data-tone="ocean"], [data-tone="nebula"]) { background: var(--offer-gradient); }
 .offerHeader { position: relative; min-height: 0; padding: 22px 22px 12px; }
 .offerMarker { display: none; }
 .offerHeading { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
@@ -107,9 +115,21 @@
 .reviewError { margin: 0; color: #ffc7c7; font-size: 13px; }
 .reviewActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .reviewActions > button { min-height: 42px; height: auto; padding: 10px 14px; }
-.toneOptions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-.toneSwatch { --offer-accent: #5ee3bc; --offer-deep: #143d36; width: 30px; height: 30px; border: 2px solid #ffffff26; border-radius: 50%; background: linear-gradient(135deg, var(--offer-accent), var(--offer-deep)); cursor: pointer; }
-.toneSwatch[aria-pressed="true"] { box-shadow: 0 0 0 3px #8297b5; }
+.toneOptions { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px; }
+.toneSwatch { --offer-accent: #5ee3bc; --offer-deep: #143d36; position: relative; display: inline-grid; flex: 0 0 44px; place-items: center; width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--swatch-paint, var(--offer-accent)); background-clip: border-box; appearance: none; cursor: pointer; }
+.toneSwatch[aria-pressed="true"] { outline: 2px solid var(--foreground, #283c55); outline-offset: 3px; }
+.toneCheck { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: #182330; }
+.teamOfferCard { flex-basis: 280px; max-width: 340px; }
+.teamOfferCard .offerBody { min-height: 0; }
+.teamUnpriced { font-size: 28px !important; }
+.teamSeatField { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; margin-top: 20px; color: #e6edf4; font-size: 12px; }
+.teamSeatField > span { margin-left: auto; color: #b8c3ce; font-size: 11px; }
+.teamSeatField input { width: 100%; min-height: 44px; border: 1px solid #ffffff40; border-radius: 9px; padding: 10px 12px; color: #fff; background: #00000036; font: inherit; font-size: 14px; }
+.teamSeatField input[aria-invalid="true"] { border-color: #ffb9a8; }
+.teamPriceTotal { display: flex; justify-content: space-between; gap: 12px; width: 100%; margin-top: 18px; padding-block: 12px; border-block: 1px solid #ffffff26; color: #b8c3ce; font-size: 12px; }
+.teamPriceTotal strong { color: #fff; font-size: 15px; font-variant-numeric: tabular-nums; }
+.teamOfferLink { display: block; text-align: center; text-decoration: none; }
+.teamPlanNotice { max-width: 760px; margin: 24px auto; border: 1px solid #ffffff26; border-radius: 12px; padding: 16px 20px; color: #c4cdd8; background: #ffffff06; font-size: 13px; line-height: 1.8; }
 @container membership-viewport (max-width: 620px) {
   .storeHeader { margin-bottom: 20px; padding: 42px 0 8px; }
   .storeHeader h1 { font-size: 26px; text-wrap: balance; }

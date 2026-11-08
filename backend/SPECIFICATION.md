@@ -107,6 +107,28 @@ implementers receive only requirements and client contracts.
   submission snapshot is scoped to account/team/project in session storage;
   unknown responses can be retried after a remount with the original idempotency
   key and approved input. Quotes never create jobs or debit credits.
+- Migration `017-team-plan-display.sql` adds an optional team-plan `display`
+  object with `tone`, `badge` and `benefits`. These fields affect presentation
+  only; seats, storage, concurrency and model permissions remain authoritative
+  resource fields. Team and personal cards share twelve named color themes,
+  including four gradients. Existing automatic assignments retain their order.
+
+## Personal plan model access
+
+- An enabled entitlement plan may set `allowedModelIds` to canonical logical
+  model IDs. Omitting the field preserves access to all available models;
+  an explicit empty array denies model generation. Invalid, blank or duplicate
+  IDs are rejected. Disabled or unconfigured provider routes remain unavailable.
+- The active administrative or purchased entitlement determines access; users
+  without an active plan use the default entitlement. The restriction is enforced
+  on quotes, new generation jobs and Agent steps before debit or provider calls.
+  Aliases share the canonical model's permissions. Completed or already accepted
+  idempotent requests keep their original response after a plan change.
+- Session settings expose `personalModelIds` separately from the sanitized model
+  catalog so independent team scopes can use the catalog. Personal selectors and
+  default-model settings filter the personal scope; existing saved preferences
+  are retained for a later plan upgrade. Team model permissions and wallet use
+  remain independent of the user's personal plan.
 
 ## Security and reliability requirements
 

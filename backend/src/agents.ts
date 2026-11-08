@@ -41,7 +41,7 @@ export async function validateAgentPlan(ctx:Context,run:Json,content:string,clie
     if(spec.type==='text'&&arrays.referenceStepIds.length)throw httpError(422,'Vision text generation is not supported by this adapter');
     const config:Json={model};for(const key of ['size','quality','vquality','videoSeconds','voice','format'])if(spec.config?.[key]!==undefined){const value=spec.config[key];if(typeof value!=='string'&&typeof value!=='number')throw httpError(422,'Invalid generation option');config[key]=value;}
     const step:Json={id,title:string(spec.title,'step title',250),type:spec.type,model,prompt:string(spec.prompt,'step prompt',32000),config,...arrays};
-    const provider=await resolveProvider(ctx,spec.type,{prompt:step.prompt,config,context:{}},client);step.estimatedCost=provider.cost;steps.push(step);seen.set(id,step);
+    const provider=await resolveProvider(ctx,spec.type,{prompt:step.prompt,config,context:{}},client,run.user_id);step.estimatedCost=provider.cost;steps.push(step);seen.set(id,step);
   }
   return{summary:typeof parsed.summary==='string'?parsed.summary.slice(0,2000):'',steps};
 }

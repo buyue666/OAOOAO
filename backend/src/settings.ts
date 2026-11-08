@@ -13,7 +13,7 @@ import {hasSiteCommercePolicy,resolveCommercePolicy} from './commerce-policy.js'
 import {publicSite,validateSiteFooter} from './site-footer.js';
 import {DEFAULT_CHECK_IN_SETTINGS,normalizeCheckInSettings,validateCheckInSettings} from './check-in.js';
 import {DEFAULT_WECHAT,wechatConfig,wechatConfigured,publicWechatConfig,validateWechatConfig} from './wechat-config.js';
-import {validatePlanGenerationKinds} from './entitlements.js';
+import {validatePlanGenerationKinds,validatePlanModels} from './entitlements.js';
 
 export type Settings = Record<string, any>;
 const bannerTones=new Set(['promo','info','warning','violet','rose','slate']);
@@ -237,7 +237,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
   if(typeof next.entitlements.enabled!=='boolean'||!Array.isArray(next.entitlements.plans))throw httpError(400,'Invalid entitlement plans');
   const planIds=new Set<string>();
   if(next.entitlements.defaultStorageQuotaBytes!==undefined&&!validStorageQuota(next.entitlements.defaultStorageQuotaBytes))throw httpError(400,'默认存储容量必须是有效的字节数');
-  for(const plan of next.entitlements.plans){validatePlanGenerationKinds(plan);if(plan.storageQuotaBytes!==undefined&&!validStorageQuota(plan.storageQuotaBytes))throw httpError(400,'会员存储容量必须是有效的字节数');string(plan.id,'plan ID');string(plan.name,'plan name');if(planIds.has(plan.id)||typeof plan.enabled!=='boolean')throw httpError(400,'Plan IDs must be unique and enabled must be boolean');planIds.add(plan.id);validNumber(plan.dailyPoints,'plan daily points');creditUnits(plan.dailyPoints);for(const [key,value]of Object.entries(object(plan.limits))){validNumber(value,'plan limit');if(key==='dailyPointSpend')creditUnits(value as number);else if(!Number.isInteger(value))throw httpError(400,'Daily plan count limits must be integers');}}
+  for(const plan of next.entitlements.plans){validatePlanGenerationKinds(plan);validatePlanModels(plan);if(plan.storageQuotaBytes!==undefined&&!validStorageQuota(plan.storageQuotaBytes))throw httpError(400,'会员存储容量必须是有效的字节数');string(plan.id,'plan ID');string(plan.name,'plan name');if(planIds.has(plan.id)||typeof plan.enabled!=='boolean')throw httpError(400,'Plan IDs must be unique and enabled must be boolean');planIds.add(plan.id);validNumber(plan.dailyPoints,'plan daily points');creditUnits(plan.dailyPoints);for(const [key,value]of Object.entries(object(plan.limits))){validNumber(value,'plan limit');if(key==='dailyPointSpend')creditUnits(value as number);else if(!Number.isInteger(value))throw httpError(400,'Daily plan count limits must be integers');}}
   if(next.entitlements.enabled&&!next.entitlements.plans.some((plan:any)=>plan.id===next.entitlements.defaultPlanId&&plan.enabled))throw httpError(400,'An enabled default entitlement plan is required');
   if(Object.hasOwn(patch,'checkIn')||Object.hasOwn(patch,'entitlements'))next.checkIn=validateCheckInSettings(next.checkIn,planIds);
   return next;

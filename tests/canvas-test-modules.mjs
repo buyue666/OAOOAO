@@ -9,7 +9,7 @@ export function canvasPolicyModules(load) {
   return {
     './canvas-workspace': load('../components/free-canvas/canvas-workspace.ts'),
     './canvas-generation-policy': policy, '../canvas-generation-policy': policy,
-    '@/lib/studio/team-generation': load('../lib/studio/team-generation.ts'),
+    '@/lib/studio/team-generation': load('../lib/studio/team-generation.ts', { './studio-models': load('../lib/studio/studio-models.ts') }),
     '@/lib/studio/video-policy': video, '@/lib/studio/prompt-references': prompt,
   }
 }

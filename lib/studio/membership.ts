@@ -15,7 +15,9 @@ export const billingOptions: BillingOption[] = [
   { value: 'once', label: '积分包', priceSuffix: '次' },
 ]
 export const tones: PlanTone[] = ['standard', 'advanced', 'premium', 'luxury', 'ultimate']
-export const toneLabels: Record<PlanTone, string> = { standard: '松石绿', advanced: '星空蓝', premium: '鸢尾紫', luxury: '玫瑰粉', ultimate: '琥珀金' }
+export const allPlanTones: PlanTone[] = [...tones, 'cyan', 'coral', 'slate', 'aurora', 'sunset', 'ocean', 'nebula']
+export const gradientPlanTones: PlanTone[] = ['aurora', 'sunset', 'ocean', 'nebula']
+export const toneLabels: Record<PlanTone, string> = { standard: '松石绿', advanced: '星空蓝', premium: '鸢尾紫', luxury: '玫瑰粉', ultimate: '琥珀金', cyan: '冰川青', coral: '珊瑚橙', slate: '雾霭灰', aurora: '极光青紫（渐变）', sunset: '落日橙粉（渐变）', ocean: '深海蓝青（渐变）', nebula: '星云粉紫（渐变）' }
 
 /** Both storefronts and the admin preview use the same product boundary. */
 export function storefrontProducts(products: BillingProduct[], kind: 'plan' | 'points'): BillingProduct[] {
@@ -95,7 +97,7 @@ function displayPayloadFor(product: BillingProduct, automaticTone: PlanTone): Ti
   const listCents = product.pricing?.listUnitAmountCents ?? product.amountCents
   const saleCents = product.pricing?.saleUnitAmountCents ?? product.amountCents
   return {
-    tone: tones.includes(display.tone as PlanTone) ? display.tone as PlanTone : automaticTone,
+    tone: allPlanTones.includes(display.tone as PlanTone) ? display.tone as PlanTone : automaticTone,
     dailyPoints: product.productKind === 'plan' ? product.dailyPoints : 0,
     badge: typeof display.badge === 'string' && display.badge.trim() ? display.badge.trim() : undefined,
     // 促销条文案：只取**本商品**的活动标签；没有活动就没有促销条，
@@ -188,7 +190,7 @@ export function toMembershipPlans(products: BillingProduct[]): MembershipPlan[] 
       const saleCents = product.pricing?.saleUnitAmountCents ?? product.amountCents
       plan = {
         id: groupId, name: typeof display.name === 'string' && display.name ? display.name : product.name,
-        audience, tone: tones.includes(display.tone as PlanTone) ? display.tone as PlanTone : tones[plans.size % tones.length],
+        audience, tone: allPlanTones.includes(display.tone as PlanTone) ? display.tone as PlanTone : tones[plans.size % tones.length],
         tiers: [],
         // 促销条文案：优先后端配置的活动标签，缺失时用「限时 X折」自动计算。
         promotionLabel: product.pricing?.promotion?.label || promotionStripLabel(listCents, saleCents) || undefined,

@@ -33,6 +33,7 @@ import {
 } from './admin-kit'
 import { useAdminNavigation, useAdminReload, useAdminSession } from './admin-shell'
 import { CommercePolicyEditor } from './commerce-policy-editor'
+import { PlanModelControl } from './plan-model-control'
 import { AdminSiteSettings } from './admin-site-settings'
 import { AdminCheckInSettings } from './admin-check-in-settings'
 import { AdminWechatSettings } from './admin-wechat-settings'
@@ -382,7 +383,7 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
 /* ------------------------------ 计费与权益 ------------------------------ */
 
 function PointsSection({ settings, onSave, saving, canUpstream }: { settings: AdminSettings; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean; canUpstream: boolean }) {
-  const [plans, setPlans] = useState(settings.entitlements.plans.map((plan) => ({ ...plan, limits: { ...plan.limits }, features: [...(plan.features ?? [])], allowedGenerationKinds: allowedGenerationKinds(plan) })))
+  const [plans, setPlans] = useState(settings.entitlements.plans.map((plan) => ({ ...plan, allowedModelIds: plan.allowedModelIds?.slice(), limits: { ...plan.limits }, features: [...(plan.features ?? [])], allowedGenerationKinds: allowedGenerationKinds(plan) })))
   const [entitlementsEnabled, setEntitlementsEnabled] = useState(settings.entitlements.enabled)
   const [defaultPlanId, setDefaultPlanId] = useState(settings.entitlements.defaultPlanId)
   const [defaultStorageQuotaBytes,setDefaultStorageQuotaBytes] = useState(settings.entitlements.defaultStorageQuotaBytes ?? 10*1024**3)
@@ -442,11 +443,12 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{ENTITLEMENT_GENERATION_KINDS.map(kind => <label key={kind.value} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={plan.allowedGenerationKinds.includes(kind.value)} onChange={event => setPlans(current => current.map((item, position) => position === index ? { ...item, allowedGenerationKinds: event.target.checked ? [...item.allowedGenerationKinds, kind.value] : item.allowedGenerationKinds.filter(value => value !== kind.value) } : item))} />{kind.label}</label>)}</div>
                   <p className="mt-3 text-xs leading-5 text-muted-foreground">启用套餐权益限制后生效。只限制新任务，不影响查看已有项目和资产；创作助手调用生成工具时同样受对应限制。不选择任何项表示禁止新建以上任务。历史方案未设置时默认全部允许。</p>
                 </fieldset>
+                <div className="mt-4"><PlanModelControl models={settings.logicalModels} value={plan.allowedModelIds} disabled={saving} onChange={allowedModelIds => setPlans(current => current.map((item, position) => position === index ? { ...item, allowedModelIds } : item))} /></div>
                 {plan.features.length > 0 && <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">历史功能标签（兼容保留）</summary><p className="mt-2 leading-5">以下旧标签仅作记录，不控制功能访问。保存方案时会保留。</p><ul className="mt-2 flex flex-wrap gap-2">{plan.features.map((feature, at) => <li key={`${at}:${feature}`} className="max-w-full break-all rounded bg-muted px-2 py-1">{feature}</li>)}</ul></details>}
               </div>
             ))}
             {!plans.length && <AdminEmpty title="暂无权益方案" description="系统尚未返回任何套餐方案定义。" />}
-            <ControlButton type="button" variant="secondary" onClick={()=>{const id=crypto.randomUUID();setPlans(current=>[...current,{id,name:'新会员方案',enabled:true,dailyPoints:0,storageQuotaBytes:defaultStorageQuotaBytes,limits:{dailyPointSpend:0,dailyApiCalls:0,dailyImages:0,dailyVideos:0,dailyAudio:0,dailyText:0},features:[],allowedGenerationKinds:ENTITLEMENT_GENERATION_KINDS.map(item=>item.value)}]);if(!defaultPlanId)setDefaultPlanId(id)}}>新增会员方案</ControlButton>
+            <ControlButton type="button" variant="secondary" onClick={()=>{const id=crypto.randomUUID();setPlans(current=>[...current,{id,name:'新会员方案',allowedModelIds:undefined,enabled:true,dailyPoints:0,storageQuotaBytes:defaultStorageQuotaBytes,limits:{dailyPointSpend:0,dailyApiCalls:0,dailyImages:0,dailyVideos:0,dailyAudio:0,dailyText:0},features:[],allowedGenerationKinds:ENTITLEMENT_GENERATION_KINDS.map(item=>item.value)}]);if(!defaultPlanId)setDefaultPlanId(id)}}>新增会员方案</ControlButton>
           </div>
         </fieldset>
       </AdminSectionCard>

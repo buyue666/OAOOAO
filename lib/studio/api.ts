@@ -48,6 +48,7 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionSettings = {
+  personalModelIds?: string[]
   site?: SiteSettings
   operationMode?: 'self_use' | 'commercial'
   modelPointCosts?: Record<string, number>

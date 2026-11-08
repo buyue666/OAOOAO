@@ -1,3 +1,4 @@
+import type { PlanTone } from '@/components/membership/types'
 export type TeamRole = 'owner' | 'admin' | 'creator' | 'reviewer'
 export const teamRoleLabels: Record<TeamRole, string> = { owner: '所有者', admin: '管理员', creator: '创作成员', reviewer: '审阅成员' }
 export const isTeamManager = (role?: TeamRole) => role === 'owner' || role === 'admin'
@@ -66,6 +67,7 @@ export type TeamUsage = {
 }
 export type TeamEvent = { id: string; action: string; actorName: string; details: Record<string, unknown>; createdAt: string }
 export type TeamPlan = {
+  display?: { tone?: PlanTone; badge?: string; benefits?: string[] }
   id: string
   name: string
   description: string

@@ -426,7 +426,7 @@ export type DataLifecycleSettings = {
 }
 export type EntitlementPlanLimits = Record<'dailyPointSpend' | 'dailyApiCalls' | 'dailyImages' | 'dailyVideos' | 'dailyAudio' | 'dailyText', number>
 export type EntitlementGenerationKind = 'text' | 'image' | 'video' | 'audio' | 'render'
-export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[]; allowedGenerationKinds?: EntitlementGenerationKind[]; storageQuotaBytes?: number }
+export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[]; allowedGenerationKinds?: EntitlementGenerationKind[]; allowedModelIds?: string[]; storageQuotaBytes?: number }
 export type EntitlementSettings = { enabled: boolean; defaultPlanId: string; plans: EntitlementPlan[]; defaultStorageQuotaBytes?: number }
 export type GenerationPointMultipliers = { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
 

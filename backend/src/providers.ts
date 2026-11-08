@@ -11,6 +11,7 @@ import { assertTeamStorage } from './team-access.js';
 import { storageConfig, assertStorageConfigured } from './object-storage.js';
 import { saveGeneratedMedia } from './generated-media.js';
 import { saveTeamAsset } from './team-assets.js';
+import { personalGenerationPlan, assertPlanGenerationAllowed, assertPlanModelAllowed } from './entitlements.js';
 
 export type GenerationKind='text'|'image'|'video'|'audio'|'render';
 export type Json=Record<string,any>;
@@ -34,10 +35,17 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   };
   if(kind==='render'){await preflightStorage();return {model:'ffmpeg',channelId:'local',upstreamModel:'ffmpeg',config:{protocol:'ffmpeg'},cost:'0.0000'};}
   const settings=await getSettings(ctx,client),chosen=userId?await accountModelDefaults(ctx,userId,client):{};
+  const plan=userId?await personalGenerationPlan(ctx,settings,userId,client):undefined;
+  if(plan)assertPlanGenerationAllowed(plan,kind);
+  const permitted=(id:string)=>!plan?.allowedModelIds||settings.logicalModels.some((m:Json)=>plan.allowedModelIds.includes(m.id)&&(m.id===id||(m.aliases||[]).includes(id)||(m.bindings||[]).some((b:Json)=>b.requestAlias===id)));
   const saved=chosen[kind+'Model'];
-  const wanted=String(input.config?.model||(saved&&availableDefault(settings,kind+'Model',saved)?saved:settings.defaultModels?.[kind+'Model'])||'');
+  const selectedDefault=saved&&permitted(saved)&&availableDefault(settings,kind+'Model',saved)?saved:settings.defaultModels?.[kind+'Model'];
+  const fallback=selectedDefault&&permitted(selectedDefault)?selectedDefault:settings.logicalModels.find((m:Json)=>m.enabled&&m.capability===kind&&permitted(m.id))?.id;
+  const wanted=String(input.config?.model||fallback||'');
   const model=(settings.logicalModels||[]).find((m:Json)=>m.enabled&&m.capability===kind&&(m.id===wanted||(m.aliases||[]).includes(wanted)||(m.bindings||[]).some((b:Json)=>b.requestAlias===wanted)));
+  if(!model&&Array.isArray(plan?.allowedModelIds))throw httpError(403,'当前个人套餐未开放此类模型，请选择套餐允许的模型');
   if(!model)throw httpError(503,`No enabled ${kind} model is configured`);
+  if(plan)assertPlanModelAllowed(plan,model.id);
   const routeAlias=(model.bindings||[]).some((b:Json)=>b.requestAlias===wanted);
   const binding=[...(model.bindings||[])].filter((b:Json)=>b.enabled&&(!routeAlias||b.requestAlias===wanted)).sort((a:Json,b:Json)=>a.priority-b.priority).find((b:Json)=>settings.systemChannels?.some((c:Json)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none')));
   if(!binding)throw httpError(503,'No authenticated provider channel is available');

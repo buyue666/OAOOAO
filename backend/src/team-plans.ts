@@ -8,8 +8,16 @@ function integer(value: unknown, min: number, max: number, name: string) {
   if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max) throw httpError(400, `${name}必须是 ${min} 至 ${max} 的整数`);
   return Number(value);
 }
+function planDisplay(value: unknown) {
+  const display = object(value ?? {});
+  if (Object.keys(display).some(key => !['tone','badge','benefits'].includes(key))) throw httpError(400, '不支持的团队套餐展示字段');
+  if (display.tone !== undefined && !['standard','advanced','premium','luxury','ultimate','cyan','coral','slate','aurora','sunset','ocean','nebula'].includes(String(display.tone))) throw httpError(400, '套餐配色无效');
+  if (display.badge !== undefined) string(display.badge, '套餐角标', 24, true);
+  if (display.benefits !== undefined && (!Array.isArray(display.benefits) || display.benefits.length > 30 || display.benefits.some(item => typeof item !== 'string' || item.length > 200 || !item.trim()))) throw httpError(400, '展示权益最多 30 项，每项最多 200 字');
+  return display;
+}
 export function teamPlanView(row: TeamRow) {
-  return { id: row.id, name: row.name, description: row.description, enabled: row.enabled, priceCents: row.price_cents === null ? null : Number(row.price_cents), minSeats: row.min_seats, maxSeats: row.max_seats, reviewerLimit: row.reviewer_limit, pointsPerSeat: Number(row.points_per_seat), creditValidityDays: row.credit_validity_days, storageBytes: Number(row.storage_bytes), teamConcurrency: row.team_concurrency, memberConcurrency: row.member_concurrency, taskLimit: Number(row.task_limit), modelIds: row.model_ids };
+  return { id: row.id, name: row.name, description: row.description, enabled: row.enabled, priceCents: row.price_cents === null ? null : Number(row.price_cents), minSeats: row.min_seats, maxSeats: row.max_seats, reviewerLimit: row.reviewer_limit, pointsPerSeat: Number(row.points_per_seat), creditValidityDays: row.credit_validity_days, storageBytes: Number(row.storage_bytes), teamConcurrency: row.team_concurrency, memberConcurrency: row.member_concurrency, taskLimit: Number(row.task_limit), modelIds: row.model_ids, display: row.display ?? {} };
 }
 
 export async function registerTeamPlans(app: FastifyInstance, ctx: Context) {
@@ -23,12 +31,13 @@ export async function registerTeamPlans(app: FastifyInstance, ctx: Context) {
   });
   app.patch('/api/admin/team-plans/:id', async request => {
     const user = await ctx.requireUser(request, 'commerce.manage'), { id } = request.params as { id: string }, body = object(request.body);
-    const allowed = ['name','description','enabled','priceCents','minSeats','maxSeats','reviewerLimit','pointsPerSeat','creditValidityDays','storageBytes','teamConcurrency','memberConcurrency','taskLimit','modelIds'];
+    const allowed = ['name','description','enabled','priceCents','minSeats','maxSeats','reviewerLimit','pointsPerSeat','creditValidityDays','storageBytes','teamConcurrency','memberConcurrency','taskLimit','modelIds','display'];
     if (Object.keys(body).some(key => !allowed.includes(key))) throw httpError(400, '不支持的团队套餐字段');
     return transaction(ctx.db, async db => {
       const old = (await db.query('SELECT * FROM oaooao_team_plans WHERE id=$1 FOR UPDATE', [id])).rows[0];
       if (!old) throw httpError(404, '套餐不存在');
       const value = { ...teamPlanView(old), ...body };
+      const display = planDisplay(value.display);
       if (typeof value.enabled !== 'boolean') throw httpError(400, '套餐启用状态无效');
       const price = value.priceCents === null ? null : integer(value.priceCents, 1, 100000000, '每席价格（分）');
       if (value.enabled && price === null) throw httpError(400, '请先完成定价再发布套餐');
@@ -41,9 +50,9 @@ export async function registerTeamPlans(app: FastifyInstance, ctx: Context) {
       const modelIds = [...new Set(value.modelIds as string[])];
       if (modelIds.length) {
         const configured = (await db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0]?.value?.logicalModels ?? [];
-        if (modelIds.some(modelId => !configured.some((model: TeamRow) => model.id === modelId && model.enabled))) throw httpError(400, '请使用站点中已启用的逻辑模型 ID');
+        if (modelIds.some(modelId => !old.model_ids.includes(modelId) && !configured.some((model: TeamRow) => model.id === modelId && model.enabled))) throw httpError(400, '请使用站点中已启用的逻辑模型 ID');
       }
-      const row = (await db.query('UPDATE oaooao_team_plans SET name=$2,description=$3,enabled=$4,price_cents=$5,min_seats=$6,max_seats=$7,reviewer_limit=$8,points_per_seat=$9,credit_validity_days=$10,storage_bytes=$11,team_concurrency=$12,member_concurrency=$13,task_limit=$14,model_ids=$15,updated_at=now() WHERE id=$1 RETURNING *', [id, string(value.name, '套餐名称', 80), string(value.description, '套餐说明', 2000, true), value.enabled, price, min, max, reviewers, creditDecimal(points), validity, storage, concurrent, perMember, creditDecimal(taskLimit), JSON.stringify(modelIds)])).rows[0];
+      const row = (await db.query('UPDATE oaooao_team_plans SET name=$2,description=$3,enabled=$4,price_cents=$5,min_seats=$6,max_seats=$7,reviewer_limit=$8,points_per_seat=$9,credit_validity_days=$10,storage_bytes=$11,team_concurrency=$12,member_concurrency=$13,task_limit=$14,model_ids=$15,display=$16,updated_at=now() WHERE id=$1 RETURNING *', [id, string(value.name, '套餐名称', 80), string(value.description, '套餐说明', 2000, true), value.enabled, price, min, max, reviewers, creditDecimal(points), validity, storage, concurrent, perMember, creditDecimal(taskLimit), JSON.stringify(modelIds), JSON.stringify(display)])).rows[0];
       await ctx.audit({ actorId: user.id, action: 'team.plan.updated', targetType: 'team-plan', targetId: id, metadata: { enabled: value.enabled } }, db);
       return { plan: teamPlanView(row) };
     });

@@ -320,6 +320,7 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionGenerationSettings = {
+  personalModelIds?: string[]
   modelPointCosts?: Record<string, number>
   generationPointMultipliers?: { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
   generationConcurrency?: Record<string, number>
