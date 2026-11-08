@@ -636,6 +636,18 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
     } finally { storageAction.current = false; setChecking(false) }
   }
 
+  if (storage.provider === 'vercel-blob') return (
+    <div className="flex flex-col gap-4">
+      <AdminNotice>Vercel Blob 私有存储由项目集成托管，无需填写 S3 访问密钥。素材通过鉴权接口读取，不对外暴露存储直链。</AdminNotice>
+      <AdminSectionCard title="对象存储 · Vercel Blob" description="连接由项目设置管理。检测会上传、读取并删除一个独立测试文件，不影响现有素材。" action={<StatusBadge tone={storage.enabled ? 'success' : 'muted'}>{storage.enabled ? '已启用' : '未启用'}</StatusBadge>}>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">新素材保存至已连接的私有存储。切换存储前请先迁移已有素材，避免文件失联。</p>
+          <div className="flex justify-end"><ControlButton variant="secondary" onClick={() => void check()} disabled={busy || checking}>{checking ? '检测中' : '检测上传、读取与删除'}</ControlButton></div>
+        </div>
+      </AdminSectionCard>
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-4">
       <AdminNotice>{CREATIVE_STORAGE_NOTICE} 私有桶通过短时签名链接下载。密钥留空保留原值，仅加密保存在此部署中。</AdminNotice>

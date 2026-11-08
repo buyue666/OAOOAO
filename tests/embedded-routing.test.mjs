@@ -9,6 +9,24 @@ const source = (await readFile(new URL('../app/api/[...path]/route.ts', import.m
 )
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
 const route = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
+const originSource = await readFile(new URL('../lib/server/backend-origin.ts', import.meta.url), 'utf8')
+const originCompiled = ts.transpileModule(originSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+const { resolveBackendOrigin } = await import('data:text/javascript;base64,' + Buffer.from(originCompiled).toString('base64'))
+
+test('后端域名兼容 Vercel 与 v0 裸域名，并保留显式配置优先级', () => {
+  assert.equal(resolveBackendOrigin({}), 'http://localhost:3000')
+  assert.equal(resolveBackendOrigin({ V0_RUNTIME_URL: 'preview.v0.build' }), 'https://preview.v0.build')
+  assert.equal(resolveBackendOrigin({ V0_RUNTIME_URL: 'https://preview.v0.build/path' }), 'https://preview.v0.build')
+  assert.equal(resolveBackendOrigin({ V0_DEV_APP_URL: 'https://preview.v0.dev' }), 'https://preview.v0.dev')
+  assert.equal(resolveBackendOrigin({ VERCEL_URL: 'branch.vercel.app' }), 'https://branch.vercel.app')
+  assert.equal(resolveBackendOrigin({ VERCEL_PROJECT_PRODUCTION_URL: 'studio.vercel.app', VERCEL_URL: 'branch.vercel.app' }), 'https://studio.vercel.app')
+  assert.equal(resolveBackendOrigin({ PUBLIC_ORIGIN: 'https://studio.test', OAOAO_PUBLIC_URL: 'https://other.test', VERCEL_URL: 'branch.vercel.app' }), 'https://studio.test')
+  assert.equal(resolveBackendOrigin({ OAOAO_PUBLIC_URL: 'https://studio.test', V0_RUNTIME_URL: 'preview.v0.build' }), 'https://studio.test')
+  assert.throws(() => resolveBackendOrigin({ PUBLIC_ORIGIN: 'not a URL', V0_RUNTIME_URL: 'preview.v0.build' }))
+  assert.equal(resolveBackendOrigin({ V0_RUNTIME_URL: 'invalid host' }), 'http://localhost:3000')
+  assert.equal(resolveBackendOrigin({ V0_RUNTIME_URL: 'unix:///tmp/runtime.sock' }), 'http://localhost:3000')
+  assert.equal(resolveBackendOrigin({ V0_RUNTIME_URL: 'invalid host', V0_DEV_APP_URL: 'https://preview.v0.dev' }), 'https://preview.v0.dev')
+})
 
 test('同项目后端仍要求数据库并保留同源与外部代理配置校验', async () => {
   const names = ['DATABASE_URL', 'OAOAO_BACKEND_URL', 'OAOAO_PUBLIC_URL']

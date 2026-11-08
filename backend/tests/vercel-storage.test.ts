@@ -4,6 +4,31 @@ import { createHash } from 'node:crypto';
 import { assertStorageConfigured, downloadObjectUrl, objectLocation, type StorageConfig } from '../src/object-storage.js';
 import { readMigrations } from '../src/migration-files.js';
 import type { Context } from '../src/core.js';
+import Fastify from 'fastify';
+import { registerSettings } from '../src/settings.js';
+
+test('托管 Blob 检测不要求 S3 密钥，缺失集成令牌时返回明确提示', async () => {
+  const previous = process.env.BLOB_READ_WRITE_TOKEN;
+  const app = Fastify();
+  try {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    const ctx = {
+      config: { origin: 'https://studio.test' },
+      db: { query: async () => ({ rows: [{ value: { enabled: true, provider: 'vercel-blob', endpoint: '', bucket: '', prefix: 'oaooao', region: 'auto', forcePathStyle: true } }] }) },
+      requireUser: async () => ({ id: 'test-admin' }),
+      audit: async () => {},
+    } as unknown as Context;
+    await registerSettings(app, ctx);
+    await app.ready();
+    const response = await app.inject({ method: 'POST', url: '/api/admin/object-storage' });
+    assert.equal(response.statusCode, 503);
+    assert.match(response.json().message, /私有文件存储尚未连接/);
+  } finally {
+    if (previous === undefined) delete process.env.BLOB_READ_WRITE_TOKEN;
+    else process.env.BLOB_READ_WRITE_TOKEN = previous;
+    await app.close();
+  }
+});
 
 const base: StorageConfig = { enabled: true, endpoint: 'https://storage.example.com', region: 'auto', bucket: 'assets', prefix: '/oaooao/', forcePathStyle: true };
 

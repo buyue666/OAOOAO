@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand, HeadBucketCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { put as blobPut, get as blobGet, head as blobHead, del as blobDelete } from '@vercel/blob';
+import { put as blobPut, get as blobGet, head as blobHead, del as blobDelete, BlobNotFoundError } from '@vercel/blob';
 import type { PoolClient } from 'pg';
 import { httpError, safeFetch, type Context } from './core.js';
 
@@ -89,7 +89,7 @@ export async function verifyStorage(ctx: Context, config: StorageConfig) {
     } finally { await deleteObject(ctx, location); }
     try { await blobHead(location.key); }
     catch (error) {
-      if ((error as Error).name === 'BlobNotFoundError') return { ok: true, bucketAccessible: true, writeVerified: true, readVerified: true, deleteVerified: true };
+      if (error instanceof BlobNotFoundError) return { ok: true, bucketAccessible: true, writeVerified: true, readVerified: true, deleteVerified: true };
       throw error;
     }
     throw httpError(502, '私有存储删除校验失败');

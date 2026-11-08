@@ -3,6 +3,7 @@ import type { ObjectStorageSettings, ObjectStorageUpdateInput } from './admin-ty
 export const CREATIVE_STORAGE_NOTICE = '支持 Cloudflare R2 与 S3 兼容存储。启用后新素材保存到对象存储，已有素材仍从原位置读取。'
 
 export function storageUpdateInput(draft: ObjectStorageSettings, accessKeyId: string, secretAccessKey: string): ObjectStorageUpdateInput {
+  if (draft.provider === 'vercel-blob') throw new Error('Vercel Blob 由项目集成管理，无需填写或保存 S3 配置')
   return {
     provider: draft.provider || 's3',
     enabled: draft.enabled,

@@ -5,19 +5,16 @@ import { Readable } from 'node:stream'
 import { Pool } from 'pg'
 import type { FastifyRequest, HTTPMethods } from 'fastify'
 import { buildApp, loadConfig } from '@/backend/src/app'
+import { resolveBackendOrigin } from './backend-origin'
 
 type EmbeddedBackend = Awaited<ReturnType<typeof buildApp>>
 const state = globalThis as typeof globalThis & { __oaooaoBackend?: Promise<EmbeddedBackend> }
 
 export function getEmbeddedBackend(): Promise<EmbeddedBackend> {
   if (state.__oaooaoBackend) return state.__oaooaoBackend
-  const configuredOrigin = process.env.PUBLIC_ORIGIN || process.env.OAOAO_PUBLIC_URL
-    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
-    || process.env.V0_RUNTIME_URL || 'http://localhost:3000'
   const config = loadConfig({
     ...process.env,
-    PUBLIC_ORIGIN: new URL(configuredOrigin).origin,
+    PUBLIC_ORIGIN: resolveBackendOrigin(),
     MEDIA_ROOT: process.env.MEDIA_ROOT || resolve(tmpdir(), 'oaooao-media'),
     WORKER_ENABLED: 'false',
     TRUSTED_PROXY_CIDRS: '',

@@ -516,7 +516,7 @@ export type AdminPaymentConfigSummary = {
 }
 
 export type ObjectStorageSettings = {
-  provider?: 'r2'|'s3'
+  provider?: 'r2'|'s3'|'vercel-blob'
   enabled: boolean
   endpoint: string
   region: string

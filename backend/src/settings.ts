@@ -293,7 +293,7 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
   });
   app.post('/api/admin/object-storage',async request=>{
     const user=await ctx.requireUser(request,'system.manage'),stored=await getObjectStorageSettings(ctx);
-    if(!stored.endpoint||!stored.bucket||!stored.accessKeyId||!stored.secretAccessKey)throw httpError(503,'Object storage is not fully configured');
+    if(stored.provider!=='vercel-blob'&&(!stored.endpoint||!stored.bucket||!stored.accessKeyId||!stored.secretAccessKey))throw httpError(503,'Object storage is not fully configured');
     const result=await verifyStorage(ctx,stored as any);
     await ctx.audit({actorId:user.id,action:'storage.test',targetType:'settings',targetId:'object-storage'});return {code:0,data:result};
   });

@@ -133,6 +133,22 @@ function storageFixture(initial, { badAck = false, testResult = { code: 0, data:
   return { writes, messages, errors, button, find, tests: () => tests, reloads: () => reloads }
 }
 
+test('托管 Blob 不展示 S3 编辑器，不覆盖集成配置，并可执行完整连接检测', async () => {
+  const managed = { ...savedStorage, provider: 'vercel-blob', enabled: true, endpoint: '', bucket: '', hasAccessKeyId: false, hasSecretAccessKey: false }
+  const f = storageFixture(managed, { testResult: { code: 0, data: { ok: true, bucketAccessible: true, writeVerified: true, readVerified: true, deleteVerified: true } } })
+  assert.ok(f.find(node => node.type === 'AdminSectionCard' && node.props.title === '对象存储 · Vercel Blob'))
+  assert.equal(f.find(node => node.type === 'AdminInput'), undefined)
+  assert.equal(f.button('保存存储配置'), undefined)
+  const check = f.button('检测上传、读取与删除')
+  assert.equal(check.props.disabled, false)
+  await check.props.onClick()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(f.tests(), 1)
+  assert.equal(f.writes.length, 0)
+  assert.match(f.messages.at(-1), /上传、读取和删除检测均通过/)
+  assert.throws(() => storageHelpers.storageUpdateInput(managed, '', ''), /由项目集成管理/)
+})
+
 test('actual settings handlers support explicit enable and disable with confirmed saves and preserved keys', async () => {
   const f = storageFixture({ ...savedStorage, enabled: true })
   assert.equal(f.writes.length, 0)
