@@ -11,10 +11,14 @@ import type { AgentRun } from '@/lib/studio/generation-types'
 import { assistantContextLabel, assistantSuggestions, assistantThreadKey, buildAssistantPrompt, type AssistantContext } from '@/lib/studio/director-context'
 import { parseAssistantThread, type AssistantMessage as Message, type AssistantPending as Pending } from '@/lib/studio/director-thread'
 import { cn } from '@/lib/utils'
-import { ControlButton, StatusBadge, type Tone } from './ui'
+import { agentPlanCosts, directorRequestPrompt, remapDirectorReferences, type DirectorScene } from '@/lib/studio/director-workspace'
+import type { CanvasSkill } from '@/lib/studio/canvas-skills'
+import { libraryAssetMediaUrl } from '@/lib/studio/reference-assets'
+import { DirectorComposer, DirectorWorkspaceView, type DirectorDraft, type DirectorReference } from './director-workspace'
+import { ControlButton, Modal, StatusBadge, type Tone } from './ui'
 
-type Reference = { id: string; file: File; uploaded?: Awaited<ReturnType<typeof uploadPersistentAsset>>; assetId?: string; status: 'uploading' | 'ready' | 'error'; error?: string }
-type Props = { projectId?: string; projectContext?: AssistantContext; context?: string; onOpenPlan?: (planId: string) => void; showHeader?: boolean; emptyStateLayout?: 'grid' | 'stacked'; compact?: boolean }
+type Reference = DirectorReference
+type Props = { projectId?: string; projectContext?: AssistantContext; context?: string; onOpenPlan?: (planId: string) => void; showHeader?: boolean; emptyStateLayout?: 'grid' | 'stacked'; compact?: boolean; standalone?: boolean; initialDraft?: DirectorDraft; onChooseProject?: (id: string | undefined, draft: DirectorDraft) => void }
 const statusMeta: Record<AgentRun['status'], { label: string; tone: Tone }> = {
   planning: { label: '正在规划', tone: 'accent' }, awaiting_approval: { label: '等待你确认', tone: 'warning' }, running: { label: '执行中', tone: 'accent' }, paused: { label: '已暂停', tone: 'warning' }, completed: { label: '已完成', tone: 'success' }, failed: { label: '执行失败', tone: 'warning' }, cancelled: { label: '已取消', tone: 'muted' },
 }
@@ -31,14 +35,17 @@ export function DirectorAgent(props: Props) {
   return <DirectorSession key={scope} {...props} scope={scope} verifiedContext={context} />
 }
 
-function DirectorSession({ scope, verifiedContext, showHeader = true, compact = false, emptyStateLayout = 'grid' }: Props & { scope: string; verifiedContext: AssistantContext }) {
+function DirectorSession({ scope, verifiedContext, showHeader = true, compact = false, emptyStateLayout = 'grid', standalone = false, initialDraft, onChooseProject }: Props & { scope: string; verifiedContext: AssistantContext }) {
   const { state } = useStudio()
   const generation = useGeneration()
   const connected = state.backendStatus === 'connected'
   const canPlan = connected && state.liveModels.some((model) => model.capability === 'text')
   const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [refs, setRefs] = useState<Reference[]>([])
+  const [input, setInput] = useState(initialDraft?.input || '')
+  const [refs, setRefs] = useState<Reference[]>(initialDraft?.refs || [])
+  const [skills, setSkills] = useState<CanvasSkill[]>(initialDraft?.skills || [])
+  const [scene, setScene] = useState<DirectorScene>(initialDraft?.scene || 'general')
+  const [selectedRunId, setSelectedRunId] = useState<string>()
   const [pending, setPending] = useState<Pending | null>(null)
   const [runs, setRuns] = useState<Record<string, AgentRun>>({})
   const [queryErrors, setQueryErrors] = useState<Record<string, string>>({})
@@ -48,7 +55,7 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
   const [submitting, setSubmitting] = useState(false)
   const [pollRevision, setPollRevision] = useState(0)
   const submitLock = useRef(false)
-  const refsRef = useRef<Reference[]>([])
+  const refsRef = useRef<Reference[]>(initialDraft?.refs || [])
   const fileRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const alive = useRef(true)
@@ -73,7 +80,12 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     try {
       const saved = parseAssistantThread(window.localStorage.getItem(scope), verifiedContext.surface, verifiedContext.projectId)
       setMessages(saved.messages); setPending(saved.pending); setStorageBlocked(false)
-      if (saved.pending) setInput(saved.pending.displayText)
+      if (saved.pending) {
+        setInput(saved.pending.displayText)
+        const restored: Reference[] = saved.pending.assetIds.map((id, index) => ({ id, assetId: id, title: saved.pending!.refTitles[index] || '参考图片', status: 'ready' }))
+        refsRef.current = restored; setRefs(restored)
+        setSkills((saved.pending.skillIds || []).map((id, index) => ({ id, title: `已选技能 ${index + 1}`, prompt: '' })))
+      }
     } catch (reason) { setStorageBlocked(true); setError(errorText(reason)) }
     setReady(true)
   }, [scope, verifiedContext.surface, verifiedContext.projectId])
@@ -104,6 +116,7 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
 
   function updateReference(value: Reference) { refsRef.current = refsRef.current.map((ref) => ref.id === value.id ? value : ref); setRefs([...refsRef.current]) }
   async function upload(ref: Reference) {
+    if (!ref.file) return
     const token = identityRef.current
     const current = () => alive.current && token === identityRef.current && refsRef.current.some((item) => item.id === ref.id)
     let next: Reference = { ...ref, status: 'uploading', error: undefined }
@@ -111,8 +124,8 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     try {
       if (!next.uploaded) { const uploaded = await uploadPersistentAsset(ref.file, 'image'); if (!current()) return; next = { ...next, uploaded }; updateReference(next) }
       const uploaded = next.uploaded!
-      const asset = await createLibraryAsset({ kind: 'image', title: ref.file.name, source: 'assistant-reference', tags: ['创作参考'], data: { storageKey: uploaded.key, serverUrl: uploaded.url, dataUrl: uploaded.url, mimeType: uploaded.mimeType, bytes: uploaded.bytes } })
-      if (current()) updateReference({ ...next, assetId: asset.id, status: 'ready' })
+      const asset = await createLibraryAsset({ kind: 'image', title: ref.title, source: 'assistant-reference', tags: ['创作参考'], data: { storageKey: uploaded.key, serverUrl: uploaded.url, dataUrl: uploaded.url, mimeType: uploaded.mimeType, bytes: uploaded.bytes } })
+      if (current()) updateReference({ ...next, assetId: asset.id, preview: uploaded.url, status: 'ready' })
     } catch (reason) { if (current()) updateReference({ ...next, status: 'error', error: errorText(reason) }) }
   }
   function addFiles(files: File[]) {
@@ -120,7 +133,7 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     if (refsRef.current.length + files.length > 4) { setError('一次最多添加 4 张参考图。'); return }
     const invalid = files.find((file) => !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 20 * 1024 * 1024)
     if (invalid) { setError(`「${invalid.name}」无法添加。请选择不超过 20 MB 的 PNG、JPEG、WebP 或 GIF 图片。`); return }
-    const added: Reference[] = files.map((file) => ({ id: crypto.randomUUID(), file, status: 'uploading' }))
+    const added: Reference[] = files.map((file) => ({ id: crypto.randomUUID(), title: file.name, file, status: 'uploading' }))
     refsRef.current = [...refsRef.current, ...added]; setRefs([...refsRef.current]); setError('')
     for (const ref of added) void upload(ref)
   }
@@ -128,14 +141,14 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     if (submitLock.current || !ready || storageBlocked || !canPlan || (!pending && (!input.trim() || unfinishedRefs))) return
     const token = identityRef.current
     const current = () => alive.current && token === identityRef.current
-    const request: Pending = pending ?? { clientRequestId: newClientRequestId('assistant'), displayText: input.trim(), prompt: buildAssistantPrompt(input, verifiedContext), surface: verifiedContext.surface, projectId: verifiedContext.projectId, assetIds: refs.map((ref) => ref.assetId!), refTitles: refs.map((ref) => ref.file.name) }
+    const request: Pending = pending ?? { clientRequestId: newClientRequestId('assistant'), displayText: input.trim(), prompt: standalone ? directorRequestPrompt(input, verifiedContext, scene, refs.map(ref => ({ id: ref.assetId!, title: ref.title }))) : buildAssistantPrompt(input, verifiedContext), surface: verifiedContext.surface, projectId: verifiedContext.projectId, assetIds: refs.map((ref) => ref.assetId!), refTitles: refs.map((ref) => ref.title), ...(standalone ? { skillIds: skills.map(skill => skill.id), publicPrompt: input.trim() } : {}) }
     try { persist(messages, request) } catch { setError('浏览器无法保存请求恢复标识，请允许本站本地存储后重试。请求尚未发送。'); return }
     submitLock.current = true; setSubmitting(true); setPending(request); setError('')
     try {
       const run = await generation.runAgent(request)
       if (!current()) return
       const next: Message[] = [...messages, { id: `${request.clientRequestId}-user`, role: 'user', text: request.displayText, refs: request.refTitles }, { id: `${request.clientRequestId}-run`, role: 'agent', text: '规划请求已收到。计划返回后，请先查看步骤和预计积分，再决定是否执行。', runId: run.id }]
-      setRuns((value) => ({ ...value, [run.id]: run })); setMessages(next); setPending(null); setInput(''); refsRef.current = []; setRefs([])
+      setRuns((value) => ({ ...value, [run.id]: run })); setSelectedRunId(run.id); setMessages(next); setPending(null); setInput(''); refsRef.current = []; setRefs([])
       try { persist(next, null) } catch { setError('请求已收到，但浏览器记录未能更新。刷新后使用原请求标识恢复，不会重复创建。') }
     } catch (reason) {
       if (!current()) return
@@ -148,6 +161,48 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     const token = identityRef.current
     const nextRun = await generation.cancelAgent(run, action)
     if (alive.current && token === identityRef.current) setRuns((current) => ({ ...current, [run.id]: nextRun }))
+  }
+
+  function removeReference(id: string) {
+    const previous = refsRef.current
+    const next = previous.filter(reference => reference.id !== id)
+    setInput(value => remapDirectorReferences(value, previous, next))
+    refsRef.current = next; setRefs([...next])
+  }
+  function pickReference(asset: { id: string; title: string; src: string }) {
+    if (submitting || pending || !connected) return
+    const existing = refsRef.current.find(reference => reference.assetId === asset.id)
+    if (existing) { removeReference(existing.id); return }
+    if (refsRef.current.length >= 4) { setError('一次最多添加 4 张参考图。'); return }
+    refsRef.current = [...refsRef.current, { id: asset.id, title: asset.title, preview: asset.src, assetId: asset.id, status: 'ready' }]
+    setRefs([...refsRef.current]); setError('')
+  }
+  async function retryTask(runId: string, taskId: string) {
+    const token = identityRef.current
+    await generation.retryAgentTask(runId, taskId)
+    const updated = await generation.getAgent(runId)
+    if (alive.current && token === identityRef.current) setRuns(current => ({ ...current, [updated.id]: updated }))
+  }
+  function clearConversation() {
+    if (!window.confirm('清空当前对话记录？已提交的任务会继续保留在生成记录中。')) return
+    try { persist([], null); setMessages([]); setRuns({}); setSelectedRunId(undefined) } catch { setError('记录未能清空，请重试。') }
+  }
+  if (standalone) {
+    const runItems = messages.flatMap((message, index) => message.runId ? [{ id: message.runId, title: messages[index - 1]?.text || '创作任务', status: runs[message.runId]?.status }] : [])
+    const activeRunId = runItems.some(run => run.id === selectedRunId) ? selectedRunId : runItems.at(-1)?.id
+    const activeRun = activeRunId ? runs[activeRunId] : undefined
+    const locked = submitting || Boolean(pending)
+    const draft = { input, refs, skills, scene }
+    return <DirectorWorkspaceView scene={scene} onScene={setScene} onStarter={(nextScene, prompt) => { if (locked) return; setScene(nextScene); setInput(prompt); document.getElementById(inputId)?.focus() }} hasMessages={messages.length > 0} runs={runItems} selectedRunId={activeRunId} onSelectRun={setSelectedRunId}
+      clearButton={<button type="button" disabled={locked} onClick={clearConversation} className={cn('inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40', focus)}><Trash2 className="size-3.5" aria-hidden="true" />清空对话</button>}
+      composer={<DirectorComposer inputId={inputId} draft={draft} setInput={setInput} setSkills={setSkills} context={verifiedContext} disabled={locked} canSubmit={ready && !storageBlocked && canPlan && !locked && Boolean(input.trim()) && !unfinishedRefs} submitting={submitting} connected={connected} canPlan={canPlan} onSubmit={() => void send()} onUpload={() => fileRef.current?.click()} onRemoveReference={removeReference} onRetryUpload={reference => void upload(reference)} onPickReference={pickReference} onSelectProject={onChooseProject ? id => onChooseProject(id, draft) : undefined} error={error} compact={messages.length > 0}
+        storageNotice={storageBlocked && <p className="mb-3 text-xs leading-5 text-muted-foreground">请求恢复记录无法安全读取，已暂停新提交。<Link href="/tasks" className="underline">前往生成记录核对</Link>，确认没有待处理任务后可清除本站的损坏对话记录并刷新。</p>}
+        recovery={pending && !submitting && <div className="mb-3 rounded-xl border border-studio-warn/30 p-3"><p className="text-xs leading-5">有一笔提交待确认。恢复时沿用原内容、素材、技能和请求标识。</p><ControlButton size="sm" className="mt-2" disabled={!canPlan} onClick={() => void send()}><RotateCcw className="size-3.5" />恢复上次提交</ControlButton></div>} />}
+      conversation={<div ref={scrollRef} className="min-h-36 flex-1 space-y-4 overflow-y-auto p-4 lg:min-h-0" aria-label="对话记录">{messages.map(message => <article key={message.id} className={cn('rounded-xl p-3', message.role === 'user' ? 'ml-4 bg-studio-accent/7' : 'mr-2 bg-muted/40')}><p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">{message.role === 'user' ? <FileText className="size-3.5" aria-hidden="true" /> : <Bot className="size-3.5 text-studio-accent" aria-hidden="true" />}{message.role === 'user' ? '你的需求' : '创作助手'}</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{message.text}</p>{message.refs?.length ? <p className="mt-2 break-words text-xs text-muted-foreground">参考：{message.refs.join('、')}</p> : null}{message.runId && <button type="button" aria-pressed={activeRunId === message.runId} onClick={() => setSelectedRunId(message.runId)} className={cn('mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs', activeRunId === message.runId ? 'bg-studio-accent/10 font-medium text-studio-accent' : 'text-muted-foreground hover:bg-muted', focus)}>{activeRunId === message.runId ? <Check className="size-3.5" /> : <ArrowRight className="size-3.5" />}查看任务方案</button>}</article>)}</div>}
+      panel={activeRun ? <AgentRunPanel run={activeRun} connected={connected} onControl={action => control(activeRun, action)} onRetryTask={taskId => retryTask(activeRun.id, taskId)} expanded /> : <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />{ready ? '正在读取服务端任务状态…' : '正在恢复对话…'}</p>}>
+      {activeRunId && queryErrors[activeRunId] && <p role="alert" className="text-xs text-studio-warn">状态暂未确认：{queryErrors[activeRunId]} <button className="underline" type="button" onClick={() => setPollRevision(value => value + 1)}>重新检查</button></p>}
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden aria-label="上传参考图片" onChange={event => { addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
+    </DirectorWorkspaceView>
   }
 
   return <section className="flex h-full min-h-0 flex-col" aria-label="创作助手">
@@ -168,7 +223,7 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
       {error && <p role="alert" className="mb-3 rounded-lg border border-amber-400/25 bg-amber-500/8 p-3 text-xs leading-5 text-foreground">{error}</p>}
       {storageBlocked && <p className="mb-3 text-xs leading-5 text-muted-foreground">请求恢复记录无法安全读取，已暂停新提交。<Link href="/tasks" className="underline">前往任务中心核对</Link>，确认没有待处理任务后可清除本站的损坏对话记录并刷新。</p>}
       {pending && !submitting && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/25 p-3"><p className="text-xs leading-5">有一笔提交待确认。恢复时沿用原内容和请求标识。</p><ControlButton size="sm" disabled={!canPlan} onClick={() => void send()}><RotateCcw className="size-3.5" />恢复上次提交</ControlButton></div>}
-      {refs.length > 0 && <ul className="mb-3 flex flex-wrap gap-2">{refs.map((ref) => <li key={ref.id} className="max-w-full rounded-lg border border-border px-2 py-1.5 text-xs"><span className="flex items-center gap-2"><span className="max-w-44 truncate">{ref.file.name}</span>{ref.status === 'uploading' ? <Loader2 className="size-3 animate-spin motion-reduce:animate-none" /> : ref.status === 'ready' ? <Check className="size-3 text-success" /> : <button className="text-destructive underline" type="button" disabled={!connected || submitting || Boolean(pending)} onClick={() => void upload(ref)}>重试上传</button>}<button type="button" disabled={submitting || Boolean(pending)} aria-label={`移除参考 ${ref.file.name}`} className={cn('rounded p-1 hover:bg-muted', focus)} onClick={() => { refsRef.current = refsRef.current.filter((item) => item.id !== ref.id); setRefs([...refsRef.current]) }}><X className="size-3" /></button></span>{ref.error && <span role="alert" className="mt-1 block max-w-64 text-destructive">{ref.error}</span>}</li>)}</ul>}
+      {refs.length > 0 && <ul className="mb-3 flex flex-wrap gap-2">{refs.map((ref) => <li key={ref.id} className="max-w-full rounded-lg border border-border px-2 py-1.5 text-xs"><span className="flex items-center gap-2"><span className="max-w-44 truncate">{ref.title}</span>{ref.status === 'uploading' ? <Loader2 className="size-3 animate-spin motion-reduce:animate-none" /> : ref.status === 'ready' ? <Check className="size-3 text-success" /> : <button className="text-destructive underline" type="button" disabled={!connected || submitting || Boolean(pending)} onClick={() => void upload(ref)}>重试上传</button>}<button type="button" disabled={submitting || Boolean(pending)} aria-label={`移除参考 ${ref.title}`} className={cn('rounded p-1 hover:bg-muted', focus)} onClick={() => removeReference(ref.id)}><X className="size-3" /></button></span>{ref.error && <span role="alert" className="mt-1 block max-w-64 text-destructive">{ref.error}</span>}</li>)}</ul>}
       <div className="rounded-xl border border-violet-400/30 bg-background p-2 focus-within:ring-2 focus-within:ring-violet-400/15"><label htmlFor={inputId} className="sr-only">告诉创作助手你的想法</label><textarea id={inputId} value={input} maxLength={4000} disabled={submitting || Boolean(pending)} onChange={(event) => setInput(event.target.value)} rows={compact ? 3 : 4} placeholder={verifiedContext.projectTitle ? '针对这个项目，你想探索或调整什么？' : '写下你的目标或已有内容，从这里一起开始…'} className="w-full resize-y rounded-lg bg-transparent px-2 py-1.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
         <div className="flex items-center justify-between gap-2 px-1 pb-1"><input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = '' }} /><button type="button" disabled={!connected || submitting || Boolean(pending) || refs.length >= 4} onClick={() => fileRef.current?.click()} className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40', focus)}><Paperclip className="size-4" aria-hidden="true" />参考图</button><button type="submit" disabled={!ready || storageBlocked || !canPlan || submitting || Boolean(pending) || !input.trim() || unfinishedRefs} className={cn('inline-flex min-h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-xs font-semibold text-white shadow-sm shadow-violet-500/20 motion-safe:transition-transform motion-safe:hover:-translate-y-0.5 disabled:transform-none disabled:cursor-not-allowed disabled:opacity-40', focus)}>{submitting ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <Send className="size-4" />}{submitting ? '正在提交' : '请助手规划'}</button></div>
       </div>
@@ -177,19 +232,22 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
   </section>
 }
 
-function AgentRunPanel({ run, connected, onControl, onRetryTask }: { run: AgentRun; connected: boolean; onControl: (action: 'pause' | 'resume' | 'retry' | 'cancel' | 'approve') => Promise<void>; onRetryTask: (taskId: string) => Promise<void> }) {
+function AgentRunPanel({ run, connected, onControl, onRetryTask, expanded = false }: { run: AgentRun; connected: boolean; onControl: (action: 'pause' | 'resume' | 'retry' | 'cancel' | 'approve') => Promise<void>; onRetryTask: (taskId: string) => Promise<void>; expanded?: boolean }) {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const lock = useRef(false)
   const meta = statusMeta[run.status] || { label: '状态待确认', tone: 'muted' as Tone }
   async function act(key: string, work: () => Promise<void>) { if (lock.current || !connected) return; lock.current = true; setBusy(key); setError(''); try { await work() } catch (reason) { setError(errorText(reason)) } finally { lock.current = false; setBusy('') } }
   const canCancel = ['planning', 'awaiting_approval', 'running', 'paused'].includes(run.status)
+  const costs = agentPlanCosts(run)
   return <div className="space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><StatusBadge tone={meta.tone}>{meta.label}</StatusBadge><span className="text-xs text-muted-foreground">{run.pointsCost !== undefined ? `已计费 ${run.pointsCost} 积分` : '积分以任务账单为准'}</span></div>
+    {expanded && run.summary && <p className="whitespace-pre-wrap break-words text-sm leading-6">{run.summary}</p>}
     {run.failure && <p role="alert" className="text-xs text-destructive">{run.failure}</p>}
     {run.status === 'planning' && <p className="text-xs text-muted-foreground">正在根据这次提交的内容准备计划；尚未确认执行生成步骤。</p>}
-    {run.status === 'awaiting_approval' && <div className="space-y-3 rounded-xl border border-violet-400/25 bg-violet-500/5 p-3"><h4 className="text-sm font-semibold">先看看这次计划</h4>{run.planApproval?.steps.length ? <><ol className="space-y-2">{run.planApproval.steps.map((step, index) => <li key={step.id} className="flex items-start gap-2 text-xs leading-5"><span className="text-violet-600 dark:text-violet-300">{index + 1}.</span><span className="flex-1">{step.title}<span className="block text-muted-foreground">{step.model || '服务端选定模型'} · {step.count} 项{step.estimatedPoints !== undefined ? ` · 预计 ${step.estimatedPoints} 积分` : ''}</span></span></li>)}</ol><p className="text-xs font-medium">预计共 {run.planApproval.totalPoints} 积分 · 最终以任务账单为准</p><ControlButton variant="primary" disabled={Boolean(busy) || !connected} onClick={() => void act('approve', () => onControl('approve'))}>{busy === 'approve' ? '正在确认…' : '确认计划并执行'}</ControlButton></> : <p className="text-xs text-muted-foreground">计划详情尚未完整返回，确认按钮将在内容就绪后显示。</p>}<p className="text-[11px] leading-5 text-muted-foreground">确认后会创建生成任务。结果请在任务与素材库中检查，再选择采用；不会自动替换当前镜头。</p></div>}
-    {run.tasks.length > 0 && <ul className="space-y-2">{run.tasks.map((task) => <li key={task.id} className="rounded-lg border border-border/70 p-2.5"><p className="flex flex-wrap justify-between gap-2 text-xs"><span className="font-medium">{task.title}</span><span className="text-muted-foreground">{{ pending: '等待中', queued: '排队中', running: '生成中', processing: '生成中', success: '已完成', completed: '已完成', error: '失败', failed: '失败', cancelled: '已取消' }[task.status] || '状态待确认'}</span></p><p className="mt-1 text-[11px] text-muted-foreground">{task.model}</p>{task.error && <p className="mt-1 text-xs text-destructive">{task.error}</p>}{['error', 'failed'].includes(task.status) && <button type="button" disabled={Boolean(busy) || !connected} className={cn('mt-2 rounded text-xs text-violet-600 underline dark:text-violet-300 disabled:opacity-40', focus)} onClick={() => void act(task.id, () => onRetryTask(task.id))}>{busy === task.id ? '正在重试…' : '重试这个步骤'}</button>}</li>)}</ul>}
+    {run.status === 'awaiting_approval' && <div className="space-y-4 rounded-xl border border-studio-accent/20 bg-studio-accent/5 p-4"><h4 className="text-sm font-semibold">先看看这次计划</h4>{run.planApproval?.steps.length ? <><ol className="space-y-4">{run.planApproval.steps.map((step, index) => <li key={step.id} className="flex items-start gap-3 text-xs leading-5"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-studio-accent/10 font-medium text-studio-accent">{index + 1}</span><span className="min-w-0 flex-1 break-words"><span className="font-medium">{step.title}</span><span className="mt-1 block text-muted-foreground">{step.model || '服务端选定模型'} · {step.count} 项{step.estimatedPoints !== undefined ? ` · 预计 ${step.estimatedPoints} 积分` : ''}</span></span></li>)}</ol><div className="space-y-2 border-y border-border/60 py-3 text-xs"><p className="flex flex-wrap justify-between gap-2"><span className="text-muted-foreground">文字规划 · 已计费</span><span>{costs.planning} 积分</span></p><p className="flex flex-wrap justify-between gap-2"><span className="text-muted-foreground">后续生成 · 预计新增消耗</span><span className="font-medium">{costs.execution} 积分</span></p></div><ControlButton variant="primary" disabled={Boolean(busy) || !connected} onClick={() => void act('approve', () => onControl('approve'))}>{busy === 'approve' ? '正在确认…' : '确认计划并执行'}</ControlButton></> : <p className="text-xs text-muted-foreground">计划详情尚未完整返回，确认按钮将在内容就绪后显示。</p>}<p className="text-[11px] leading-5 text-muted-foreground">确认后创建后续生成任务，最终以任务账单为准。生成结果保存到创作资产，不会自动替换当前镜头。</p></div>}
+    {run.tasks.length > 0 && run.status !== 'awaiting_approval' && <ul className="space-y-2">{run.tasks.map((task) => <li key={task.id} className="rounded-lg border border-border/70 p-2.5"><p className="flex flex-wrap justify-between gap-2 text-xs"><span className="font-medium">{task.title}</span><span className="text-muted-foreground">{{ pending: '等待中', queued: '排队中', running: '生成中', processing: '生成中', success: '已完成', completed: '已完成', error: '失败', failed: '失败', cancelled: '已取消' }[task.status] || '状态待确认'}</span></p><p className="mt-1 text-[11px] text-muted-foreground">{task.model}</p>{task.error && <p className="mt-1 text-xs text-destructive">{task.error}</p>}{['error', 'failed'].includes(task.status) && <button type="button" disabled={Boolean(busy) || !connected} className={cn('mt-2 rounded text-xs text-violet-600 underline dark:text-violet-300 disabled:opacity-40', focus)} onClick={() => void act(task.id, () => onRetryTask(task.id))}>{busy === task.id ? '正在重试…' : '重试这个步骤'}</button>}</li>)}</ul>}
     {run.cancellation && <p className="text-xs text-studio-warn">已请求取消，还有 {run.cancellation.pendingCount} 项等待确认。</p>}{error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+    {expanded && <AgentOutputGallery run={run} />}
     <div className="flex flex-wrap items-center gap-2">{run.status === 'running' && <ControlButton size="sm" disabled={Boolean(busy) || !connected} onClick={() => void act('pause', () => onControl('pause'))}><CirclePause className="size-3.5" />暂停后续步骤</ControlButton>}{run.status === 'paused' && <ControlButton size="sm" disabled={Boolean(busy) || !connected} onClick={() => void act('resume', () => onControl('resume'))}><CirclePlay className="size-3.5" />继续</ControlButton>}{run.status === 'failed' && !run.tasks.length && <ControlButton size="sm" disabled={Boolean(busy) || !connected} onClick={() => void act('retry', () => onControl('retry'))}><RotateCcw className="size-3.5" />重新规划</ControlButton>}{canCancel && <ControlButton size="sm" disabled={Boolean(busy) || !connected} onClick={() => void act('cancel', () => onControl('cancel'))}><X className="size-3.5" />取消任务</ControlButton>}<Link href="/tasks" className={cn('rounded text-xs text-muted-foreground underline', focus)}>查看任务记录</Link>{run.status === 'completed' && <Link href="/library" className={cn('rounded text-xs text-violet-600 underline dark:text-violet-300', focus)}>查看生成素材</Link>}</div>
   </div>
 }
@@ -201,5 +259,33 @@ export function AgentPlanPanel({ planId }: { planId: string | null; onNotice?: (
   return <div className="space-y-3 p-4"><p className="text-sm font-medium">{plan?.title || '尚无计划'}</p><p className="text-xs leading-5 text-muted-foreground">历史本地草稿不会创建或完成生成任务。请向创作助手提交内容，查看服务端返回的计划并确认执行。</p></div>
 }
 export function DirectorAgentWorkspace({ projectId }: { projectId?: string; context?: string }) {
-  return <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/5 via-card to-cyan-500/5 shadow-xl shadow-violet-950/5"><DirectorAgent projectId={projectId} /></div>
+  const { state } = useStudio()
+  return <StandaloneDirectorWorkspace key={state.user.id} projectId={projectId} accountId={state.user.id} />
+}
+
+function StandaloneDirectorWorkspace({ projectId, accountId }: { projectId?: string; accountId: string }) {
+  const [selectedProject, setSelectedProject] = useState(projectId)
+  const [draft, setDraft] = useState<DirectorDraft>()
+  const [ready, setReady] = useState(false)
+  const selectionKey = `oaooao-agent-project:${encodeURIComponent(accountId)}`
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(selectionKey)
+      if (!projectId && saved && saved.length < 200) setSelectedProject(saved)
+    } catch { /* The session itself reports unavailable recovery storage before submission. */ }
+    setReady(true)
+  }, [selectionKey, projectId])
+  if (!ready) return <p role="status" className="py-10 text-center text-sm text-muted-foreground">正在恢复创作空间…</p>
+  return <DirectorAgent projectId={selectedProject} standalone showHeader={false} initialDraft={draft} onChooseProject={(id, nextDraft) => {
+    try { if (id) window.localStorage.setItem(selectionKey, id); else window.localStorage.removeItem(selectionKey) } catch { /* Existing thread persistence still blocks unsafe submissions. */ }
+    setDraft(nextDraft); setSelectedProject(id)
+  }} />
+}
+
+function AgentOutputGallery({ run }: { run: AgentRun }) {
+  const [previewId, setPreviewId] = useState<string>()
+  const outputs = run.outputs || []
+  const preview = outputs.find(asset => asset.id === previewId)
+  if (!outputs.length) return null
+  return <section className="space-y-3 border-t border-border pt-4" aria-label="生成结果"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">生成结果 · {outputs.length}</h3><Link href="/canvas" className={cn('inline-flex min-h-9 items-center gap-1 rounded px-1 text-xs text-studio-accent hover:underline', focus)}>打开画布<ArrowRight className="size-3.5" aria-hidden="true" /></Link></div><div className="grid gap-3 sm:grid-cols-2">{outputs.map(asset => asset.kind === 'text' ? <details key={asset.id} className="min-w-0 rounded-xl border border-border bg-muted/20 p-3 sm:col-span-2" open><summary className={cn('cursor-pointer rounded text-sm font-medium', focus)}>{asset.title}</summary><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6">{String(asset.data.content || asset.data.textContent || asset.data.text || '')}</p></details> : <div key={asset.id} className="min-w-0 rounded-xl border border-border bg-muted/20 p-2">{asset.kind === 'video' ? <video src={libraryAssetMediaUrl(asset)} controls playsInline preload="none" aria-label={asset.title} className="aspect-square w-full rounded-lg bg-background object-contain" /> : asset.kind === 'audio' ? <audio src={libraryAssetMediaUrl(asset)} controls preload="none" aria-label={asset.title} className="w-full" /> : <button type="button" onClick={() => setPreviewId(asset.id)} className={cn('block aspect-square w-full overflow-hidden rounded-lg bg-background', focus)} aria-label={`预览 ${asset.title}`}><img src={libraryAssetMediaUrl(asset)} alt={asset.title} loading="lazy" decoding="async" className="size-full object-contain" /></button>}<p className="mt-2 break-words px-1 text-xs text-muted-foreground">{asset.title}</p></div>)}</div><p className="text-[11px] text-muted-foreground">结果已保存到创作资产，可在画布中选择引用。</p><Modal open={Boolean(preview)} title={preview?.title || '图片预览'} onClose={() => setPreviewId(undefined)} className="sm:max-w-5xl">{preview && <img src={libraryAssetMediaUrl(preview)} alt={preview.title} className="mx-auto max-h-[75dvh] w-full object-contain" />}</Modal></section>
 }

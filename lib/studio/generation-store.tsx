@@ -28,6 +28,7 @@ import {
   recoverGenerationTask as recoverTaskRequest,
   retryAgentRunTask,
   type RequestOutcome,
+  type CreateAgentRunInput,
 } from './generation-api'
 import type {
   AgentRun,
@@ -151,7 +152,7 @@ export type GenerationContextValue = {
   createVideo: (input: VideoGenerationInput) => Promise<GenerationTaskView>
   createAudio: (input: AudioGenerationInput) => Promise<GenerationTaskView>
   createText: (input: TextGenerationInput) => Promise<GenerationTaskView>
-  runAgent: (input: { prompt: string; surface: 'chat' | 'canvas' | 'drama'; projectId?: string; assetIds?: string[]; skillIds?: string[]; clientRequestId?: string }) => Promise<AgentRun>
+  runAgent: (input: CreateAgentRunInput) => Promise<AgentRun>
   getAgent: (id: string) => Promise<AgentRun>
   cancelAgent: (run: Pick<AgentRun, 'id'>, action: 'pause' | 'resume' | 'retry' | 'cancel' | 'approve') => Promise<AgentRun>
   cancelTask: (task: GenerationTaskView) => Promise<GenerationTaskView>
@@ -843,7 +844,7 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
    * Agent 响应同样带积分（账号级）并会驱动界面；迟到时必须丢弃，
    * 且 `finally` 里的 `setRunning(false)` 也不能动新账号的按钮状态。
    */
-  const runAgent = useCallback(async (input: { prompt: string; surface: 'chat' | 'canvas' | 'drama'; projectId?: string; assetIds?: string[]; skillIds?: string[]; clientRequestId?: string }) => {
+  const runAgent = useCallback(async (input: CreateAgentRunInput) => {
     const epoch = sessionEpochRef.current
     const ownerUserId = userIdRef.current
     const stillCurrent = () => epoch === sessionEpochRef.current && ownerUserId === userIdRef.current

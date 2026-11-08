@@ -24,3 +24,9 @@ test('fresh or completed conversations have no unresolved request', () => {
   assert.deepEqual(parseAssistantThread(null, 'chat'), { messages: [], pending: null })
   assert.equal(parseAssistantThread(serialize(null), 'drama', 'one').pending, null)
 })
+
+test('workspace recovery keeps the exact selected skills and public prompt while accepting legacy requests', () => {
+  const request = { ...pending, skillIds: ['owned-skill'], publicPrompt: '原始需求 @图1' }
+  assert.deepEqual(parseAssistantThread(serialize(request), 'drama', 'one').pending, request)
+  for (const altered of [{ ...request, skillIds: [null] }, { ...request, publicPrompt: {} }, { ...request, skillIds: Array(9).fill('skill') }]) assert.throws(() => parseAssistantThread(serialize(altered), 'drama', 'one'))
+})

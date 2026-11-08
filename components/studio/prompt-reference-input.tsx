@@ -6,7 +6,7 @@ import {createPortal} from 'react-dom'
 import {FileAudio, FileVideo, Image as ImageIcon} from 'lucide-react'
 import {insertReferenceMention, promptReferenceMentions, referenceMentionLabel, referenceMentionQuery, type PromptReference} from '@/lib/studio/prompt-references'
 
-export function PromptReferenceInput({id, value, onChange, references, placeholder, inputRef, disabled, compact, onFocus, onKeyDown}: {id: string; value: string; onChange: (value: string) => void; references: PromptReference[]; placeholder?: string; inputRef?: RefObject<HTMLTextAreaElement | null>; disabled?: boolean; compact?: boolean; onFocus?: () => void; onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void}) {
+export function PromptReferenceInput({id, value, onChange, references, placeholder, inputRef, disabled, compact, appearance, onFocus, onKeyDown}: {id: string; value: string; onChange: (value: string) => void; references: PromptReference[]; placeholder?: string; inputRef?: RefObject<HTMLTextAreaElement | null>; disabled?: boolean; compact?: boolean; appearance?: 'composer'; onFocus?: () => void; onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void}) {
   const tx = useUiText()
   const ownTextarea = useRef<HTMLTextAreaElement>(null)
   const textarea = inputRef ?? ownTextarea
@@ -64,7 +64,7 @@ export function PromptReferenceInput({id, value, onChange, references, placehold
   }
   highlighted.push(value.slice(end))
   return <>
-    <div className="prompt-reference-editor studio-field relative rounded-lg border border-border bg-background text-sm leading-6 text-foreground focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15">
+    <div className={`prompt-reference-editor relative text-sm leading-6 text-foreground ${appearance === 'composer' ? 'agent-prompt-editor' : 'studio-field rounded-lg border border-border bg-background focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15'}`}>
     <div ref={mirror} aria-hidden="true" className={`prompt-reference-mirror pointer-events-none absolute inset-0 overflow-hidden ${value ? '' : 'text-muted-foreground'}`}>{value ? highlighted : placeholder}{'\u200b'}</div>
     <textarea ref={textarea} id={id} value={value} disabled={disabled} aria-label="提示词" rows={compact ? 3 : 5} placeholder={placeholder} role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={visible} aria-controls={visible ? listId : undefined} aria-activedescendant={visible && candidates.length ? `${listId}-${candidates[Math.min(active, candidates.length - 1)].index}` : undefined}
       onChange={event => {onChange(event.target.value); setCaret(event.target.selectionStart); setOpen(Boolean(referenceMentionQuery(event.target.value, event.target.selectionStart))); setActive(0)}}

@@ -5,6 +5,9 @@ import { buildApp } from '../src/app.js';
 import { hashToken } from '../src/core.js';
 import { adjustWallet, getWallet } from '../src/wallet.js';
 import { createTestDatabase } from './core-helpers.js';
+import { advanceAgentRuns } from '../src/agents.js';
+import { processNextJob } from '../src/worker.js';
+import { saveMedia } from '../src/media.js';
 
 async function fixture(){
   const database=await createTestDatabase();
@@ -98,5 +101,35 @@ test('canvas Agent reads only an owned saved project and cannot replace its cont
     const userMessage=planner.messages.find((message:{role:string})=>message.role==='user').content;
     assert.match(userMessage,/Owned saved scene context/);assert.doesNotMatch(userMessage,/FORGED_UNTRUSTED_CLIENT_CONTEXT|Foreign private board/);
     assert.equal((await getWallet(f.ctx,f.users[0].id)).pointsBalance,90);
+  }finally{await f.cleanup();}
+});
+
+test('Agent workspace returns real owned outputs and separates planning from additional execution cost',async()=>{
+  const f=await fixture();try{
+    await f.ctx.db.query("UPDATE oaooao_settings SET value=jsonb_set(jsonb_set(value,'{logicalModels}',(value->'logicalModels') || $1::jsonb),'{modelPointCosts,skills-image}','7'::jsonb) WHERE id='global'",[JSON.stringify([{id:'skills-image',name:'Synthetic image',capability:'image',enabled:true,bindings:[{id:'skills-image-binding',channelId:'skills-fixture',upstreamModel:'synthetic-planner',enabled:true,priority:1}]}])]);
+    const submitted=await f.submit([]);assert.equal(submitted.statusCode,202,submitted.body);
+    const id=submitted.json().run.id;
+    const read=async()=>(await f.app.inject({method:'GET',url:`/api/agent/runs/${id}`,headers:f.users[0].headers})).json().run;
+    assert.equal((await read()).planningPoints,10);
+    const plan={summary:'Owned workspace plan',steps:[{id:'brief',title:'整理方案',type:'text',model:'skills-text',prompt:'Synthetic brief'},{id:'picture',title:'制作图片',type:'image',model:'skills-image',prompt:'Synthetic picture',dependsOn:['brief']}]};
+    await processNextJob(f.ctx,async()=>({type:'complete',result:{content:JSON.stringify(plan)}}));
+    await advanceAgentRuns(f.ctx);
+    let run=await read();assert.equal(run.status,'awaiting_approval');assert.equal(run.summary,plan.summary);
+    assert.equal(run.planningPoints,10);assert.equal(run.planApproval.executionEstimatedPoints,17);assert.equal(run.planApproval.totalPoints,27);assert.deepEqual(run.outputs,[]);
+    assert.equal(Number((await f.ctx.db.query('SELECT count(*) n FROM oaooao_generation_jobs')).rows[0].n),1,'child generation requires explicit approval');
+    const approved=await f.app.inject({method:'POST',url:`/api/agent/runs/${id}/approve`,headers:f.users[0].headers,payload:{}});assert.equal(approved.statusCode,200,approved.body);
+    await advanceAgentRuns(f.ctx);
+    await processNextJob(f.ctx,async()=>({type:'complete',result:{content:'Owned generated text'}}));
+    await advanceAgentRuns(f.ctx);
+    await processNextJob(f.ctx,async(ctx,job)=>{const media=await saveMedia(ctx,job.user_id,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrGkAAAAASUVORK5CYII=','base64'));return{type:'complete',result:{url:media.url,results:[{url:media.url,mimeType:media.mimeType}]}};});
+    await advanceAgentRuns(f.ctx);
+    run=await read();assert.equal(run.status,'completed');assert.equal(run.pointsCost,27);assert.equal(run.planningPoints,10);
+    assert.deepEqual(run.outputs.map((asset:any)=>asset.kind),['text','image']);assert.equal(run.outputs[0].data.content,'Owned generated text');assert.match(run.outputs[1].data.serverUrl,/^\/api\/reference-assets\//);
+    const foreign=await f.asset(f.users[1],{title:'PRIVATE_OTHER_ACCOUNT_OUTPUT'});
+    await f.ctx.db.query("UPDATE oaooao_agent_steps SET asset_ids=asset_ids || $2::jsonb WHERE run_id=$1 AND step_id='picture'",[id,JSON.stringify([foreign.id])]);
+    const guarded=await read();assert.equal(guarded.outputs.length,2);assert.doesNotMatch(JSON.stringify(guarded.outputs),/PRIVATE_OTHER_ACCOUNT_OUTPUT/);
+    const forbidden=await f.app.inject({method:'GET',url:`/api/agent/runs/${id}`,headers:f.users[1].headers});assert.equal(forbidden.statusCode,404);
+    await f.ctx.db.query('DELETE FROM oaooao_library_assets WHERE id=$1',[run.outputs[0].id]);
+    assert.equal((await read()).outputs.length,1,'removed outputs are omitted rather than replaced with unrelated library items');
   }finally{await f.cleanup();}
 });

@@ -23,7 +23,7 @@ function generationAssets(result:Json|undefined,kind:string){
   return candidates.map((item:Json)=>{const url=String(item.url||item.remoteUrl||'');return url?{type:kind,...item,url}:null;}).filter(Boolean);
 }
 function projectView(row:Json){return{...row.document,id:row.id,title:row.title,sourceHandoffId:row.source_handoff_id||undefined,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
-function assetView(row:Json){return{...row.document,id:row.id,kind:row.kind,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
+export function assetView(row:Json){return{...row.document,id:row.id,kind:row.kind,createdAt:iso(row.created_at),updatedAt:iso(row.updated_at)};}
 function textMessageContent(value:unknown){
   if(typeof value==='string')return value.slice(0,32000);
   if(!Array.isArray(value)||value.length<1||value.length>12)throw httpError(400,'Invalid multimodal message content');

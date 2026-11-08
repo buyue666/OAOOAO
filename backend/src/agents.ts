@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PoolClient } from 'pg';
 import { httpError, object, string, hasPermission, transaction, type Context, type AppUser } from './core.js';
 import { getSettings } from './settings.js';
-import { createJob, inputHash } from './creative.js';
+import { assetView, createJob, inputHash } from './creative.js';
 import { resolveProvider, type Json, type GenerationKind } from './providers.js';
 import { cancelJob } from './worker.js';
 import { creditUnits, getWallet } from './wallet.js';
@@ -23,7 +23,13 @@ async function view(ctx:Context,run:Json,client?:PoolClient){
   const steps=(await db.query('SELECT s.*,to_jsonb(j) job FROM oaooao_agent_steps s LEFT JOIN oaooao_generation_jobs j ON j.id=s.job_id WHERE s.run_id=$1 ORDER BY s.position',[run.id])).rows;
   const tasks=steps.map(s=>({id:s.job_id||s.step_id,title:s.specification.title,type:s.specification.type,model:s.specification.model,optimizedPrompt:s.specification.prompt,...s.specification.config,status:s.job?.status||'pending',error:s.job?.error||undefined}));
   const jobs=(await db.query("SELECT cost FROM oaooao_generation_jobs WHERE (id=$1 OR input->'context'->>'runId'=$2) AND status NOT IN ('error','cancelled')",[run.job_id,run.id])).rows;
-  return{id:run.id,conversationId:run.input.conversationId,surface:run.input.surface,projectId:run.input.projectId,status:run.state,prompt:run.input.prompt,referencedAssetIds:run.input.assetIds||[],selectedSkillIds:[...new Set(run.input.skillIds||[])],requestedModelIds:run.input.modelIds||[],assetIds:steps.flatMap(s=>s.asset_ids||[]),tasks:tasks.length?tasks:[{id:planner.id,title:'Planning',type:'text',model:planner.model,status:planner.status,error:planner.error}],cancellation:run.cancel_requested?{pendingCount:[planner,...steps.map(s=>s.job)].filter(j=>j&&['pending','running','paused'].includes(j.status)).length}:undefined,pointsCost:jobs.reduce((n,r)=>n+Number(r.cost),0),failure:run.failure||undefined,planApproval:run.plan?{totalPoints:Number(planner.cost)+run.plan.steps.reduce((n:number,s:Json)=>n+Number(s.estimatedCost),0),estimated:true,approvedAt:run.approved_at?new Date(run.approved_at).getTime():undefined,steps:run.plan.steps.map((s:Json)=>({id:s.id,title:s.title,model:s.model,count:1,estimatedPoints:Number(s.estimatedCost)}))}:undefined,createdAt:new Date(run.created_at).getTime(),updatedAt:new Date(run.updated_at).getTime()};
+  const assetIds:string[]=steps.flatMap(s=>s.asset_ids||[]);
+  // Resolve only this run's owned output IDs, never scan or expose the whole library.
+  const outputRows=assetIds.length?(await db.query('SELECT * FROM oaooao_library_assets WHERE user_id=$1 AND id=ANY($2::text[])',[run.user_id,assetIds])).rows:[];
+  const outputs=assetIds.flatMap(id=>{const row=outputRows.find(asset=>asset.id===id);return row?[assetView(row)]:[];});
+  const planningPoints=['error','cancelled'].includes(planner.status)?0:Number(planner.cost);
+  const executionEstimatedPoints=run.plan?.steps.reduce((n:number,s:Json)=>n+Number(s.estimatedCost),0)||0;
+  return{id:run.id,conversationId:run.input.conversationId,surface:run.input.surface,projectId:run.input.projectId,status:run.state,prompt:run.input.prompt,summary:run.plan?.summary||undefined,referencedAssetIds:run.input.assetIds||[],selectedSkillIds:[...new Set(run.input.skillIds||[])],requestedModelIds:run.input.modelIds||[],assetIds,outputs,tasks:tasks.length?tasks:[{id:planner.id,title:'文字规划',type:'text',model:planner.model,status:planner.status,error:planner.error}],cancellation:run.cancel_requested?{pendingCount:[planner,...steps.map(s=>s.job)].filter(j=>j&&['pending','running','paused'].includes(j.status)).length}:undefined,pointsCost:jobs.reduce((n,r)=>n+Number(r.cost),0),planningPoints,failure:run.failure||undefined,planApproval:run.plan?{totalPoints:planningPoints+executionEstimatedPoints,executionEstimatedPoints,estimated:true,approvedAt:run.approved_at?new Date(run.approved_at).getTime():undefined,steps:run.plan.steps.map((s:Json)=>({id:s.id,title:s.title,model:s.model,count:1,estimatedPoints:Number(s.estimatedCost)}))}:undefined,createdAt:new Date(run.created_at).getTime(),updatedAt:new Date(run.updated_at).getTime()};
 }
 export async function validateAgentPlan(ctx:Context,run:Json,content:string,client:PoolClient):Promise<Json>{
   let parsed:Json;try{parsed=JSON.parse(content.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}catch{throw httpError(422,'Planner returned invalid JSON');}

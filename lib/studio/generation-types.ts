@@ -213,8 +213,11 @@ export type AgentRun = {
   tasks: AgentRunTask[]
   cancellation?: { pendingCount: number }
   pointsCost?: number
+  planningPoints?: number
+  summary?: string
+  outputs?: import('./account-api').LibraryAssetView[]
   failure?: string
-  planApproval?: { totalPoints: number; estimated: boolean; approvedAt?: number; steps: Array<{ id: string; title: string; model?: string; count: number; estimatedPoints?: number }> }
+  planApproval?: { totalPoints: number; executionEstimatedPoints?: number; estimated: boolean; approvedAt?: number; steps: Array<{ id: string; title: string; model?: string; count: number; estimatedPoints?: number }> }
   timings?: Record<string, number>
   createdAt: number
   updatedAt: number

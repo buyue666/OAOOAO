@@ -2291,6 +2291,15 @@
 .prompt-reference-textarea::placeholder { color: transparent; }
 .prompt-reference-textarea::selection { color: transparent; background: rgb(147 197 253 / 45%); }
 .prompt-reference-textarea:focus { outline: none; box-shadow: none; }
+.agent-prompt-editor { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.agent-prompt-editor .prompt-reference-textarea,
+.agent-prompt-editor .prompt-reference-mirror { padding: .25rem; }
+.agent-prompt-editor .prompt-reference-textarea { min-height: 180px; }
+.agent-composer-compact .agent-prompt-editor .prompt-reference-textarea { min-height: 92px; }
+@media (max-width: 640px) {
+  .agent-prompt-editor .prompt-reference-textarea { min-height: 155px; font-size: 16px; }
+  .agent-prompt-editor .prompt-reference-mirror { font-size: 16px; }
+}
 .prompt-reference-mention { border-radius: 4px; color: #1d4ed8; background: #eff6ff; box-shadow: inset 0 0 0 1px #bfdbfe; font-style: inherit; }
 .dark .prompt-reference-mention { color: #bfdbfe; background: #1e3a5f; box-shadow: inset 0 0 0 1px #3b82f6; }
 @media (forced-colors: active) {

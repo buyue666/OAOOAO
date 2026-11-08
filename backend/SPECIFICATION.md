@@ -35,6 +35,15 @@ implementers receive only requirements and client contracts.
 
 ## Team workspace contract
 
+Agent run views additionally return `summary`, `planningPoints`,
+`planApproval.executionEstimatedPoints`, and `outputs`. Planning cost is the
+current non-refunded planner job; the execution estimate covers the proposed
+child steps. These are distinct from the cumulative `pointsCost` already charged.
+Outputs use the library-asset view, preserve step/result order, and include only
+the run owner's assets explicitly recorded on its steps. Deleted outputs are
+omitted. Reading a run does not generate media or create child jobs; explicit
+plan approval remains required.
+
 - `/api/teams/:teamId/projects/:projectId/canvas` reads and writes the project's
   `document` as a canvas. Reads return `{data:{project,workspace}}` with current
   reviewer/download permissions and the team's allowed model IDs. PATCH accepts
