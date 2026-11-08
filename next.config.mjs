@@ -13,7 +13,8 @@ const nextConfig = {
     }
     return config
   },
-  serverExternalPackages: ['fastify', '@fastify/cookie', '@fastify/multipart', 'pg', 'nodemailer', '@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
+  transpilePackages: ['fastify', '@fastify/cookie', '@fastify/multipart', 'light-my-request', 'cookie'],
+  serverExternalPackages: ['pg', 'nodemailer', '@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
   outputFileTracingIncludes: { '/*': ['./backend/migrations/*.sql'] },
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
   typescript: {

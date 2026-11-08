@@ -28,6 +28,24 @@ test('后端域名兼容 Vercel 与 v0 裸域名，并保留显式配置优先�
   assert.equal(resolveBackendOrigin({ V0_RUNTIME_URL: 'invalid host', V0_DEV_APP_URL: 'https://preview.v0.dev' }), 'https://preview.v0.dev')
 })
 
+test('生产打包转译 Fastify 与 Cookie 链路，避免受限运行时直接 require ESM', async () => {
+  const config = await readFile(new URL('../next.config.mjs', import.meta.url), 'utf8')
+  const parsed = ts.createSourceFile('next.config.mjs', config, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const declaration = parsed.statements.flatMap(node => ts.isVariableStatement(node) ? [...node.declarationList.declarations] : []).find(node => node.name.getText(parsed) === 'nextConfig')
+  assert.ok(declaration && ts.isObjectLiteralExpression(declaration.initializer))
+  const values = name => {
+    const property = declaration.initializer.properties.find(node => ts.isPropertyAssignment(node) && node.name.getText(parsed) === name)
+    assert.ok(property && ts.isArrayLiteralExpression(property.initializer))
+    return property.initializer.elements.map(node => node.text)
+  }
+  const bundled = values('transpilePackages')
+  const external = values('serverExternalPackages')
+  for (const name of ['fastify', '@fastify/cookie', '@fastify/multipart', 'light-my-request', 'cookie']) {
+    assert.ok(bundled.includes(name), name + ' must be bundled')
+    assert.ok(!external.includes(name), name + ' must not remain external')
+  }
+})
+
 test('内嵌后端不继承函数宿主的零端口', async () => {
   const embedded = await readFile(new URL('../lib/server/embedded-backend.ts', import.meta.url), 'utf8')
   const parsed = ts.createSourceFile('embedded-backend.ts', embedded, ts.ScriptTarget.Latest, true)
