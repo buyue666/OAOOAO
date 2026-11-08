@@ -28,6 +28,56 @@ test('后端域名兼容 Vercel 与 v0 裸域名，并保留显式配置优先�
   assert.equal(resolveBackendOrigin({ V0_RUNTIME_URL: 'invalid host', V0_DEV_APP_URL: 'https://preview.v0.dev' }), 'https://preview.v0.dev')
 })
 
+test('内嵌后端不继承函数宿主的零端口', async () => {
+  const embedded = await readFile(new URL('../lib/server/embedded-backend.ts', import.meta.url), 'utf8')
+  const parsed = ts.createSourceFile('embedded-backend.ts', embedded, ts.ScriptTarget.Latest, true)
+  const declaration = parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'getEmbeddedBackend')
+  assert.ok(declaration)
+  const implementation = ts.transpileModule(declaration.getText(parsed).replace(/^export /, ''), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+  let captured
+  const app = { ready: async () => {} }
+  const create = new Function('state', 'loadConfig', 'resolveBackendOrigin', 'resolve', 'tmpdir', 'Pool', 'buildApp', implementation + '; return getEmbeddedBackend')
+  const getBackend = create({}, env => { captured = env; return { production: true, databaseUrl: 'unused' } }, () => 'https://studio.test', (...parts) => parts.join('/'), () => '/tmp', class { end() {} }, async () => app)
+  const previous = process.env.PORT
+  try {
+    process.env.PORT = '0'
+    assert.equal(await getBackend(), app)
+    assert.equal(captured.PORT, '3001')
+    assert.equal(captured.WORKER_ENABLED, 'false')
+  } finally {
+    if (previous === undefined) delete process.env.PORT; else process.env.PORT = previous
+  }
+})
+
+test('初始化诊断保留原因并脱敏原始和 URL 编码凭据', async () => {
+  const failing = source.replace('Response.json({ embedded: true, path: new URL(request.url).pathname })', "Promise.reject(new Error('Unit startup failure: ' + process.env.ENCRYPTION_KEY + ' ' + encodeURIComponent(process.env.DATABASE_URL)))")
+  const output = ts.transpileModule(failing, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+  const failingRoute = await import('data:text/javascript;base64,' + Buffer.from(output).toString('base64'))
+  const names = ['DATABASE_URL', 'ENCRYPTION_KEY', 'OAOAO_BACKEND_URL']
+  const previous = Object.fromEntries(names.map(name => [name, process.env[name]]))
+  const previousError = console.error
+  const logs = []
+  try {
+    process.env.DATABASE_URL = 'postgresql://unit:unit-secret@unit.invalid/studio'
+    process.env.ENCRYPTION_KEY = 'unit-private-key-do-not-log'
+    delete process.env.OAOAO_BACKEND_URL
+    console.error = (...parts) => logs.push(parts)
+    const request = Object.assign(new Request('https://studio.test/api/health/ready'), { nextUrl: new URL('https://studio.test/api/health/ready') })
+    const response = await failingRoute.GET(request)
+    assert.equal(response.status, 503)
+    assert.doesNotMatch(await response.text(), /Unit startup failure|unit-private-key/)
+    assert.equal(logs[0][0], 'Embedded backend unavailable')
+    assert.match(logs[0][1].detail, /Unit startup failure: \[redacted\] \[redacted\]/)
+    const emitted = JSON.stringify(logs)
+    assert.ok(!emitted.includes(process.env.ENCRYPTION_KEY))
+    assert.ok(!emitted.includes(process.env.DATABASE_URL))
+    assert.ok(!emitted.includes(encodeURIComponent(process.env.DATABASE_URL)))
+  } finally {
+    console.error = previousError
+    for (const name of names) if (previous[name] === undefined) delete process.env[name]; else process.env[name] = previous[name]
+  }
+})
+
 test('同项目后端仍要求数据库并保留同源与外部代理配置校验', async () => {
   const names = ['DATABASE_URL', 'OAOAO_BACKEND_URL', 'OAOAO_PUBLIC_URL']
   const previous = Object.fromEntries(names.map(name => [name, process.env[name]]))

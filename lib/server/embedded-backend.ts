@@ -16,6 +16,7 @@ export function getEmbeddedBackend(): Promise<EmbeddedBackend> {
     ...process.env,
     PUBLIC_ORIGIN: resolveBackendOrigin(),
     MEDIA_ROOT: process.env.MEDIA_ROOT || resolve(tmpdir(), 'oaooao-media'),
+    PORT: '3001',
     WORKER_ENABLED: 'false',
     TRUSTED_PROXY_CIDRS: '',
   })

@@ -49,7 +49,13 @@ async function proxy(request: NextRequest) {
       const { handleEmbeddedRequest } = await import('@/lib/server/embedded-backend')
       return await handleEmbeddedRequest(request)
     } catch (error) {
-      console.error('Embedded backend unavailable', { type: error instanceof Error ? error.name : 'UnknownError' })
+      let detail = error instanceof Error ? error.message : 'Unknown initialization error'
+      const secrets = Object.entries(process.env)
+        .filter(([name, value]) => value && /PASSWORD|SECRET|TOKEN|KEY|(?:DATABASE|POSTGRES).*URL/i.test(name))
+        .flatMap(([, value]) => [value!, encodeURIComponent(value!)])
+        .sort((a, b) => b.length - a.length)
+      for (const secret of secrets) detail = detail.replaceAll(secret, '[redacted]')
+      console.error('Embedded backend unavailable', { type: error instanceof Error ? error.name : 'UnknownError', detail: detail.slice(0, 500) })
       return Response.json({ error: '后端服务暂不可用，请检查数据库及站点加密密钥配置' }, { status: 503 })
     }
   }
