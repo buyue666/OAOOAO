@@ -30,15 +30,15 @@ export async function cancelJob(ctx:Context,client:PoolClient,id:string,userId:s
   await jobEvent(client,id,'cancellation.requested',{taskId:id,pendingCount:1});return updated;
 }
 export type Executor=(ctx:Context,job:Json,poll:boolean)=>Promise<ProviderResult>;
-export async function processNextJob(ctx:Context,execute:Executor=invokeProvider):Promise<boolean>{
+export async function processNextJob(ctx:Context,execute:Executor=invokeProvider,scopeUserId?:string):Promise<boolean>{
   const {advanceAgentRuns}=await import('./agents.js');
   await advanceAgentRuns(ctx);
   const workerId=randomUUID();
   const job=await transaction(ctx.db,async client=>{
     // A crashed POST may already have been accepted upstream. Never repeat it.
-    const expired=await client.query(`UPDATE oaooao_generation_jobs SET phase='review',needs_review=true,error='Worker stopped during provider submission; outcome requires verification',lease_owner=null,lease_until=null,updated_at=clock_timestamp() WHERE status='running' AND phase='submitting' AND lease_until<now() RETURNING id`);
+    const expired=await client.query(`UPDATE oaooao_generation_jobs SET phase='review',needs_review=true,error='Worker stopped during provider submission; outcome requires verification',lease_owner=null,lease_until=null,updated_at=clock_timestamp() WHERE status='running' AND phase='submitting' AND lease_until<now() AND ($1::text IS NULL OR user_id=$1) RETURNING id`,[scopeUserId||null]);
     for(const row of expired.rows)await jobEvent(client,row.id,'task.needs_review',{taskId:row.id});
-    const row=(await client.query(`SELECT * FROM oaooao_generation_jobs WHERE status IN ('pending','running') AND phase IN ('queued','polling') AND next_poll_at<=now() AND (lease_until IS NULL OR lease_until<now()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`)).rows[0];
+    const row=(await client.query(`SELECT * FROM oaooao_generation_jobs WHERE status IN ('pending','running') AND phase IN ('queued','polling') AND next_poll_at<=now() AND (lease_until IS NULL OR lease_until<now()) AND ($1::text IS NULL OR user_id=$1) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1`,[scopeUserId||null])).rows[0];
     if(!row)return null;
     const polling=row.phase==='polling';
     const result=(await client.query(`UPDATE oaooao_generation_jobs SET status='running',phase=$2,lease_owner=$3,lease_until=now()+interval '5 minutes',started_at=coalesce(started_at,now()),updated_at=clock_timestamp() WHERE id=$1 RETURNING *`,[row.id,polling?'polling':'submitting',workerId])).rows[0];

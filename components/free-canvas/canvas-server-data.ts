@@ -35,14 +35,21 @@ async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>
   } catch {
     return { kind: 'error', message: '后端服务地址无效，请检查 OAOAO_BACKEND_URL' }
   }
-  if (!target) return { kind: 'error', message: '后端服务未配置' }
+  if (!target && !process.env.DATABASE_URL) return { kind: 'error', message: '后端服务未配置' }
 
   let response: Response
   try {
-    response = await fetch(target, {
-      headers: { accept: 'application/json', cookie: cookieHeader },
-      cache: 'no-store',
-    })
+    if (target) {
+      response = await fetch(target, {
+        headers: { accept: 'application/json', cookie: cookieHeader },
+        cache: 'no-store',
+      })
+    } else {
+      const { handleEmbeddedRequest } = await import('@/lib/server/embedded-backend')
+      response = await handleEmbeddedRequest(new Request(new URL(pathWithQuery, 'http://embedded.internal'), {
+        headers: { accept: 'application/json', cookie: cookieHeader },
+      }))
+    }
   } catch {
     return { kind: 'error', message: '后端连接失败，请稍后重试' }
   }

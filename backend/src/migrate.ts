@@ -1,16 +1,9 @@
-import { access, readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { createHash } from 'node:crypto';
+import { readMigrations } from './migration-files.js';
 import pg, {type Pool} from 'pg';
 import { transaction } from './core.js';
-export async function readMigrations(){
-  let directory=fileURLToPath(new URL('../migrations/',import.meta.url));
-  try{await access(directory);}catch{directory=fileURLToPath(new URL('../../migrations/',import.meta.url));}
-  const files=(await readdir(directory)).filter(f=>/^\d+-.+\.sql$/.test(f)).sort();
-  if(!files.length)throw new Error('No packaged database migrations were found');
-  return Promise.all(files.map(async name=>{const sql=await readFile(resolve(directory,name),'utf8');return {name,sql,checksum:createHash('sha256').update(sql).digest('hex')};}));
-}
+export { readMigrations } from './migration-files.js';
 export async function migrate(db:Pool){
   const migrations=await readMigrations();
   await transaction(db,async client=>{await client.query('SELECT pg_advisory_xact_lock(193147,2)');await client.query('CREATE TABLE IF NOT EXISTS oaooao_migrations(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');

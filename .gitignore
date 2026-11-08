@@ -13,6 +13,8 @@ __v0_jsx-dev-runtime.ts
 # Common ignores
 node_modules
 .next/
+.workflow-data/
+app/.well-known/workflow/
 .DS_Store
 *.log
 *.tsbuildinfo
@@ -48,3 +50,4 @@ public/media/brand/oao-logo-transparent-source.png
 /backend/**/*.py[cod]
 /backend/**/*.dump
 /backend/**/*.backup
+/.swc

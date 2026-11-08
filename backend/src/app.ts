@@ -12,7 +12,7 @@ import { registerWatermark } from './watermark.js';
 import { registerCheckIn } from './check-in.js';
 import { registerCommerce } from './commerce.js';
 import { registerContent } from './content.js';
-import { readMigrations } from './migrate.js';
+import { readMigrations } from './migration-files.js';
 import { registerTeams } from './teams.js';
 import { registerTeamPlans } from './team-plans.js';
 import { registerTeamProjects } from './team-projects.js';
@@ -55,7 +55,7 @@ export async function buildApp(options:BuildOptions={}):Promise<FastifyInstance 
   await app.register(multipart,{limits:{fileSize:50*1024*1024,files:4,fields:20,parts:24}});
   app.addHook('onRequest',async(request,reply)=>{
     reply.header('Cache-Control','no-store');reply.header('X-Content-Type-Options','nosniff');reply.header('Referrer-Policy','same-origin');
-    if(config.production)reply.header('Strict-Transport-Security','max-age=31536000; includeSubDomains');
+    if(config.production)reply.header('Strict-Transport-Security','max-age=63072000');
     assertCsrfOrigin(ctx,request.method,request.headers.origin,request.headers['sec-fetch-site'] as string|undefined,Boolean(request.cookies[config.sessionCookieName]),request.url);
   });
   app.setErrorHandler((error,request,reply)=>{

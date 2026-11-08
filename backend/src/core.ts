@@ -13,6 +13,7 @@ export interface AppConfig {
   sessionCookieName: string; sessionTtlSeconds: number; encryptionKey: string;
   mediaRoot: string; host: string; port: number; workerEnabled: boolean;
   trustedProxies?: string[];
+  previewCookies?: boolean;
 }
 export interface AppUser {
   id: string; username: string; email: string | null; displayName: string;

@@ -1,9 +1,11 @@
 import { createRequire } from 'node:module'
+import { withWorkflow } from 'workflow/next'
 const require = createRequire(import.meta.url)
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack(config) {
     config.cache = false
+    config.resolve.extensionAlias = { ...config.resolve.extensionAlias, '.js': ['.ts', '.tsx', '.js'] }
     // Next's client entry builder prefixes cross-drive Windows paths with ./.
     for (const file of ['next/dist/client/next.js', 'next/dist/client/app-next.js']) {
       const entry = require.resolve(file)
@@ -11,6 +13,8 @@ const nextConfig = {
     }
     return config
   },
+  serverExternalPackages: ['fastify', '@fastify/cookie', '@fastify/multipart', 'pg', 'nodemailer', '@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
+  outputFileTracingIncludes: { '/*': ['./backend/migrations/*.sql'] },
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
   typescript: {
     ignoreBuildErrors: false,
@@ -34,4 +38,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withWorkflow(nextConfig)

@@ -4,6 +4,15 @@ packages:
 
 pmOnFail: ignore
 
+allowBuilds:
+  '@swc/core': true
+  cbor-extract: true
+  esbuild: true
+
+overrides:
+  '@vercel/oidc': '4.0.7'
+
 minimumReleaseAgeExclude:
   - '@next/*'
   - next
+  - nodemailer@10.4.0

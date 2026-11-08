@@ -213,7 +213,7 @@ export async function registerMedia(app: FastifyInstance, ctx: Context) {
     if(row.storage_backend==='s3'){
       // Image/video elements use direct R2 delivery. Same-origin JS fetches and
       // canvas CORS reads retain their origin without requiring a public bucket or CORS changes.
-      if(request.headers['sec-fetch-dest']!=='empty'&&request.headers['sec-fetch-mode']!=='cors')return reply.redirect(await downloadObjectUrl(ctx,row.storage_location));
+      if(row.storage_location.provider!=='vercel-blob'&&request.headers['sec-fetch-dest']!=='empty'&&request.headers['sec-fetch-mode']!=='cors')return reply.redirect(await downloadObjectUrl(ctx,row.storage_location));
       return reply.send(await getObject(ctx,row.storage_location));
     }
     return reply.send(await readFile(mediaPath(ctx.config.mediaRoot,id)));

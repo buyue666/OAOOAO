@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 /**
  * 解析后端地址。
@@ -13,7 +14,9 @@ export const dynamic = 'force-dynamic'
  */
 function resolveBackend(configured: string | undefined) {
   const value = configured?.trim()
-  if (!value) return { error: Response.json({ error: '后端服务未配置' }, { status: 503 }) } as const
+  if (!value) return process.env.DATABASE_URL
+    ? { embedded: true } as const
+    : { error: Response.json({ error: '后端服务未配置' }, { status: 503 }) } as const
   let target: URL
   try {
     target = new URL(value)
@@ -29,7 +32,6 @@ function resolveBackend(configured: string | undefined) {
 async function proxy(request: NextRequest) {
   const resolved = resolveBackend(process.env.OAOAO_BACKEND_URL)
   if ('error' in resolved) return resolved.error
-  const target = resolved.target
   // Validate the browser origin here before translating it to the upstream origin.
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
     const expected = process.env.OAOAO_PUBLIC_URL || `${request.nextUrl.protocol}//${request.headers.get('host') || request.nextUrl.host}`
@@ -42,6 +44,16 @@ async function proxy(request: NextRequest) {
     }
     if (request.headers.get('sec-fetch-site') === 'cross-site') return Response.json({ error: '跨站请求已被拦截' }, { status: 403 })
   }
+  if ('embedded' in resolved) {
+    try {
+      const { handleEmbeddedRequest } = await import('@/lib/server/embedded-backend')
+      return await handleEmbeddedRequest(request)
+    } catch (error) {
+      console.error('Embedded backend unavailable', { type: error instanceof Error ? error.name : 'UnknownError' })
+      return Response.json({ error: '后端服务暂不可用，请检查数据库及站点加密密钥配置' }, { status: 503 })
+    }
+  }
+  const target = resolved.target
   target.pathname = `${target.pathname.replace(/\/$/, '')}${request.nextUrl.pathname}`
   target.search = request.nextUrl.search
   const headers = new Headers(request.headers)

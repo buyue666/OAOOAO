@@ -34,7 +34,7 @@ export async function verifyPassword(password:string,encoded:string):Promise<boo
 }
 export function validateUsername(value:unknown):string {const name=string(value,'username',64);if(!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{2,63}$/.test(name))throw httpError(400,'Username must contain 3–64 letters, digits, dots, hyphens or underscores');return name;}
 function permissions(value:unknown):string[]{if(!Array.isArray(value)||value.some(p=>!ADMIN_PERMISSIONS.includes(p)))throw httpError(400,'Invalid administrator permissions');return [...new Set(value)] as string[];}
-function cookieOptions(ctx:Context){return {httpOnly:true,secure:ctx.config.production,sameSite:'lax' as const,path:'/',maxAge:ctx.config.sessionTtlSeconds};}
+function cookieOptions(ctx:Context){return {httpOnly:true,secure:ctx.config.production||ctx.config.previewCookies===true,sameSite:ctx.config.previewCookies?'none' as const:'lax' as const,path:'/',maxAge:ctx.config.sessionTtlSeconds};}
 async function createSession(ctx:Context,userId:string,reply:FastifyReply,expectedPasswordHash:string){
   const token=randomBytes(32).toString('base64url');
   await transaction(ctx.db,async client=>{
