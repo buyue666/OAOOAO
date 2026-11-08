@@ -114,6 +114,8 @@ test('legacy and multi-node actions both open a captured editor without creating
   const useCanvasStore = selector => selector(store); useCanvasStore.getState = () => store
   const Dialog = () => null, Provider = () => null
   const module = sourceModule('../components/free-canvas/canvas-editor.tsx', {
+    '@/lib/studio/team-generation': {}, '@/components/ui/dialog': {}, '@/components/ui/button': {},
+    './canvas-generation-policy': {}, './nodes/generation-settings': {}, './team-canvas-assets': {},
     react: hooks.react, 'next/link': () => null,
     '@xyflow/react': { ReactFlowProvider: () => null, useReactFlow: () => ({ screenToFlowPosition: point => point, fitView() {} }) },
     '@/lib/studio/store': { useStudio: () => ({ state: { user: { id: 'account' }, models: [], sessionSettings: {} } }) },

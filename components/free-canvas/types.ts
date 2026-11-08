@@ -19,6 +19,7 @@ export type NodeReference = {
   title: string
   url: string
   mediaKind: MediaKind
+  role?: 'reference' | 'first_frame' | 'last_frame'
 }
 
 export type NodeSkill = {
@@ -52,6 +53,7 @@ export type NodeTask = {
   unconfirmed?: boolean
   cancelRequested?: boolean
   submission?: NodeSubmission
+  approvedCost?: number
 }
 
 export type NodeSubmission = { kind: 'image'; input: ImageGenerationInput } | { kind: 'video'; input: VideoGenerationInput } | { kind: 'audio'; input: AudioGenerationInput } | { kind: 'text'; input: TextGenerationInput }
@@ -68,6 +70,7 @@ export type GenerationNodeData = {
   count: number
   voice: string
   format: string
+  edit?: ImageGenerationInput['edit']
   references: NodeReference[]
   skills: NodeSkill[]
   task: NodeTask | null

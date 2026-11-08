@@ -46,7 +46,7 @@ export async function createTeamJob(ctx: Context, workspace: TeamWorkspace, user
   return transaction(ctx.db, async db => {
     await lockTeam(db, workspace.teamId);
     await requireTeamProject(db, workspace.teamId, userId, workspace.projectId, 'write');
-    const existing = (await db.query('SELECT * FROM oaooao_generation_jobs WHERE team_id=$1 AND user_id=$2 AND kind=$3 AND client_request_id=$4 AND attempt_no=1', [workspace.teamId, userId, kind, key])).rows[0];
+    const existing = (await db.query('SELECT * FROM oaooao_generation_jobs WHERE team_id=$1 AND kind=$2 AND client_request_id=$3 AND attempt_no=1', [workspace.teamId, kind, key])).rows[0];
     if (existing) { if (existing.input_hash !== hash) throw httpError(409, '提交标识已用于不同的任务'); return existing }
     const { team, provider } = await prepareTeamGeneration(ctx, db, workspace, userId, kind, input);
     if (creditUnits(provider.cost) > approved) throw httpError(409, '当前费用高于确认报价，请重新获取报价');
@@ -93,5 +93,12 @@ export async function registerTeamGeneration(app: FastifyInstance, ctx: Context)
       if (!teamManager(member.role) && row.user_id !== user.id) throw httpError(403, '只能取消自己的任务');
       return { task: taskView(await cancelJob(ctx, db, id, row.user_id)) };
     });
+  });
+  app.get(root + '/:id', async request => {
+    const user = await ctx.requireUser(request), { teamId, projectId, id } = request.params as TeamWorkspace & { id: string };
+    await requireTeamProject(ctx.db, teamId, user.id, projectId);
+    const row = (await ctx.db.query('SELECT * FROM oaooao_generation_jobs WHERE id=$1 AND team_id=$2 AND team_project_id=$3', [id, teamId, projectId])).rows[0];
+    if (!row) throw httpError(404, '任务不存在');
+    return { task: taskView(row) };
   });
 }

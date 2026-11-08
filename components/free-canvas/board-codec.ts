@@ -139,6 +139,7 @@ function readReference(value: unknown): NodeReference | null {
     title: textOf(raw.title, '参考素材'),
     url,
     mediaKind: isMediaKind(raw.mediaKind) ? raw.mediaKind : 'image',
+    ...(raw.role === 'first_frame' || raw.role === 'last_frame' || raw.role === 'reference' ? { role: raw.role } : {}),
   }
 }
 
@@ -194,6 +195,7 @@ function readTask(raw: Raw): NodeTask | null {
   const unconfirmed = !id && Boolean(task.unconfirmed || (savedPhase === 'queued' && submission))
   const interrupted = !id && savedPhase === 'queued'
   return { id, phase: unconfirmed || interrupted ? 'error' : savedPhase, unconfirmed, submission,
+    ...(typeof task.approvedCost === 'number' && Number.isFinite(task.approvedCost) && task.approvedCost >= 0 ? { approvedCost: task.approvedCost } : {}),
     cancelRequested: Boolean(task.cancelRequested),
     clientRequestId: textOf(task.clientRequestId) || submission?.input.clientRequestId,
     error: unconfirmed ? '请确认上次提交结果；重试会使用原参数和标识，不会重复扣费。' : interrupted ? '提交准备已中断，请检查任务记录后重试。' : textOf(task.error) || undefined,
@@ -217,6 +219,7 @@ function readGeneration(kind: GenerationKind, raw: Raw, meta: Raw): GenerationNo
     count: 1,
     voice: textOf(raw.voice),
     format: textOf(raw.format),
+    ...(raw.edit && typeof raw.edit === 'object' ? { edit: raw.edit as GenerationNodeData['edit'] } : {}),
     references: Array.isArray(raw.references) ? readReferences(raw.references) : readLegacyReferences(raw.referenceUrls),
     skills: readSkills(raw.skills),
     task: readTask(raw),

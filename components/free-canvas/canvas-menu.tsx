@@ -61,7 +61,7 @@ export function CanvasContextMenu() {
       ref={ref}
       role="menu"
       aria-label="画布菜单"
-      className="fixed z-[70] w-[232px] overflow-y-auto rounded-2xl border border-white/15 bg-neutral-950 p-1.5 text-white shadow-[0_24px_60px_rgba(0,0,0,0.75)]"
+      className="fixed z-[70] w-[232px] overflow-y-auto rounded-2xl border border-border bg-card p-1.5 text-foreground shadow-[0_24px_60px_rgba(0,0,0,0.75)]"
       style={{ left, top, maxHeight: `calc(100dvh - ${top + 8}px)` }}
       onContextMenu={(event) => event.preventDefault()}
       onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close() }}
@@ -78,8 +78,8 @@ export function CanvasContextMenu() {
       }}
     >
       {entries.map((entry) => {
-        if (entry.type === 'separator') return <div key={entry.key} role="separator" className="my-1 h-px bg-white/10" />
-        if (entry.type === 'heading') return <p key={entry.key} className="px-2.5 pt-1.5 pb-1 text-[11px] tracking-[0.12em] text-neutral-500 uppercase">{entry.label}</p>
+        if (entry.type === 'separator') return <div key={entry.key} role="separator" className="my-1 h-px bg-muted" />
+        if (entry.type === 'heading') return <p key={entry.key} className="px-2.5 pt-1.5 pb-1 text-[11px] tracking-[0.12em] text-muted-foreground uppercase">{entry.label}</p>
         return (
           <button
             key={entry.key}
@@ -91,7 +91,7 @@ export function CanvasContextMenu() {
               entry.onSelect()
               close()
             }}
-            className={cn('flex w-full items-center rounded-xl px-2.5 py-2 text-left text-[13px] text-neutral-100 transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none disabled:opacity-35 disabled:hover:bg-transparent')}
+            className={cn('flex w-full items-center rounded-xl px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-35 disabled:hover:bg-transparent')}
           >
             {entry.label}
           </button>
@@ -167,7 +167,7 @@ function nodeEntries(
   entries.push({ type: 'item', key: 'copy', label: '复制到画布剪贴板', onSelect: () => { prepare(); store().copySelection() } })
   entries.push({ type: 'item', key: 'export-selection', label: '导出选中内容 JSON', onSelect: () => actions.exportSelection(selectedIds) })
   entries.push({ type: 'item', key: 'delete', label: hasGroup ? '删除整组（含内容，可撤销）' : '删除选中内容（可撤销）', onSelect: () => { prepare(); store().deleteSelection() } })
-  return entries
+  return store().workspace ? entries.filter(entry => !['save-results', 'agent-draft', 'skill-draft'].includes(entry.key)) : entries
 }
 
 function paneEntries(
@@ -185,6 +185,7 @@ function paneEntries(
   const { actions, store, canUndo, canRedo, clipboard, trash, fit } = context
   const entries: MenuEntry[] = [{ type: 'heading', key: 'h-new', label: '新建节点' }]
   for (const kind of CREATABLE_KINDS) {
+    if (store().workspace && kind === 'agent') continue
     entries.push({ type: 'item', key: `new-${kind}`, label: NODE_META[kind].label, onSelect: () => actions.createNodeAt(kind, position) })
   }
   entries.push({ type: 'separator', key: 'sep-1' })

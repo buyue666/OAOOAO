@@ -132,7 +132,7 @@ export function useAgentActions() {
 
   // 刷新或重新打开画布后，自动恢复尚未结束的运行观察。
   useEffect(() => {
-    if (!hydrated || !projectId) return
+    if (!hydrated || !projectId || useCanvasStore.getState().workspace) return
     for (const node of useCanvasStore.getState().nodes) {
       if (node.type === 'agent' && node.data.runId && ((!isAgentRunTerminal(node.data.runStatus) && !USER_ACTION_RUN_STATUSES.includes(node.data.runStatus ?? '')) || (isAgentRunTerminal(node.data.runStatus) && node.data.deliveredRunId !== node.data.runId && !node.data.deliveryError))) {
         observeAgentRun(node.id, node.data.runId, generation.getAgent, projectId)
@@ -142,6 +142,7 @@ export function useAgentActions() {
 
   const startAgent = useCallback(async (nodeId: string) => {
     const state = useCanvasStore.getState()
+    if (state.workspace) return state.setNotice('团队画布请使用图片、视频、音频或文本节点生成')
     const node = state.nodes.find((item) => item.id === nodeId)
     if (!node || node.type !== 'agent' || !state.projectId) return
     const prompt = node.data.prompt.trim()
@@ -173,6 +174,7 @@ export function useAgentActions() {
   }, [generation])
 
   const controlRun = useCallback(async (nodeId: string, action: 'pause' | 'resume' | 'cancel' | 'approve' | 'retry') => {
+    if (useCanvasStore.getState().workspace) return
     const node = useCanvasStore.getState().nodes.find((item) => item.id === nodeId)
     const currentProjectId = useCanvasStore.getState().projectId
     if (!node || node.type !== 'agent' || !node.data.runId || !currentProjectId) return

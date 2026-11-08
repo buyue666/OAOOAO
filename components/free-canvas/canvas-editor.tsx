@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ReactFlowProvider, useReactFlow, type Viewport, type XYPosition } from '@xyflow/react'
 import type { LibraryAssetView } from '@/lib/studio/account-api'
-import { createLibraryAsset } from '@/lib/studio/account-api'
+import { createLibraryAsset, uploadPersistentAsset } from '@/lib/studio/account-api'
 import type { CanvasBackendProject } from '@/lib/studio/api'
 import { useStudio } from '@/lib/studio/store'
-import { useGeneration } from '@/lib/studio/generation-store'
-import { defaultGenerationDefaults } from '@/lib/studio/studio-models'
-import { categoryOf, referenceOf } from './asset-reference'
+import { defaultGenerationDefaults, defaultModelFor, filterModelsByCapability } from '@/lib/studio/studio-models'
+import { availableTeamModels } from '@/lib/studio/team-generation'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { referenceOf } from './asset-reference'
 import { readBoard, writeBoard } from './board-codec'
 import { CanvasActionsProvider, type CanvasActions } from './canvas-context'
 import { CanvasAssetLibrary } from './canvas-asset-library'
@@ -22,8 +24,12 @@ import { nodePositionAtCenter } from './canvas-position'
 import { CanvasContextMenu } from './canvas-menu'
 import { flushCanvasSave, flushCanvasSaveOnHide, startCanvasAutosave, stopCanvasSaveTimer } from './canvas-persistence'
 import { useCanvasStore } from './canvas-store'
-import { createMediaNode, createNodeOfKind, type CreatableKind } from './node-factory'
-import type { ImageEditorTarget, NodeSide } from './types'
+import { createGenerationNode, createMediaNode, createNodeOfKind, type CreatableKind } from './node-factory'
+import type { ImageEditorTarget, NodeReference, NodeSide } from './types'
+import type { CanvasWorkspace as WorkspaceScope } from './canvas-workspace'
+import { canvasModelDefaults, canvasReferences } from './canvas-generation-policy'
+import { GenerationSettings } from './nodes/generation-settings'
+import { saveTeamCanvasImage, TeamCanvasAssets } from './team-canvas-assets'
 import { useAgentActions } from './use-agent-actions'
 import { useGenerationActions } from './use-generation-actions'
 import { useWorkHandoff } from './use-work-handoff'
@@ -31,10 +37,9 @@ import { useCanvasSelectionActions } from './use-canvas-selection-actions'
 import { ImageEditorPanel, type ImageEditRequest, type ImageEditOperation, type ImageEditorVersion } from './image-editor-panel'
 
 const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
-const MAX_REFERENCES = 4
 const PROJECT_FIELDS_OWNED_BY_BOARD = ['nodes', 'connections', 'viewport', 'title', 'updatedAt']
 
-export function CanvasEditor({ projectId, project, loadError }: { projectId: string; project: CanvasBackendProject | null; loadError: string | null }) {
+export function CanvasEditor({ projectId, project, loadError, workspace }: { projectId: string; project: CanvasBackendProject | null; loadError: string | null; workspace?: WorkspaceScope }) {
   const hydrated = useCanvasStore((state) => state.hydrated && state.projectId === projectId)
   const hydrate = useCanvasStore((state) => state.hydrate)
   const reset = useCanvasStore((state) => state.reset)
@@ -44,6 +49,7 @@ export function CanvasEditor({ projectId, project, loadError }: { projectId: str
     const board = readBoard(project)
     hydrate({
       projectId,
+      workspace,
       title: project.title,
       updatedAt: project.updatedAt,
       projectMeta: projectMetaOf(project),
@@ -51,7 +57,7 @@ export function CanvasEditor({ projectId, project, loadError }: { projectId: str
       edges: board.edges,
       viewport: board.viewport ?? DEFAULT_VIEWPORT,
     })
-  }, [hydrate, hydrated, project, projectId])
+  }, [hydrate, hydrated, project, projectId, workspace])
 
   useEffect(() => {
     const stopAutosave = startCanvasAutosave()
@@ -91,10 +97,11 @@ export function CanvasEditor({ projectId, project, loadError }: { projectId: str
 }
 
 function CanvasWorkspace() {
-  const { state } = useStudio()
+  const { state, estimateCredits } = useStudio()
+  const workspace = useCanvasStore(store => store.workspace)
+  const models = useMemo(() => workspace ? availableTeamModels(state.models, workspace.modelIds, state.sessionSettings) : state.models, [workspace, state.models, state.sessionSettings])
   const defaults = useMemo(() => defaultGenerationDefaults(state.sessionSettings), [state.sessionSettings])
   const generation = useGenerationActions()
-  const generationRuntime = useGeneration()
   const agent = useAgentActions()
   const selectionActions = useCanvasSelectionActions()
   const { screenToFlowPosition, fitView } = useReactFlow()
@@ -103,7 +110,8 @@ function CanvasWorkspace() {
   const [selectionSkill, setSelectionSkill] = useState<(SelectionSkillSession & { id: number }) | null>(null)
   const skillDraftSequence = useRef(0)
   const nodeCount = useCanvasStore((store) => store.nodes.length)
-  const canvasNodes = useCanvasStore((store) => store.nodes)
+  const editorNode = useCanvasStore(store => store.imageEditor ? store.nodes.find(node => node.id === store.imageEditor?.nodeId) : undefined)
+  const settingsNodeId = useCanvasStore(store => store.settingsNodeId)
   const imageEditor = useCanvasStore((store) => store.imageEditor)
   const closeImageEditor = useCanvasStore((store) => store.closeImageEditor)
   const assetPanelOpen = useCanvasStore((store) => store.assetPanelOpen)
@@ -119,6 +127,7 @@ function CanvasWorkspace() {
   const closeSelectionSkill = useCallback(() => setSelectionSkill(null), [])
   const createSkillFromSelection = useCallback((nodeIds?: readonly string[]) => {
     const store = useCanvasStore.getState()
+    if (store.workspace) return store.setNotice('团队画布请直接填写创作指令，个人技能不在此空间使用')
     if (!store.hydrated || !store.projectId || !state.user.id) return store.setNotice('请先登录并打开画布，再创建技能')
     try {
       const selection = createSelectionSkillDraft(store.nodes, store.edges, nodeIds, state.models)
@@ -133,18 +142,21 @@ function CanvasWorkspace() {
 
   const createNodeAt = useCallback((kind: CreatableKind, position: XYPosition) => {
     const store = useCanvasStore.getState()
+    if (store.workspace?.readOnly) return
+    if (store.workspace && kind === 'agent') return store.setNotice('团队画布请使用图片、视频、音频或文本节点生成')
     const node = createNodeOfKind(kind, position, defaults)
+    if (node.type === 'generation') node.data = canvasModelDefaults(node.data, models.find(model => model.id === defaultModelFor(node.data.kind, state.sessionSettings, filterModelsByCapability(models, node.data.kind))))
     const isGeneration = kind === 'image' || kind === 'video' || kind === 'text' || kind === 'audio'
     store.insertNodes([node], [], { select: true, focus: isGeneration })
     if (kind === 'reference' || kind === 'asset') store.setAssetPanel(true, node.id)
-  }, [defaults])
+  }, [defaults, models, state.sessionSettings])
 
-  const openDirector = useCallback((nodeId: string) => useCanvasStore.getState().setDirectorNodeId(nodeId), [])
+  const openDirector = useCallback((nodeId: string) => { const store = useCanvasStore.getState(); if (store.workspace?.readOnly) return store.setNotice('审阅模式不能修改导演台场景'); store.setDirectorNodeId(nodeId) }, [])
   const openImageEditor = useCallback((target: ImageEditorTarget) => useCanvasStore.getState().openImageEditor(target), [])
 
   const editorVersions = useMemo<ImageEditorVersion[]>(() => {
     if (!imageEditor) return []
-    const node = canvasNodes.find((item) => item.id === imageEditor.nodeId)
+    const node = editorNode
     if (node?.type === 'generation') {
       return node.data.results
         .filter((result) => result.mediaKind === 'image')
@@ -154,19 +166,28 @@ function CanvasWorkspace() {
       return [{ id: `${node.id}-${node.data.media.url}`, imageUrl: node.data.media.url, label: node.data.title || '当前图片' }]
     }
     return [{ id: `current-${imageEditor.url}`, imageUrl: imageEditor.url, label: '当前图片' }]
-  }, [canvasNodes, imageEditor])
+  }, [editorNode, imageEditor])
 
   const handleImageEditSubmit = useCallback(async (request: ImageEditRequest) => {
     const store = useCanvasStore.getState()
     if (!store.projectId) throw new Error('请先保存画布，再提交图片编辑')
-    const sourceNode = imageEditor ? canvasNodes.find((node) => node.id === imageEditor.nodeId) : undefined
+    if (store.workspace?.readOnly) throw new Error('审阅模式不能提交生成任务')
+    const saveImage = async (url: string, title: string) => {
+      if (workspace) return saveTeamCanvasImage(workspace, url, title)
+      if (!url.startsWith('data:')) return url
+      const blob = await (await fetch(url)).blob()
+      return (await uploadPersistentAsset(new File([blob], `${title}.png`, { type: blob.type }), 'image')).url
+    }
+    const sourceNode = imageEditor ? store.nodes.find((node) => node.id === imageEditor.nodeId) : undefined
     const sourceRatio = sourceNode?.type === 'generation' ? sourceNode.data.ratio : undefined
-    const source = request.imageUrl.startsWith('data:')
-      ? { type: 'image', dataUrl: request.imageUrl }
-      : { type: 'image', url: request.imageUrl }
-    const regionReferences = (request.regions ?? [])
-      .filter((region) => Boolean(region.referenceImageDataUrl))
-      .map((region) => ({ type: 'image' as const, dataUrl: region.referenceImageDataUrl, name: `区域 ${region.id} 参考图` }))
+    const sourceUrl = await saveImage(request.imageUrl, '编辑原图')
+    const references: NodeReference[] = [{ id: sourceUrl, title: imageEditor?.title || '编辑原图', url: sourceUrl, mediaKind: 'image' }]
+    for (const region of request.regions ?? []) if (region.referenceImageDataUrl) {
+      const url = await saveImage(region.referenceImageDataUrl, `区域 ${region.id} 参考图`)
+      references.push({ id: url, title: `区域 ${region.id} 参考图`, url, mediaKind: 'image' })
+    }
+    const maskUrl = request.maskDataUrl ? await saveImage(request.maskDataUrl, '编辑蒙版') : undefined
+    if (useCanvasStore.getState().projectMeta !== store.projectMeta || !useCanvasStore.getState().hydrated) return
     const prompt = request.prompt.trim() || (
       request.operation === 'to-video' ? '让画面自然动起来，保持主体、镜头构图和光影一致。'
         : request.operation === 'erase' ? '移除标记区域，并自然补全背景，保持原图构图和光影。'
@@ -176,35 +197,26 @@ function CanvasWorkspace() {
                 : request.operation === 'layers' ? '将图片拆分为可独立编辑的主体、前景和背景图层，保持原图构图和细节。'
                   : '根据标记区域进行自然编辑，保持未标记区域不变。'
     )
-    if (request.operation === 'to-video') {
-      await generationRuntime.createVideo({
-        prompt: prompt || '让画面自然动起来，保持主体和镜头构图。',
-        references: [source],
-        surface: 'canvas',
-        projectId: store.projectId,
-      })
-      store.setNotice('已提交视频生成任务，可在任务记录查看进度')
-      return
-    }
-    await generationRuntime.createImage({
-      prompt,
-      kind: 'edit',
-      ...(request.ratio || sourceRatio ? { ratio: request.ratio || sourceRatio } : {}),
-      references: [source, ...regionReferences],
-      edit: {
-        operation: request.operation as Exclude<ImageEditOperation, 'to-video'>,
-        ...(request.maskDataUrl ? { mask: { type: 'image', dataUrl: request.maskDataUrl } } : {}),
-      },
-      surface: 'canvas',
-      projectId: store.projectId,
-      title: `编辑：${imageEditor?.title || '图片'}`,
-    })
-    store.setNotice('已提交图片编辑任务，可在任务记录查看结果')
-  }, [canvasNodes, generationRuntime, imageEditor])
+    const kind = request.operation === 'to-video' ? 'video' : 'image'
+    const result = createGenerationNode(kind, viewportCenter(), defaults)
+    const inherited = sourceNode?.type === 'generation' && sourceNode.data.kind === kind ? sourceNode.data : undefined
+    const modelId = request.model || inherited?.model || defaultModelFor(kind, state.sessionSettings, filterModelsByCapability(models, kind))
+    const model = models.find(item => item.id === modelId)
+    if (kind === 'video' && model?.capabilities.firstFrame) references[0] = { ...references[0], role: 'first_frame' }
+    const ratio = request.ratio || sourceRatio || result.data.ratio
+    result.data = { ...result.data, title: `${kind === 'video' ? '变视频' : '编辑'}：${imageEditor?.title || '图片'}`, prompt, references, model: modelId, ratio: model?.capabilities.ratios.includes(ratio) ? ratio : model?.capabilities.ratios[0] || ratio, resolution: request.resolution || inherited?.resolution || result.data.resolution, quality: request.quality || inherited?.quality || model?.capabilities.qualities[0] || result.data.quality,
+      ...(kind === 'image' ? { edit: { operation: request.operation as Exclude<ImageEditOperation, 'to-video'>, ...(maskUrl ? { mask: { type: 'image', url: maskUrl } } : {}) } } : {}) }
+    result.data = canvasModelDefaults(result.data, model)
+    store.insertNodes([result], [], { select: true })
+    store.closeImageEditor()
+    await generation.submitNode(result.id)
+    void fitView({ nodes: [{ id: result.id }], padding: 0.6, duration: 180, maxZoom: 1 })
+  }, [defaults, fitView, generation, imageEditor, models, state.sessionSettings, viewportCenter, workspace])
 
   const handleSaveEditorVersion = useCallback(async (imageUrl: string) => {
     const target = useCanvasStore.getState().imageEditor
     if (!target) return
+    if (workspace) { await saveTeamCanvasImage(workspace, imageUrl, `${target.title} 编辑版`); useCanvasStore.getState().setNotice('已保存在当前项目素材'); return }
     await createLibraryAsset({
       kind: 'image',
       title: `${target.title} 编辑版`.slice(0, 120),
@@ -214,16 +226,20 @@ function CanvasWorkspace() {
       data: { serverUrl: imageUrl, dataUrl: imageUrl, mediaKind: 'image', assetRole: 'general' },
     })
     useCanvasStore.getState().setNotice('已保存到资产库')
-  }, [])
+  }, [workspace])
 
   const createNodeNear = useCallback((sourceId: string, side: NodeSide, kind: CreatableKind) => {
     const store = useCanvasStore.getState()
-    const id = store.insertNodeNear(sourceId, side, createNodeOfKind(kind, { x: 0, y: 0 }, defaults))
+    if (store.workspace?.readOnly || (store.workspace && kind === 'agent')) return
+    const node = createNodeOfKind(kind, { x: 0, y: 0 }, defaults)
+    if (node.type === 'generation') node.data = canvasModelDefaults(node.data, models.find(model => model.id === defaultModelFor(node.data.kind, state.sessionSettings, filterModelsByCapability(models, node.data.kind))))
+    const id = store.insertNodeNear(sourceId, side, node)
     if (id && (kind === 'reference' || kind === 'asset')) store.setAssetPanel(true, id)
-  }, [defaults])
+  }, [defaults, models, state.sessionSettings])
 
   const focusAgent = useCallback(() => {
     const store = useCanvasStore.getState()
+    if (store.workspace) return store.setNotice('团队画布请使用生成节点')
     const existing = store.nodes.find((node) => node.type === 'agent')
     if (existing) {
       store.selectNodeOnly(existing.id)
@@ -235,6 +251,7 @@ function CanvasWorkspace() {
 
   const exportCanvas = useCallback(() => {
     const store = useCanvasStore.getState()
+    if (store.workspace && !store.workspace.canDownload) return store.setNotice('尚未获得下载权限')
     const board = writeBoard(store.nodes, store.edges)
     const payload = { title: store.title, exportedAt: new Date().toISOString(), nodes: board.nodes, connections: board.connections }
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
@@ -248,19 +265,20 @@ function CanvasWorkspace() {
     store.setNotice('画布已导出')
   }, [])
 
-  const handleAssetPick = useCallback((asset: LibraryAssetView) => {
+  const handleReferencePick = useCallback((reference: NodeReference) => {
     const store = useCanvasStore.getState()
+    if (store.workspace?.readOnly) return
     const target = store.assetTargetNodeId ? store.nodes.find((node) => node.id === store.assetTargetNodeId) : undefined
-
-    if (asset.kind === 'text') return store.setNotice('请通过节点上的“选择技能”添加创作指令')
-
-    const reference = referenceOf(asset)
-    if (!reference) return store.setNotice('这个素材没有可用的地址')
 
     if (target?.type === 'generation') {
       if (target.data.kind !== 'image' && target.data.kind !== 'video') return store.setNotice('这个节点类型不使用参考素材')
       if (target.data.references.some((item) => item.id === reference.id)) return
-      if (target.data.references.length >= MAX_REFERENCES) return store.setNotice(`最多添加 ${MAX_REFERENCES} 个参考素材`)
+      const modelId = target.data.model || defaultModelFor(target.data.kind, state.sessionSettings, filterModelsByCapability(models, target.data.kind))
+      const model = models.find(item => item.id === modelId)
+      const refs = canvasReferences(target.id, target.data, store.nodes, store.edges)
+      if (target.data.kind === 'image' && reference.mediaKind !== 'image') return store.setNotice('图片节点只支持图片参考')
+      if (!model) return store.setNotice('请先在节点配置中选择可用模型')
+      if (refs.length >= model.capabilities.maxReferences) return store.setNotice(`当前模型最多支持 ${model.capabilities.maxReferences} 个参考素材`)
       store.updateNodeData(target.id, { references: [...target.data.references, reference] }, { history: true })
       return
     }
@@ -271,9 +289,14 @@ function CanvasWorkspace() {
       return
     }
 
-    const kind = categoryOf(asset) === 'general' ? 'reference' : 'asset'
-    store.insertNodes([createMediaNode(kind, viewportCenter(), reference)], [], { select: true })
-  }, [viewportCenter])
+    store.insertNodes([createMediaNode('reference', viewportCenter(), reference)], [], { select: true })
+  }, [models, state.sessionSettings, viewportCenter])
+  const handleAssetPick = useCallback((asset: LibraryAssetView) => {
+    if (asset.kind === 'text') return useCanvasStore.getState().setNotice('请通过节点上的“选择技能”添加创作指令')
+    const reference = referenceOf(asset)
+    if (reference) handleReferencePick(reference)
+    else useCanvasStore.getState().setNotice('这个素材没有可用地址')
+  }, [handleReferencePick])
 
   const actions = useMemo<CanvasActions>(() => ({
     ...generation,
@@ -287,16 +310,16 @@ function CanvasWorkspace() {
     selectSkills: setSkillNodeId,
     createSkillFromSelection,
     saveSkillFromNode,
-    saveSelectionResults: selectionActions.saveSelectionResults,
-    draftAgentFromSelection: selectionActions.draftAgentFromSelection,
-    exportSelection: selectionActions.exportSelection,
-  }), [generation, agent, createNodeNear, createNodeAt, openDirector, openImageEditor, focusAgent, exportCanvas, createSkillFromSelection, saveSkillFromNode, selectionActions.saveSelectionResults, selectionActions.draftAgentFromSelection, selectionActions.exportSelection])
+    saveSelectionResults: workspace ? () => useCanvasStore.getState().setNotice('团队生成结果已自动保存到当前项目素材') : selectionActions.saveSelectionResults,
+    draftAgentFromSelection: workspace ? focusAgent : selectionActions.draftAgentFromSelection,
+    exportSelection: workspace && !workspace.canDownload ? exportCanvas : selectionActions.exportSelection,
+  }), [generation, agent, createNodeNear, createNodeAt, openDirector, openImageEditor, focusAgent, exportCanvas, createSkillFromSelection, saveSkillFromNode, selectionActions.saveSelectionResults, selectionActions.draftAgentFromSelection, selectionActions.exportSelection, workspace])
 
   return (
     <CanvasActionsProvider value={actions}>
-      <main className="relative h-full min-h-0 w-full overflow-hidden bg-black text-white">
+      <main className="relative h-full min-h-0 w-full overflow-hidden bg-background text-foreground" onKeyDownCapture={event => { if (event.code === 'Space' && !(event.target as HTMLElement).closest('[role="dialog"]') && (event.target as HTMLElement).closest('button,select,input[type="checkbox"],[role="radio"]')) event.preventDefault() }}>
         <CanvasFlow initialViewport={initialViewport} />
-        {imageEditor ? (
+        {imageEditor && !workspace?.readOnly ? (
           <div className="pointer-events-auto absolute inset-y-0 right-0 z-[60] max-w-full shadow-2xl">
             <ImageEditorPanel
               imageSrc={imageEditor.url}
@@ -306,21 +329,29 @@ function CanvasWorkspace() {
               onClose={closeImageEditor}
               onSubmit={handleImageEditSubmit}
               onSaveVersion={handleSaveEditorVersion}
+              modelOptions={models.filter(model => (model.capability === 'image' && model.capabilities.editing) || (model.capability === 'video' && model.capabilities.firstFrame)).map(model => ({ id: model.id, label: model.shortName || model.name, capability: model.capability as 'image' | 'video', note: model.note, creditCost: model.creditCost, ratios: model.capabilities.ratios, resolutions: model.capabilities.resolutions, qualities: model.capabilities.qualities, qualityLabels: model.capabilities.qualityLabels }))}
+              initialModelId={editorNode?.type === 'generation' ? editorNode.data.model : undefined}
+              initialResolution={editorNode?.type === 'generation' ? editorNode.data.resolution : undefined}
+              initialQuality={editorNode?.type === 'generation' ? editorNode.data.quality : undefined}
+              estimateCredits={estimateCredits}
               onVersionSelect={(version) => useCanvasStore.getState().openImageEditor({ ...imageEditor, url: version.imageUrl, title: version.label || imageEditor.title })}
             />
           </div>
         ) : null}
+        {imageEditor && workspace?.readOnly && <Dialog open onOpenChange={open => { if (!open) closeImageEditor() }}><DialogContent className="sm:max-w-[85vw]"><DialogHeader><DialogTitle>{imageEditor.title}</DialogTitle><DialogDescription>图片预览</DialogDescription></DialogHeader><img src={imageEditor.url} alt={imageEditor.title} className="max-h-[75dvh] w-full object-contain" /></DialogContent></Dialog>}
+        {settingsNodeId && !imageEditor && !assetPanelOpen && <GenerationSettings nodeId={settingsNodeId} />}
+        {generation.approval && <Dialog open onOpenChange={open => { if (!open) generation.dismissApproval() }}><DialogContent><DialogHeader><DialogTitle>确认生成费用</DialogTitle><DialogDescription>{workspace ? `使用「${workspace.teamName}」的团队积分，结果保存到当前项目。` : '报价包含当前输出参数及参考素材的费用。'}</DialogDescription></DialogHeader><p className="text-3xl font-semibold tabular-nums">{generation.approval.points.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="ml-2 text-sm font-normal text-muted-foreground">积分</span></p><p className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-3 text-xs leading-5">{generation.approval.submission.input.prompt}</p><DialogFooter><Button variant="outline" onClick={generation.dismissApproval}>返回修改</Button><Button onClick={generation.confirmGeneration}>确认并生成</Button></DialogFooter></DialogContent></Dialog>}
         <CanvasTopBar onExport={exportCanvas} onFocusAgent={focusAgent} />
         {nodeCount === 0 ? <EmptyCanvasGuide onCreate={(kind) => createNodeAt(kind, nodePositionAtCenter(kind, viewportCenter()))} /> : null}
         <CanvasZoomDock />
-        <CanvasSelectionBar />
-        <CanvasContextMenu />
+        {!workspace?.readOnly && <CanvasSelectionBar />}
+        {!workspace?.readOnly && <CanvasContextMenu />}
         {skillNodeId ? <CanvasSkillDialog nodeId={skillNodeId} onClose={() => setSkillNodeId(null)} /> : null}
         {selectionSkill ? <CanvasSelectionSkillDialog key={selectionSkill.id} session={selectionSkill} onClose={closeSelectionSkill} /> : null}
         {selectionActions.dialogs}
         {assetPanelOpen ? (
-          <div className="pointer-events-auto absolute top-16 right-3 z-50 w-[min(360px,calc(100%-1.5rem))]">
-            <CanvasAssetLibrary targetNodeId={assetTargetNodeId} onPick={handleAssetPick} onClose={() => setAssetPanel(false)} />
+          <div className="pointer-events-auto absolute top-36 right-3 z-50 w-[min(360px,calc(100%-1.5rem))] sm:top-20">
+            {workspace ? <TeamCanvasAssets workspace={workspace} onPick={handleReferencePick} onClose={() => setAssetPanel(false)} /> : <CanvasAssetLibrary targetNodeId={assetTargetNodeId} onPick={handleAssetPick} onClose={() => setAssetPanel(false)} />}
           </div>
         ) : null}
         <CanvasNoticeToast />

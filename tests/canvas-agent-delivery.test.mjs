@@ -3,11 +3,13 @@ import { test } from 'node:test'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
+import { canvasPolicyModules } from './canvas-test-modules.mjs'
 
 const require = createRequire(import.meta.url)
 const source = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 const compile = value => ts.transpileModule(value, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
 function sourceModule(path, mocks = {}, globals = {}) {
+  if (path.endsWith('/canvas-persistence.ts')) mocks = { './canvas-workspace': sourceModule('../components/free-canvas/canvas-workspace.ts'), ...mocks }
   const module = { exports: {} }
   new Function('require', 'module', 'exports', ...Object.keys(globals), compile(source(path)))(name => Object.hasOwn(mocks, name) ? mocks[name] : require(name), module, module.exports, ...Object.values(globals))
   return module.exports
@@ -176,14 +178,16 @@ test('real video settings turn suffixed capability labels into numeric seconds s
   const patches = [], node = { id: 'video', type: 'generation', data: { kind: 'video', model: 'video-model', seconds: 5, references: [], skills: [], prompt: 'Synthetic' } }
   const store = { nodes: [node], edges: [], updateNodeData: (_, patch) => { patches.push(patch); Object.assign(node.data, patch) }, openSettings() {}, setAssetPanel() {} }
   const settings = sourceModule('../components/free-canvas/nodes/generation-settings.tsx', {
+    ...canvasPolicyModules(sourceModule),
+    '@/components/studio/ui': {},
     '@/lib/utils': { cn: (...values) => values.filter(Boolean).join(' ') }, '@/lib/studio/studio-models': { filterModelsByCapability: value => value, ratioLabel: value => value },
     '@/lib/studio/store': { useStudio: () => ({ state: { models: [{ id: 'video-model', capabilities: { durations: ['5 秒', '8 秒'], ratios: [], qualities: [], maxReferences: 0 } }] } }) },
-    '../canvas-context': { useCanvasActions: () => ({ estimateNode: () => 1 }) }, '../canvas-store': { useCanvasStore: selector => selector(store) }, './node-kit': { COUNTER_SCALE: '', SETTINGS_POPOVER_WIDTH: 300 },
+    '../canvas-context': { useCanvasActions: () => ({ estimateNode: () => 1 }) }, '../canvas-store': { useCanvasStore: Object.assign(selector => selector(store), { getState: () => store }) },
   })
-  function find(element) { if (!element || typeof element !== 'object') return; if (element.props?.label === '时长') return element; for (const child of [element.props?.children].flat(Infinity)) { const found = find(child); if (found) return found } }
+  function find(element) { if (!element || typeof element !== 'object') return; if (element.props?.['aria-label'] === '视频时长') return element; for (const child of [element.props?.children].flat(Infinity)) { const found = find(child); if (found) return found } }
   const control = find(settings.GenerationSettings({ nodeId: node.id, placement: { side: 'right', offset: { x: 0, y: 0 } } }))
-  assert.deepEqual(control.props.options, [{ value: '5', label: '5 秒' }, { value: '8', label: '8 秒' }])
-  control.props.onChange('8'); assert.deepEqual(patches, [{ seconds: 8 }])
+  assert.equal(control.props.type, 'range'); assert.equal(control.props.max, 1)
+  control.props.onChange({ target: { value: '1' } }); assert.deepEqual(patches, [{ seconds: 8 }])
   const parsed = ts.createSourceFile('generation-api.ts', source('../lib/studio/generation-api.ts'), ts.ScriptTarget.ES2022, true)
   const definitions = parsed.statements.filter(node => ts.isFunctionDeclaration(node) && ['createVideoTask', 'projectTaskContext'].includes(node.name?.text)).map(node => `export ${node.getText(parsed).replace(/^export\s+/, '')}`).join('\n')
   let body; const module = { exports: {} }

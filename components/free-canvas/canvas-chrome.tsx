@@ -25,12 +25,13 @@ const SAVE_LABEL: Record<SaveStatus, string> = {
 export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void; onFocusAgent: () => void }) {
   const router = useRouter()
   const [leaveTo, setLeaveTo] = useState<string | null>(null)
-  const leave = (href: '/studio' | '/canvas') => {
+  const leave = (href: string) => {
     const current = useCanvasStore.getState()
     if (current.revision !== current.savedRevision) setLeaveTo(href)
     else router.push(href)
   }
   const title = useCanvasStore((state) => state.title)
+  const workspace = useCanvasStore(state => state.workspace)
   const projectId = useCanvasStore((state) => state.projectId)
   const saveStatus = useCanvasStore((state) => state.saveStatus)
   const saveError = useCanvasStore((state) => state.saveError)
@@ -45,31 +46,32 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
   return (
     <header className="pointer-events-none absolute inset-x-3 top-3 z-40 flex flex-wrap items-start justify-between gap-2">
       {leaveTo ? <CanvasLeaveDialog onClose={() => setLeaveTo(null)} onSaved={() => { const href = leaveTo; setLeaveTo(null); router.push(href) }} /> : null}
-      <div className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 rounded-2xl border border-white/15 bg-black/85 p-1.5 backdrop-blur-md">
-        <button type="button" onClick={() => leave('/studio')} aria-label="返回工作台" title="返回工作台" className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white">
+      <div className="pointer-events-auto flex min-w-0 max-w-full items-center gap-1 rounded-2xl border border-border bg-card/95 p-1.5 backdrop-blur-md">
+        <button type="button" onClick={() => leave(workspace ? `/teams/${workspace.teamId}/projects/${workspace.projectId}` : '/studio')} aria-label={workspace ? '返回团队项目' : '返回工作台'} title={workspace ? '返回团队项目' : '返回工作台'} className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs text-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
           <ArrowLeft className="size-4" aria-hidden="true" />
-          工作台
+          {workspace ? '团队项目' : '工作台'}
         </button>
-        <button type="button" onClick={() => leave('/canvas')} aria-label="返回画布列表" title="返回画布列表" className="flex size-8 shrink-0 items-center justify-center rounded-xl text-neutral-400 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white"><FolderOpen className="size-4" aria-hidden="true" /></button>
-        <CanvasNameEditor key={projectId} value={title} onCommit={setTitle} label="画布名称" className="w-40 flex-1 sm:w-56" />
-        <SaveStatusLabel status={saveStatus} error={saveError} onExport={onExport} />
+        {!workspace && <button type="button" onClick={() => leave('/canvas')} aria-label="返回画布列表" title="返回画布列表" className="flex size-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><FolderOpen className="size-4" aria-hidden="true" /></button>}
+        {workspace?.readOnly ? <span className="max-w-48 truncate px-2 text-sm font-medium" title={title}>{title}</span> : <CanvasNameEditor key={projectId} value={title} onCommit={setTitle} label="画布名称" className="w-28 flex-1 sm:w-48" />}
+        {workspace && <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">{workspace.readOnly ? '团队 · 审阅' : '团队画布'}</span>}
+        {!workspace?.readOnly && <SaveStatusLabel status={saveStatus} error={saveError} onExport={onExport} />}
       </div>
-      <div className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border border-white/15 bg-black/85 p-1.5 backdrop-blur-md">
-        <CanvasCreateMenu />
-        <ToolbarButton label="撤销" disabled={!canUndo} onClick={() => undo()}>
+      <div className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border border-border bg-card/95 p-1.5 backdrop-blur-md">
+        {!workspace?.readOnly && <CanvasCreateMenu />}
+        <ToolbarButton label="撤销" disabled={!canUndo || workspace?.readOnly} onClick={() => undo()}>
           <Undo2 className="size-4" aria-hidden="true" />
         </ToolbarButton>
-        <ToolbarButton label="重做" disabled={!canRedo} onClick={() => redo()}>
+        <ToolbarButton label="重做" disabled={!canRedo || workspace?.readOnly} onClick={() => redo()}>
           <Redo2 className="size-4" aria-hidden="true" />
         </ToolbarButton>
-        <span aria-hidden="true" className="mx-1 h-5 w-px bg-white/15" />
-        <ToolbarButton label="定位 OAO Agent" onClick={onFocusAgent}>
+        <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+        {!workspace && <ToolbarButton label="定位 OAO Agent" onClick={onFocusAgent}>
           <Bot className="size-4" aria-hidden="true" />
-        </ToolbarButton>
+        </ToolbarButton>}
         <ToolbarButton label="资产库" pressed={assetPanelOpen} onClick={() => (assetPanelOpen ? setAssetPanel(false) : setAssetPanel(true))}>
           <FolderOpen className="size-4" aria-hidden="true" />
         </ToolbarButton>
-        <ToolbarButton label="导出画布" onClick={onExport}>
+        <ToolbarButton label="导出画布" disabled={workspace ? !workspace.canDownload : false} onClick={onExport}>
           <Download className="size-4" aria-hidden="true" />
         </ToolbarButton>
       </div>
@@ -80,7 +82,7 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
 function SaveStatusLabel({ status, error, onExport }: { status: SaveStatus; error: string | null; onExport: () => void }) {
   if (status === 'conflict') {
     return (
-      <button type="button" aria-label="画布在别处更新，导出本地内容以免丢失" title={error ?? '画布已在别处更新，请先导出本地内容，再刷新同步。'} onClick={onExport} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+      <button type="button" aria-label="画布在别处更新，导出本地内容以免丢失" title={error ?? '画布已在别处更新，请先导出本地内容，再刷新同步。'} onClick={onExport} className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
         <CircleAlert className="size-3.5" aria-hidden="true" />
         <span className="hidden sm:inline">导出本地副本</span>
       </button>
@@ -88,14 +90,14 @@ function SaveStatusLabel({ status, error, onExport }: { status: SaveStatus; erro
   }
   if (status === 'error') {
     return (
-      <button type="button" aria-label="保存失败，重试保存" title={error ?? undefined} onClick={() => void flushCanvasSave().catch(() => undefined)} className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+      <button type="button" aria-label="保存失败，重试保存" title={error ?? undefined} onClick={() => void flushCanvasSave().catch(() => undefined)} className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
         <RefreshCw className="size-3.5" aria-hidden="true" />
         <span className="hidden sm:inline">重试保存</span>
       </button>
     )
   }
   return (
-    <span role="status" aria-live="polite" title={SAVE_LABEL[status]} className="flex shrink-0 items-center gap-1.5 px-1.5 text-[11px] text-neutral-400">
+    <span role="status" aria-live="polite" title={SAVE_LABEL[status]} className="flex shrink-0 items-center gap-1.5 px-1.5 text-[11px] text-muted-foreground">
       {status === 'saving' ? <LoaderCircle className="size-3 motion-safe:animate-spin" aria-hidden="true" /> : status === 'dirty' ? <span className="size-1.5 rounded-full bg-amber-300" aria-hidden="true" /> : <Check className="size-3" aria-hidden="true" />}
       <span className="sr-only sm:not-sr-only">{SAVE_LABEL[status]}</span>
     </span>
@@ -112,8 +114,8 @@ function ToolbarButton({ label, onClick, disabled, pressed, children }: { label:
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-xl text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white disabled:opacity-35',
-        pressed && 'bg-white text-black hover:bg-white hover:text-black',
+        'flex size-11 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-35',
+        pressed && 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground',
       )}
     >
       {children}
@@ -122,23 +124,25 @@ function ToolbarButton({ label, onClick, disabled, pressed, children }: { label:
 }
 
 export function EmptyCanvasGuide({ onCreate }: { onCreate: (kind: CreatableKind) => void }) {
+  const workspace = useCanvasStore(state => state.workspace)
   return (
-    <section aria-labelledby="empty-canvas-title" className="pointer-events-auto absolute top-1/2 left-1/2 z-10 w-[min(calc(100%-1.5rem),520px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/15 bg-neutral-950/95 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.7)] sm:p-6">
-      <h2 id="empty-canvas-title" className="text-lg font-semibold text-white">从一个节点开始</h2>
-      <p className="mt-1 text-sm leading-relaxed text-neutral-400">选择节点类型，直接在节点里输入提示词并生成，结果会留在这个节点上。</p>
+    <section aria-labelledby="empty-canvas-title" className="pointer-events-auto absolute top-1/2 left-1/2 z-10 w-[min(calc(100%-1.5rem),520px)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-border bg-card/95 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.7)] sm:p-6">
+      <h2 id="empty-canvas-title" className="text-lg font-semibold text-foreground">从一个节点开始</h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">选择节点类型，直接在节点里输入提示词并生成，结果会留在这个节点上。</p>
       <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {CREATABLE_KINDS.map((kind) => {
+        {CREATABLE_KINDS.filter(kind => !workspace || kind !== 'agent').map((kind) => {
           const meta = NODE_META[kind]
           const Icon = meta.icon
           return (
             <button
               key={kind}
               type="button"
+              disabled={workspace?.readOnly}
               onClick={() => onCreate(kind)}
-              className="flex min-h-16 flex-col items-start justify-between gap-2 rounded-2xl border border-white/12 p-3 text-left transition-colors hover:border-white/50 hover:bg-white/[0.04] focus-visible:outline-2 focus-visible:outline-white"
+              className="flex min-h-16 flex-col items-start justify-between gap-2 rounded-2xl border border-border p-3 text-left transition-colors hover:border-primary/60 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
             >
-              <Icon className="size-4 text-neutral-300" aria-hidden="true" />
-              <span className="text-xs font-medium text-white">{meta.label}</span>
+              <Icon className="size-4 text-foreground" aria-hidden="true" />
+              <span className="text-xs font-medium text-foreground">{meta.label}</span>
             </button>
           )
         })}
@@ -159,7 +163,7 @@ export function CanvasNoticeToast() {
 
   if (!notice) return null
   return (
-    <p role="status" className="pointer-events-none absolute top-20 left-1/2 z-50 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full border border-white/20 bg-black/90 px-4 py-2 text-xs text-white shadow-xl">
+    <p role="status" className="pointer-events-none absolute top-20 left-1/2 z-50 max-w-[calc(100%-2rem)] -translate-x-1/2 truncate rounded-full border border-border bg-card/95 px-4 py-2 text-xs text-foreground shadow-xl">
       {notice}
     </p>
   )

@@ -186,7 +186,7 @@ function requestIdHeaders(clientRequestId?: string, attemptNo?: number) {
   return headers
 }
 
-function projectTaskContext(input: { projectId?: string; episodeId?: string; shotId?: string; conversationId?: string; parentTaskId?: string; surface?: string; clientRequestId?: string; attemptNo?: number }) {
+function projectTaskContext(input: { projectId?: string; episodeId?: string; shotId?: string; conversationId?: string; parentTaskId?: string; surface?: string; clientRequestId?: string; attemptNo?: number; approvedCost?: number }) {
   return Object.fromEntries(Object.entries({
     projectId: input.projectId,
     episodeId: input.episodeId,
@@ -196,6 +196,7 @@ function projectTaskContext(input: { projectId?: string; episodeId?: string; sho
     surface: input.surface,
     clientRequestId: input.clientRequestId,
     attemptNo: input.attemptNo,
+    approvedCost: input.approvedCost,
   }).filter(([, value]) => value !== undefined && value !== ''))
 }
 

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { canvasPolicyModules, canvasTestModel } from './canvas-test-modules.mjs'
 
 const require = createRequire(import.meta.url)
 function sourceModule(path, mocks = {}) {
@@ -168,14 +169,16 @@ function generationHarness(library) {
   const useCanvasStore = selector => selector(state); useCanvasStore.getState = () => state
   const generation = { tasks: [], createText: async input => { calls.push(input); return { id: 'task' } } }
   const hook = sourceModule('../components/free-canvas/use-generation-actions.ts', {
-    react: { useCallback: fn => fn, useMemo: fn => fn(), useRef: value => ({ current: value }), useEffect: () => {} },
+    ...canvasPolicyModules(sourceModule),
+    '@/lib/studio/api': {},
+    react: { useCallback: fn => fn, useMemo: fn => fn(), useState: value => [value, () => {}], useRef: value => ({ current: value }), useEffect: () => {} },
     '@/lib/studio/account-api': { listLibraryAssets: library },
     '@/lib/studio/canvas-skills': helper,
     '@/lib/studio/generation-api': { newClientRequestId: () => 'synthetic-request' },
     '@/lib/studio/generation-store': { useGeneration: () => generation },
     '@/lib/studio/reference-assets': { isSubmittableReferenceUrl: () => true },
     '@/lib/studio/studio-models': { filterModelsByCapability: models => models },
-    '@/lib/studio/store': { useStudio: () => ({ state: { models: [], user: { id: 'synthetic-account' } }, estimateCredits: () => 0 }) },
+    '@/lib/studio/store': { useStudio: () => ({ state: { models: [canvasTestModel('text', 'text')], user: { id: 'synthetic-account' } }, estimateCredits: () => 0 }) },
     './canvas-persistence': { flushCanvasSave: async () => {} },
     './canvas-store': { useCanvasStore },
   })
@@ -277,6 +280,7 @@ function saveHarness(request) {
   const state = { projectId: 'canvas', hydrated: true, revision: 2, savedRevision: 1, saveStatus: 'dirty', updatedAt: '2026-01-01T00:00:00.000Z', projectMeta: {}, title: 'Board', nodes: [], edges: [], viewport: {}, setSaveStatus(status, error) { state.saveStatus = status; state.saveError = error }, markSaved(updatedAt, revision) { state.updatedAt = updatedAt; state.savedRevision = revision; state.saveStatus = state.revision === revision ? 'saved' : 'dirty' } }
   class ApiError extends Error {}
   const persistence = sourceModule('../components/free-canvas/canvas-persistence.ts', {
+    './canvas-workspace': sourceModule('../components/free-canvas/canvas-workspace.ts'),
     '@/lib/studio/api': { request, StudioApiError: ApiError },
     './board-codec': { writeBoard: () => ({ nodes: [], connections: [] }), writeViewport: value => value },
     './canvas-store': { useCanvasStore: { getState: () => state } },

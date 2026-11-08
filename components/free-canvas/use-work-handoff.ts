@@ -12,7 +12,7 @@ export function useWorkHandoff(viewportCenter: () => XYPosition) {
   const { state } = useStudio()
   const accountId = state.backendStatus === 'connected' ? state.user.id : ''
   useEffect(() => {
-    if (!accountId) return
+    if (!accountId || useCanvasStore.getState().workspace) return
     const entries = takeWorkHandoff(window.sessionStorage, accountId)
     if (!entries.length) return
     const origin = viewportCenter()

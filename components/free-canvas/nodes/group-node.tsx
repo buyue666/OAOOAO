@@ -11,12 +11,12 @@ export const GroupNode = memo(function GroupNode({ id, data, selected, width, he
     <div
       data-node-kind="group"
       data-selected={selected}
-      className={cn('rounded-3xl border border-dashed bg-white/[0.02] transition-colors', selected ? 'border-white/70' : 'border-white/20')}
+      className={cn('rounded-3xl border border-dashed bg-muted/30 transition-colors', selected ? 'border-primary/70' : 'border-border')}
       style={{ width, height }}
     >
       <div className="flex items-center gap-2 px-4 py-3">
-        <span className="shrink-0 text-[11px] tracking-[0.14em] text-neutral-500 uppercase">分组</span>
-        <TitleEditor nodeId={id} title={data.title} className="text-xs text-neutral-300" />
+        <span className="shrink-0 text-[11px] tracking-[0.14em] text-muted-foreground uppercase">分组</span>
+        <TitleEditor nodeId={id} title={data.title} className="text-xs text-foreground" />
       </div>
     </div>
   )

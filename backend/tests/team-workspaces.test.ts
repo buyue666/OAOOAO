@@ -61,6 +61,77 @@ test('team and project APIs enforce current membership, project ACLs and optimis
   assert.equal(assignments.rowCount, 0);
 });
 
+test('team canvas shares project ACLs and versions, preserving settings and rejecting simultaneous stale edits', async t => {
+  const f = await fixture(t), path = f.root + '/canvas';
+  for (const actor of ['outsider', 'admin']) assert.equal((await f.req(actor, 'GET', path)).statusCode, 404);
+  const initial = (await f.req('creator', 'GET', path)).json().data;
+  assert.equal(initial.workspace.readOnly, false); assert.equal(initial.workspace.teamId, f.team.id);
+  assert.equal((await f.req('reviewer', 'GET', path)).json().data.workspace.readOnly, true);
+  const project = { ...initial.project, nodes: [{ id: 'draft', type: 'text', position: { x: 20, y: 60 }, data: { kind: 'text', prompt: 'Synthetic project draft' } }], connections: [] };
+  const body = { expectedUpdatedAt: initial.project.updatedAt, expectedVersion: initial.project.version, project };
+  assert.equal((await f.req('reviewer', 'PATCH', path, body)).statusCode, 403);
+  const writes = await Promise.all([f.req('creator', 'PATCH', path, body), f.req('owner', 'PATCH', path, body)]);
+  assert.deepEqual(writes.map(response => response.statusCode).sort(), [200, 409]);
+  const loaded = (await f.req('owner', 'GET', path)).json().data.project;
+  assert.equal(loaded.nodes[0].data.prompt, 'Synthetic project draft'); assert.notEqual(loaded.updatedAt, initial.project.updatedAt);
+  const metadata = (await f.req('owner', 'GET', f.root)).json().project;
+  assert.equal(metadata.visibility, 'restricted'); assert.deepEqual(new Set(metadata.memberIds), new Set(f.project.memberIds)); assert.equal(metadata.version, 2);
+  assert.equal((await f.req('creator', 'PATCH', f.root, { version: 1, title: 'Stale settings' })).statusCode, 409);
+  assert.equal((await f.req('creator', 'PATCH', path, { project })).statusCode, 428);
+});
+
+test('team canvas pins project media and rejects foreign assets, personal URLs and foreign task IDs', async t => {
+  const f = await fixture(t), path = f.root + '/canvas';
+  const stored = await f.req('creator', 'POST', f.root + '/assets', { title: 'Current project image', dataUrl: `data:image/png;base64,${pixel.toString('base64')}` });
+  assert.equal(stored.statusCode, 200, stored.body); const asset = stored.json().asset;
+  const second = (await f.req('owner', 'POST', `/api/teams/${f.team.id}/projects`, { title: 'Different project', visibility: 'team' })).json().project;
+  const elsewhere = (await f.req('owner', 'POST', `/api/teams/${f.team.id}/projects/${second.id}/assets`, { title: 'Other image', dataUrl: `data:image/png;base64,${pixel.toString('base64')}` })).json().asset;
+  const initial = (await f.req('owner', 'GET', path)).json().data.project;
+  const save = (data: any, metadata?: any) => f.req('creator', 'PATCH', path, { expectedUpdatedAt: initial.updatedAt, expectedVersion: initial.version, project: { ...initial, nodes: [{ id: 'image', type: 'image', position: { x: 0, y: 0 }, data, metadata }], connections: [] } });
+  for (const url of [elsewhere.url, '/api/reference-assets/' + randomUUID(), 'https://external.invalid/image.png', 'data:image/png;base64,AA==']) assert.equal((await save({ references: [{ url }] })).statusCode, 403);
+  assert.equal((await save({}, { remoteUrl: elsewhere.url })).statusCode, 403);
+  assert.equal((await save({ task: { id: randomUUID() } })).statusCode, 403);
+  const good = await save({ references: [{ url: asset.url, mediaKind: 'image', role: 'first_frame' }] });
+  assert.equal(good.statusCode, 200, good.body);
+  const search = await f.req('reviewer', 'GET', `/api/teams/${f.team.id}/assets?projectId=${f.project.id}&kind=media&keyword=Current`);
+  assert.equal(search.statusCode, 200, search.body); assert.equal(search.json().total, 1); assert.equal(search.json().assets[0].id, asset.id);
+  assert.equal((await f.req('reviewer', 'GET', `/api/teams/${f.team.id}/assets?projectId=${f.project.id}&keyword=Other`)).json().total, 0);
+  assert.equal((await f.req('owner', 'DELETE', `/api/teams/${f.team.id}/assets/${asset.id}`)).statusCode, 409, 'Media used by the canvas must not be removed');
+  await f.req('owner', 'DELETE', `/api/teams/${f.team.id}/members/${f.actors.creator.id}`);
+  assert.equal((await f.req('creator', 'GET', path)).statusCode, 404);
+});
+
+test('shared canvas retries by another authorized member return one team task and one debit', async t => {
+  const f = await fixture(t); await f.publish(); await f.subscribe();
+  const headers = { 'idempotency-key': 'synthetic-shared-canvas-request' };
+  const a = await f.req('creator', 'POST', f.root + '/generations', f.raw(), headers);
+  const b = await f.req('owner', 'POST', f.root + '/generations', f.raw(), headers);
+  assert.equal(a.statusCode, 202, a.body); assert.equal(b.statusCode, 202, b.body); assert.equal(a.json().task.id, b.json().task.id);
+  assert.equal((await f.req('owner', 'GET', `/api/teams/${f.team.id}/usage`)).json().balance, 199);
+  const id = a.json().task.id;
+  assert.equal((await f.req('reviewer', 'GET', `${f.root}/generations/${id}`)).statusCode, 200);
+  const second = (await f.req('owner', 'POST', `/api/teams/${f.team.id}/projects`, { title: 'Second', visibility: 'team' })).json().project;
+  assert.equal((await f.req('owner', 'GET', `/api/teams/${f.team.id}/projects/${second.id}/generations/${id}`)).statusCode, 404);
+  assert.equal((await f.req('owner', 'POST', `/api/teams/${f.team.id}/projects/${second.id}/generations`, f.raw(), headers)).statusCode, 409);
+  const canvas = (await f.req('owner', 'GET', f.root + '/canvas')).json().data.project;
+  const saved = await f.req('creator', 'PATCH', f.root + '/canvas', { expectedUpdatedAt: canvas.updatedAt, expectedVersion: canvas.version, project: { ...canvas, nodes: [{ id: 'result', type: 'image', position: { x: 0, y: 0 }, data: { task: { id, phase: 'queued' } } }], connections: [] } });
+  assert.equal(saved.statusCode, 200, saved.body);
+  assert.equal((await f.db.query('SELECT count(*) n FROM oaooao_wallet_operations WHERE user_id=$1', [f.actors.creator.id])).rows[0].n, '0');
+});
+
+test('team text generation persists its actual result in project storage after the author leaves', async t => {
+  const f = await fixture(t); await f.publish(); await f.subscribe();
+  const task = await f.req('creator', 'POST', f.root + '/generations', f.raw('text'), { 'idempotency-key': 'synthetic-canvas-text' });
+  assert.equal(task.statusCode, 202, task.body);
+  await f.req('owner', 'DELETE', `/api/teams/${f.team.id}/members/${f.actors.creator.id}`);
+  await processNextJob(f.ctx, (ctx, job, poll) => invokeProvider(ctx, job, poll, (async () => new Response(JSON.stringify({ choices: [{ message: { content: 'Synthetic saved team text' } }] }))) as any));
+  const row = (await f.db.query('SELECT * FROM oaooao_team_assets WHERE team_id=$1', [f.team.id])).rows[0];
+  assert.equal(row.project_id, f.project.id); assert.equal(row.kind, 'text'); assert.equal(row.text_content, 'Synthetic saved team text');
+  const result = (await f.req('owner', 'GET', `${f.root}/generations/${task.json().task.id}`)).json().task;
+  assert.equal(result.status, 'success'); assert.equal(result.result.teamAssetId, row.id);
+  assert.equal((await f.db.query('SELECT count(*) n FROM oaooao_library_assets')).rows[0].n, '0');
+});
+
 test('team administration separates commerce and billing permissions and keeps manual grants idempotent', async t => {
   const f = await fixture(t);
   assert.equal((await f.req('billing', 'GET', '/api/admin/team-plans')).statusCode, 403);

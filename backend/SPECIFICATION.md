@@ -35,6 +35,28 @@ implementers receive only requirements and client contracts.
 
 ## Team workspace contract
 
+- `/api/teams/:teamId/projects/:projectId/canvas` reads and writes the project's
+  `document` as a canvas. Reads return `{data:{project,workspace}}` with current
+  reviewer/download permissions and the team's allowed model IDs. PATCH accepts
+  `{expectedVersion,expectedUpdatedAt,project:{title,nodes,connections,viewport}}`, locks the team,
+  validates project access and every media/task reference, and returns an
+  acknowledged timestamp. It increments the same optimistic project version used
+  by settings; stale saves return 409 without overwriting either editor's data.
+  Documents are limited to 3 MiB, 2,000 nodes and 6,000 edges. Media must already be
+  stored in the same project; personal, external and inline URLs are rejected.
+  Reviewer viewport/selection changes remain local. This is shared persistent
+  project content, with conflict detection, rather than realtime collaboration.
+- Team canvas generation uses the existing team quote/create/cancel APIs and
+  scoped GET `/generations/:id`. A stable team-wide request ID can be reconciled
+  by another authorized project member without creating a second debit; a changed
+  project or payload still conflicts. The canvas persists the immutable request
+  and approved cost before creating any paid task. Media and generated text are
+  stored in the original project, using team capacity even after the author leaves.
+  Personal Agent runs and personal skills are unavailable in team canvas.
+- Team asset lists accept `keyword` and `kind=text|image|video|audio|media` in
+  addition to project and pagination filters. `media` excludes text before
+  pagination and counting; every filter retains current project ACL enforcement.
+
 - Additive migration `016-team-workspaces.sql` leaves historical personal rows in
   the personal scope. Teams have independent membership, project ACLs, storage,
   credit batches, budgets and audit events; site-admin roles never grant ordinary

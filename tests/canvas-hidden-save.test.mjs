@@ -6,32 +6,55 @@ import ts from 'typescript'
 
 const source = readFileSync(new URL('../components/free-canvas/canvas-persistence.ts', import.meta.url), 'utf8')
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+const workspaceModule = { exports: {} }
+new Function('exports', ts.transpileModule(readFileSync(new URL('../components/free-canvas/canvas-workspace.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(workspaceModule.exports)
 const tick = () => new Promise(resolve => setImmediate(resolve))
 const initialVersion = '2026-10-14T00:00:00.000Z'
 const nextVersion = '2026-10-14T00:00:01.000Z'
 const finalVersion = '2026-10-14T00:00:02.000Z'
-const ack = updatedAt => ({ data: { ack: { updatedAt } } })
+const ack = (updatedAt, version) => ({ data: { ack: { updatedAt, version } } })
 
 function fixture() {
   const listeners = new Set(), timers = new Map(), calls = []
   let timerId = 0
   let state
   const update = patch => { const previous = state; state = { ...state, ...patch }; for (const callback of listeners) callback(state, previous) }
-  const fresh = (id, version = initialVersion) => ({ projectId: id, projectMeta: {}, title: id, updatedAt: version, hydrated: true, revision: 1, savedRevision: 0, saveStatus: 'dirty', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 },
+  const fresh = (id, version = initialVersion) => ({ projectId: id, projectVersion: 1, projectMeta: {}, title: id, updatedAt: version, hydrated: true, revision: 1, savedRevision: 0, saveStatus: 'dirty', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 },
     setSaveStatus: (saveStatus, saveError = null) => update({ saveStatus, saveError }),
-    markSaved: (updatedAt, savedRevision) => update({ updatedAt, savedRevision, saveStatus: state.revision === savedRevision ? 'saved' : 'dirty' }),
+    markSaved: (updatedAt, savedRevision, projectVersion) => update({ updatedAt, savedRevision, projectVersion: projectVersion ?? state.projectVersion, saveStatus: state.revision === savedRevision ? 'saved' : 'dirty' }),
   })
   state = fresh('a')
   class ApiError extends Error {}
   const module = { exports: {} }
   const mocks = {
+    './canvas-workspace': workspaceModule.exports,
     '@/lib/studio/api': { StudioApiError: ApiError, request: (url, input) => new Promise((resolve, reject) => { calls.push({ url, ...input, body: JSON.parse(input.body), resolve, reject }) }) },
     './board-codec': { writeBoard: (nodes, connections) => ({ nodes, connections }), writeViewport: value => value },
     './canvas-store': { useCanvasStore: { getState: () => state, subscribe: callback => { listeners.add(callback); return () => listeners.delete(callback) } } },
   }
   vm.runInNewContext(`(function(require,module,exports){${code}\n})`, { Error, setTimeout: callback => { timers.set(++timerId, callback); return timerId }, clearTimeout: id => timers.delete(id) })(name => mocks[name], module, module.exports)
-  return { api: module.exports, calls, timers, state: () => state, edit: () => update({ revision: state.revision + 1, saveStatus: 'dirty' }), hydrate: (id, version) => { state = fresh(id, version) }, conflict: () => Object.assign(new ApiError('Synthetic conflict'), { status: 409 }) }
+  return { api: module.exports, calls, timers, state: () => state, workspace: value => update({ workspace: value }), edit: () => update({ revision: state.revision + 1, saveStatus: 'dirty' }), hydrate: (id, version) => { state = fresh(id, version) }, conflict: () => Object.assign(new ApiError('Synthetic conflict'), { status: 409 }) }
 }
+
+test('team autosaves use acknowledged project versions while keeping the editor session identity stable', async () => {
+  const f = fixture(), meta = f.state().projectMeta
+  f.workspace({ teamId: 'team', projectId: 'a', readOnly: false })
+  const first = f.api.flushCanvasSave()
+  assert.equal(f.calls[0].url, '/api/teams/team/projects/a/canvas'); assert.equal(f.calls[0].body.expectedVersion, 1)
+  f.calls[0].resolve(ack(nextVersion, 2)); await first
+  assert.equal(f.state().projectVersion, 2); assert.equal(f.state().projectMeta, meta)
+  f.edit(); const second = f.api.flushCanvasSave()
+  assert.equal(f.calls[1].body.expectedVersion, 2); f.calls[1].resolve(ack(finalVersion, 3)); await second
+  assert.equal(f.state().projectVersion, 3)
+})
+
+test('team saves require a version acknowledgement and reviewer viewport changes never write a project', async () => {
+  const f = fixture(); f.workspace({ teamId: 'team', projectId: 'a', readOnly: false })
+  const save = f.api.flushCanvasSave(); f.calls[0].resolve(ack(nextVersion)); await assert.rejects(save, /团队项目版本/)
+  assert.equal(f.state().savedRevision, 0); assert.equal(f.state().projectVersion, 1)
+  f.workspace({ teamId: 'team', projectId: 'a', readOnly: true }); await f.api.flushCanvasSave()
+  assert.equal(f.calls.length, 1)
+})
 
 test('hidden save clears debounce and normal flush waits for its CAS acknowledgement', async () => {
   const f = fixture(); f.api.startCanvasAutosave(); f.edit()

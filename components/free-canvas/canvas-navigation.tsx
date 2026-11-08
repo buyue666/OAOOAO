@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { useCanvasStore } from './canvas-store'
 
 export const CANVAS_MIN_ZOOM = 0.2
-export const CANVAS_MAX_ZOOM = 2
+export const CANVAS_MAX_ZOOM = 5
 
 function motionDuration() { return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180 }
 
@@ -15,6 +15,7 @@ export function CanvasNavigationDock() {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow()
   const zoom = useStore((state) => state.transform[2])
   const nodeCount = useCanvasStore((state) => state.nodes.length)
+  const readOnly = useCanvasStore(state => state.workspace?.readOnly ?? false)
   const hasSelection = useCanvasStore((state) => state.nodes.some(node => node.selected))
   const miniMapOpen = useCanvasStore((state) => state.miniMapOpen)
   const setMiniMapOpen = useCanvasStore((state) => state.setMiniMapOpen)
@@ -49,7 +50,7 @@ export function CanvasNavigationDock() {
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const target = event.target
-      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || (target instanceof HTMLElement && (target.isContentEditable || target.closest('input,textarea,select,dialog[open],[role="dialog"],[data-canvas-name-editor]')))) return
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || (target instanceof HTMLElement && (target.isContentEditable || target.closest('input,textarea,select,button,a,[role="menu"],dialog[open],[role="dialog"],[data-canvas-name-editor]')))) return
       if (event.altKey && event.shiftKey && event.code === 'KeyF') { event.preventDefault(); arrange(); return }
       if (event.altKey) return
       if (event.code === 'Digit1' && event.shiftKey) { event.preventDefault(); fitAll() }
@@ -84,28 +85,28 @@ export function CanvasNavigationDock() {
   }, [zoomMenuOpen, viewMenuOpen])
 
   return <>
-    <div role="toolbar" aria-label="画布导航" className="pointer-events-auto absolute bottom-3 left-3 z-40 flex max-w-[calc(100%-1.5rem)] items-center rounded-2xl border border-white/15 bg-neutral-950/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,.3)] backdrop-blur-md sm:gap-0.5">
+    <div role="toolbar" aria-label="画布导航" className="pointer-events-auto absolute bottom-3 left-3 z-40 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center rounded-2xl border border-border bg-card/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,.3)] backdrop-blur-md sm:flex-nowrap sm:gap-0.5">
       <DockButton label="缩小（−）" disabled={zoom <= CANVAS_MIN_ZOOM + .001} onClick={() => void zoomOut({ duration: motionDuration() })}><Minus className="size-4" /></DockButton>
       <div ref={menuRef} className="relative">
-        <button ref={zoomTrigger} type="button" aria-label={`缩放比例 ${Math.round(zoom * 100)}%，选择缩放比例`} aria-expanded={zoomMenuOpen} aria-controls="canvas-zoom-options" onClick={() => { setZoomMenuOpen(open => !open); setViewMenuOpen(false) }} className="h-7 min-w-10 rounded-lg px-1 text-center text-xs tabular-nums text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white sm:h-8 sm:min-w-12">{Math.round(zoom * 100)}%</button>
-        {zoomMenuOpen && <div id="canvas-zoom-options" className="absolute bottom-11 left-0 min-w-36 rounded-xl border border-white/15 bg-neutral-900 p-1.5 shadow-xl" aria-label="缩放比例选项">
-          {[25, 50, 75, 100, 150, 200].map(percent => <button key={percent} type="button" aria-pressed={Math.round(zoom * 100) === percent} onClick={() => { void zoomTo(percent / 100, { duration: motionDuration() }); setZoomMenuOpen(false); zoomTrigger.current?.focus() }} className="flex h-8 w-full items-center justify-between rounded-lg px-3 text-left text-xs text-neutral-200 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white"><span>{percent}%</span>{percent === 100 && <span className="text-neutral-500">原始尺寸</span>}</button>)}
+        <button ref={zoomTrigger} type="button" aria-label={`缩放比例 ${Math.round(zoom * 100)}%，选择缩放比例`} aria-expanded={zoomMenuOpen} aria-controls="canvas-zoom-options" onClick={() => { setZoomMenuOpen(open => !open); setViewMenuOpen(false) }} className="h-7 min-w-10 rounded-lg px-1 text-center text-xs tabular-nums text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:h-11 sm:min-w-12">{Math.round(zoom * 100)}%</button>
+        {zoomMenuOpen && <div id="canvas-zoom-options" className="absolute bottom-11 left-0 min-w-36 rounded-xl border border-border bg-popover p-1.5 shadow-xl" aria-label="缩放比例选项">
+          {[25, 50, 75, 100, 150, 200, 300, 500].map(percent => <button key={percent} type="button" aria-pressed={Math.round(zoom * 100) === percent} onClick={() => { void zoomTo(percent / 100, { duration: motionDuration() }); setZoomMenuOpen(false); zoomTrigger.current?.focus() }} className="flex h-11 w-full items-center justify-between rounded-lg px-3 text-left text-xs text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><span>{percent}%</span>{percent === 100 && <span className="text-muted-foreground">原始尺寸</span>}</button>)}
         </div>}
       </div>
       <DockButton label="放大（+）" disabled={zoom >= CANVAS_MAX_ZOOM - .001} onClick={() => void zoomIn({ duration: motionDuration() })}><Plus className="size-4" /></DockButton>
-      <span className="mx-0.5 h-4 w-px bg-white/15 sm:mx-1" aria-hidden="true" />
+      <span className="mx-0.5 h-4 w-px bg-muted sm:mx-1" aria-hidden="true" />
       <DockButton label="适应整个画布（Shift + 1）" disabled={!nodeCount} onClick={fitAll}><Maximize2 className="size-4" /></DockButton>
       <DockButton label="定位选中节点（Shift + 2）" disabled={!hasSelection} onClick={fitSelected}><Focus className="size-4" /></DockButton>
-      <DockButton label="整理画布，可撤销（Alt + Shift + F）" disabled={nodeCount < 2} onClick={arrange}><LayoutGrid className="size-4" /></DockButton>
-      <span className="mx-0.5 h-4 w-px bg-white/15 sm:mx-1" aria-hidden="true" />
+      <DockButton label="整理画布，可撤销（Alt + Shift + F）" disabled={readOnly || nodeCount < 2} onClick={arrange}><LayoutGrid className="size-4" /></DockButton>
+      <span className="mx-0.5 h-4 w-px bg-muted sm:mx-1" aria-hidden="true" />
       <DockButton label="小地图：拖动定位、滚轮缩放（M）" pressed={miniMapOpen} onClick={() => setMiniMapOpen(!miniMapOpen)}><Map className="size-4" /></DockButton>
       <div ref={viewMenuRef} className="relative">
-        <button ref={viewTrigger} type="button" aria-label="画布视图设置" title="画布视图设置" aria-expanded={viewMenuOpen} aria-controls="canvas-view-options" onClick={() => { setViewMenuOpen(open => !open); setZoomMenuOpen(false) }} className="flex size-7 items-center justify-center rounded-lg text-neutral-300 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white sm:size-8"><SlidersHorizontal className="size-4" aria-hidden="true" /></button>
-        {viewMenuOpen && <div id="canvas-view-options" className="absolute right-0 bottom-11 w-52 rounded-xl border border-white/15 bg-neutral-900 p-3 text-xs text-neutral-200 shadow-xl">
-          <p className="mb-3 text-[11px] text-neutral-500">当前画布视图</p>
+        <button ref={viewTrigger} type="button" aria-label="画布视图设置" title="画布视图设置" aria-expanded={viewMenuOpen} aria-controls="canvas-view-options" onClick={() => { setViewMenuOpen(open => !open); setZoomMenuOpen(false) }} className="flex size-7 items-center justify-center rounded-lg text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:size-11"><SlidersHorizontal className="size-4" aria-hidden="true" /></button>
+        {viewMenuOpen && <div id="canvas-view-options" className="absolute right-0 bottom-11 w-52 rounded-xl border border-border bg-popover p-3 text-xs text-foreground shadow-xl">
+          <p className="mb-3 text-[11px] text-muted-foreground">当前画布视图</p>
           <label className="flex cursor-pointer items-center justify-between gap-3 py-2"><span>显示节点连线</span><input type="checkbox" checked={showEdges} onChange={event => setShowEdges(event.target.checked)} className="size-3.5 accent-white" /></label>
           <label className="flex cursor-pointer items-center justify-between gap-3 py-2"><span>拖动时吸附网格</span><input type="checkbox" checked={snapToGrid} onChange={event => setSnapToGrid(event.target.checked)} className="size-3.5 accent-white" /></label>
-          <p className="mt-2 text-[11px] leading-5 text-neutral-500">隐藏连线不影响节点间的输入引用。吸附间距为 24 px。</p>
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">隐藏连线不影响节点间的输入引用。吸附间距为 24 px。</p>
         </div>}
       </div>
       <DockButton label="快捷键帮助（?）" onClick={() => setHelpOpen(true)}><Keyboard className="size-4" /></DockButton>
@@ -115,7 +116,7 @@ export function CanvasNavigationDock() {
 }
 
 function DockButton({ label, children, onClick, disabled, pressed }: { label: string; children: ReactNode; onClick: () => void; disabled?: boolean; pressed?: boolean }) {
-  return <button type="button" aria-label={label} title={label} disabled={disabled} aria-pressed={pressed} onClick={onClick} className={cn('flex size-7 shrink-0 items-center justify-center rounded-lg text-neutral-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-30 sm:size-8', pressed && 'bg-white/15 text-white')}><span aria-hidden="true">{children}</span></button>
+  return <button type="button" aria-label={label} title={label} disabled={disabled} aria-pressed={pressed} onClick={onClick} className={cn('flex size-11 shrink-0 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-30 sm:size-11', pressed && 'bg-muted text-foreground')}><span aria-hidden="true">{children}</span></button>
 }
 
 const shortcuts = [
@@ -133,10 +134,10 @@ function CanvasShortcutsDialog({ onClose }: { onClose: () => void }) {
     dialog.current?.showModal()
     return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus() }
   }, [])
-  return <dialog ref={dialog} onCancel={onClose} aria-labelledby="canvas-shortcuts-title" className="pointer-events-auto fixed inset-0 m-auto max-h-[85dvh] w-[min(500px,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-white/15 bg-neutral-950 p-5 text-white shadow-2xl backdrop:bg-black/65">
+  return <dialog ref={dialog} onCancel={onClose} aria-labelledby="canvas-shortcuts-title" className="pointer-events-auto fixed inset-0 m-auto max-h-[85dvh] w-[min(500px,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-border bg-card p-5 text-foreground shadow-2xl backdrop:bg-background/65">
     <div className="mb-4 flex items-center justify-between gap-3"><h2 id="canvas-shortcuts-title" className="flex items-center gap-2 text-base font-semibold"><Keyboard className="size-4" aria-hidden="true" />画布快捷键</h2><DockButton label="关闭快捷键帮助" onClick={onClose}><X className="size-4" /></DockButton></div>
-    <dl className="space-y-3">{shortcuts.map(([label, keys]) => <div key={label} className="flex flex-wrap items-center justify-between gap-2 text-xs"><dt className="text-neutral-300">{label}</dt><dd><kbd className="rounded-md bg-white/[0.07] px-2 py-1 font-sans text-[11px] text-neutral-400">{keys}</kbd></dd></div>)}</dl>
-    <p className="mt-5 border-t border-white/10 pt-3 text-[11px] leading-5 text-neutral-500">编辑名称或提示词时，快捷键优先用于文字编辑。整理画布只调整位置，保留分组、连线与所有内容，可以撤销。</p>
-    <p className="mt-2 text-[11px] leading-5 text-neutral-500">画布交互组件由 <a href="https://reactflow.dev" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-white">React Flow</a> 提供。</p>
+    <dl className="space-y-3">{shortcuts.map(([label, keys]) => <div key={label} className="flex flex-wrap items-center justify-between gap-2 text-xs"><dt className="text-foreground">{label}</dt><dd><kbd className="rounded-md bg-muted px-2 py-1 font-sans text-[11px] text-muted-foreground">{keys}</kbd></dd></div>)}</dl>
+    <p className="mt-5 border-t border-border pt-3 text-[11px] leading-5 text-muted-foreground">编辑名称或提示词时，快捷键优先用于文字编辑。整理画布只调整位置，保留分组、连线与所有内容，可以撤销。</p>
+    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">画布交互组件由 <a href="https://reactflow.dev" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">React Flow</a> 提供。</p>
   </dialog>
 }

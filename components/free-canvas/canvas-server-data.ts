@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { notFound, redirect } from 'next/navigation'
 import type { CanvasBackendProject, CanvasSummary } from '@/lib/studio/api'
 import { isStudioPreview } from '@/lib/studio/preview-mode'
+import { teamCanvasRoot, type CanvasWorkspace } from './canvas-workspace'
 
 type LoadOutcome<T> =
   | { kind: 'ok'; data: T }
@@ -76,4 +77,12 @@ export async function loadCanvasProject(projectId: string): Promise<{ project: C
   if (outcome.kind === 'not-found') notFound()
   if (outcome.kind !== 'ok') return { project: null, error: outcome.kind === 'error' ? outcome.message : null }
   return { project: outcome.data.project, error: null }
+}
+
+export async function loadTeamCanvas(teamId: string, projectId: string) {
+  const outcome = await loadFromBackend<{ project: CanvasBackendProject; workspace: CanvasWorkspace }>(`${teamCanvasRoot({ teamId, projectId })}/canvas`)
+  if (outcome.kind === 'unauthorized') redirect('/login')
+  if (outcome.kind === 'not-found') notFound()
+  if (outcome.kind !== 'ok') return { project: null, workspace: undefined, error: outcome.kind === 'error' ? outcome.message : '无法打开团队画布' }
+  return { ...outcome.data, error: null }
 }

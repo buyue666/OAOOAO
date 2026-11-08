@@ -54,6 +54,8 @@ export function NodeHandles() {
 }
 
 export function NodeAnchors({ nodeId }: { nodeId: string }) {
+  const readOnly = useCanvasStore(state => state.workspace?.readOnly ?? false)
+  if (readOnly) return null
   return (
     <>
       {SIDES.map((side) => (
@@ -86,7 +88,7 @@ function NodeAnchor({ nodeId, side }: { nodeId: string; side: NodeSide }) {
           openTypeMenu(open ? null : { nodeId, side })
         }}
         className={cn(
-          'absolute flex size-6 items-center justify-center rounded-full border border-white/30 bg-neutral-950 text-white transition-opacity duration-150 hover:bg-white hover:text-black focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
+          'absolute flex size-6 items-center justify-center rounded-full border border-border bg-card text-foreground transition-opacity duration-150 hover:bg-primary hover:text-primary-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
           open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-data-[selected=true]:opacity-100',
         )}
         style={{ left: side === 'right' ? 14 : side === 'left' ? -38 : -12, top: side === 'bottom' ? 14 : side === 'top' ? -38 : -12, transform: COUNTER_SCALE }}
@@ -106,7 +108,7 @@ function NodeTypeMenu({ side, onPick }: { side: NodeSide; onPick: (kind: Creatab
       ref={root}
       role="menu"
       aria-label="选择节点类型"
-      className="nowheel nodrag rounded-2xl border border-white/15 bg-neutral-950 p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.7)]"
+      className="nowheel nodrag rounded-2xl border border-border bg-card p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.7)]"
       style={{ position: 'absolute', width: MENU_WIDTH, transform: COUNTER_SCALE, transformOrigin: MENU_ORIGIN[side], ...MENU_POSITION[side] }}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
@@ -129,9 +131,9 @@ function NodeTypeMenu({ side, onPick }: { side: NodeSide; onPick: (kind: Creatab
             type="button"
             role="menuitem"
             onClick={() => onPick(kind)}
-            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-white transition-colors hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"
+            className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
           >
-            <Icon className="size-4 shrink-0 text-neutral-400" aria-hidden="true" />
+            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             {meta.label}
           </button>
         )
@@ -142,6 +144,8 @@ function NodeTypeMenu({ side, onPick }: { side: NodeSide; onPick: (kind: Creatab
 
 export function TitleEditor({ nodeId, title, className }: { nodeId: string; title: string; className?: string }) {
   const updateNodeData = useCanvasStore((state) => state.updateNodeData)
+  const readOnly = useCanvasStore(state => state.workspace?.readOnly ?? false)
+  if (readOnly) return <span className={cn('min-w-0 flex-1 truncate text-sm font-medium', className)} title={title}>{title}</span>
   return <CanvasNameEditor key={nodeId} value={title} label="节点名称" maxLength={60} compact className={className} onCommit={(next) => updateNodeData(nodeId, { title: next }, { history: true })} />
 }
 

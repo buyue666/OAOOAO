@@ -10,7 +10,6 @@ import { GenerationNode } from './nodes/generation-node'
 import { GroupNode } from './nodes/group-node'
 import { MediaNode } from './nodes/media-node'
 import { DirectorNode } from './nodes/director-node'
-import { settingsPlacementFor } from './nodes/node-kit'
 import type { FreeCanvasNode } from './types'
 import { CANVAS_MAX_ZOOM, CANVAS_MIN_ZOOM } from './canvas-navigation'
 import { DirectorDesk } from './director-desk'
@@ -25,28 +24,28 @@ const nodeTypes = {
 
 const defaultEdgeOptions = {
   type: 'default',
-  style: { stroke: 'rgba(255,255,255,0.72)', strokeWidth: 1.4 },
+  style: { stroke: 'var(--muted-foreground)', strokeWidth: 1.4 },
 }
 
-/** React Flow 的主题变量统一换成黑白层级，不沿用旧画布的青绿色与玻璃面板。 */
+/** Keep the canvas in the same theme as the workbench. */
 const FLOW_THEME = {
-  '--xy-background-color': '#000000',
-  '--xy-node-background-color': '#0a0a0a',
-  '--xy-node-border': '1px solid rgba(255,255,255,0.15)',
-  '--xy-node-color': '#fafafa',
-  '--xy-selection-background-color': 'rgba(255,255,255,0.05)',
-  '--xy-selection-border': '1px dashed rgba(255,255,255,0.45)',
-  '--xy-edge-stroke': 'rgba(255,255,255,0.72)',
-  '--xy-edge-stroke-selected': '#ffffff',
-  '--xy-handle-background-color': '#fafafa',
-  '--xy-controls-button-background-color': '#0a0a0a',
-  '--xy-controls-button-color': '#fafafa',
+  '--xy-background-color': 'var(--background)',
+  '--xy-node-background-color': 'var(--card)',
+  '--xy-node-border': '1px solid var(--border)',
+  '--xy-node-color': 'var(--foreground)',
+  '--xy-selection-background-color': 'color-mix(in oklab, var(--primary) 8%, transparent)',
+  '--xy-selection-border': '1px dashed var(--primary)',
+  '--xy-edge-stroke': 'var(--muted-foreground)',
+  '--xy-edge-stroke-selected': 'var(--primary)',
+  '--xy-handle-background-color': 'var(--primary)',
+  '--xy-controls-button-background-color': 'var(--card)',
+  '--xy-controls-button-color': 'var(--foreground)',
   '--xy-attribution-background-color': 'transparent',
 } as CSSProperties
 
 const INTERACTIVE_SELECTOR = 'textarea,input,select,button,a,label,video,audio'
 function isEditableTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest('input,textarea,select,dialog[open],[role="dialog"],[data-canvas-name-editor]')))
+  return target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest('input,textarea,select,button,a,[role="menu"],dialog[open],[role="dialog"],[data-canvas-name-editor]')))
 }
 
 export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
@@ -60,13 +59,13 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   })
 
   const nodes = useCanvasStore((state) => state.nodes)
+  const readOnly = useCanvasStore(state => state.workspace?.readOnly ?? false)
   const edges = useCanvasStore((state) => state.edges)
   const miniMapOpen = useCanvasStore((state) => state.miniMapOpen)
   const snapToGrid = useCanvasStore((state) => state.snapToGrid)
   const showEdges = useCanvasStore((state) => state.showEdges)
   const directorNodeId = useCanvasStore((state) => state.directorNodeId)
   const hasSelection = useCanvasStore((state) => state.nodes.some(node => node.selected))
-  const settingsNodeId = useCanvasStore((state) => state.settingsNodeId)
   const onNodesChange = useCanvasStore((state) => state.onNodesChange)
   const onEdgesChange = useCanvasStore((state) => state.onEdgesChange)
   const connect = useCanvasStore((state) => state.connect)
@@ -89,10 +88,6 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
     publishZoom(initialZoom)
   }, [initialZoom, publishZoom])
 
-  const renderNodes = useMemo(
-    () => nodes.map((node) => (node.id === settingsNodeId ? ({ ...node, zIndex: 1000 } as FreeCanvasNode) : node)),
-    [nodes, settingsNodeId],
-  )
   const renderEdges = useMemo(() => showEdges ? edges : edges.map(edge => ({ ...edge, hidden: true })), [edges, showEdges])
 
   const handleNodeClick: NodeMouseHandler<FreeCanvasNode> = (event, node) => {
@@ -102,7 +97,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
       return
     }
     const current = useCanvasStore.getState().settingsNodeId
-    openSettings(current === node.id ? null : node.id, settingsPlacementFor(event.currentTarget))
+    openSettings(current === node.id ? null : node.id)
   }
 
   const handleNodeContextMenu = (event: ReactMouseEvent, node: FreeCanvasNode) => {
@@ -126,6 +121,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   }
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (readOnly || useCanvasStore.getState().workspace) return
     const payload = readAssetDrag(event.dataTransfer)
     if (!payload) return
     event.preventDefault()
@@ -175,12 +171,16 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   }, [])
 
   return (
-    <div ref={rootRef} data-oao-free-canvas className="absolute inset-0 bg-black" style={FLOW_THEME} onDragOver={handleDragOver} onDrop={handleDrop}>
+    <div ref={rootRef} data-oao-free-canvas className="absolute inset-0 bg-background" style={FLOW_THEME} onDragOver={handleDragOver} onDrop={handleDrop} onKeyDownCapture={event => { if (event.code === 'Space' && (event.target as HTMLElement).closest('button,select,input[type="checkbox"],[role="radio"]')) event.preventDefault() }}>
       <ReactFlow
         aria-label="自由画布"
-        nodes={renderNodes}
+        nodes={nodes}
         edges={renderEdges}
         nodeTypes={nodeTypes}
+        onlyRenderVisibleElements={nodes.length >= 40}
+        nodesDraggable={!readOnly}
+        nodesConnectable={!readOnly}
+        edgesReconnectable={!readOnly}
         defaultEdgeOptions={defaultEdgeOptions}
         // The canvas shell is branded and the attribution is not part of the
         // product chrome. React Flow is retained as a dependency and its MIT
@@ -213,7 +213,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
         onPaneClick={() => closeOverlays()}
         onPaneContextMenu={handlePaneContextMenu}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="rgba(255,255,255,0.16)" />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--border)" />
         {miniMapOpen && <MiniMap<FreeCanvasNode>
           ariaLabel="画布小地图，可拖动定位或滚轮缩放"
           pannable
@@ -221,7 +221,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
           position="bottom-left"
           className="overflow-hidden rounded-xl border border-white/20 shadow-xl"
           style={{ left: 12, bottom: hasSelection ? 216 : 72, margin: 0, width: 192, height: 120 }}
-          bgColor="#111113"
+          bgColor="var(--card)"
           maskColor="rgba(0,0,0,0.52)"
           maskStrokeColor="rgba(255,255,255,0.65)"
           maskStrokeWidth={1.5}

@@ -277,6 +277,7 @@ test('the permanent add menu centers new nodes in flow coordinates after viewpor
   const position = sourceModule('../components/free-canvas/canvas-position.ts', { './node-factory': factory })
   const calls = []
   const { CanvasCreateMenu } = sourceModule('../components/free-canvas/canvas-create-menu.tsx', {
+    './canvas-store': { useCanvasStore: selector => selector({ workspace: null }) },
     react: { useEffect: () => {}, useRef: () => ({ current: null }), useState: () => [true, () => {}] },
     '@xyflow/react': { useReactFlow: () => ({ screenToFlowPosition: point => ({ x: (point.x - 100) / .5, y: (point.y - 50) / .5 }) }) },
     './canvas-context': { useCanvasActions: () => ({ createNodeAt: (kind, origin) => calls.push({ kind, origin }) }) },

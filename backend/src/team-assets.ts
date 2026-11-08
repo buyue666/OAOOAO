@@ -68,7 +68,9 @@ export async function registerTeamAssets(app: FastifyInstance, ctx: Context) {
     const user = await ctx.requireUser(request), { teamId } = request.params as { teamId: string }, query = (request.query ?? {}) as Record<string, string>, page = pagination(query);
     await requireTeam(ctx.db, teamId, user.id);
     if (query.projectId) await requireTeamProject(ctx.db, teamId, user.id, query.projectId);
-    const rows = (await ctx.db.query(`SELECT a.*,u.display_name,u.username,count(*) OVER() total FROM oaooao_team_assets a JOIN oaooao_team_projects p ON p.id=a.project_id JOIN oaooao_team_members m ON m.team_id=p.team_id AND m.user_id=$2 JOIN oaooao_users u ON u.id=a.created_by WHERE a.team_id=$1 AND a.status='ready' AND ($3='' OR a.project_id=$3) AND ${projectVisibilitySql} ORDER BY a.created_at DESC,a.id LIMIT $4 OFFSET $5`, [teamId, user.id, query.projectId || '', page.pageSize, page.offset])).rows;
+    const keyword = string(query.keyword ?? '', '搜索关键词', 200, true), kind = query.kind || '';
+    if (kind && !['text','image','video','audio','media'].includes(kind)) throw httpError(400, '素材类型无效');
+    const rows = (await ctx.db.query(`SELECT a.*,u.display_name,u.username,count(*) OVER() total FROM oaooao_team_assets a JOIN oaooao_team_projects p ON p.id=a.project_id JOIN oaooao_team_members m ON m.team_id=p.team_id AND m.user_id=$2 JOIN oaooao_users u ON u.id=a.created_by WHERE a.team_id=$1 AND a.status='ready' AND ($3='' OR a.project_id=$3) AND ($6='' OR a.title ILIKE '%'||$6||'%') AND ($7='' OR a.kind=$7 OR ($7='media' AND a.kind<>'text')) AND ${projectVisibilitySql} ORDER BY a.created_at DESC,a.id LIMIT $4 OFFSET $5`, [teamId, user.id, query.projectId || '', page.pageSize, page.offset, keyword, kind])).rows;
     return { assets: rows.map(teamAssetView), total: Number(rows[0]?.total ?? 0) };
   });
   app.post('/api/teams/:teamId/projects/:projectId/assets', { bodyLimit: 34 * 1024 * 1024 }, async request => {

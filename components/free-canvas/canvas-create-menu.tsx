@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react'
 import { useCanvasActions } from './canvas-context'
 import { CREATABLE_KINDS, NODE_META } from './node-factory'
 import { nodePositionAtCenter } from './canvas-position'
+import { useCanvasStore } from './canvas-store'
 
 export function CanvasCreateMenu() {
   const [open, setOpen] = useState(false)
@@ -13,6 +14,7 @@ export function CanvasCreateMenu() {
   const trigger = useRef<HTMLButtonElement>(null)
   const { screenToFlowPosition } = useReactFlow()
   const actions = useCanvasActions()
+  const workspace = useCanvasStore(state => state.workspace)
   useEffect(() => {
     if (!open) return
     const outside = (event: PointerEvent) => { if (event.target instanceof Node && !ref.current?.contains(event.target)) setOpen(false) }
@@ -31,11 +33,11 @@ export function CanvasCreateMenu() {
       items[event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
     }
   }}>
-    <button ref={trigger} type="button" aria-label="添加节点" title="添加节点" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)} className="mr-1 flex h-8 items-center gap-1 rounded-xl bg-white px-2 text-xs font-medium text-black hover:bg-neutral-200 focus-visible:outline-2 focus-visible:outline-white"><Plus className="size-4" aria-hidden="true" /><span className="hidden sm:inline">添加</span></button>
-    {open && <div role="menu" aria-label="添加画布节点" className="absolute top-11 left-0 z-50 max-h-[calc(100dvh-10rem)] w-48 overflow-y-auto rounded-xl border border-white/15 bg-neutral-950 p-1.5 text-white shadow-2xl">
-      {CREATABLE_KINDS.map(kind => {
+    <button ref={trigger} type="button" aria-label="添加节点" title="添加节点" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)} className="mr-1 flex h-11 items-center gap-1 rounded-xl bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-ring"><Plus className="size-4" aria-hidden="true" /><span className="hidden sm:inline">添加</span></button>
+    {open && <div role="menu" aria-label="添加画布节点" className="absolute top-11 left-0 z-50 max-h-[calc(100dvh-10rem)] w-48 overflow-y-auto rounded-xl border border-border bg-card p-1.5 text-foreground shadow-2xl">
+      {CREATABLE_KINDS.filter(kind => !workspace || kind !== 'agent').map(kind => {
         const { icon: Icon, label } = NODE_META[kind]
-        return <button key={kind} type="button" role="menuitem" tabIndex={-1} onClick={() => { actions.createNodeAt(kind, nodePositionAtCenter(kind, screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }))); setOpen(false); trigger.current?.focus() }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-neutral-200 hover:bg-white/10 focus-visible:bg-white/10 focus-visible:outline-none"><Icon className="size-4" aria-hidden="true" />{label}</button>
+        return <button key={kind} type="button" role="menuitem" tabIndex={-1} onClick={() => { actions.createNodeAt(kind, nodePositionAtCenter(kind, screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }))); setOpen(false); trigger.current?.focus() }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"><Icon className="size-4" aria-hidden="true" />{label}</button>
       })}
     </div>}
   </div>

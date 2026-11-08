@@ -2,7 +2,9 @@
 
 import { MediaDownloadButton } from '@/components/studio/media-download-button'
 
-import { memo, useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { memo, useEffect, useMemo, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { PromptReferenceInput } from '@/components/studio/prompt-reference-input'
+import { canvasReferences } from '../canvas-generation-policy'
 import type { NodeProps } from '@xyflow/react'
 import { AudioLines, Clapperboard, Copy, Download, FileText, Image as ImageIcon, Loader2, RotateCcw, SlidersHorizontal, Sparkles, Square, Star, AlertTriangle, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -12,8 +14,7 @@ import { useCanvasActions } from '../canvas-context'
 import { useCanvasStore } from '../canvas-store'
 import { NODE_SIZE } from '../node-factory'
 import type { GenerationFlowNode, GenerationKind, GenerationNodeData, NodeResult, TaskPhase } from '../types'
-import { NodeAnchors, NodeHandles, settingsPlacementFor, TitleEditor } from './node-kit'
-import { GenerationSettings } from './generation-settings'
+import { NodeAnchors, NodeHandles, TitleEditor } from './node-kit'
 
 const KIND_ICON = { image: ImageIcon, video: Clapperboard, text: FileText, audio: AudioLines } satisfies Record<GenerationKind, typeof ImageIcon>
 
@@ -36,6 +37,9 @@ const PHASE_LABEL: Record<TaskPhase | 'idle', string> = {
 export const GenerationNode = memo(function GenerationNode({ id, data, selected }: NodeProps<GenerationFlowNode>) {
   const { state } = useStudio()
   const actions = useCanvasActions()
+  const readOnly = useCanvasStore(store => store.workspace?.readOnly ?? false)
+  const revision = useCanvasStore(store => store.revision)
+  const references = useMemo(() => { const store = useCanvasStore.getState(); return canvasReferences(id, data, store.nodes, store.edges).map(ref => ({ id: ref.id, name: ref.title, type: ref.mediaKind, preview: ref.mediaKind === 'image' ? ref.url : undefined })) }, [id, data, revision])
   const settingsPlacement = useCanvasStore((store) => (store.settingsNodeId === id ? store.settingsPlacement : null))
   const focusRequested = useCanvasStore((store) => store.focusNodeId === id)
   const clearFocus = useCanvasStore((store) => store.clearFocus)
@@ -57,11 +61,11 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
     ? filterModelsByCapability(state.models, capabilityOf(data.kind)).find((model) => model.id === data.model)?.shortName ?? '指定模型'
     : '自动模型'
   const estimate = actions.estimateNode(data)
-  const canSubmit = (data.prompt.trim().length > 0 || data.task?.unconfirmed) && !busy
+  const canSubmit = !readOnly && (data.prompt.trim().length > 0 || data.task?.unconfirmed) && !busy
 
   const handleSettingsClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
-    openSettings(settingsPlacement ? null : id, settingsPlacementFor(event.currentTarget))
+    openSettings(settingsPlacement ? null : id)
   }
 
   const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -78,14 +82,14 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
       <NodeAnchors nodeId={id} />
       <article
         className={cn(
-          'flex flex-col gap-3 rounded-[20px] border bg-[#15171b] p-3.5 text-white shadow-[0_16px_45px_rgba(0,0,0,0.32)] transition-colors focus-within:border-white/55',
-          selected || settingsPlacement ? 'border-white/65 ring-4 ring-white/[0.05]' : 'border-white/15 hover:border-white/35',
+          'flex flex-col gap-3 rounded-[20px] border bg-card p-3.5 text-foreground shadow-lg transition-colors focus-within:border-primary/60',
+          selected || settingsPlacement ? 'border-primary ring-4 ring-primary/10' : 'border-border hover:border-primary/40',
         )}
       >
         <header className="flex items-center gap-2">
-          <Icon className="size-4 shrink-0 text-neutral-400" aria-hidden="true" />
+          <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <TitleEditor nodeId={id} title={data.title} />
-          <span className="ml-auto shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-neutral-300" aria-live="polite">
+          <span className="ml-auto shrink-0 rounded-full border border-border px-2 py-0.5 text-[11px] text-foreground" aria-live="polite">
             {data.task?.unconfirmed ? '提交待确认' : busy && data.task?.cancelRequested ? '取消待确认' : PHASE_LABEL[phase]}
           </span>
           <button
@@ -94,7 +98,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
             aria-expanded={Boolean(settingsPlacement)}
             onClick={handleSettingsClick}
             onPointerDown={(event) => event.stopPropagation()}
-            className="nodrag flex size-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white"
+            className="nodrag flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
           >
             <SlidersHorizontal className="size-3.5" aria-hidden="true" />
           </button>
@@ -102,21 +106,21 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
 
         <NodeResultArea id={id} data={data} phase={phase} />
 
-        <div className="nodrag nowheel flex flex-col gap-2.5 rounded-xl border border-white/10 bg-black p-2.5 focus-within:border-white/50">
-          <textarea
-            ref={textareaRef}
+        <div className="nodrag nowheel flex flex-col gap-3">
+          <PromptReferenceInput
+            id={`canvas-prompt-${id}`}
+            inputRef={textareaRef}
+            compact
+            references={references}
             value={data.prompt}
-            disabled={busy || data.task?.unconfirmed}
-            rows={2}
-            aria-label="提示词"
+            disabled={readOnly || busy || data.task?.unconfirmed}
             placeholder={PLACEHOLDER[data.kind]}
             onFocus={() => beginEdit()}
-            onChange={(event) => updateNodeData(id, { prompt: event.target.value })}
+            onChange={(prompt) => updateNodeData(id, { prompt })}
             onKeyDown={handlePromptKeyDown}
-            className="nodrag nowheel min-h-11 w-full resize-none bg-transparent text-sm leading-relaxed text-white placeholder:text-neutral-600 focus:outline-none"
           />
           <div className="flex items-center gap-2">
-            <span className="min-w-0 truncate text-[11px] text-neutral-500">
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
               {modelName}
               {data.kind === 'image' || data.kind === 'video' ? ` · ${data.ratio}` : ''}
               {' · '}
@@ -126,32 +130,31 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
               {busy ? (
                 <>
                   {data.task?.id ? (
-                    <button type="button" onClick={() => void actions.checkNode(id)} className="flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs text-neutral-300 hover:bg-white/10">
+                    <button type="button" onClick={() => void actions.checkNode(id)} className="flex h-11 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs text-foreground hover:bg-muted">
                       <RefreshCw className="size-3.5" aria-hidden="true" />
                       检查
                     </button>
                   ) : null}
-                  <button type="button" onClick={() => void actions.cancelNode(id)} disabled={!data.task?.id || data.task.cancelRequested} className="flex h-8 items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                  <button type="button" onClick={() => void actions.cancelNode(id)} disabled={!data.task?.id || data.task.cancelRequested} className="flex h-11 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs text-foreground hover:bg-muted disabled:opacity-40">
                     <Square className="size-3 fill-current" aria-hidden="true" />
                     {data.task?.cancelRequested ? '取消待确认' : '取消'}
                   </button>
                 </>
               ) : phase === 'error' ? (
-                <button type="button" onClick={() => void actions.submitNode(id)} disabled={!canSubmit} className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-black hover:bg-neutral-200 disabled:opacity-40">
+                <button type="button" onClick={() => void actions.submitNode(id)} disabled={!canSubmit} className="flex h-11 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
                   <RotateCcw className="size-3.5" aria-hidden="true" />
                   {data.task?.unconfirmed ? '确认原提交' : '重试'}
                 </button>
               ) : (
-                <button type="button" onClick={() => void actions.submitNode(id)} disabled={!canSubmit} className="flex h-8 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-medium text-black hover:bg-neutral-200 disabled:opacity-40">
+                <button type="button" onClick={() => void actions.submitNode(id)} disabled={!canSubmit} className="flex h-11 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
                   {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Sparkles className="size-3.5" aria-hidden="true" />}
-                  {data.results.length || data.text ? '再次生成' : '生成'}
+                  {readOnly ? '审阅模式' : data.results.length || data.text ? '再次生成' : '生成'}
                 </button>
               )}
             </div>
           </div>
         </div>
       </article>
-      {settingsPlacement ? <GenerationSettings nodeId={id} placement={settingsPlacement} /> : null}
     </div>
   )
 })
@@ -165,19 +168,19 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
 
   if (phase === 'queued' || phase === 'running') {
     return (
-      <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/[0.03]" role="status">
-        <div className="h-px w-2/3 overflow-hidden bg-white/10">
-          <div className="h-full w-1/2 animate-pulse bg-white" />
+      <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/40" role="status">
+        <div className="h-px w-2/3 overflow-hidden bg-muted">
+          <div className="h-full w-1/2 animate-pulse bg-primary" />
         </div>
-        <p className="px-4 text-center text-xs leading-5 text-neutral-400">{data.task?.cancelRequested ? '取消请求已发送，任务仍可能执行。请继续检查，确认停止后才能重新生成。' : '正在生成，可随时申请取消'}</p>
+        <p className="px-4 text-center text-xs leading-5 text-muted-foreground">{data.task?.cancelRequested ? '取消请求已发送，任务仍可能执行。请继续检查，确认停止后才能重新生成。' : '正在生成，可随时申请取消'}</p>
       </div>
     )
   }
 
   if (phase === 'error') {
     return (
-      <div role="alert" className="flex gap-2.5 rounded-xl border border-white/25 bg-white/[0.04] p-3 text-xs leading-relaxed text-neutral-200">
-        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-white" aria-hidden="true" />
+      <div role="alert" className="flex gap-2.5 rounded-xl border border-border bg-muted/40 p-3 text-xs leading-relaxed text-foreground">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden="true" />
         <p className="min-w-0 break-words">{data.task?.error || '生成失败，可以调整后重试'}</p>
       </div>
     )
@@ -186,11 +189,11 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
   if (data.kind === 'text' && data.text) {
     return (
       <div className="flex flex-col gap-2">
-        <div className="nowheel max-h-44 overflow-y-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-black/50 p-3 text-sm leading-relaxed text-neutral-100">
+        <div className="nowheel max-h-44 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border bg-muted/50 p-3 text-sm leading-relaxed text-foreground">
           {data.text}
         </div>
         <div className="flex justify-end">
-          <button type="button" onClick={() => void navigator.clipboard?.writeText(data.text)} className="nodrag flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-neutral-400 hover:bg-white/10 hover:text-white">
+          <button type="button" onClick={() => void navigator.clipboard?.writeText(data.text)} className="nodrag flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
             <Copy className="size-3.5" aria-hidden="true" />
             复制文本
           </button>
@@ -210,33 +213,34 @@ function NodeResultArea({ id, data, phase }: { id: string; data: GenerationNodeD
   }
 
   return (
-    <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-dashed border-white/15 px-6 text-center text-xs leading-relaxed text-neutral-500">
+    <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-dashed border-border px-6 text-center text-xs leading-relaxed text-muted-foreground">
       输入提示词后生成，结果会回写到这个节点
     </div>
   )
 }
 
 function ResultItem({ nodeId, title, prompt, taskId, result, index, onFavorite, onOpenEditor }: { nodeId: string; title: string; prompt: string; taskId?: string; result: NodeResult; index: number; onFavorite: () => void; onOpenEditor: () => void }) {
+  const workspace = useCanvasStore(store => store.workspace)
   const label = `${title} 结果 ${index + 1}`
   return (
-    <figure className="nodrag relative overflow-hidden rounded-xl border border-white/10 bg-black">
+    <figure className="nodrag relative overflow-hidden rounded-xl border border-border bg-background">
       {result.mediaKind === 'image' ? (
-        <button type="button" onClick={onOpenEditor} aria-label={`编辑${label}`} title="打开图片编辑" className="nodrag block w-full cursor-zoom-in text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-          <img src={result.url} alt={label} loading="lazy" decoding="async" draggable={false} className="block w-full object-cover" />
+        <button type="button" onClick={onOpenEditor} aria-label={`编辑${label}`} title="打开图片编辑" className="nodrag block w-full cursor-zoom-in text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <img src={result.url} alt={label} loading="lazy" decoding="async" draggable={false} className="block aspect-square w-full object-contain" />
         </button>
       ) : result.mediaKind === 'video' ? (
-        <video src={result.url} poster={result.poster} controls controlsList="nodownload" playsInline preload="metadata" aria-label={label} className="nowheel block w-full bg-black" />
+        <video src={result.url} poster={result.poster} controls controlsList="nodownload" playsInline preload="metadata" aria-label={label} className="nowheel block w-full bg-background" />
       ) : (
         <div className="flex items-center gap-3 p-3">
-          <AudioLines className="size-5 shrink-0 text-neutral-400" aria-hidden="true" />
+          <AudioLines className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <audio src={result.url} controls preload="none" aria-label={label} className="nowheel min-w-0 flex-1" />
         </div>
       )}
       <figcaption className="absolute right-2 bottom-2 flex gap-1">
-        <button type="button" aria-label={`收藏${label}`} title="收藏到资产库" onClick={onFavorite} className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black">
+        {!workspace && <button type="button" aria-label={`收藏${label}`} title="收藏到资产库" onClick={onFavorite} className="flex size-9 items-center justify-center rounded-lg bg-foreground/80 text-background hover:bg-primary hover:text-primary-foreground">
           <Star className="size-3.5" aria-hidden="true" />
-        </button>
-        <MediaDownloadButton media={{ url: result.url, kind: result.mediaKind }} title={label} prompt={prompt} taskId={taskId || nodeId} iconOnly className="flex size-7 items-center justify-center rounded-lg bg-black/70 text-white hover:bg-white hover:text-black disabled:opacity-50" />
+        </button>}
+        {workspace ? workspace.canDownload && <a href={`${result.url}?download=1`} download aria-label={`下载${label}`} title="下载结果" className="flex size-9 items-center justify-center rounded-lg bg-foreground/80 text-background"><Download className="size-4" /></a> : <MediaDownloadButton media={{ url: result.url, kind: result.mediaKind }} title={label} prompt={prompt} taskId={taskId || nodeId} iconOnly className="flex size-9 items-center justify-center rounded-lg bg-foreground/80 text-background hover:bg-primary hover:text-primary-foreground disabled:opacity-50" />}
       </figcaption>
     </figure>
   )

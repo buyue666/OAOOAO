@@ -108,6 +108,7 @@ export type SubmissionIdentity = {
 
 /** Stable destination for a generation task; persisted by the backend task store. */
 export type GenerationProjectContext = {
+  approvedCost?: number
   projectId?: string
   episodeId?: string
   shotId?: string

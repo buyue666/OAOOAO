@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ChangeEvent, type DragEvent } from 'react'
+import { useDeferredValue, useState, type ChangeEvent, type DragEvent } from 'react'
 import { AudioLines, FileText, Upload, X } from 'lucide-react'
 import { createLibraryAsset, readImageSize, uploadPersistentAsset, type LibraryAssetView } from '@/lib/studio/account-api'
 import { libraryAssetMediaUrl } from '@/lib/studio/reference-assets'
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { ASSET_DRAG_TYPE, categoryOf, referenceOf } from './asset-reference'
 import { errorMessageOf } from './use-generation-actions'
 
-type TabId = 'all' | 'character' | 'scene' | 'prop' | 'style' | 'garment' | 'image' | 'video' | 'upload' | 'favorite'
+type TabId = 'all' | 'character' | 'scene' | 'prop' | 'style' | 'garment' | 'image' | 'video' | 'audio' | 'upload' | 'favorite'
 
 const TABS: { id: TabId; label: string; match: (asset: LibraryAssetView) => boolean }[] = [
   { id: 'all', label: '全部', match: () => true },
@@ -20,6 +20,7 @@ const TABS: { id: TabId; label: string; match: (asset: LibraryAssetView) => bool
   { id: 'garment', label: '服装', match: (asset) => categoryOf(asset) === 'garment' },
   { id: 'image', label: '参考图片', match: (asset) => asset.kind === 'image' },
   { id: 'video', label: '参考视频', match: (asset) => asset.kind === 'video' },
+  { id: 'audio', label: '参考音频', match: (asset) => asset.kind === 'audio' },
   { id: 'upload', label: '用户上传文件', match: (asset) => asset.source === 'user-upload' },
   { id: 'favorite', label: '生成结果收藏', match: (asset) => asset.tags.includes('收藏') },
 ]
@@ -32,9 +33,11 @@ type CanvasAssetLibraryProps = {
 
 export function CanvasAssetLibrary({ targetNodeId, onPick, onClose }: CanvasAssetLibraryProps) {
   const [tab, setTab] = useState<TabId>('all')
+  const [search, setSearch] = useState('')
+  const keyword = useDeferredValue(search)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const library = useLibraryAssets({ pageSize: 60 })
+  const library = useLibraryAssets({ pageSize: 60, keyword, kind: ['image', 'video', 'audio'].includes(tab) ? tab : undefined })
   const activeTab = TABS.find((item) => item.id === tab) ?? TABS[0]
   const visible = library.assets.filter((asset) => asset.kind !== 'text' && activeTab.match(asset))
 
@@ -77,43 +80,28 @@ export function CanvasAssetLibrary({ targetNodeId, onPick, onClose }: CanvasAsse
   }
 
   return (
-    <section aria-label="资产库" className="flex max-h-[min(72dvh,600px)] flex-col gap-3 rounded-2xl border border-white/15 bg-neutral-950 p-3.5 text-white shadow-[0_24px_70px_rgba(0,0,0,0.8)]">
+    <section aria-label="资产库" className="flex max-h-[min(72dvh,600px)] flex-col gap-3 rounded-2xl border border-border bg-card p-3.5 text-foreground shadow-xl">
       <header className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">资产库</h2>
-          <p className="text-[11px] text-neutral-500">{targetNodeId ? '点选即加入当前节点，也可拖到画布' : '拖拽素材到画布即可创建节点'}</p>
+          <p className="text-[11px] text-muted-foreground">{targetNodeId ? '点选即加入当前节点，也可拖到画布' : '拖拽素材到画布即可创建节点'}</p>
         </div>
-        <button type="button" aria-label="关闭资产库" onClick={onClose} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white">
+        <button type="button" aria-label="关闭资产库" onClick={onClose} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
           <X className="size-4" aria-hidden="true" />
         </button>
       </header>
 
-      <div role="tablist" aria-label="资产分类" className="flex flex-wrap gap-1">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={item.id === tab}
-            onClick={() => setTab(item.id)}
-            className={cn(
-              'h-7 rounded-full border px-2.5 text-[11px] transition-colors',
-              item.id === tab ? 'border-white bg-white text-black' : 'border-white/15 text-neutral-300 hover:border-white/40 hover:text-white',
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <input aria-label="搜索创作资产" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索素材名称" className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+      <select aria-label="资产分类" value={tab} onChange={event => setTab(event.target.value as TabId)} className="h-11 rounded-xl border border-border bg-background px-3 text-sm">{TABS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
 
-      <label className={cn('flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/25 text-xs text-neutral-200 transition-colors hover:border-white/60', busy && 'pointer-events-none opacity-50')}>
+      <label className={cn('flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border text-xs text-foreground transition-colors hover:border-primary/70', busy && 'pointer-events-none opacity-50')}>
         <Upload className="size-3.5" aria-hidden="true" />
         上传图片、视频或音频
         <input type="file" multiple accept="image/*,video/*,audio/*" className="sr-only" onChange={handleUpload} />
       </label>
-      {notice ? <p role="status" className="text-[11px] text-neutral-400">{notice}</p> : null}
-      {library.state === 'unauthenticated' ? <p className="text-xs text-neutral-400">登录后可以使用资产库。</p> : null}
-      {library.state === 'error' ? <p role="alert" className="text-xs text-neutral-400">{library.message || '资产读取失败，请稍后重试'}</p> : null}
+      {notice ? <p role="status" className="text-[11px] text-muted-foreground">{notice}</p> : null}
+      {library.state === 'unauthenticated' ? <p className="text-xs text-muted-foreground">登录后可以使用资产库。</p> : null}
+      {library.state === 'error' ? <p role="alert" className="text-xs text-muted-foreground">{library.message || '资产读取失败，请稍后重试'}</p> : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length ? (
@@ -125,14 +113,14 @@ export function CanvasAssetLibrary({ targetNodeId, onPick, onClose }: CanvasAsse
             ))}
           </ul>
         ) : (
-          <p className="py-8 text-center text-xs text-neutral-500">
+          <p className="py-8 text-center text-xs text-muted-foreground">
             {library.state === 'loading' || library.state === 'idle' ? '正在读取资产' : '这个分类还没有素材'}
           </p>
         )}
       </div>
 
       {library.hasMore ? (
-        <button type="button" onClick={() => void library.loadMore()} disabled={library.loadingMore} className="h-8 rounded-lg border border-white/15 text-xs text-neutral-200 hover:bg-white/10 disabled:opacity-40">
+        <button type="button" onClick={() => void library.loadMore()} disabled={library.loadingMore} className="h-8 rounded-lg border border-border text-xs text-foreground hover:bg-muted disabled:opacity-40">
           加载更多
         </button>
       ) : null}
@@ -158,24 +146,24 @@ function AssetItem({ asset, onPick }: { asset: LibraryAssetView; onPick: () => v
       onClick={onPick}
       title={asset.title}
       aria-label={`选择素材 ${asset.title}`}
-      className="group flex w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-black text-left transition-colors hover:border-white/50 focus-visible:outline-2 focus-visible:outline-white"
+      className="group flex w-full flex-col overflow-hidden rounded-xl border border-border bg-background text-left transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-ring"
     >
-      <span className="flex aspect-square w-full items-center justify-center overflow-hidden bg-white/[0.04]">
+      <span className="flex aspect-square w-full items-center justify-center overflow-hidden bg-muted/40">
         {asset.kind === 'image' && url ? (
           <img src={url} alt="" loading="lazy" decoding="async" draggable={false} className="size-full object-cover" />
         ) : asset.kind === 'video' && url ? (
           <video src={url} muted preload="metadata" className="size-full object-cover" />
         ) : asset.kind === 'audio' ? (
-          <AudioLines className="size-5 text-neutral-400" aria-hidden="true" />
+          <AudioLines className="size-5 text-muted-foreground" aria-hidden="true" />
         ) : (
-          <span className="line-clamp-4 px-2 text-[10px] leading-snug text-neutral-400">
+          <span className="line-clamp-4 px-2 text-[10px] leading-snug text-muted-foreground">
             {String(asset.data.prompt ?? asset.data.text ?? asset.title)}
           </span>
         )}
       </span>
       <span className="flex items-center gap-1 px-1.5 py-1">
-        {asset.kind === 'text' ? <FileText className="size-3 shrink-0 text-neutral-500" aria-hidden="true" /> : null}
-        <span className="min-w-0 truncate text-[11px] text-neutral-200">{asset.title}</span>
+        {asset.kind === 'text' ? <FileText className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
+        <span className="min-w-0 truncate text-[11px] text-foreground">{asset.title}</span>
       </span>
     </button>
   )

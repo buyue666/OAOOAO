@@ -50,7 +50,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   const isPolicyPage = pathname === '/terms' || pathname === '/privacy'
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isWorkspace = pathname === '/image' || pathname === '/video'
-  const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/')
+  const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/') || /^\/teams\/[^/]+\/projects\/[^/]+\/canvas$/.test(pathname)
   const isProtectedRoute = isProtectedStudioRoute(pathname)
   const authRequired = isProtectedRoute && !isStudioPreview()
   const authChecking = authRequired && (!state.hydrated || state.backendStatus === 'checking')
@@ -81,7 +81,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
    */
   if (isLanding || isAuthPage || isPolicyPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isAdmin) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
-  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-black text-white"><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
+  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground"><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
 
   return (
       <div

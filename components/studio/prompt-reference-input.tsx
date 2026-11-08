@@ -1,14 +1,15 @@
 'use client'
 
 import { useUiText } from '@/lib/studio/i18n'
-import {useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode} from 'react'
+import {useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject, type KeyboardEvent} from 'react'
 import {createPortal} from 'react-dom'
 import {FileAudio, FileVideo, Image as ImageIcon} from 'lucide-react'
 import {insertReferenceMention, promptReferenceMentions, referenceMentionLabel, referenceMentionQuery, type PromptReference} from '@/lib/studio/prompt-references'
 
-export function PromptReferenceInput({id, value, onChange, references, placeholder}: {id: string; value: string; onChange: (value: string) => void; references: PromptReference[]; placeholder?: string}) {
+export function PromptReferenceInput({id, value, onChange, references, placeholder, inputRef, disabled, compact, onFocus, onKeyDown}: {id: string; value: string; onChange: (value: string) => void; references: PromptReference[]; placeholder?: string; inputRef?: RefObject<HTMLTextAreaElement | null>; disabled?: boolean; compact?: boolean; onFocus?: () => void; onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void}) {
   const tx = useUiText()
-  const textarea = useRef<HTMLTextAreaElement>(null)
+  const ownTextarea = useRef<HTMLTextAreaElement>(null)
+  const textarea = inputRef ?? ownTextarea
   const mirror = useRef<HTMLDivElement>(null)
   const restoredCaret = useRef<number | null>(null)
   const listId = useId()
@@ -18,7 +19,7 @@ export function PromptReferenceInput({id, value, onChange, references, placehold
   const [position, setPosition] = useState({top: 0, left: 0, width: 280, maxHeight: 240})
   const mention = referenceMentionQuery(value, caret)
   const candidates = references.map((reference, index) => ({...reference, index, label: referenceMentionLabel(references, index)})).filter(reference => !mention?.query || `${reference.index + 1} ${reference.label} ${reference.type === 'image' ? '图片' : reference.type === 'video' ? '视频' : '音频'} ${reference.name}`.toLowerCase().includes(mention.query.toLowerCase()))
-  const visible = open && Boolean(mention)
+  const visible = !disabled && open && Boolean(mention)
   const syncMirror = () => {
     if (!textarea.current || !mirror.current) return
     mirror.current.style.width = `${textarea.current.clientWidth}px`
@@ -65,15 +66,17 @@ export function PromptReferenceInput({id, value, onChange, references, placehold
   return <>
     <div className="prompt-reference-editor studio-field relative rounded-lg border border-border bg-background text-sm leading-6 text-foreground focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15">
     <div ref={mirror} aria-hidden="true" className={`prompt-reference-mirror pointer-events-none absolute inset-0 overflow-hidden ${value ? '' : 'text-muted-foreground'}`}>{value ? highlighted : placeholder}{'\u200b'}</div>
-    <textarea ref={textarea} id={id} value={value} rows={5} placeholder={placeholder} role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={visible} aria-controls={visible ? listId : undefined} aria-activedescendant={visible && candidates.length ? `${listId}-${candidates[Math.min(active, candidates.length - 1)].index}` : undefined}
+    <textarea ref={textarea} id={id} value={value} disabled={disabled} aria-label="提示词" rows={compact ? 3 : 5} placeholder={placeholder} role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={visible} aria-controls={visible ? listId : undefined} aria-activedescendant={visible && candidates.length ? `${listId}-${candidates[Math.min(active, candidates.length - 1)].index}` : undefined}
       onChange={event => {onChange(event.target.value); setCaret(event.target.selectionStart); setOpen(Boolean(referenceMentionQuery(event.target.value, event.target.selectionStart))); setActive(0)}}
-      onScroll={syncMirror} onSelect={event => setCaret(event.currentTarget.selectionStart)} onFocus={event => {setCaret(event.target.selectionStart); setOpen(Boolean(referenceMentionQuery(value, event.target.selectionStart)))}} onBlur={() => setOpen(false)}
+      onScroll={syncMirror} onSelect={event => setCaret(event.currentTarget.selectionStart)} onFocus={event => {onFocus?.(); setCaret(event.target.selectionStart); setOpen(Boolean(referenceMentionQuery(value, event.target.selectionStart)))}} onBlur={() => setOpen(false)}
       onKeyDown={event => {
-        if (!visible || event.nativeEvent.isComposing) return
+        if (event.nativeEvent.isComposing) return
+        if (!visible) { onKeyDown?.(event); return }
         if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); setOpen(false)}
         else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {event.preventDefault(); setActive(current => (current + (event.key === 'ArrowDown' ? 1 : -1) + Math.max(1, candidates.length)) % Math.max(1, candidates.length))}
         else if ((event.key === 'Enter' || event.key === 'Tab') && candidates.length) {event.preventDefault(); choose(candidates[Math.min(active, candidates.length - 1)].index)}
-      }} className="prompt-reference-textarea relative block min-h-36 w-full resize-y bg-transparent outline-none" />
+        if (!event.defaultPrevented) onKeyDown?.(event)
+      }} className={`prompt-reference-textarea nodrag nowheel relative block w-full resize-y bg-transparent outline-none disabled:opacity-60 ${compact ? 'min-h-24' : 'min-h-36'}`} />
     </div>
     {visible && createPortal(<div id={listId} role="listbox" aria-label={tx("选择已上传的参考素材")} className="fixed z-[100] overflow-y-auto rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl" style={position}>
       <p className="px-2 py-1 text-[11px] text-muted-foreground">{tx("选择参考素材 · 图、视频、音频分别编号")}</p>

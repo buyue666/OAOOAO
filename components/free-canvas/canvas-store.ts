@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { CanvasWorkspace } from './canvas-workspace'
 import {
   addEdge,
   applyEdgeChanges,
@@ -25,6 +26,7 @@ export type ContextMenuState = { x: number; y: number; target: ContextTarget } |
 export type TypeMenuState = { nodeId: string; side: NodeSide } | null
 
 export type HydratePayload = {
+  workspace?: CanvasWorkspace
   projectId: string
   title: string
   updatedAt: string | null
@@ -43,6 +45,8 @@ const GROUP_PADDING = 40
 const GROUP_HEADER = 56
 
 export type CanvasState = {
+  projectVersion: number | null
+  workspace: CanvasWorkspace | null
   projectId: string | null
   title: string
   updatedAt: string | null
@@ -78,7 +82,7 @@ export type CanvasState = {
   hydrate: (payload: HydratePayload) => void
   reset: () => void
   setTitle: (title: string) => void
-  markSaved: (updatedAt: string | null, revision: number) => void
+  markSaved: (updatedAt: string | null, revision: number, projectVersion?: number) => void
   setSaveStatus: (status: SaveStatus, error?: string | null) => void
   setNotice: (notice: string | null) => void
   onNodesChange: (changes: NodeChange<FreeCanvasNode>[]) => void
@@ -227,6 +231,8 @@ function freeSpotFor(position: XYPosition, size: { width: number; height: number
 }
 
 const initialState = {
+  projectVersion: null as number | null,
+  workspace: null as CanvasWorkspace | null,
   projectId: null,
   title: '',
   updatedAt: null,
@@ -258,16 +264,19 @@ const initialState = {
   showEdges: true,
 }
 
-export const useCanvasStore = create<CanvasState>()((set, get) => ({
+export const useCanvasStore = create<CanvasState>()((set, get) => {
+const actions: CanvasState = {
   ...initialState,
 
   hydrate: (payload) =>
     set({
       ...initialState,
       projectId: payload.projectId,
+      workspace: payload.workspace ?? null,
       title: payload.title,
       updatedAt: payload.updatedAt,
       projectMeta: payload.projectMeta,
+      projectVersion: typeof payload.projectMeta.version === 'number' ? payload.projectMeta.version : null,
       nodes: sortGroupsFirst(payload.nodes),
       edges: payload.edges,
       viewport: payload.viewport,
@@ -303,9 +312,10 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
     return true
   },
 
-  markSaved: (updatedAt, revision) =>
+  markSaved: (updatedAt, revision, projectVersion) =>
     set((state) => ({
       updatedAt: updatedAt ?? state.updatedAt,
+      projectVersion: projectVersion ?? state.projectVersion,
       savedRevision: revision,
       saveStatus: state.revision === revision ? 'saved' : 'dirty',
       saveError: null,
@@ -317,6 +327,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   onNodesChange: (changes) =>
     set((state) => {
+      if (state.workspace?.readOnly) return { nodes: applyNodeChanges(changes.filter(change => change.type === 'select' || change.type === 'dimensions'), state.nodes) }
       const removals = changes.filter((change) => change.type === 'remove').map((change) => change.id)
       if (removals.length) return removalPatch(state, removals, '删除节点')
       const nodes = applyNodeChanges<FreeCanvasNode>(changes, state.nodes)
@@ -326,6 +337,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
 
   onEdgesChange: (changes) =>
     set((state) => {
+      if (state.workspace?.readOnly) return { edges: applyEdgeChanges(changes.filter(change => change.type === 'select'), state.edges) }
       const edges = applyEdgeChanges<FreeCanvasEdge>(changes, state.edges)
       const removed = changes.some((change) => change.type === 'remove')
       const mutated = changes.some((change) => change.type !== 'select')
@@ -354,6 +366,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   commitViewport: (viewport) =>
     set((state) => {
       const current = state.viewport
+      if (state.workspace?.readOnly) return { viewport }
       if (current.x === viewport.x && current.y === viewport.y && current.zoom === viewport.zoom) return {}
       return { viewport, ...dirtyPatch(state) }
     }),
@@ -456,7 +469,7 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
         return { ...node, data: { ...node.data, ...patch } } as FreeCanvasNode
       })
       if (!changed) return {}
-      return { nodes, ...(options?.persist === false ? {} : dirtyPatch(state)) }
+      return { nodes, ...(options?.persist === false || state.workspace?.readOnly ? {} : dirtyPatch(state)) }
     }),
 
   removeNodes: (ids, label = '删除节点') => set((state) => removalPatch(state, ids, label)),
@@ -644,4 +657,16 @@ export const useCanvasStore = create<CanvasState>()((set, get) => ({
   clearFocus: () => set({ focusNodeId: null }),
 
   selectNodeOnly: (nodeId) => set((state) => ({ nodes: selectOnly(state.nodes, new Set([nodeId])) })),
-}))
+}
+// The same store backs every entry point (menus, shortcuts and node controls).
+// Enforce reviewer mode here as well as in React Flow and on the server.
+const writes = ['setTitle', 'beginEdit', 'undo', 'redo', 'connect', 'insertNodes', 'insertNodeNear', 'updateNodeData', 'removeNodes', 'deleteSelection', 'restoreTrash', 'duplicateSelection', 'pasteClipboard', 'groupSelection', 'ungroupSelection', 'alignSelection', 'arrangeLayout'] as const
+for (const key of writes) {
+  const action = actions[key] as (...args: unknown[]) => unknown
+  ;(actions as unknown as Record<string, unknown>)[key] = (...args: unknown[]) => {
+    if (get().workspace?.readOnly) return key === 'arrangeLayout' ? false : key === 'insertNodeNear' ? null : undefined
+    return action(...args)
+  }
+}
+return actions
+})

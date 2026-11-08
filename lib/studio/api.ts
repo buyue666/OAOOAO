@@ -162,6 +162,7 @@ export type CanvasBackendConnection = {
 }
 
 export type CanvasBackendProject = {
+  version?: number
   id: string
   title: string
   createdAt: string

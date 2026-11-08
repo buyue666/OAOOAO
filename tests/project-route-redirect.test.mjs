@@ -70,6 +70,7 @@ async function canvasLoader(response, environment = 'production') {
     'next/headers': { cookies: async () => ({ toString: () => 'synthetic-session=fixture' }) },
     'next/navigation': navigation,
     '@/lib/studio/preview-mode': preview,
+    './canvas-workspace': await loadModule('../components/free-canvas/canvas-workspace.ts'),
   }, { process: { env: { OAOAO_BACKEND_URL: 'http://synthetic.invalid' } }, fetch: async () => response })
 }
 

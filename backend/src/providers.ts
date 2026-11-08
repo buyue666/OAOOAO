@@ -10,6 +10,7 @@ import { assertStorageAvailable } from './storage-quota.js';
 import { assertTeamStorage } from './team-access.js';
 import { storageConfig, assertStorageConfigured } from './object-storage.js';
 import { saveGeneratedMedia } from './generated-media.js';
+import { saveTeamAsset } from './team-assets.js';
 
 export type GenerationKind='text'|'image'|'video'|'audio'|'render';
 export type Json=Record<string,any>;
@@ -199,7 +200,8 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
     const response=await request('/chat/completions',JSON.stringify({model,messages:await providerTextMessages(ctx,job.user_id,input),stream:false}));
     const data=await response.json() as Json;const content=data.choices?.[0]?.message?.content;
     if(typeof content!=='string')throw new ProviderFailure('Provider returned no usable text output');
-    return{type:'complete',result:{content}};
+    const asset = ctx.workspace ? await saveTeamAsset(ctx, ctx.workspace, job.user_id, { title: input.prompt.slice(0, 100) || '文本生成结果', text: content }, true) : undefined;
+    return{type:'complete',result:{content,...(asset ? { teamAssetId: asset.id } : {})}};
   }
   if(job.kind==='audio'){
     const response=await request('/audio/speech',JSON.stringify({model,input:input.prompt,voice:config.voice||'alloy',response_format:config.format||'mp3'}));
