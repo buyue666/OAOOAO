@@ -37,3 +37,13 @@ test('request names and capability collisions never produce conflicting route id
   assert.notEqual(candidate.id, 'writer-three')
   assert.equal(new Set(result.models.flatMap(model => [model.id, ...(model.aliases ?? [])])).size, 4)
 })
+
+test('an already routed upstream is not rediscovered under a missing or stale capability hint', () => {
+  const video = { id: 'motion', name: 'Motion', capability: 'video', enabled: true, bindings: [{ id: 'motion-route', channelId: 'a', upstreamModel: 'motion-model', enabled: true, priority: 1 }] }
+  for (const advancedConfig of [{}, { modelCapabilities: { 'motion-model': 'text' } }]) {
+    const result = channelModelCatalog([{ id: 'a', enabled: true, models: ['motion-model', 'new-writer'], advancedConfig }], [video])
+    assert.deepEqual(result.models[0], video)
+    assert.deepEqual([...result.pendingIds], ['new-writer'])
+    assert.equal(result.models.filter(model => model.bindings.some(binding => binding.upstreamModel === 'motion-model')).length, 1)
+  }
+})

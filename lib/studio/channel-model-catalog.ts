@@ -5,10 +5,12 @@ export function channelModelCatalog(channels: SystemChannel[], configured: Logic
   const models = structuredClone(configured)
   const pendingIds = new Set<string>()
   const normalize = (name: string) => name.trim().toLowerCase()
+  const routedUpstreams = new Set(configured.flatMap(model => model.bindings.map(binding => `${binding.channelId}:${normalize(binding.upstreamModel)}`)))
   const reserved = new Set(configured.flatMap(model => [model.id, ...(model.aliases ?? [])]).map(normalize))
   const known = new Set(configured.flatMap(model => [model.id, ...(model.aliases ?? []), ...model.bindings.map(binding => binding.upstreamModel)].map(name => `${model.capability}:${normalize(name)}`)))
   const drafts = new Map<string, LogicalModel>()
   for (const channel of channels) for (const upstreamModel of channel.models) {
+    if (routedUpstreams.has(`${channel.id}:${normalize(upstreamModel)}`)) continue
     const capability = channel.advancedConfig?.modelCapabilities?.[upstreamModel] ?? 'text'
     const key = `${capability}:${normalize(upstreamModel)}`
     if (known.has(key)) continue
