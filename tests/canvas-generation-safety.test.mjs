@@ -118,17 +118,17 @@ test('the real image editor callback keeps model choices and team uploads in a p
     const uploads = [], submissions = [], models = [canvasTestModel('chosen-image'), canvasTestModel('chosen-video', 'video')]
     const deps = { useCallback: fn => fn, useCanvasStore: h.actual, workspace, models, defaults, state: { sessionSettings: undefined },
       imageEditor: h.actual.getState().imageEditor, viewportCenter: () => ({ x: 400, y: 0 }), fitView() {},
-      createGenerationNode: factory.createGenerationNode, canvasModelDefaults: policy.canvasModelDefaults,
+      createGenerationNode: factory.createGenerationNode, canvasModelDefaults: policy.canvasModelDefaults, imageEditorVideoInput: sourceModule('../lib/studio/image-editor-settings.ts', { './video-policy': sourceModule('../lib/studio/video-policy.ts') }).imageEditorVideoInput,
       filterModelsByCapability: (models, kind) => models.filter(model => model.capability === kind), defaultModelFor: (_kind, _settings, models) => models[0]?.id,
       saveTeamCanvasImage: async (scope, url, title) => { uploads.push({ scope, url, title }); return url.startsWith('data:') ? `/api/teams/team/assets/upload-${uploads.length}/content` : url },
       generation: { submitNode: async id => { const node = h.actual.getState().nodes.find(node => node.id === id); submissions.push(plain(node)) } },
     }
     const submit = new Function(...Object.keys(deps), `${code}\nreturn handleImageEditSubmit;`)(...Object.values(deps))
-    await submit({ operation, imageUrl: '/api/teams/team/assets/source/content', prompt: 'Synthetic edit', brushSize: 10, model: operation === 'to-video' ? 'chosen-video' : 'chosen-image', resolution: '2K', quality: operation === 'to-video' ? '720' : 'high', ...(operation === 'inpaint' ? { maskDataUrl: 'data:image/png;base64,synthetic', regions: [{ id: 1, referenceImageDataUrl: 'data:image/png;base64,region' }] } : {}) })
+    await submit({ operation, imageUrl: '/api/teams/team/assets/source/content', prompt: 'Synthetic edit', brushSize: 10, model: operation === 'to-video' ? 'chosen-video' : 'chosen-image', resolution: '2K', quality: operation === 'to-video' ? '720' : 'high', seconds: 6, ...(operation === 'inpaint' ? { maskDataUrl: 'data:image/png;base64,synthetic', regions: [{ id: 1, referenceImageDataUrl: 'data:image/png;base64,region' }] } : {}) })
     assert.equal(submissions.length, 1); assert.equal(submissions[0].data.model, operation === 'to-video' ? 'chosen-video' : 'chosen-image')
     assert.equal(submissions[0].data.quality, operation === 'to-video' ? '720' : 'high'); assert.equal(h.actual.getState().imageEditor, null)
     if (operation === 'inpaint') { assert.equal(submissions[0].data.resolution, '2K'); assert.equal(submissions[0].data.references.length, 2); assert.match(submissions[0].data.edit.mask.url, /^\/api\/teams\/team\/assets\//); assert.equal(uploads.length, 3) }
-    else { assert.equal(submissions[0].data.references[0].role, 'first_frame'); assert.equal(submissions[0].data.seconds, 8) }
+    else { assert.equal(submissions[0].data.references[0].role, 'first_frame'); assert.equal(submissions[0].data.seconds, 6) }
     assert(uploads.every(upload => upload.scope === workspace)); h.unmount()
   }
 })

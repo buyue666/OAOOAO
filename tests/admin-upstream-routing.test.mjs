@@ -5,6 +5,7 @@ import ts from 'typescript'
 
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8')
 function compile(source,imports={}) {
+  if (!imports['@/lib/studio/channel-model-catalog'] && source.includes('channel-model-catalog')) imports = { ...imports, '@/lib/studio/channel-model-catalog': compile(read('../lib/studio/channel-model-catalog.ts')) }
   const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText
   const module={exports:{}}
   new Function('require','module','exports',code)(name=>{assert.ok(name in imports,`Unexpected import ${name}`);return imports[name]},module,module.exports)

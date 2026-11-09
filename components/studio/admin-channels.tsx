@@ -7,6 +7,7 @@ import { fetchChannelModels, getAdminSettings, listGenerationOperations, saveCha
 import { collectAliasIssues, formatAliasInput, normalizeAliases, normalizeModelKey, parseAliasInput, requestNamesOf, validateAlias } from '@/lib/studio/model-alias'
 import type { AdminGenerationChannel, AdminSettings, ChannelModelConfig, LogicalModel, SystemChannel, SystemChannelModelFetchResult } from '@/lib/studio/admin-types'
 import { bindingBaseCost, synchronizeUpstreamPricing, upstreamPricePeers, upstreamPricingConflicts, upstreamPricingSnapshot } from '@/lib/studio/upstream-pricing'
+import { channelModelCatalog, configuredCatalogModels } from '@/lib/studio/channel-model-catalog'
 import { cn } from '@/lib/utils'
 import { ControlButton, StatusBadge } from './ui'
 import { ModelIcon } from './model-icon'
@@ -53,6 +54,7 @@ function localizeChannelError(reason: unknown, fallback: string) {
     ['A saved API key cannot be used with a different provider origin', '留空表示不修改已保存的 API Key；如需移除旧密钥，请勾选“清空已保存的 API Key”。'],
     ['Changing the storage origin requires a new access key ID or clearing the saved key', '更换存储地址后，必须填写新的 Access Key ID，或清空已保存的密钥。'],
     ['1K image resolution requires the auto quality parameter', '启用 1K 清晰度时，图片质量必须绑定“自动”（参数值 auto）。'],
+    ['Model catalog discovery is unavailable for this protocol', '当前协议暂不支持自动拉取模型，请手动添加模型名称。'],
   ]
   return translations.find(([english]) => message.includes(english))?.[1] || message || fallback
 }
@@ -84,6 +86,7 @@ export function AdminChannelsPanel() {
   const [message, setMessage] = useState('')
   const [editing, setEditing] = useState<SystemChannel | 'new' | null>(null)
   const [routing, setRouting] = useState(false)
+  const [routingModelId, setRoutingModelId] = useState<string | undefined>()
   const [tab, setTab] = useState<ChannelTab>('channels')
   const [channelQuery, setChannelQuery] = useState('')
   const [channelStatus, setChannelStatus] = useState<'all' | 'enabled' | 'disabled'>('all')
@@ -102,7 +105,8 @@ export function AdminChannelsPanel() {
   useEffect(() => { void load() }, [load])
 
   const channels = settings?.systemChannels ?? []
-  const models = (settings?.logicalModels ?? []).filter(model => model.bindings.some(binding => channels.some(channel => channel.id === binding.channelId)))
+  const catalog = useMemo(() => channelModelCatalog(settings?.systemChannels ?? [], settings?.logicalModels ?? []), [settings])
+  const models = catalog.models.filter(model => model.bindings.some(binding => channels.some(channel => channel.id === binding.channelId)))
   const enabledChannels = channels.filter((channel) => channel.enabled)
   const missingKey = channels.filter((channel) => !channel.hasApiKey).length
   /** 运行时健康信息来自生成运维接口，按渠道汇总失败次数与冷却状态。 */
@@ -172,7 +176,7 @@ export function AdminChannelsPanel() {
       {confirm.dialog}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminStat label="模型列表" value={formatAdminNumber(models.length)} detail="对外展示给用户的模型" />
+        <AdminStat label="模型列表" value={formatAdminNumber(models.length)} detail={catalog.pendingIds.size ? `${catalog.pendingIds.size} 个已拉取模型待配置` : '已配置的模型'} />
         <AdminStat label="配置渠道" value={formatAdminNumber(channels.length)} detail={`其中启用 ${formatAdminNumber(enabledChannels.length)}`} tone="success" />
         <AdminStat label="冷却中渠道" value={formatAdminNumber(coolingCount)} detail="连续失败后被自动降权" tone={coolingCount ? 'danger' : 'neutral'} />
         <AdminStat label="缺少密钥" value={formatAdminNumber(missingKey)} detail="未保存 API Key 的渠道" tone={missingKey ? 'warning' : 'neutral'} />
@@ -252,7 +256,7 @@ export function AdminChannelsPanel() {
       {tab === 'models' && (
         <AdminDataPanel
           title="模型列表"
-          description="对用户展示的模型名称、能力类型与渠道绑定优先级。修改后立即影响路由。"
+          description="已拉取的模型会显示在这里；待配置模型需设置价格并启用后，用户才能使用。"
           actions={canManage ? <ControlButton variant="primary" size="sm" onClick={() => setRouting(true)}><Layers3 className="size-3.5" />管理路由</ControlButton> : undefined}
           filters={
             <>
@@ -268,10 +272,10 @@ export function AdminChannelsPanel() {
             <AdminTable columns={['显示名称', '标识', '能力', '状态', '渠道绑定']} minWidth={900} caption="模型列表">
               {visibleModels.map((model) => (
                 <AdminRow key={model.id}>
-                  <AdminCell className="font-medium">{model.name || model.id}</AdminCell>
+                  <AdminCell className="font-medium">{canManage ? <button type="button" className="text-left hover:text-studio-accent hover:underline" onClick={() => { setRoutingModelId(model.id); setRouting(true) }}>{model.name || model.id}</button> : model.name || model.id}</AdminCell>
                   <AdminCell className="font-mono text-[11px]">{model.id}</AdminCell>
                   <AdminCell><StatusBadge tone="muted">{capabilityLabel(model.capability)}</StatusBadge></AdminCell>
-                  <AdminCell><StatusBadge tone={model.enabled ? 'success' : 'muted'}>{model.enabled ? '已启用' : '已停用'}</StatusBadge></AdminCell>
+                  <AdminCell><StatusBadge tone={catalog.pendingIds.has(model.id) ? 'warning' : model.enabled ? 'success' : 'muted'}>{catalog.pendingIds.has(model.id) ? '待配置' : model.enabled ? '已启用' : '已停用'}</StatusBadge>{catalog.pendingIds.has(model.id) && canManage && <button type="button" className="ml-2 text-xs text-studio-accent hover:underline" onClick={() => { setRoutingModelId(model.id); setRouting(true) }}>配置</button>}</AdminCell>
                   <AdminCell>
                     <div className="flex flex-wrap gap-1.5">
                       {model.bindings.map((binding) => (
@@ -308,6 +312,7 @@ export function AdminChannelsPanel() {
       {routing && settings && (
         <RoutingEditor
           settings={settings}
+          initialModelId={routingModelId}
           onClose={() => setRouting(false)}
           onSaved={(text) => { setMessage(text); setRouting(false); load() }}
         />
@@ -544,8 +549,9 @@ function ManualModelAdd({ onAdd }: { onAdd: (model: string) => void }) {
 
 /* -------------------------------- 路由编辑 -------------------------------- */
 
-function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings; onClose: () => void; onSaved: (message: string) => void }) {
-  const [models, setModels] = useState<LogicalModel[]>(() => settings.logicalModels.map((model) => ({ ...model, bindings: model.bindings.map(({iconUrl: _legacyIcon, ...binding}) => ({ ...binding })) })))
+function RoutingEditor({ settings, initialModelId, onClose, onSaved }: { settings: AdminSettings; initialModelId?: string; onClose: () => void; onSaved: (message: string) => void }) {
+  const [initialCatalog] = useState(() => channelModelCatalog(settings.systemChannels, settings.logicalModels))
+  const [models, setModels] = useState<LogicalModel[]>(() => initialCatalog.models.map((model) => ({ ...model, bindings: model.bindings.map(({iconUrl: _legacyIcon, ...binding}) => ({ ...binding })) })))
   const [defaults, setDefaults] = useState(settings.defaultModels)
   const [costs, setCosts] = useState<Record<string, number>>(settings.modelPointCosts || {})
   const [busy, setBusy] = useState(false)
@@ -553,7 +559,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
   const [query, setQuery] = useState('')
   const [capabilityFilter, setCapabilityFilter] = useState<'all' | Capability>('all')
   const [enabledOnly, setEnabledOnly] = useState(false)
-  const [selectedModelId, setSelectedModelId] = useState(() => settings.defaultModels.imageModel || settings.logicalModels[0]?.id || '')
+  const [selectedModelId, setSelectedModelId] = useState(() => initialModelId || settings.defaultModels.imageModel || initialCatalog.models[0]?.id || '')
   // 复选框与“当前编辑”分开：点击卡片只切换编辑对象，只有明确勾选的模型才会参与批量操作。
   const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(() => new Set())
   const [batchNotice, setBatchNotice] = useState('')
@@ -704,7 +710,9 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
       // 别名冲突必须在提交前拦住：保存后行为会随数组顺序变化。
       const aliasIssues = collectAliasIssues(models)
       if (aliasIssues.length) throw new Error(aliasIssues[0])
-      await saveRouting({ logicalModels: models, defaultModels: defaults, modelPointCosts: costs })
+      const savedModels = configuredCatalogModels(models, initialCatalog, costs)
+      for (const model of savedModels) if (initialCatalog.pendingIds.has(model.id) && model.enabled && model.capability !== 'video' && model.bindings.some(binding => binding.enabled && bindingBaseCost(model, binding, costs) === undefined)) throw new Error(`请先设置「${model.name || model.id}」的积分价格，再启用模型。`)
+      await saveRouting({ logicalModels: savedModels, defaultModels: defaults, modelPointCosts: costs })
       onSaved('模型路由、默认模型与价格已保存')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '保存失败')
@@ -792,7 +800,7 @@ function RoutingEditor({ settings, onClose, onSaved }: { settings: AdminSettings
                     />
                     <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted p-1 text-studio-accent"><ModelIcon model={model} /></span><span className="min-w-0 truncate text-xs font-semibold">{model.name || model.id}</span>
                   </span>
-                  <StatusBadge tone={model.enabled ? 'success' : 'muted'}>{model.enabled ? '启用' : '停用'}</StatusBadge>
+                  <StatusBadge tone={model.enabled ? 'success' : initialCatalog.pendingIds.has(model.id) ? 'warning' : 'muted'}>{model.enabled ? '启用' : initialCatalog.pendingIds.has(model.id) ? '待配置' : '停用'}</StatusBadge>
                 </span>
                 <span className="mt-1 block truncate font-mono text-[11px] text-muted-foreground">{model.id}</span>
                 <span className="mt-1 block text-[11px] text-muted-foreground">{capabilityLabel(model.capability)} · {model.bindings.length} 个渠道绑定 · {modelPriceLabel(model, costs)}</span>

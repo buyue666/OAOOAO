@@ -1,4 +1,5 @@
 import {normalizeModelCatalog,modelReady} from './model-catalog.js';
+import {effectiveChannelProtocol} from './channel-protocol.js';
 import {validateVideoPolicySettings} from './video-policy.js';
 import {validateUpstreamPricing} from './upstream-pricing.js';
 import { randomUUID } from 'node:crypto';
@@ -301,7 +302,7 @@ export async function registerSettings(app:FastifyInstance,ctx:Context) {
     await ctx.requireUser(request,'upstream.manage');const body=object(request.body),settings=await getSettings(ctx);const saved=settings.systemChannels.find((c:any)=>c.id===body.channelId);
     const baseUrl=string(body.baseUrl||saved?.baseUrl,'base URL',2000);validUrl(baseUrl,'base URL');
     const key=body.apiKey?string(body.apiKey,'API key',16384):ctx.decrypt(saved?.apiKey||'');
-    const format=body.protocol||saved?.advancedConfig?.protocol||body.apiFormat||saved?.apiFormat||'openai';
+    const format=effectiveChannelProtocol(body.protocol ?? saved?.advancedConfig?.protocol,body.apiFormat ?? saved?.apiFormat);
     if(!body.apiKey&&saved?.apiKey&&new URL(baseUrl).origin!==new URL(saved.baseUrl).origin)throw httpError(400,'A saved API key cannot be used with a different provider origin');
     if(!['openai','openai-compatible','ciyuan-async'].includes(format))throw httpError(501,'Model catalog discovery is unavailable for this protocol');
     const base=new URL(baseUrl);base.pathname=`${base.pathname.replace(/\/$/,'')}/models`;

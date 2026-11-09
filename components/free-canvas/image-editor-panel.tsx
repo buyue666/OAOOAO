@@ -16,6 +16,7 @@ import {
   MousePointer2,
   Paintbrush,
   Redo2,
+  RefreshCw,
   Scissors,
   Sparkles,
   Trash2,
@@ -28,7 +29,8 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import styles from './image-editor-panel.module.css'
-import { ModelNote } from '../studio/ui'
+import { SelectField } from '../studio/ui'
+import { scheduleVideoQuote } from '@/lib/studio/video-quote'
 
 export type ImageEditorTool = 'brush' | 'eraser' | 'rect' | 'move'
 export type ImageEditOperation = 'inpaint' | 'remove-background' | 'erase' | 'outpaint' | 'enhance' | 'layers' | 'to-video'
@@ -47,6 +49,7 @@ export interface ImageEditRequest {
   model?: string
   resolution?: string
   quality?: string
+  seconds?: number
 }
 
 export type ImageEditorRegion = { id: number; prompt?: string; referenceImageDataUrl?: string }
@@ -66,6 +69,7 @@ export type ImageEditorModelOption = {
   resolutions?: string[]
   qualities?: string[]
   qualityLabels?: Record<string, string>
+  videoDurations?: Record<string, number[]>
 }
 
 export interface ImageEditorVersion {
@@ -100,10 +104,12 @@ export interface ImageEditorPanelProps {
   /** Optional video defaults used when switching this image editor to video. */
   initialVideoModelId?: string
   initialVideoQuality?: string
+  initialVideoSeconds?: number
   initialResolution?: string
   initialQuality?: string
   /** Optional live estimate for the current editor settings. */
   estimateCredits?: (modelId: string, settings?: { quality?: string; count?: number; seconds?: number }) => number
+  quoteVideoCredits?: (settings: { model: string; quality: string; seconds: number }, signal: AbortSignal) => Promise<number>
   showHeader?: boolean
   /** Visual treatment for the editor surface. */
   theme?: 'dark' | 'light'
@@ -252,9 +258,11 @@ export function ImageEditorPanel({
   initialModelId,
   initialVideoModelId,
   initialVideoQuality = '',
+  initialVideoSeconds = 8,
   initialResolution = '1K',
   initialQuality = 'auto',
   estimateCredits,
+  quoteVideoCredits,
   showHeader = true,
   theme = 'dark',
 }: ImageEditorPanelProps) {
@@ -290,6 +298,12 @@ export function ImageEditorPanel({
   const [editorResolution, setEditorResolution] = useState(initialResolution)
   const [editorQuality, setEditorQuality] = useState(initialQuality)
   const [editorVideoQuality, setEditorVideoQuality] = useState(initialVideoQuality)
+  const [editorVideoSeconds, setEditorVideoSeconds] = useState(initialVideoSeconds)
+  const [videoQuote, setVideoQuote] = useState<{ key: string; points?: number; error?: string }>({ key: '' })
+  const [quoteRevision, setQuoteRevision] = useState(0)
+  const quoteVideoRef = useRef(quoteVideoCredits)
+  quoteVideoRef.current = quoteVideoCredits
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState<PanPoint>({ x: 0, y: 0 })
   const [toolbarOffset, setToolbarOffset] = useState<PanPoint>({ x: 0, y: 0 })
@@ -311,24 +325,47 @@ export function ImageEditorPanel({
   const editorCapability = operation === 'to-video' ? 'video' : 'image'
   const editorModelChoices = useMemo(() => {
     const matching = modelOptions.filter((item) => !item.capability || item.capability === editorCapability)
-    return matching.length ? matching : modelOptions
+    return matching
   }, [editorCapability, modelOptions])
   const videoModelChoices = useMemo(() => {
     const matching = modelOptions.filter((item) => item.capability === 'video')
-    return matching.length ? matching : modelOptions
+    return matching
   }, [modelOptions])
   const selectedEditorModelId = editorCapability === 'video' ? editorVideoModelId : editorModelId
   const selectedEditorModel = editorModelChoices.find((item) => item.id === selectedEditorModelId) ?? editorModelChoices[0]
   const activeEditorQuality = editorCapability === 'video' ? editorVideoQuality : editorQuality
   const setActiveEditorQuality = editorCapability === 'video' ? setEditorVideoQuality : setEditorQuality
+  const editorVideoDurationOptions = selectedEditorModel?.videoDurations?.[activeEditorQuality] ?? []
+  const selectedVideoSeconds = editorVideoDurationOptions.length
+    ? editorVideoDurationOptions.includes(editorVideoSeconds) ? editorVideoSeconds : editorVideoDurationOptions.includes(initialVideoSeconds) ? initialVideoSeconds : editorVideoDurationOptions[0]
+    : editorVideoSeconds
+  const quoteKey = JSON.stringify([imageSrc, selectedEditorModel?.id, activeEditorQuality, selectedVideoSeconds, quoteRevision])
+  const needsVideoQuote = editorCapability === 'video' && Boolean(quoteVideoCredits) && Boolean(selectedEditorModel)
+  useEffect(() => {
+    if (!needsVideoQuote || !selectedEditorModel) return
+    return scheduleVideoQuote({
+      load: async signal => {
+        const points = await quoteVideoRef.current!({ model: selectedEditorModel.id, quality: activeEditorQuality, seconds: selectedVideoSeconds }, signal)
+        if (!Number.isFinite(points) || points < 0) throw new Error('费用预估无效，请重试')
+        return points
+      },
+      onSuccess: points => setVideoQuote({ key: quoteKey, points }),
+      onError: error => setVideoQuote({ key: quoteKey, error: error instanceof Error ? error.message : '费用预估失败，请重试' }),
+    })
+  }, [needsVideoQuote, quoteKey])
+  const quotePending = needsVideoQuote && videoQuote.key !== quoteKey
+  const quoteError = needsVideoQuote && videoQuote.key === quoteKey ? videoQuote.error : undefined
   const estimatedCredits = useMemo(() => {
+    if (needsVideoQuote) return videoQuote.key === quoteKey ? videoQuote.points : undefined
     const modelId = selectedEditorModel?.id || selectedEditorModelId
-    if (!modelId) return 0
+    if (!modelId) return undefined
     const settings = editorCapability === 'video'
-      ? { quality: activeEditorQuality || undefined, count: 1, seconds: 8 }
+      ? { quality: activeEditorQuality || undefined, count: 1, seconds: selectedVideoSeconds }
       : { quality: activeEditorQuality || undefined, count: 1 }
-    return estimateCredits?.(modelId, settings) ?? selectedEditorModel?.creditCost ?? 0
-  }, [activeEditorQuality, editorCapability, estimateCredits, selectedEditorModel?.creditCost, selectedEditorModel?.id, selectedEditorModelId])
+    const points = estimateCredits?.(modelId, settings) ?? selectedEditorModel?.creditCost
+    return points && points > 0 ? points : undefined
+  }, [needsVideoQuote, quoteKey, videoQuote, activeEditorQuality, editorCapability, selectedVideoSeconds, estimateCredits, selectedEditorModel?.creditCost, selectedEditorModel?.id, selectedEditorModelId])
+  const estimateLabel = quotePending ? '正在核算预计消耗…' : quoteError ? '费用预估失败，请重试' : estimatedCredits !== undefined ? `预计消耗 ${estimatedCredits} 积分` : '预计消耗以任务账单为准'
   const editorResolutionOptions = useMemo(() => (
     selectedEditorModel?.resolutions?.length ? selectedEditorModel.resolutions : [initialResolution || '1K']
   ), [initialResolution, selectedEditorModel])
@@ -342,11 +379,11 @@ export function ImageEditorPanel({
   // image editing and video conversion. This also makes newly loaded backend
   // model lists safe when the original model is no longer available.
   useEffect(() => {
-    if (!editorModelChoices.length) return
+    if (editorCapability !== 'image' || !editorModelChoices.length) return
     setEditorModelId((current) => editorModelChoices.some((item) => item.id === current)
       ? current
       : (editorModelChoices.find((item) => item.id === initialModelId)?.id ?? editorModelChoices[0].id))
-  }, [editorModelChoices, initialModelId])
+  }, [editorCapability, editorModelChoices, initialModelId])
   useEffect(() => {
     if (!videoModelChoices.length) return
     setEditorVideoModelId((current) => videoModelChoices.some((item) => item.id === current)
@@ -876,29 +913,32 @@ export function ImageEditorPanel({
   }
 
   const submit = async (confirmedHiddenMarkers = false) => {
+    if (isSubmitting || quotePending || quoteError || (modelOptions.length > 0 && !selectedEditorModel)) return
     if (!confirmedHiddenMarkers && operation !== 'outpaint' && hasMask && !showMarkers) {
       setHiddenSubmitConfirm(true)
       return
     }
     setStatus('正在提交编辑请求…')
+    setIsSubmitting(true)
     setHiddenSubmitConfirm(false)
     const canvas = maskRef.current
     const rawPrompt = prompt.trim()
     const markerIndex = rawPrompt.indexOf('【区域标记】')
     const basePrompt = (markerIndex >= 0 ? rawPrompt.slice(0, markerIndex) : rawPrompt).trim() || selectedMeta.defaultPrompt
-    const regionPrompt = operation !== 'outpaint' && maskRegions.length > 0
+    const regionPrompt = editorCapability === 'image' && operation !== 'outpaint' && maskRegions.length > 0
       ? `请按照画面上的标注编号处理：${maskRegions.map((region) => `${region.prompt?.trim() ? `区域 ${region.id}：${region.prompt.trim()}` : `区域 ${region.id}`}${region.referenceImageDataUrl ? '（附有该区域参考图）' : ''}`).join('；')}。提示词中的“区域 N”对应画面上同编号位置。`
       : ''
     const request: ImageEditRequest = {
       operation,
       prompt: [basePrompt, regionPrompt].filter(Boolean).join('\n\n'),
-      maskDataUrl: operation !== 'outpaint' && canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
+      maskDataUrl: editorCapability === 'image' && operation !== 'outpaint' && canvas && hasMask ? canvas.toDataURL('image/png') : undefined,
       imageUrl: imageSrc,
       brushSize,
       model: selectedEditorModel?.id || selectedEditorModelId || undefined,
       resolution: editorCapability === 'image' ? (editorResolution || undefined) : undefined,
       quality: activeEditorQuality || undefined,
-      regions: operation !== 'outpaint' && maskRegions.length > 0
+      seconds: editorCapability === 'video' ? selectedVideoSeconds : undefined,
+      regions: editorCapability === 'image' && operation !== 'outpaint' && maskRegions.length > 0
         ? maskRegions.map((region) => ({ id: region.id, prompt: region.prompt, referenceImageDataUrl: region.referenceImageDataUrl }))
         : undefined,
       ratio: operation === 'outpaint' && outpaintRatio !== 'original' ? outpaintRatio : undefined,
@@ -906,8 +946,10 @@ export function ImageEditorPanel({
     try {
       await onSubmit?.(request)
       setStatus('已提交，等待生成结果')
-    } catch {
-      setStatus('提交失败，请稍后重试')
+    } catch (reason) {
+      setStatus(reason instanceof Error ? reason.message : '提交失败，请稍后重试')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1009,29 +1051,25 @@ export function ImageEditorPanel({
       </div>
 
       {editorModelChoices.length > 0 && <div className={styles.editorSettingsBar} aria-label="改图参数">
-        <div className={styles.editorSettingField}>
-          <span>模型</span>
-          <span className={styles.editorSettingControl}>
-            {selectedEditorModel?.icon && <span className={styles.editorSettingIcon}>{selectedEditorModel.icon}</span>}
-            <select value={selectedEditorModel?.id ?? selectedEditorModelId} onChange={(event) => editorCapability === 'video' ? setEditorVideoModelId(event.target.value) : setEditorModelId(event.target.value)} aria-label="改图模型">
-              {editorModelChoices.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-            </select>
-            {selectedEditorModel?.note?.trim() && <ModelNote note={selectedEditorModel.note} />}
-          </span>
-        </div>
-        {(editorCapability === 'image' || selectedEditorModel?.resolutions?.length) && <label className={styles.editorSettingField}>
+        <SelectField className={`${styles.editorSettingField} ${styles.editorModelSelect}`} label={editorCapability === 'video' ? '视频模型' : '改图模型'} value={selectedEditorModel?.id ?? selectedEditorModelId} onChange={editorCapability === 'video' ? setEditorVideoModelId : setEditorModelId} options={editorModelChoices.map(item => ({ value: item.id, label: item.label, icon: item.icon, note: item.note }))} />
+        {editorCapability === 'image' && <label className={styles.editorSettingField}>
           <span>清晰度</span>
           <select value={editorResolution} onChange={(event) => setEditorResolution(event.target.value)} aria-label="改图清晰度">
             {editorResolutionOptions.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>}
         <label className={styles.editorSettingField}>
-          <span>{editorCapability === 'video' ? '视频清晰度' : '图片质量'}</span>
+          <span>{editorCapability === 'video' ? '清晰度' : '图片质量'}</span>
           <select value={activeEditorQuality} onChange={(event) => setActiveEditorQuality(event.target.value)} aria-label={editorCapability === 'video' ? '视频清晰度' : '改图图片质量'}>
             {editorQualityOptions.map((item) => <option key={item} value={item}>{selectedEditorModel?.qualityLabels?.[item] || (item === 'auto' ? '自动' : item)}</option>)}
           </select>
         </label>
+        {editorCapability === 'video' && editorVideoDurationOptions.length > 0 && <label className={`${styles.editorSettingField} ${styles.durationControl}`}>
+          <span>时长 <strong>{selectedVideoSeconds} 秒</strong></span>
+          <input type="range" min="0" max={editorVideoDurationOptions.length - 1} step="1" value={Math.max(0, editorVideoDurationOptions.indexOf(selectedVideoSeconds))} disabled={editorVideoDurationOptions.length === 1} onChange={event => setEditorVideoSeconds(editorVideoDurationOptions[Number(event.target.value)])} aria-label="视频时长" aria-valuetext={`${selectedVideoSeconds} 秒`} />
+        </label>}
       </div>}
+      {modelOptions.length > 0 && !editorModelChoices.length && <p className={styles.unavailable} role="status">暂无支持{editorCapability === 'video' ? '图片转视频' : '图片编辑'}的模型，请先在后台配置。</p>}
 
       {operation === 'outpaint' && <div className={styles.outpaintRatioBar} role="radiogroup" aria-label="扩图比例">
         <span className={styles.outpaintRatioLabel}>扩图比例</span>
@@ -1185,17 +1223,18 @@ export function ImageEditorPanel({
       </div>
 
       <footer className={styles.footer}>
-        <span className={styles.status} role="status">{status}</span>
+        <span className={styles.status} role="status" title={quoteError || status}>{quoteError || status}</span>
         <div className={styles.footerActions}>
+          {quoteError && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={() => setQuoteRevision(value => value + 1)}><RefreshCw aria-hidden="true" />重新预估</button>}
           <div className={styles.quickActions}>
             {operation !== 'outpaint' && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={clearMask} disabled={!hasMask}><Trash2 aria-hidden="true" /><span>清除标记</span></button>}
             {onSaveVersion && <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={saveVersion} disabled={isSaving}><Save aria-hidden="true" /><span>{isSaving ? '保存中…' : '保存'}</span></button>}
           </div>
-          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit()}>
+          <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} disabled={isSubmitting || quotePending || Boolean(quoteError) || (modelOptions.length > 0 && !selectedEditorModel)} onClick={() => void submit()}>
             <WandSparkles aria-hidden="true" />
             <span className={styles.primaryActionCopy}>
-              <span>{operation === 'outpaint' ? '按新尺寸生成图片' : selectedMeta.submitLabel}</span>
-              <small>{estimatedCredits > 0 ? `预计消耗 ${estimatedCredits} 积分` : '预计消耗以任务账单为准'}</small>
+              <span>{isSubmitting ? '提交中…' : operation === 'outpaint' ? '按新尺寸生成图片' : selectedMeta.submitLabel}</span>
+              <small role="status">{estimateLabel}</small>
             </span>
           </button>
         </div>
@@ -1208,10 +1247,10 @@ export function ImageEditorPanel({
             <button type="button" className={styles.iconButton} onClick={() => setHiddenSubmitConfirm(false)} aria-label="取消提交"><X aria-hidden="true" /></button>
           </div>
           <img className={styles.confirmThumbnail} src={imageSrc} alt="当前图片预览" />
-          <p className={styles.confirmMessage}>已隐藏标记，但标记会一并提交。{estimatedCredits > 0 ? ` 本次预计消耗 ${estimatedCredits} 积分。` : ' 预计消耗以任务账单为准。'}</p>
+          <p className={styles.confirmMessage}>已隐藏标记，但标记会一并提交。{estimateLabel}。</p>
           <div className={styles.confirmActions}>
             <button type="button" className={`${styles.actionButton} ${styles.secondaryAction}`} onClick={() => setHiddenSubmitConfirm(false)}>取消</button>
-            <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} onClick={() => void submit(true)}>确认提交{estimatedCredits > 0 ? ` · ${estimatedCredits} 积分` : ''}</button>
+            <button type="button" className={`${styles.actionButton} ${styles.primaryAction}`} disabled={isSubmitting || quotePending || Boolean(quoteError)} onClick={() => void submit(true)}>确认提交{estimatedCredits !== undefined ? ` · ${estimatedCredits} 积分` : ''}</button>
           </div>
         </div>
       </div>}

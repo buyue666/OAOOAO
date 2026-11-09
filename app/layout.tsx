@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
+import Script from 'next/script'
 import { StudioApp } from '@/components/studio/studio-app'
 import { GenerationProvider } from '@/lib/studio/generation-store'
 import { StudioProvider } from '@/lib/studio/store'
@@ -18,15 +19,16 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: '#f4f5f7',
+  colorScheme: 'dark light',
+  themeColor: '#0f1012',
   userScalable: true,
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" className="bg-background" suppressHydrationWarning>
+    <html lang="zh-CN" className="dark bg-background" style={{ colorScheme: 'dark' }} suppressHydrationWarning>
       <body className="font-sans antialiased">
+        <Script id="oao-theme" strategy="beforeInteractive">{`(function(){var theme='dark';try{var raw=localStorage.getItem('oaooao-studio-preferences-v1')??localStorage.getItem('oaooao-studio-demo');var saved=raw?JSON.parse(raw):null;if(saved&&saved.theme==='light')theme='light'}catch{}document.documentElement.classList.toggle('dark',theme==='dark');document.documentElement.style.colorScheme=theme})();`}</Script>
         <LocaleProvider>
           <StudioProvider>
             <SiteBrandMetadata />

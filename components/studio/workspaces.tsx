@@ -88,6 +88,7 @@ import type { Asset, GenerationSettings, ModelConfig, Work } from '@/lib/studio/
 import { publishReferenceAsset } from '@/lib/studio/generation-api'
 import { buildVideoReferences, isVideoFrameMode, videoPickerKind } from '@/lib/studio/video-references'
 import { ImageEditorPanel, type ImageEditRequest, type ImageEditorVersion } from '@/components/free-canvas/image-editor-panel'
+import { imageEditorModelSettings, imageEditorVideoInput } from '@/lib/studio/image-editor-settings'
 import type { GenerationReference } from '@/lib/studio/generation-types'
 import { hasDeliverable } from '@/lib/studio/result-delivery'
 import { addMediaToProject, listProjectReferencedSourceIds, type ProjectMediaInput } from '@/lib/studio/project-media'
@@ -1080,18 +1081,7 @@ export function ImageWorkspace() {
     // support, depending on the upstream provider's capability profile.
     const videoCandidates = videoModelList.filter((item) => item.capabilities.editing || item.capabilities.firstFrame)
     const candidates = [...imageCandidates, ...videoCandidates]
-    return candidates.map((item) => ({
-      id: item.id,
-      label: `${item.shortName} · ${item.creditCost} 积分/次`,
-      note: item.note,
-      capability: (item.capability === 'video' ? 'video' : 'image') as 'image' | 'video',
-      icon: <ModelIcon model={item} />,
-      ratios: item.capabilities.ratios,
-      resolutions: item.capabilities.resolutions,
-      qualities: item.capabilities.qualities,
-      qualityLabels: item.capabilities.qualityLabels,
-      creditCost: item.creditCost,
-    }))
+    return candidates.map(item => ({ ...imageEditorModelSettings(item), icon: <ModelIcon model={item} /> }))
   }, [editorWork?.model, imageModelList, model?.id, videoModelList])
 
   const submitImageEditor = useCallback(async (request: ImageEditRequest) => {
@@ -1107,15 +1097,10 @@ export function ImageWorkspace() {
       const videoModel = videoModelList.find((item) => item.id === request.model)
         ?? videoModelList.find((item) => item.id === defaultModelFor('video', state.sessionSettings, videoModelList))
         ?? videoModelList[0]
-      const requestedRatio = request.ratio || work.ratio
-      const videoRatio = videoModel?.capabilities.ratios.includes(requestedRatio) ? requestedRatio : videoModel?.capabilities.ratios[0] ?? '16:9'
+      if (!videoModel) throw new Error('暂无可用的视频模型')
       await generation.createVideo({
+        ...imageEditorVideoInput(videoModel, request.imageUrl, request.ratio || work.ratio, request.quality || videoModel.capabilities.qualities[0] || defaultModels.videoQuality, request.seconds ?? defaultModels.videoSeconds),
         prompt: request.prompt,
-        model: videoModel?.id,
-        ratio: videoRatio,
-        quality: request.quality || videoModel?.capabilities.qualities?.[0] || defaultModels.videoQuality,
-        seconds: 8,
-        references: [source],
         surface: 'chat',
         projectId: state.selectedProjectId,
       })
@@ -1139,7 +1124,7 @@ export function ImageWorkspace() {
       title: `编辑：${work.title}`,
     })
     setNotice({ tone: 'accent', text: `已提交${request.operation === 'outpaint' ? '扩图' : request.operation === 'enhance' ? '高清修复' : request.operation === 'layers' ? '分图层' : '图片编辑'}任务，可在下方生成任务查看结果。` })
-  }, [defaultModels.videoQuality, editorWork, generation, model?.id, quality, ratio, resolution, state.selectedProjectId, state.sessionSettings, videoModelList])
+  }, [defaultModels.videoQuality, defaultModels.videoSeconds, editorWork, generation, model?.id, quality, ratio, resolution, state.selectedProjectId, state.sessionSettings, videoModelList])
 
   const saveEditorVersion = useCallback(async (imageUrl: string) => {
     if (!editorWork) return
@@ -1506,7 +1491,7 @@ export function ImageWorkspace() {
           versions={editorVersions}
           activeVersionId={editorWork.id}
           showHeader={false}
-          theme="light"
+          theme={state.theme}
           className="!w-full !min-w-0 !border-l-0"
           onClose={() => setEditorWork(null)}
           onSubmit={submitImageEditor}
@@ -1514,6 +1499,12 @@ export function ImageWorkspace() {
           initialModelId={editorWork.model || model?.id}
           initialVideoModelId={defaultModelFor('video', state.sessionSettings, videoModelList)}
           initialVideoQuality={defaultModels.videoQuality || videoModelList[0]?.capabilities.qualities?.[0] || '高清'}
+          initialVideoSeconds={defaultModels.videoSeconds}
+          quoteVideoCredits={async (settings, signal) => {
+            const selected = videoModelList.find(item => item.id === settings.model)
+            if (!selected) throw new Error('所选视频模型已不可用，请重新选择')
+            return (await quoteVideoGeneration(imageEditorVideoInput(selected, editorWork.src, editorWork.ratio, settings.quality, settings.seconds), signal)).points
+          }}
           initialResolution={editorWork.resolution || resolution}
           initialQuality={editorWork.quality || quality}
           estimateCredits={(modelId, settings = {}) => estimateCredits(modelId, {

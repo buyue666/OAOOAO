@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import {effectiveChannelProtocol} from './channel-protocol.js';
 import { prepareVideoPolicy, validateVideoInput } from './video-policy.js';
 import type { PoolClient } from 'pg';
 import { httpError, safeFetch, type Context } from './core.js';
@@ -52,7 +53,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   const channel=settings.systemChannels.find((c:Json)=>c.id===binding.channelId);
   const storeGeneratedMedia=!!ctx.workspace||channel.storeGeneratedMedia!==false;
   if(kind!=='text'&&storeGeneratedMedia)await preflightStorage();
-  const protocol=channel.advancedConfig?.protocol||channel.apiFormat||'openai';
+  const protocol=effectiveChannelProtocol(channel.advancedConfig?.protocol,channel.apiFormat);
 
   if(!protocols.has(protocol))throw httpError(503,`Configured protocol ${protocol} is not supported by this backend`);
   const base=new URL(channel.baseUrl);

@@ -67,7 +67,8 @@ test('production starts with no synthetic account, models, business records, bal
 test('legacy browser storage can only restore theme and sidebar preferences', () => {
   const poisoned = { theme: 'dark', sidebarCollapsed: true, skin: 'gradient', backendStatus: 'connected', user: { id: 'other-account', role: 'admin' }, credits: 999999, projects: [{ id: 'private' }], models: [{ id: 'invented' }], tasks: [{ status: 'completed' }], canvasBoards: { private: {} } }
   assert.deepEqual(helpers.readStudioPreferences(JSON.stringify(poisoned)), { theme: 'dark', sidebarCollapsed: true, skin: 'minimal' })
-  for (const raw of [null, '{broken', 'null', '[]', '"string"']) assert.deepEqual(helpers.readStudioPreferences(raw), { theme: 'light', sidebarCollapsed: false, skin: 'minimal' })
+  for (const raw of [null, '{broken', 'null', '[]', '"string"']) assert.deepEqual(helpers.readStudioPreferences(raw), { theme: 'dark', sidebarCollapsed: false, skin: 'minimal' })
+  assert.deepEqual(helpers.readStudioPreferences('{"theme":"light"}'), { theme: 'light', sidebarCollapsed: false, skin: 'minimal' })
 })
 
 test('account changes purge every old account collection, including admin rows and canvas drafts', () => {

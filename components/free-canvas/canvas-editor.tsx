@@ -6,6 +6,10 @@ import { ReactFlowProvider, useReactFlow, type Viewport, type XYPosition } from 
 import type { LibraryAssetView } from '@/lib/studio/account-api'
 import { createLibraryAsset, uploadPersistentAsset } from '@/lib/studio/account-api'
 import type { CanvasBackendProject } from '@/lib/studio/api'
+import { request as apiRequest } from '@/lib/studio/api'
+import { quoteVideoGeneration } from '@/lib/studio/generation-api'
+import { imageEditorModelSettings, imageEditorVideoInput } from '@/lib/studio/image-editor-settings'
+import { ModelIcon } from '@/components/studio/model-icon'
 import { useStudio } from '@/lib/studio/store'
 import { defaultGenerationDefaults, defaultModelFor, filterModelsByCapability } from '@/lib/studio/studio-models'
 import { availableTeamModels } from '@/lib/studio/team-generation'
@@ -28,7 +32,8 @@ import { useCanvasStore } from './canvas-store'
 import { createGenerationNode, createMediaNode, createNodeOfKind, type CreatableKind } from './node-factory'
 import type { ImageEditorTarget, NodeReference, NodeSide } from './types'
 import type { CanvasWorkspace as WorkspaceScope } from './canvas-workspace'
-import { canvasModelDefaults, canvasReferences } from './canvas-generation-policy'
+import { teamCanvasRoot } from './canvas-workspace'
+import { canvasModelDefaults, canvasReferences, teamCanvasPayload } from './canvas-generation-policy'
 import { GenerationSettings } from './nodes/generation-settings'
 import { saveTeamCanvasImage, TeamCanvasAssets } from './team-canvas-assets'
 import { useAgentActions } from './use-agent-actions'
@@ -204,9 +209,9 @@ function CanvasWorkspace() {
     const modelId = request.model || inherited?.model || defaultModelFor(kind, state.sessionSettings, filterModelsByCapability(models, kind))
     const model = models.find(item => item.id === modelId)
     if (kind === 'video' && model?.capabilities.firstFrame) references[0] = { ...references[0], role: 'first_frame' }
-    const ratio = request.ratio || sourceRatio || result.data.ratio
+    const ratio = kind === 'video' && model ? imageEditorVideoInput(model, sourceUrl, request.ratio || sourceRatio, request.quality || model.capabilities.qualities[0], request.seconds ?? result.data.seconds).ratio : request.ratio || sourceRatio || result.data.ratio
     result.data = { ...result.data, title: `${kind === 'video' ? '变视频' : '编辑'}：${imageEditor?.title || '图片'}`, prompt, references, model: modelId, ratio: model?.capabilities.ratios.includes(ratio) ? ratio : model?.capabilities.ratios[0] || ratio, resolution: request.resolution || inherited?.resolution || result.data.resolution, quality: request.quality || inherited?.quality || model?.capabilities.qualities[0] || result.data.quality,
-      ...(kind === 'image' ? { edit: { operation: request.operation as Exclude<ImageEditOperation, 'to-video'>, ...(maskUrl ? { mask: { type: 'image', url: maskUrl } } : {}) } } : {}) }
+      ...(kind === 'image' ? { edit: { operation: request.operation as Exclude<ImageEditOperation, 'to-video'>, ...(maskUrl ? { mask: { type: 'image', url: maskUrl } } : {}) } } : { seconds: request.seconds ?? result.data.seconds }) }
     result.data = canvasModelDefaults(result.data, model)
     store.insertNodes([result], [], { select: true })
     store.closeImageEditor()
@@ -339,14 +344,27 @@ function CanvasWorkspace() {
           <div className="pointer-events-auto absolute inset-y-0 right-0 z-[60] max-w-full shadow-2xl">
             <ImageEditorPanel
               imageSrc={imageEditor.url}
+              theme={state.theme}
               title={imageEditor.title}
               versions={editorVersions}
               activeVersionId={editorVersions.find((version) => version.imageUrl === imageEditor.url)?.id}
               onClose={closeImageEditor}
               onSubmit={handleImageEditSubmit}
               onSaveVersion={handleSaveEditorVersion}
-              modelOptions={models.filter(model => (model.capability === 'image' && model.capabilities.editing) || (model.capability === 'video' && model.capabilities.firstFrame)).map(model => ({ id: model.id, label: model.shortName || model.name, capability: model.capability as 'image' | 'video', note: model.note, creditCost: model.creditCost, ratios: model.capabilities.ratios, resolutions: model.capabilities.resolutions, qualities: model.capabilities.qualities, qualityLabels: model.capabilities.qualityLabels }))}
+              modelOptions={models.filter(model => (model.capability === 'image' && (model.capabilities.editing || (editorNode?.type === 'generation' && editorNode.data.model === model.id))) || (model.capability === 'video' && (model.capabilities.firstFrame || model.capabilities.editing))).map(model => ({ ...imageEditorModelSettings(model), icon: <ModelIcon model={model} /> }))}
               initialModelId={editorNode?.type === 'generation' ? editorNode.data.model : undefined}
+              initialVideoModelId={defaultModelFor('video', state.sessionSettings, filterModelsByCapability(models, 'video'))}
+              initialVideoQuality={defaults.videoQuality}
+              initialVideoSeconds={defaults.videoSeconds}
+              quoteVideoCredits={async (settings, signal) => {
+                const selected = models.find(model => model.id === settings.model && model.capability === 'video')
+                if (!selected) throw new Error('所选视频模型已不可用，请重新选择')
+                const input = { ...imageEditorVideoInput(selected, imageEditor.url, editorNode?.type === 'generation' ? editorNode.data.ratio : undefined, settings.quality, settings.seconds), prompt: '费用预估' }
+                const quote = workspace
+                  ? await apiRequest<{ points: number }>(`${teamCanvasRoot(workspace)}/generations/quote`, { method: 'POST', body: JSON.stringify(teamCanvasPayload({ kind: 'video', input })), signal })
+                  : await quoteVideoGeneration(input, signal)
+                return quote.points
+              }}
               initialResolution={editorNode?.type === 'generation' ? editorNode.data.resolution : undefined}
               initialQuality={editorNode?.type === 'generation' ? editorNode.data.quality : undefined}
               estimateCredits={estimateCredits}

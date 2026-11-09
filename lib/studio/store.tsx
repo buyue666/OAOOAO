@@ -31,14 +31,14 @@ export function emptyAccountState(): Pick<StudioState, 'user' | 'credits' | 'pro
 export function readStudioPreferences(raw: string | null): Pick<StudioState, 'theme' | 'skin' | 'sidebarCollapsed'> {
   let value: Record<string, unknown> = {}
   try { const parsed = raw ? JSON.parse(raw) : {}; if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) value = parsed } catch { /* Invalid storage must not prevent session loading. */ }
-  return { theme: value.theme === 'dark' ? 'dark' : 'light', skin: 'minimal', sidebarCollapsed: value.sidebarCollapsed === true }
+  return { theme: value.theme === 'light' ? 'light' : 'dark', skin: 'minimal', sidebarCollapsed: value.sidebarCollapsed === true }
 }
 
 function getInitialState(): StudioState {
   return {
     hydrated: false,
     backendStatus: 'checking',
-    theme: 'light',
+    theme: 'dark',
     skin: 'minimal',
     sidebarCollapsed: false,
     ...emptyAccountState(),
@@ -242,9 +242,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, [state.hydrated, refreshSession])
 
   useEffect(() => {
+    if (!state.hydrated) return
     document.documentElement.classList.toggle('dark', state.theme === 'dark')
     document.documentElement.style.colorScheme = state.theme
-  }, [state.theme])
+  }, [state.hydrated, state.theme])
 
   /**
    * 保证 `selectedProjectId` 始终指向**当前用户的真实项目**。
