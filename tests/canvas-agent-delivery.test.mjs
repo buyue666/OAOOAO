@@ -48,6 +48,7 @@ function harness({ getAgent, library, save, initialStatus = 'running', runId = '
   const generation = { getAgent: async id => { pollCalls.push(id); return getAgent ? getAgent(id, pollCalls.length) : completed }, runAgent: async () => ({ ...completed, status: 'planning', assetIds: [] }) }
   let effects = [], effectSlots = [], pendingEffects = []
   const hook = sourceModule('../components/free-canvas/use-agent-actions.ts', {
+    './canvas-agent-context': sourceModule('../components/free-canvas/canvas-agent-context.ts', { '@/lib/studio/prompt-references': sourceModule('../lib/studio/prompt-references.ts') }),
     react: { useCallback: fn => fn, useMemo: fn => fn(), useEffect: (fn, deps) => effects.push({ fn, deps }) },
     '@/lib/studio/generation-api': { newClientRequestId: () => 'synthetic-request' },
     '@/lib/studio/account-api': { listLibraryAssets: async params => { queries.push(params); return library ? library(params) : { assets: [asset('image-result'), asset('text-result', 'text'), asset('audio-result', 'audio')], total: 3 } } },

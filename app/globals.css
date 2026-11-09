@@ -1256,7 +1256,15 @@
    顶部项目状态、底部工具岛与右下角 Agent。它不复用普通工作台的浅色顶栏，
    但节点、项目同步和 Agent 仍然使用同一套业务状态。
    ========================================================================== */
-.oao-canvas-route { color-scheme: dark; }
+.studio-model-icon[data-model-icon-tone='monochrome'] { filter: brightness(0); }
+.dark .studio-model-icon[data-model-icon-tone='monochrome'] { filter: brightness(0) invert(1); }
+.oao-canvas-route { color-scheme: light; }
+.dark .oao-canvas-route { color-scheme: dark; }
+.oao-free-canvas [data-canvas-tool='select'] .react-flow__pane { cursor: crosshair; }
+.oao-free-canvas [data-canvas-tool='pan'] .react-flow__pane,
+.oao-free-canvas [data-canvas-tool='pan'] .react-flow__node { cursor: grab; }
+.oao-free-canvas [data-canvas-tool='pan'] .react-flow__pane:active,
+.oao-free-canvas [data-canvas-tool='pan'] .react-flow__node:active { cursor: grabbing; }
 .oao-canvas-editor {
   --canvas-ink: #f4f7f8;
   --canvas-muted: rgba(235, 235, 235, .62);

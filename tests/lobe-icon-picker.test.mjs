@@ -12,7 +12,7 @@ function load(path,imports={}) {
 }
 const all=node=>node&&typeof node==='object'?[node,...[node.props?.children].flat(Infinity).flatMap(all)]:[]
 const text=node=>typeof node==='string'?node:node&&typeof node==='object'?[node.props?.children].flat(Infinity).map(text).join(''):''
-const imports={react:{},'react-dom':{},'react/jsx-runtime':{},'lucide-react':{},'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},'./admin-kit':{AdminInput:'Input'}}
+const imports={'@/lib/studio/model-icon-style':load('../lib/studio/model-icon-style.ts'),react:{},'react-dom':{},'react/jsx-runtime':{},'lucide-react':{},'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},'./admin-kit':{AdminInput:'Input'}}
 const picker=load('../components/studio/lobe-icon-picker.tsx',imports)
 
 test('icon surface aligns to the trigger end within drawer and viewport bounds, flipping above near the bottom',()=>{

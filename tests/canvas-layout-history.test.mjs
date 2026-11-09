@@ -61,6 +61,8 @@ test('view preferences never change saved content or history and reset between p
   store.getState().setMiniMapOpen(true)
   store.getState().setSnapToGrid(true)
   store.getState().setShowEdges(false)
+  store.getState().setTool('pan')
+  store.getState().setAgentPanelDocked(true)
   assert.equal(store.getState().revision, 0)
   assert.equal(store.getState().past.length, 0)
   assert.equal(store.getState().edges, edges)
@@ -69,6 +71,9 @@ test('view preferences never change saved content or history and reset between p
   assert.equal(store.getState().miniMapOpen, false)
   assert.equal(store.getState().snapToGrid, false)
   assert.equal(store.getState().showEdges, true)
+  assert.equal(store.getState().tool, 'select')
+  assert.equal(store.getState().agentPanelNodeId, null)
+  assert.equal(store.getState().agentPanelDocked, false)
   assert.equal(store.getState().projectId, 'another-project')
 })
 
@@ -82,6 +87,25 @@ test('conflicting remote updates block arrangement without mutating local drafts
   assert.equal(store.getState().past.length, 0)
   assert.equal(store.getState().revision, 0)
   assert.equal(store.getState().saveStatus, 'conflict')
+})
+
+test('an Agent panel only opens an existing Agent and closes when that node is removed', () => {
+  const store = storeModule()
+  fixture(store)
+  const agent = factory.createAgentNode({ x: 0, y: 0 }, 'test-panel-agent')
+  store.getState().insertNodes([agent], [])
+  store.getState().setAgentPanel('inside')
+  assert.equal(store.getState().agentPanelNodeId, null)
+  store.getState().setAgentPanel(agent.id)
+  assert.equal(store.getState().agentPanelNodeId, agent.id)
+  const revision = store.getState().revision
+  store.getState().setAgentPanelDocked(true)
+  assert.equal(store.getState().revision, revision)
+  store.getState().removeNodes([agent.id])
+  assert.equal(store.getState().agentPanelNodeId, null)
+  store.getState().undo()
+  assert.ok(store.getState().nodes.some(node => node.id === agent.id))
+  assert.equal(store.getState().agentPanelNodeId, null)
 })
 
 test('committed names are trimmed and empty or unchanged drafts do not create save revisions', () => {

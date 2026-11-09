@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { modelIconTone } from '@/lib/studio/model-icon-style'
 import { AdminInput } from './admin-kit'
 
 /**
@@ -200,7 +201,7 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
           className={cn('flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-2.5 text-left transition-colors hover:border-studio-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', compact ? 'h-9' : 'h-10')}
         >
           <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted p-1">
-            {value ? <img src={selectedIconUrl || value} alt="" className="size-full object-contain" onError={(event) => { const target = event.currentTarget; if (selected && target.src !== lobeIconPlainUrl(selected.slug)) target.src = lobeIconPlainUrl(selected.slug) }} /> : <span className="text-xs text-muted-foreground">—</span>}
+            {value ? <PickerIcon src={selectedIconUrl || value} fallback={selected ? lobeIconPlainUrl(selected.slug) : undefined} /> : <span className="text-xs text-muted-foreground">—</span>}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs text-foreground">{selected?.label || (value ? '自定义图标' : '选择图标')}</span>
           <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
@@ -222,7 +223,7 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
             const iconUrl = item.url || lobeIconUrl(item.slug)
             const checked = value === iconUrl || value === lobeIconUrl(item.slug) || value === lobeIconPlainUrl(item.slug)
             return <button key={item.slug} type="button" aria-pressed={checked} title={`${item.label} · ${item.group}`} onClick={() => { onChange(iconUrl); closeAndFocus() }} className={cn('relative flex min-w-0 flex-col items-center gap-1 rounded-md border p-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60', checked ? 'border-studio-accent bg-studio-accent/10' : 'border-border bg-background hover:border-studio-accent/50 hover:bg-muted')}>
-              <span className="flex size-8 items-center justify-center overflow-hidden rounded-md bg-muted p-1.5"><img src={iconUrl} alt="" loading="lazy" className="size-full object-contain" onError={(event) => { const target = event.currentTarget; const fallback = lobeIconPlainUrl(item.slug); if (target.src !== fallback) target.src = fallback }} /></span>
+              <span className="flex size-8 items-center justify-center overflow-hidden rounded-md bg-muted p-1.5"><PickerIcon src={iconUrl} fallback={lobeIconPlainUrl(item.slug)} lazy /></span>
               <span className="w-full truncate text-[10px] text-foreground">{item.label}</span>
               {checked && <Check className="absolute right-1 top-1 size-3 text-studio-accent" />}
             </button>
@@ -236,4 +237,12 @@ export function LobeIconPicker({ value, onChange, className, compact = false, 'a
       </div>, document.body)}
     </div>
   )
+}
+
+function PickerIcon({ src, fallback, lazy }: { src: string; fallback?: string; lazy?: boolean }) {
+  const [failedSrc, setFailedSrc] = useState('')
+  const [failedFallback, setFailedFallback] = useState('')
+  const current = failedSrc === src ? fallback : src
+  if (!current || current === failedFallback) return <span aria-hidden="true" className="text-xs text-muted-foreground">—</span>
+  return <img src={current} alt="" loading={lazy ? 'lazy' : undefined} data-model-icon-tone={modelIconTone(current)} className="studio-model-icon size-full object-contain" onError={() => { if (current === src) setFailedSrc(src); else setFailedFallback(current) }} />
 }

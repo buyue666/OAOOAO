@@ -8,6 +8,7 @@ import { buildAgentResultNodes, loadAgentResultAssets } from './agent-delivery'
 import { useCanvasStore } from './canvas-store'
 import { errorMessageOf } from './use-generation-actions'
 import type { AgentNodeData, AgentStep } from './types'
+import { canvasAgentPrompt } from './canvas-agent-context'
 
 const TERMINAL_RUN_STATUSES = ['completed', 'failed', 'cancelled']
 const USER_ACTION_RUN_STATUSES = ['awaiting_approval', 'paused']
@@ -154,7 +155,9 @@ export function useAgentActions() {
       .slice(0, 24)
       .map((item) => item.data.title)
     const assetIds = [...new Set(state.nodes.flatMap((item) => (item.type === 'media' && item.data.media?.libraryAssetId ? [item.data.media.libraryAssetId] : [])))].slice(0, 16)
-    const submission = node.data.clientRequestId && node.data.submission ? node.data.submission : { prompt, assetIds, skillIds: (node.data.skills ?? []).map((skill) => skill.id) }
+    let submission: NonNullable<AgentNodeData['submission']>
+    try { submission = node.data.clientRequestId && node.data.submission ? node.data.submission : { prompt: canvasAgentPrompt(prompt, state.nodes), assetIds, skillIds: (node.data.skills ?? []).map((skill) => skill.id) } }
+    catch (reason) { state.setNotice(errorMessageOf(reason)); return }
     const clientRequestId = node.data.clientRequestId || newClientRequestId('agent')
     patchAgentNode(nodeId, { runId: null, runStatus: 'planning', steps: [], failure: null, pointsCost: null, context, clientRequestId, submission, planApproval: undefined, deliveredRunId: null, deliveryError: null }, true, state.projectId)
     try {

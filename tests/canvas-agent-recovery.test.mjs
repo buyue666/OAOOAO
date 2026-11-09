@@ -47,6 +47,7 @@ test('the real Agent action recovers the reloaded snapshot using the original im
   const useCanvasStore = selector => selector(state); useCanvasStore.getState = () => state
   const run = { id: 'synthetic-server-run', status: 'awaiting_approval', tasks: [], pointsCost: 1 }
   const module = sourceModule('../components/free-canvas/use-agent-actions.ts', {
+    './canvas-agent-context': sourceModule('../components/free-canvas/canvas-agent-context.ts', { '@/lib/studio/prompt-references': sourceModule('../lib/studio/prompt-references.ts') }),
     react: { useCallback: fn => fn, useMemo: fn => fn(), useEffect: () => {} },
     '@/lib/studio/generation-api': { newClientRequestId: () => { throw new Error('Recovery must never allocate a new identity') } },
     '@/lib/studio/account-api': {},

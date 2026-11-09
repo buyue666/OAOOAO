@@ -40,7 +40,7 @@ const MENU_ORIGIN: Record<NodeSide, string> = {
   left: 'top right',
 }
 
-const HANDLE_STYLE: CSSProperties = { width: 12, height: 12, background: '#cbd0d8', border: '3px solid #15171b', zIndex: 10 }
+const HANDLE_STYLE: CSSProperties = { width: 12, height: 12, background: 'var(--primary)', border: '3px solid var(--card)', zIndex: 10 }
 
 export function NodeHandles() {
   return (

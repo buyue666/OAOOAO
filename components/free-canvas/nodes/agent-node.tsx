@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from 'react'
 import { useUpdateNodeInternals, type NodeProps } from '@xyflow/react'
-import { ArrowUp, Bot, Check, CheckCircle2, ChevronDown, ChevronUp, CircleDashed, Layers3, Loader2, Pause, Play, Puzzle, RefreshCw, Square, X, XCircle } from 'lucide-react'
+import { ArrowUp, Bot, Check, CheckCircle2, ChevronDown, ChevronUp, CircleDashed, Layers3, LayoutGrid, Loader2, PanelRight, Pause, Play, Puzzle, RefreshCw, Square, X, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStudio } from '@/lib/studio/store'
 import { filterModelsByCapability } from '@/lib/studio/studio-models'
@@ -12,16 +12,25 @@ import { NODE_SIZE } from '../node-factory'
 import { isAgentRunTerminal } from '../use-agent-actions'
 import type { AgentFlowNode, AgentStep } from '../types'
 import { NodeAnchors, NodeHandles } from './node-kit'
+import { PromptReferenceInput } from '@/components/studio/prompt-reference-input'
+import { canvasAgentReferences } from '../canvas-agent-context'
 
 const RUN_STATUS_LABEL: Record<string, string> = { planning: '正在规划', awaiting_approval: '待确认计划', running: '正在执行', paused: '已暂停', unconfirmed: '提交待确认', completed: '已完成', failed: '运行失败', cancelled: '已取消' }
 const STEP_STATUS_LABEL: Record<string, string> = { pending: '等待', queued: '排队', running: '执行中', processing: '执行中', completed: '完成', success: '完成', failed: '失败', error: '失败', cancelled: '已取消' }
 const BUTTON = 'nodrag inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40'
 
 export const AgentNode = memo(function AgentNode({ id, data, selected }: NodeProps<AgentFlowNode>) {
+  return <CanvasAgentCard id={id} data={data} selected={selected} />
+})
+
+export function CanvasAgentCard({ id, data, selected, panel = false }: { id: string; data: AgentFlowNode['data']; selected?: boolean; panel?: boolean }) {
   const actions = useCanvasActions()
   const { state } = useStudio()
   const updateNodeData = useCanvasStore((store) => store.updateNodeData)
   const beginEdit = useCanvasStore((store) => store.beginEdit)
+  const nodes = useCanvasStore(store => store.nodes)
+  const activePanel = useCanvasStore(store => store.agentPanelNodeId === id)
+  const references = canvasAgentReferences(nodes)
   const updateInternals = useUpdateNodeInternals()
   const actionLock = useRef(false)
   const [pendingAction, setPendingAction] = useState(false)
@@ -42,54 +51,55 @@ export const AgentNode = memo(function AgentNode({ id, data, selected }: NodePro
   }
 
   return (
-    <div className="group relative [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-ring" style={{ width: NODE_SIZE.agent.width }} data-selected={selected} data-node-kind="agent">
-      <NodeHandles />
-      <NodeAnchors nodeId={id} />
+    <div className="group relative [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-2 [&_button:focus-visible]:outline-ring" style={{ width: panel ? '100%' : NODE_SIZE.agent.width }} data-selected={selected} data-node-kind="agent">
+      {!panel && <><NodeHandles /><NodeAnchors nodeId={id} /></>}
       <article aria-label="画布 Agent" className={cn('overflow-hidden rounded-[22px] border bg-card text-foreground shadow-lg transition-[border-color,box-shadow] focus-within:border-primary/60', selected ? 'border-primary ring-4 ring-primary/10' : 'border-primary/[0.14] hover:border-border')}>
         <header className="flex items-center gap-3 px-4 py-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-[#22252b]"><Bot className="size-5 text-foreground" aria-hidden="true" /></span>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-muted"><Bot className="size-5 text-foreground" aria-hidden="true" /></span>
           <div className="min-w-0 flex-1"><h3 className="text-sm font-semibold tracking-wide">画布助手</h3><p className="mt-0.5 text-[10px] tracking-[0.16em] text-muted-foreground">OAO AGENT</p></div>
-          <span role="status" className={cn('rounded-md px-2 py-1 text-[10px]', running ? 'bg-muted text-foreground' : data.runStatus === 'failed' ? 'bg-amber-400/10 text-amber-200' : 'text-muted-foreground')}>{RUN_STATUS_LABEL[data.runStatus ?? ''] ?? '准备就绪'}</span>
-          <button type="button" aria-label={collapsed ? '展开 Agent' : '折叠 Agent'} aria-expanded={!collapsed} aria-controls={`agent-body-${id}`} onClick={() => updateNodeData(id, { collapsed: !collapsed })} className="nodrag flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">{collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}</button>
+          <span role="status" className={cn('rounded-md px-2 py-1 text-[10px]', running ? 'bg-muted text-foreground' : data.runStatus === 'failed' ? 'bg-amber-400/10 text-studio-warn' : 'text-muted-foreground')}>{RUN_STATUS_LABEL[data.runStatus ?? ''] ?? '准备就绪'}</span>
+          {!panel && <button type="button" aria-label="在面板中打开画布助手" title="在面板中打开" onClick={() => useCanvasStore.getState().setAgentPanel(id)} className="nodrag grid size-8 place-items-center rounded-lg hover:bg-muted"><PanelRight className="size-4" /></button>}
+          <button type="button" aria-label={collapsed ? '展开 Agent' : '折叠 Agent'} aria-expanded={!collapsed} aria-controls={`agent-body-${id}${panel ? '-panel' : ''}`} onClick={() => updateNodeData(id, { collapsed: !collapsed })} className="nodrag flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">{collapsed ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}</button>
         </header>
-        {collapsed ? <p className="truncate border-t border-primary/[0.06] px-4 py-3 text-xs text-muted-foreground">{data.prompt || '展开后输入任务，选择技能并制定计划'}</p> : (
-          <div id={`agent-body-${id}`} className="flex flex-col gap-3 px-4 pb-4">
+        {collapsed || activePanel && !panel ? <p className="truncate border-t border-border px-4 py-3 text-xs text-muted-foreground">{activePanel && !panel ? '正在助手面板中编辑 · 草稿与进度同步' : data.prompt || '展开后输入任务，选择技能并制定计划'}</p> : (
+          <div id={`agent-body-${id}${panel ? '-panel' : ''}`} className="flex flex-col gap-3 px-4 pb-4">
             <div className="flex items-center gap-2 border-y border-primary/[0.06] py-2.5 text-[10px] text-muted-foreground" aria-label="先制定计划，再确认执行，最后回到画布">
               <span className={cn('flex items-center gap-1.5', (!data.runStatus || data.runStatus === 'planning') && 'text-foreground')}><span className="font-mono">01</span> 制定计划</span><span className="h-px flex-1 bg-muted" /><span className={cn('flex items-center gap-1.5', waiting && 'text-foreground')}><span className="font-mono">02</span> 确认执行</span><span className="h-px flex-1 bg-muted" /><span className={cn('flex items-center gap-1.5', data.runStatus === 'completed' && 'text-foreground')}><span className="font-mono">03</span> 生成结果</span>
             </div>
-            <div className="nodrag nowheel rounded-xl border border-border bg-[#0d0f12] px-3 pt-3 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-white/5">
-              <label htmlFor={`agent-prompt-${id}`} className="sr-only">Agent 指令</label>
-              <textarea id={`agent-prompt-${id}`} value={data.prompt} rows={4} maxLength={16000} placeholder="想在这张画布上创作什么？\n例如：为这组素材设计 3 个连贯镜头。" disabled={locked} onFocus={() => beginEdit()} onChange={(event) => updateNodeData(id, { prompt: event.target.value })} onKeyDown={(event) => { if (!event.nativeEvent.isComposing && event.key === 'Enter' && (event.ctrlKey || event.metaKey) && canRun) { event.preventDefault(); void perform(() => actions.startAgent(id)) } }} className="nodrag nowheel min-h-28 max-h-72 w-full resize-y bg-transparent text-[13px] leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:text-muted-foreground" />
+            {!data.runStatus && !data.prompt && <div aria-label="画布助手快捷任务" className="flex flex-col gap-2"><p className="py-2 text-center text-xs leading-6 text-muted-foreground">把想法整理成可审核的制作计划<br />输入 @ 引用画布节点</p>{['把选中的文本整理成分镜计划', '梳理人物、场景和道具清单'].map(text => <button key={text} type="button" disabled={locked} onClick={() => updateNodeData(id, { prompt: text }, { history: true })} className="nodrag min-h-11 rounded-xl border border-border px-3 text-left text-xs hover:bg-muted">{text}</button>)}<button type="button" onClick={() => useCanvasStore.getState().arrangeLayout()} className="nodrag flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-left text-xs hover:bg-muted"><LayoutGrid className="size-3.5" />整理画布布局<span className="ml-auto text-[10px] text-muted-foreground">可撤销</span></button></div>}
+            <div className="nodrag nowheel rounded-xl border border-border bg-muted/30 px-3 pt-3 focus-within:border-primary/50">
+              <label htmlFor={`agent-prompt-${id}${panel ? '-panel' : ''}`} className="sr-only">Agent 指令</label>
+              <PromptReferenceInput id={`agent-prompt-${id}${panel ? '-panel' : ''}`} value={data.prompt} references={references} compact appearance="composer" placeholder="描述任务，输入 @ 引用画布节点…" disabled={locked} onFocus={() => beginEdit()} onChange={prompt => updateNodeData(id, { prompt: prompt.slice(0, 14000) })} onKeyDown={event => { if (!event.nativeEvent.isComposing && event.key === 'Enter' && (event.ctrlKey || event.metaKey) && canRun) { event.preventDefault(); void perform(() => actions.startAgent(id)) } }} />
               <div className="flex flex-wrap items-center gap-1.5 border-t border-primary/[0.06] py-2.5">
-                <button type="button" disabled={locked} onClick={() => actions.selectSkills(id)} className={`${BUTTON} border border-border text-foreground hover:bg-white/5`}><Puzzle className="size-3.5" />{skills.length ? `${skills.length} 个技能` : '选择技能'}</button>
+                <button type="button" disabled={locked} onClick={() => actions.selectSkills(id)} className={`${BUTTON} border border-border text-foreground hover:bg-muted/60`}><Puzzle className="size-3.5" />{skills.length ? `${skills.length} 个技能` : '选择技能'}</button>
                 <span className="ml-auto text-[10px] text-muted-foreground">⌘ / Ctrl + Enter</span>
               </div>
             </div>
-            {skills.length ? <ul aria-label="已选技能" className="flex flex-wrap gap-1.5">{skills.map((skill) => <li key={skill.id} className="flex max-w-full items-center gap-1 rounded-md border border-border bg-white/[0.035] py-1 pr-1 pl-2 text-[11px] text-foreground"><Puzzle className="mr-0.5 size-3 shrink-0 text-muted-foreground" /><span className="truncate" title={skill.prompt}>{skill.title}</span><button type="button" aria-label={`移除技能 ${skill.title}`} disabled={locked} onClick={() => updateNodeData(id, { skills: skills.filter((item) => item.id !== skill.id) }, { history: true })} className="nodrag rounded p-0.5 hover:bg-muted disabled:opacity-30"><X className="size-3" /></button></li>)}</ul> : null}
-            <details className="nodrag text-xs text-muted-foreground"><summary className="cursor-pointer rounded py-1.5 text-[11px] outline-offset-2 focus-visible:outline-ring"><Layers3 className="mr-1.5 inline size-3.5" />读取整张画布{data.context.length ? ` · ${data.context.length} 个对象` : ''}</summary><p className="pt-1 leading-5">使用当前画布的节点、提示词、素材和连线来制定计划。</p>{data.context.length ? <ul className="mt-2 flex flex-wrap gap-1">{data.context.map((title, index) => <li key={`${title}-${index}`} className="max-w-full truncate rounded bg-white/5 px-2 py-1">{title}</li>)}</ul> : null}</details>
+            {skills.length ? <ul aria-label="已选技能" className="flex flex-wrap gap-1.5">{skills.map((skill) => <li key={skill.id} className="flex max-w-full items-center gap-1 rounded-md border border-border bg-muted/30 py-1 pr-1 pl-2 text-[11px] text-foreground"><Puzzle className="mr-0.5 size-3 shrink-0 text-muted-foreground" /><span className="truncate" title={skill.prompt}>{skill.title}</span><button type="button" aria-label={`移除技能 ${skill.title}`} disabled={locked} onClick={() => updateNodeData(id, { skills: skills.filter((item) => item.id !== skill.id) }, { history: true })} className="nodrag rounded p-0.5 hover:bg-muted disabled:opacity-30"><X className="size-3" /></button></li>)}</ul> : null}
+            <details className="nodrag text-xs text-muted-foreground"><summary className="cursor-pointer rounded py-1.5 text-[11px] outline-offset-2 focus-visible:outline-ring"><Layers3 className="mr-1.5 inline size-3.5" />读取整张画布{data.context.length ? ` · ${data.context.length} 个对象` : ''}</summary><p className="pt-1 leading-5">使用当前画布的节点、提示词、素材和连线来制定计划。</p>{data.context.length ? <ul className="mt-2 flex flex-wrap gap-1">{data.context.map((title, index) => <li key={`${title}-${index}`} className="max-w-full truncate rounded bg-muted/60 px-2 py-1">{title}</li>)}</ul> : null}</details>
             {!hasModel ? <p className="rounded-lg border border-border px-3 py-2 text-xs leading-5 text-muted-foreground">尚未配置可用的文本模型，请联系管理员后再运行。</p> : null}
-            {data.failure ? <p role="alert" className="rounded-lg border border-amber-300/20 bg-amber-400/5 px-3 py-2.5 text-xs leading-5 text-amber-100">{data.failure}</p> : null}
-            {data.deliveryError ? <p role="alert" className="rounded-lg border border-amber-300/20 px-3 py-2.5 text-xs leading-5 text-amber-100">{data.deliveryError}</p> : deliveryPending ? <p role="status" className="text-xs leading-5 text-muted-foreground">正在接收并保存运行结果…</p> : null}
+            {data.failure ? <p role="alert" className="rounded-lg border border-amber-300/20 bg-amber-400/5 px-3 py-2.5 text-xs leading-5 text-studio-warn">{data.failure}</p> : null}
+            {data.deliveryError ? <p role="alert" className="rounded-lg border border-amber-300/20 px-3 py-2.5 text-xs leading-5 text-studio-warn">{data.deliveryError}</p> : deliveryPending ? <p role="status" className="text-xs leading-5 text-muted-foreground">正在接收并保存运行结果…</p> : null}
             {data.runStatus === 'awaiting_approval' && data.planApproval ? <div className="rounded-xl border border-border bg-muted/40 p-3"><p className="text-xs font-medium">计划已就绪 · {data.steps.length} 个步骤</p><p className="mt-1.5 text-xs leading-5 text-muted-foreground">预计消耗 {data.planApproval.totalPoints} 积分，确认后开始执行。</p></div> : null}
             {data.steps.length ? <section aria-label="执行进度" className="rounded-xl border border-primary/[0.08] p-3"><div className="mb-3 flex justify-between text-[11px] text-muted-foreground"><span>执行步骤</span><span>{completed} / {data.steps.length}</span></div><ol className="flex max-h-60 flex-col gap-2 overflow-y-auto nowheel">{data.steps.map((step, index) => <StepRow key={step.id} step={step} index={index} />)}</ol></section> : null}
             <div className="nodrag flex flex-wrap items-center justify-end gap-2 border-t border-primary/[0.07] pt-3">
               {data.deliveryError && data.runId ? <button type="button" onClick={() => actions.refreshAgent(id)} className={`${BUTTON} border border-border text-foreground hover:bg-muted`}><RefreshCw className="size-3.5" />重试接收结果</button> : null}
               {pendingAction ? <Loader2 className="mr-auto size-4 animate-spin text-muted-foreground" aria-label="正在提交操作" /> : data.pointsCost !== null ? <span className="mr-auto text-[10px] text-muted-foreground">已用 {data.pointsCost} 积分</span> : null}
-              {(running || waiting) && data.runId ? <button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.cancelAgent(id))} className={`${BUTTON} text-muted-foreground hover:bg-white/5`}><Square className="size-3" />取消</button> : null}
-              {running && data.runId ? <><button type="button" disabled={pendingAction} aria-label="刷新 Agent 进度" onClick={() => actions.refreshAgent(id)} className={`${BUTTON} text-muted-foreground hover:bg-white/5`}><RefreshCw className="size-3.5" /></button><button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.pauseAgent(id))} className={`${BUTTON} border border-border text-foreground hover:bg-muted`}><Pause className="size-3.5" />暂停</button></> : null}
-              {data.runStatus === 'awaiting_approval' ? <button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.approveAgent(id))} className={`${BUTTON} bg-neutral-100 font-medium text-neutral-950 hover:bg-white`}><Check className="size-3.5" />确认执行</button> : data.runStatus === 'paused' ? <button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.resumeAgent(id))} className={`${BUTTON} bg-neutral-100 font-medium text-neutral-950 hover:bg-white`}><Play className="size-3.5" />继续执行</button> : !running ? <button type="button" disabled={!canRun} onClick={() => void perform(() => actions.startAgent(id))} className={`${BUTTON} bg-neutral-100 font-medium text-neutral-950 hover:bg-white`}><ArrowUp className="size-4" />{data.runStatus === 'unconfirmed' ? '确认上次提交' : '生成计划'}</button> : !data.runId ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />正在生成计划</span> : null}
+              {(running || waiting) && data.runId ? <button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.cancelAgent(id))} className={`${BUTTON} text-muted-foreground hover:bg-muted/60`}><Square className="size-3" />取消</button> : null}
+              {running && data.runId ? <><button type="button" disabled={pendingAction} aria-label="刷新 Agent 进度" onClick={() => actions.refreshAgent(id)} className={`${BUTTON} text-muted-foreground hover:bg-muted/60`}><RefreshCw className="size-3.5" /></button><button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.pauseAgent(id))} className={`${BUTTON} border border-border text-foreground hover:bg-muted`}><Pause className="size-3.5" />暂停</button></> : null}
+              {data.runStatus === 'awaiting_approval' ? <button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.approveAgent(id))} className={`${BUTTON} bg-primary font-medium text-primary-foreground hover:bg-primary/90`}><Check className="size-3.5" />确认执行</button> : data.runStatus === 'paused' ? <button type="button" disabled={pendingAction} onClick={() => void perform(() => actions.resumeAgent(id))} className={`${BUTTON} bg-primary font-medium text-primary-foreground hover:bg-primary/90`}><Play className="size-3.5" />继续执行</button> : !running ? <button type="button" disabled={!canRun} onClick={() => void perform(() => actions.startAgent(id))} className={`${BUTTON} bg-primary font-medium text-primary-foreground hover:bg-primary/90`}><ArrowUp className="size-4" />{data.runStatus === 'unconfirmed' ? '确认上次提交' : '生成计划'}</button> : !data.runId ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-3.5 animate-spin" />正在生成计划</span> : null}
             </div>
           </div>
         )}
       </article>
     </div>
   )
-})
+}
 
 function StepRow({ step, index }: { step: AgentStep; index: number }) {
   const done = step.status === 'completed' || step.status === 'success'
   const failed = step.status === 'failed' || step.status === 'error'
   const active = step.status === 'running' || step.status === 'processing'
   const Icon = done ? CheckCircle2 : failed ? XCircle : active ? Loader2 : CircleDashed
-  return <li className="flex items-start gap-2 text-xs"><Icon className={cn('mt-0.5 size-3.5 shrink-0', failed ? 'text-amber-200' : 'text-muted-foreground', active && 'animate-spin')} aria-hidden="true" /><div className="min-w-0 flex-1"><p className="break-words leading-5 text-foreground">{index + 1}. {step.title}</p>{step.error ? <p className="mt-1 break-words text-[11px] leading-5 text-amber-200">{step.error}</p> : null}</div><span className="shrink-0 pt-0.5 text-[10px] text-muted-foreground">{STEP_STATUS_LABEL[step.status] ?? step.status}</span></li>
+  return <li className="flex items-start gap-2 text-xs"><Icon className={cn('mt-0.5 size-3.5 shrink-0', failed ? 'text-studio-warn' : 'text-muted-foreground', active && 'animate-spin')} aria-hidden="true" /><div className="min-w-0 flex-1"><p className="break-words leading-5 text-foreground">{index + 1}. {step.title}</p>{step.error ? <p className="mt-1 break-words text-[11px] leading-5 text-studio-warn">{step.error}</p> : null}</div><span className="shrink-0 pt-0.5 text-[10px] text-muted-foreground">{STEP_STATUS_LABEL[step.status] ?? step.status}</span></li>
 }

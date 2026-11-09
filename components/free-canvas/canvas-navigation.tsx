@@ -5,6 +5,7 @@ import { useReactFlow, useStore } from '@xyflow/react'
 import { Focus, Keyboard, LayoutGrid, Map, Maximize2, Minus, Plus, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCanvasStore } from './canvas-store'
+import { CanvasViewToggle } from './canvas-controls'
 
 export const CANVAS_MIN_ZOOM = 0.2
 export const CANVAS_MAX_ZOOM = 5
@@ -85,7 +86,7 @@ export function CanvasNavigationDock() {
   }, [zoomMenuOpen, viewMenuOpen])
 
   return <>
-    <div role="toolbar" aria-label="画布导航" className="pointer-events-auto absolute bottom-3 left-3 z-40 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center rounded-2xl border border-border bg-card/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,.3)] backdrop-blur-md sm:flex-nowrap sm:gap-0.5">
+    <div role="toolbar" aria-label="画布导航" className="pointer-events-auto absolute bottom-3 left-3 z-[45] flex max-w-[calc(100%-1.5rem)] flex-wrap items-center rounded-2xl border border-border bg-card/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,.3)] backdrop-blur-md sm:flex-nowrap sm:gap-0.5">
       <DockButton label="缩小（−）" disabled={zoom <= CANVAS_MIN_ZOOM + .001} onClick={() => void zoomOut({ duration: motionDuration() })}><Minus className="size-4" /></DockButton>
       <div ref={menuRef} className="relative">
         <button ref={zoomTrigger} type="button" aria-label={`缩放比例 ${Math.round(zoom * 100)}%，选择缩放比例`} aria-expanded={zoomMenuOpen} aria-controls="canvas-zoom-options" onClick={() => { setZoomMenuOpen(open => !open); setViewMenuOpen(false) }} className="h-7 min-w-10 rounded-lg px-1 text-center text-xs tabular-nums text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:h-11 sm:min-w-12">{Math.round(zoom * 100)}%</button>
@@ -100,12 +101,12 @@ export function CanvasNavigationDock() {
       <DockButton label="整理画布，可撤销（Alt + Shift + F）" disabled={readOnly || nodeCount < 2} onClick={arrange}><LayoutGrid className="size-4" /></DockButton>
       <span className="mx-0.5 h-4 w-px bg-muted sm:mx-1" aria-hidden="true" />
       <DockButton label="小地图：拖动定位、滚轮缩放（M）" pressed={miniMapOpen} onClick={() => setMiniMapOpen(!miniMapOpen)}><Map className="size-4" /></DockButton>
-      <div ref={viewMenuRef} className="relative">
+      <div ref={viewMenuRef} className="static sm:relative">
         <button ref={viewTrigger} type="button" aria-label="画布视图设置" title="画布视图设置" aria-expanded={viewMenuOpen} aria-controls="canvas-view-options" onClick={() => { setViewMenuOpen(open => !open); setZoomMenuOpen(false) }} className="flex size-7 items-center justify-center rounded-lg text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring sm:size-11"><SlidersHorizontal className="size-4" aria-hidden="true" /></button>
-        {viewMenuOpen && <div id="canvas-view-options" className="absolute right-0 bottom-11 w-52 rounded-xl border border-border bg-popover p-3 text-xs text-foreground shadow-xl">
+        {viewMenuOpen && <div id="canvas-view-options" className="absolute bottom-full left-0 mb-2 max-h-[60dvh] w-52 max-w-full overflow-y-auto rounded-xl border border-border bg-popover p-3 text-xs text-foreground shadow-xl sm:bottom-11 sm:left-auto sm:right-0 sm:mb-0 sm:max-w-none">
           <p className="mb-3 text-[11px] text-muted-foreground">当前画布视图</p>
-          <label className="flex cursor-pointer items-center justify-between gap-3 py-2"><span>显示节点连线</span><input type="checkbox" checked={showEdges} onChange={event => setShowEdges(event.target.checked)} className="size-3.5 accent-white" /></label>
-          <label className="flex cursor-pointer items-center justify-between gap-3 py-2"><span>拖动时吸附网格</span><input type="checkbox" checked={snapToGrid} onChange={event => setSnapToGrid(event.target.checked)} className="size-3.5 accent-white" /></label>
+          <CanvasViewToggle label="显示节点连线" checked={showEdges} onChange={setShowEdges} />
+          <CanvasViewToggle label="拖动时吸附网格" checked={snapToGrid} onChange={setSnapToGrid} />
           <p className="mt-2 text-[11px] leading-5 text-muted-foreground">隐藏连线不影响节点间的输入引用。吸附间距为 24 px。</p>
         </div>}
       </div>
@@ -120,7 +121,8 @@ function DockButton({ label, children, onClick, disabled, pressed }: { label: st
 }
 
 const shortcuts = [
-  ['拖动画布', '空白处拖动 / 按住空格拖动'], ['框选多个节点', 'Shift + 拖动'], ['放大 / 缩小', '+ / − 或滚轮'],
+  ['选择 / 抓手', 'V / H'], ['临时平移', '按住空格拖动 / 鼠标中键'], ['框选多个节点', '选择工具下拖动空白处'], ['追加选择', 'Ctrl/⌘ + 点击'], ['放大 / 缩小', '+ / − 或滚轮'],
+  ['打开 / 收起画布助手', 'Ctrl/⌘ + /'],
   ['适应全部 / 定位选中', 'Shift + 1 / Shift + 2'], ['恢复 100%', 'Shift + 0'], ['切换小地图', 'M'],
   ['整理画布', 'Alt + Shift + F'],
   ['撤销 / 重做', 'Ctrl/⌘ + Z / Shift + Z'], ['复制 / 粘贴', 'Ctrl/⌘ + C / V'], ['创建副本', 'Ctrl/⌘ + D'],

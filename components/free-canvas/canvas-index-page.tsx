@@ -9,7 +9,7 @@ import { createFreeCanvas, renameFreeCanvas } from './canvas-persistence'
 import { errorMessageOf } from './use-generation-actions'
 
 const DOT_GRID = {
-  backgroundImage: 'radial-gradient(rgba(255,255,255,0.14) 1px, transparent 1px)',
+  backgroundImage: 'radial-gradient(var(--border) 1px, transparent 1px)',
   backgroundSize: '16px 16px',
 }
 
@@ -31,32 +31,32 @@ export function CanvasIndexPage({ projects, loadError }: { projects: CanvasSumma
   }
 
   return (
-    <main className="h-full min-h-0 overflow-y-auto bg-black text-white">
+    <main className="h-full min-h-0 overflow-y-auto bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-8 px-5 py-8 md:px-8 md:py-10">
-        <nav aria-label="画布导航" className="flex items-center gap-5 text-sm text-neutral-300">
-          <Link href="/studio" className="inline-flex items-center gap-2 rounded-lg hover:text-white"><ArrowLeft className="size-4" aria-hidden="true" />返回创作首页</Link>
-          <Link href="/projects" className="rounded-lg hover:text-white">我的项目</Link>
+        <nav aria-label="画布导航" className="flex items-center gap-5 text-sm text-foreground">
+          <Link href="/studio" className="inline-flex items-center gap-2 rounded-lg hover:text-foreground"><ArrowLeft className="size-4" aria-hidden="true" />返回创作首页</Link>
+          <Link href="/projects" className="rounded-lg hover:text-foreground">我的项目</Link>
         </nav>
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-6">
           <div>
-            <p className="text-[11px] tracking-[0.2em] text-neutral-500 uppercase">自由画布</p>
+            <p className="text-[11px] tracking-[0.2em] text-muted-foreground uppercase">自由画布</p>
             <h1 className="mt-2 text-2xl font-semibold">我的画布</h1>
           </div>
           <button
             type="button"
             onClick={() => void createCanvas()}
             disabled={creating}
-            className="flex h-10 items-center gap-2 rounded-xl bg-white px-4 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:opacity-50"
+            className="flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             <Plus className="size-4" aria-hidden="true" />
             {creating ? '正在创建' : '新建画布'}
           </button>
         </header>
 
-        {notice ? <p role="alert" className="text-sm text-neutral-300">{notice}</p> : null}
+        {notice ? <p role="alert" className="text-sm text-foreground">{notice}</p> : null}
 
         {loadError ? (
-          <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-neutral-400"><span>画布列表读取失败：{loadError}</span><button type="button" onClick={() => router.refresh()} className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">重新读取</button></div>
+          <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground"><span>画布列表读取失败：{loadError}</span><button type="button" onClick={() => router.refresh()} className="rounded-lg border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted">重新读取</button></div>
         ) : projects.length ? (
           <ul aria-label="画布列表" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {projects.map((project) => (
@@ -66,10 +66,10 @@ export function CanvasIndexPage({ projects, loadError }: { projects: CanvasSumma
             ))}
           </ul>
         ) : (
-          <section className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-white/15 px-6 py-16 text-center">
+          <section className="flex flex-col items-center gap-3 rounded-3xl border border-dashed border-border px-6 py-16 text-center">
             <h2 className="text-base font-medium">还没有画布</h2>
-            <p className="max-w-sm text-sm leading-relaxed text-neutral-500">新建一张空白画布，从第一个节点开始创作。</p>
-            <button type="button" onClick={() => void createCanvas()} disabled={creating} className="mt-2 flex h-9 items-center gap-2 rounded-xl bg-white px-4 text-sm font-medium text-black hover:bg-neutral-200 disabled:opacity-50">
+            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">新建一张空白画布，从第一个节点开始创作。</p>
+            <button type="button" onClick={() => void createCanvas()} disabled={creating} className="mt-2 flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
               <Plus className="size-4" aria-hidden="true" />
               新建画布
             </button>
@@ -123,13 +123,13 @@ function CanvasCard({ project, onChanged }: { project: CanvasSummary; onChanged:
   }
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-white/12 bg-neutral-950 transition-colors hover:border-white/35">
-      <Link href={`/canvas/${project.id}`} aria-label={`打开画布 ${project.title}`} className="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white">
-        <div className="flex aspect-[16/9] items-center justify-center overflow-hidden bg-black" style={project.cover?.kind === 'image' ? undefined : DOT_GRID}>
+    <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-primary/40">
+      <Link href={`/canvas/${project.id}`} aria-label={`打开画布 ${project.title}`} className="block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+        <div className="flex aspect-[16/9] items-center justify-center overflow-hidden bg-background" style={project.cover?.kind === 'image' ? undefined : DOT_GRID}>
           {project.cover?.kind === 'image' ? (
             <img src={project.cover.url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
           ) : (
-            <span className="text-xs text-neutral-600">{project.nodeCount ? `${project.nodeCount} 个节点` : '空白画布'}</span>
+            <span className="text-xs text-muted-foreground">{project.nodeCount ? `${project.nodeCount} 个节点` : '空白画布'}</span>
           )}
         </div>
       </Link>
@@ -137,7 +137,7 @@ function CanvasCard({ project, onChanged }: { project: CanvasSummary; onChanged:
       <div className="flex flex-1 flex-col gap-2 p-4">
         {renaming ? (
           <form onSubmit={submitRename} className="flex items-center gap-1.5">
-            <label className="min-w-0 flex-1 rounded-lg border border-white/25 bg-black focus-within:border-white/60 focus-within:shadow-[0_0_0_3px_rgba(255,255,255,0.04)]">
+            <label className="min-w-0 flex-1 rounded-lg border border-border bg-background focus-within:border-primary/60 focus-within:shadow-[0_0_0_3px_rgba(255,255,255,0.04)]">
               <span className="sr-only">画布名称</span>
               <input
                 autoFocus
@@ -147,39 +147,39 @@ function CanvasCard({ project, onChanged }: { project: CanvasSummary; onChanged:
                 disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => { if (event.key === 'Escape' && !event.nativeEvent.isComposing && !busy) setRenaming(false) }}
-                className="h-8 w-full rounded-lg bg-transparent px-2 text-sm text-white"
+                className="h-8 w-full rounded-lg bg-transparent px-2 text-sm text-foreground"
                 style={{ border: 0, outline: 'none', boxShadow: 'none' }}
               />
             </label>
-            <button type="submit" disabled={busy} aria-label="保存名称" className="flex size-8 items-center justify-center rounded-lg bg-white text-black disabled:opacity-40">
+            <button type="submit" disabled={busy} aria-label="保存名称" className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40">
               <Check className="size-4" aria-hidden="true" />
             </button>
-            <button type="button" disabled={busy} onClick={() => setRenaming(false)} aria-label="取消重命名" className="flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white disabled:opacity-40">
+            <button type="button" disabled={busy} onClick={() => setRenaming(false)} aria-label="取消重命名" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40">
               <X className="size-4" aria-hidden="true" />
             </button>
           </form>
         ) : (
-          <Link href={`/canvas/${project.id}`} className="truncate text-sm font-medium text-white hover:underline">
+          <Link href={`/canvas/${project.id}`} className="truncate text-sm font-medium text-foreground hover:underline">
             {project.title}
           </Link>
         )}
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-muted-foreground">
           {project.nodeCount} 个节点 · {formatUpdatedAt(project.updatedAt)} 更新
         </p>
-        {message ? <p role="alert" className="text-xs text-neutral-400">{message}</p> : null}
+        {message ? <p role="alert" className="text-xs text-muted-foreground">{message}</p> : null}
 
         <div className="mt-auto flex items-center justify-end gap-1 pt-2">
           {confirming ? (
             <>
-              <button type="button" onClick={() => setConfirming(false)} className="h-8 rounded-lg px-2.5 text-xs text-neutral-400 hover:bg-white/10 hover:text-white">取消</button>
-              <button type="button" onClick={() => void remove()} disabled={busy} className="h-8 rounded-lg bg-white px-2.5 text-xs font-medium text-black hover:bg-neutral-200 disabled:opacity-40">确认删除</button>
+              <button type="button" onClick={() => setConfirming(false)} className="h-8 rounded-lg px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">取消</button>
+              <button type="button" onClick={() => void remove()} disabled={busy} className="h-8 rounded-lg bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40">确认删除</button>
             </>
           ) : (
             <>
-              <button type="button" onClick={startRename} aria-label={`重命名 ${project.title}`} className="flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white">
+              <button type="button" onClick={startRename} aria-label={`重命名 ${project.title}`} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
                 <Pencil className="size-3.5" aria-hidden="true" />
               </button>
-              <button type="button" onClick={() => setConfirming(true)} aria-label={`删除 ${project.title}`} className="flex size-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-white/10 hover:text-white">
+              <button type="button" onClick={() => setConfirming(true)} aria-label={`删除 ${project.title}`} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
                 <Trash2 className="size-3.5" aria-hidden="true" />
               </button>
             </>

@@ -124,7 +124,7 @@ test('legacy and multi-node actions both open a captured editor without creating
     '@/lib/studio/studio-models': { defaultGenerationDefaults: () => ({}) },
     './asset-reference': {}, './board-codec': {}, './canvas-context': { CanvasActionsProvider: Provider }, './canvas-asset-library': {}, './canvas-skill-dialog': {}, './image-editor-panel': {},
     './canvas-selection-skill-dialog': { CanvasSelectionSkillDialog: Dialog }, './canvas-selection-skill': { createSelectionSkillDraft },
-    './canvas-chrome': {}, './canvas-flow': {}, './canvas-position': {}, './canvas-menu': {}, './canvas-persistence': {}, './canvas-store': { useCanvasStore }, './node-factory': {}, './use-agent-actions': { useAgentActions: () => ({}) },
+    './canvas-chrome': {}, './canvas-agent-panel': {}, './canvas-flow': {}, './canvas-position': {}, './canvas-menu': {}, './canvas-persistence': {}, './canvas-store': { useCanvasStore }, './node-factory': {}, './use-agent-actions': { useAgentActions: () => ({}) },
     './use-generation-actions': { useGenerationActions: () => ({ saveSkillFromNode: async () => { legacyWrites++ } }) }, './use-work-handoff': { useWorkHandoff() {} },
     './use-canvas-selection-actions': { useCanvasSelectionActions: () => ({ saveSelectionResults() {}, draftAgentFromSelection() {}, exportSelection() {}, dialogs: null }) },
   })

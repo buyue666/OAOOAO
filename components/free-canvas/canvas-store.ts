@@ -78,6 +78,9 @@ export type CanvasState = {
   miniMapOpen: boolean
   snapToGrid: boolean
   showEdges: boolean
+  tool: 'select' | 'pan'
+  agentPanelNodeId: string | null
+  agentPanelDocked: boolean
 
   hydrate: (payload: HydratePayload) => void
   reset: () => void
@@ -109,6 +112,9 @@ export type CanvasState = {
   setMiniMapOpen: (open: boolean) => void
   setSnapToGrid: (enabled: boolean) => void
   setShowEdges: (visible: boolean) => void
+  setTool: (tool: 'select' | 'pan') => void
+  setAgentPanel: (nodeId: string | null) => void
+  setAgentPanelDocked: (docked: boolean) => void
   adoptRemoteBoard: (nodes: FreeCanvasNode[], edges: FreeCanvasEdge[], updatedAt: string) => void
   openSettings: (nodeId: string | null, placement?: SettingsPlacement) => void
   openTypeMenu: (menu: TypeMenuState) => void
@@ -174,6 +180,7 @@ function removalPatch(state: CanvasState, ids: string[], label: string): Partial
     typeMenu: state.typeMenu && removeIds.has(state.typeMenu.nodeId) ? null : state.typeMenu,
     contextMenu: null,
     directorNodeId: state.directorNodeId && removeIds.has(state.directorNodeId) ? null : state.directorNodeId,
+    agentPanelNodeId: state.agentPanelNodeId && removeIds.has(state.agentPanelNodeId) ? null : state.agentPanelNodeId,
     ...(removedGroupIds.size ? { notice: `已删除 ${removedGroupIds.size} 个分组及其中内容（共 ${removed.length} 个节点），可撤销。` } : {}),
   }
 }
@@ -262,6 +269,9 @@ const initialState = {
   miniMapOpen: false,
   snapToGrid: false,
   showEdges: true,
+  tool: 'select' as const,
+  agentPanelNodeId: null as string | null,
+  agentPanelDocked: false,
 }
 
 export const useCanvasStore = create<CanvasState>()((set, get) => {
@@ -294,6 +304,9 @@ const actions: CanvasState = {
   setMiniMapOpen: (miniMapOpen) => set({ miniMapOpen }),
   setSnapToGrid: (snapToGrid) => set({ snapToGrid }),
   setShowEdges: (showEdges) => set({ showEdges }),
+  setTool: (tool) => set({ tool, settingsNodeId: null, typeMenu: null, contextMenu: null }),
+  setAgentPanel: (nodeId) => set(state => ({ agentPanelNodeId: !state.workspace && state.nodes.some(node => node.id === nodeId && node.type === 'agent') ? nodeId : null })),
+  setAgentPanelDocked: (agentPanelDocked) => set({ agentPanelDocked }),
   setDirectorNodeId: (directorNodeId) => set({ directorNodeId }),
   openImageEditor: (imageEditor) => set({ imageEditor, settingsNodeId: null, typeMenu: null, contextMenu: null, assetPanelOpen: false, assetTargetNodeId: null }),
   closeImageEditor: () => set({ imageEditor: null }),

@@ -18,7 +18,8 @@ import { CanvasAssetLibrary } from './canvas-asset-library'
 import { CanvasSkillDialog } from './canvas-skill-dialog'
 import { CanvasSelectionSkillDialog, type SelectionSkillSession } from './canvas-selection-skill-dialog'
 import { createSelectionSkillDraft } from './canvas-selection-skill'
-import { CanvasNoticeToast, CanvasSelectionBar, CanvasTopBar, CanvasZoomDock, EmptyCanvasGuide } from './canvas-chrome'
+import { CanvasNoticeToast, CanvasSelectionBar, CanvasTopBar, CanvasToolRail, CanvasZoomDock, EmptyCanvasGuide } from './canvas-chrome'
+import { CanvasAgentPanel } from './canvas-agent-panel'
 import { CanvasFlow } from './canvas-flow'
 import { nodePositionAtCenter } from './canvas-position'
 import { CanvasContextMenu } from './canvas-menu'
@@ -243,11 +244,25 @@ function CanvasWorkspace() {
     const existing = store.nodes.find((node) => node.type === 'agent')
     if (existing) {
       store.selectNodeOnly(existing.id)
-      void fitView({ nodes: [{ id: existing.id }], padding: 0.6, duration: 240, maxZoom: 1 })
+      store.setAgentPanel(existing.id)
       return
     }
     createNodeAt('agent', nodePositionAtCenter('agent', viewportCenter()))
-  }, [createNodeAt, fitView, viewportCenter])
+    const created = useCanvasStore.getState().nodes.find(node => node.type === 'agent' && node.selected)
+    if (created) useCanvasStore.getState().setAgentPanel(created.id)
+  }, [createNodeAt, viewportCenter])
+
+  useEffect(() => {
+    const open = (event: KeyboardEvent) => {
+      if (event.isComposing || event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.code !== 'Slash' || document.querySelector('dialog[open],[role="dialog"],[data-director-desk]')) return
+      event.preventDefault()
+      const store = useCanvasStore.getState()
+      if (store.agentPanelNodeId) store.setAgentPanel(null)
+      else focusAgent()
+    }
+    window.addEventListener('keydown', open)
+    return () => window.removeEventListener('keydown', open)
+  }, [focusAgent])
 
   const exportCanvas = useCallback(() => {
     const store = useCanvasStore.getState()
@@ -317,7 +332,8 @@ function CanvasWorkspace() {
 
   return (
     <CanvasActionsProvider value={actions}>
-      <main className="relative h-full min-h-0 w-full overflow-hidden bg-background text-foreground" onKeyDownCapture={event => { if (event.code === 'Space' && !(event.target as HTMLElement).closest('[role="dialog"]') && (event.target as HTMLElement).closest('button,select,input[type="checkbox"],[role="radio"]')) event.preventDefault() }}>
+      <main className="oao-free-canvas relative h-full min-h-0 w-full overflow-hidden bg-background text-foreground">
+        <CanvasStage>
         <CanvasFlow initialViewport={initialViewport} />
         {imageEditor && !workspace?.readOnly ? (
           <div className="pointer-events-auto absolute inset-y-0 right-0 z-[60] max-w-full shadow-2xl">
@@ -342,6 +358,7 @@ function CanvasWorkspace() {
         {settingsNodeId && !imageEditor && !assetPanelOpen && <GenerationSettings nodeId={settingsNodeId} />}
         {generation.approval && <Dialog open onOpenChange={open => { if (!open) generation.dismissApproval() }}><DialogContent><DialogHeader><DialogTitle>确认生成费用</DialogTitle><DialogDescription>{workspace ? `使用「${workspace.teamName}」的团队积分，结果保存到当前项目。` : '报价包含当前输出参数及参考素材的费用。'}</DialogDescription></DialogHeader><p className="text-3xl font-semibold tabular-nums">{generation.approval.points.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}<span className="ml-2 text-sm font-normal text-muted-foreground">积分</span></p><p className="max-h-28 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-muted p-3 text-xs leading-5">{generation.approval.submission.input.prompt}</p><DialogFooter><Button variant="outline" onClick={generation.dismissApproval}>返回修改</Button><Button onClick={generation.confirmGeneration}>确认并生成</Button></DialogFooter></DialogContent></Dialog>}
         <CanvasTopBar onExport={exportCanvas} onFocusAgent={focusAgent} />
+        <CanvasToolRail />
         {nodeCount === 0 ? <EmptyCanvasGuide onCreate={(kind) => createNodeAt(kind, nodePositionAtCenter(kind, viewportCenter()))} /> : null}
         <CanvasZoomDock />
         {!workspace?.readOnly && <CanvasSelectionBar />}
@@ -355,9 +372,16 @@ function CanvasWorkspace() {
           </div>
         ) : null}
         <CanvasNoticeToast />
+        </CanvasStage>
+        <CanvasAgentPanel />
       </main>
     </CanvasActionsProvider>
   )
+}
+
+function CanvasStage({ children }: { children: React.ReactNode }) {
+  const docked = useCanvasStore(state => state.agentPanelDocked && state.nodes.some(node => node.id === state.agentPanelNodeId && node.type === 'agent'))
+  return <div className={`absolute inset-0 ${docked ? 'lg:right-[412px]' : ''}`}>{children}</div>
 }
 
 function projectMetaOf(project: CanvasBackendProject): Record<string, unknown> {
@@ -366,10 +390,10 @@ function projectMetaOf(project: CanvasBackendProject): Record<string, unknown> {
 
 function CanvasStatusScreen({ title, description }: { title: string; description: string }) {
   return (
-    <main className="flex h-full min-h-0 flex-col items-center justify-center gap-2 bg-black px-6 text-center text-white">
+    <main className="flex h-full min-h-0 flex-col items-center justify-center gap-2 bg-background px-6 text-center text-foreground">
       <h1 className="text-base font-medium">{title}</h1>
-      <p className="max-w-sm text-sm leading-relaxed text-neutral-500">{description}</p>
-      <Link href="/canvas" className="mt-4 flex h-9 items-center rounded-xl border border-white/20 px-4 text-sm text-white hover:bg-white/10">
+      <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{description}</p>
+      <Link href="/canvas" className="mt-4 flex h-9 items-center rounded-xl border border-border px-4 text-sm text-foreground hover:bg-muted">
         返回画布列表
       </Link>
     </main>

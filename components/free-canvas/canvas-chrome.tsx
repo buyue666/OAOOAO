@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Bot, Check, CircleAlert, Download, FolderOpen, LoaderCircle, Redo2, RefreshCw, Undo2 } from 'lucide-react'
+import { ArrowLeft, Bot, Check, CircleAlert, Download, FolderOpen, Hand, LoaderCircle, MousePointer2, Redo2, RefreshCw, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { flushCanvasSave } from './canvas-persistence'
 import { useCanvasStore, type SaveStatus } from './canvas-store'
@@ -10,6 +10,7 @@ import { CREATABLE_KINDS, NODE_META, type CreatableKind } from './node-factory'
 import { CanvasLeaveDialog } from './canvas-leave-dialog'
 import { CanvasNameEditor } from './canvas-name-editor'
 import { CanvasCreateMenu } from './canvas-create-menu'
+import { CanvasThemeButton } from './canvas-controls'
 export { CanvasSelectionBar } from './canvas-selection-toolbar'
 export { CanvasNavigationDock as CanvasZoomDock } from './canvas-navigation'
 
@@ -35,12 +36,8 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
   const projectId = useCanvasStore((state) => state.projectId)
   const saveStatus = useCanvasStore((state) => state.saveStatus)
   const saveError = useCanvasStore((state) => state.saveError)
-  const canUndo = useCanvasStore((state) => state.past.length > 0)
-  const canRedo = useCanvasStore((state) => state.future.length > 0)
   const assetPanelOpen = useCanvasStore((state) => state.assetPanelOpen)
   const setTitle = useCanvasStore((state) => state.setTitle)
-  const undo = useCanvasStore((state) => state.undo)
-  const redo = useCanvasStore((state) => state.redo)
   const setAssetPanel = useCanvasStore((state) => state.setAssetPanel)
 
   return (
@@ -57,15 +54,7 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
         {!workspace?.readOnly && <SaveStatusLabel status={saveStatus} error={saveError} onExport={onExport} />}
       </div>
       <div className="pointer-events-auto flex shrink-0 items-center gap-0.5 rounded-2xl border border-border bg-card/95 p-1.5 backdrop-blur-md">
-        {!workspace?.readOnly && <CanvasCreateMenu />}
-        <ToolbarButton label="撤销" disabled={!canUndo || workspace?.readOnly} onClick={() => undo()}>
-          <Undo2 className="size-4" aria-hidden="true" />
-        </ToolbarButton>
-        <ToolbarButton label="重做" disabled={!canRedo || workspace?.readOnly} onClick={() => redo()}>
-          <Redo2 className="size-4" aria-hidden="true" />
-        </ToolbarButton>
-        <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
-        {!workspace && <ToolbarButton label="定位 OAO Agent" onClick={onFocusAgent}>
+        {!workspace && <ToolbarButton label="打开画布助手（Ctrl/⌘ + /）" onClick={onFocusAgent}>
           <Bot className="size-4" aria-hidden="true" />
         </ToolbarButton>}
         <ToolbarButton label="资产库" pressed={assetPanelOpen} onClick={() => (assetPanelOpen ? setAssetPanel(false) : setAssetPanel(true))}>
@@ -74,15 +63,31 @@ export function CanvasTopBar({ onExport, onFocusAgent }: { onExport: () => void;
         <ToolbarButton label="导出画布" disabled={workspace ? !workspace.canDownload : false} onClick={onExport}>
           <Download className="size-4" aria-hidden="true" />
         </ToolbarButton>
+        <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+        <CanvasThemeButton />
       </div>
     </header>
   )
 }
 
+export function CanvasToolRail() {
+  const tool = useCanvasStore(state => state.tool)
+  const setTool = useCanvasStore(state => state.setTool)
+  const readOnly = useCanvasStore(state => state.workspace?.readOnly)
+  const canUndo = useCanvasStore(state => state.past.length > 0)
+  const canRedo = useCanvasStore(state => state.future.length > 0)
+  return <div role="toolbar" aria-label="画布工具" className="absolute left-3 top-24 z-40 flex flex-col gap-1 rounded-2xl border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-md sm:top-1/2 sm:-translate-y-1/2">
+    {!readOnly && <><CanvasCreateMenu rail /><span className="mx-2 my-1 h-px bg-border" /></>}
+    <ToolbarButton label="选择工具（V）：拖动空白处框选" pressed={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 className="size-[18px]" /></ToolbarButton>
+    <ToolbarButton label="抓手工具（H）：拖动画布" pressed={tool === 'pan'} onClick={() => setTool('pan')}><Hand className="size-[18px]" /></ToolbarButton>
+    {!readOnly && <><span className="mx-2 my-1 h-px bg-border" /><ToolbarButton label="撤销（Ctrl/⌘ + Z）" disabled={!canUndo} onClick={() => useCanvasStore.getState().undo()}><Undo2 className="size-4" /></ToolbarButton><ToolbarButton label="重做（Ctrl/⌘ + Shift + Z）" disabled={!canRedo} onClick={() => useCanvasStore.getState().redo()}><Redo2 className="size-4" /></ToolbarButton></>}
+  </div>
+}
+
 function SaveStatusLabel({ status, error, onExport }: { status: SaveStatus; error: string | null; onExport: () => void }) {
   if (status === 'conflict') {
     return (
-      <button type="button" aria-label="画布在别处更新，导出本地内容以免丢失" title={error ?? '画布已在别处更新，请先导出本地内容，再刷新同步。'} onClick={onExport} className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+      <button type="button" aria-label="画布在别处更新，导出本地内容以免丢失" title={error ?? '画布已在别处更新，请先导出本地内容，再刷新同步。'} onClick={onExport} className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-studio-warn hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
         <CircleAlert className="size-3.5" aria-hidden="true" />
         <span className="hidden sm:inline">导出本地副本</span>
       </button>
@@ -90,7 +95,7 @@ function SaveStatusLabel({ status, error, onExport }: { status: SaveStatus; erro
   }
   if (status === 'error') {
     return (
-      <button type="button" aria-label="保存失败，重试保存" title={error ?? undefined} onClick={() => void flushCanvasSave().catch(() => undefined)} className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-amber-300 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+      <button type="button" aria-label="保存失败，重试保存" title={error ?? undefined} onClick={() => void flushCanvasSave().catch(() => undefined)} className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs text-studio-warn hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
         <RefreshCw className="size-3.5" aria-hidden="true" />
         <span className="hidden sm:inline">重试保存</span>
       </button>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { Background, BackgroundVariant, MiniMap, ReactFlow, useReactFlow, type NodeMouseHandler, type Viewport } from '@xyflow/react'
+import { Background, BackgroundVariant, MiniMap, ReactFlow, SelectionMode, useReactFlow, type NodeMouseHandler, type Viewport } from '@xyflow/react'
 import { readAssetDrag } from './asset-reference'
 import { useCanvasStore } from './canvas-store'
 import { createMediaNode } from './node-factory'
@@ -59,6 +59,8 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   })
 
   const nodes = useCanvasStore((state) => state.nodes)
+  const tool = useCanvasStore(state => state.tool)
+  const [spacePan, setSpacePan] = useState(false)
   const readOnly = useCanvasStore(state => state.workspace?.readOnly ?? false)
   const edges = useCanvasStore((state) => state.edges)
   const miniMapOpen = useCanvasStore((state) => state.miniMapOpen)
@@ -91,6 +93,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
   const renderEdges = useMemo(() => showEdges ? edges : edges.map(edge => ({ ...edge, hidden: true })), [edges, showEdges])
 
   const handleNodeClick: NodeMouseHandler<FreeCanvasNode> = (event, node) => {
+    if (tool === 'pan' || spacePan) return
     if ((event.target as Element).closest(INTERACTIVE_SELECTOR)) return
     if (node.type !== 'generation') {
       openSettings(null)
@@ -132,8 +135,14 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || isEditableTarget(event.target)) return
+      if (event.defaultPrevented || event.isComposing || document.querySelector('dialog[open],[data-director-desk]')) return
       const store = useCanvasStore.getState()
+      const toolbar = event.target instanceof HTMLElement && event.target.closest('[role="toolbar"]') && !event.target.closest('input,textarea,select')
+      if ((!isEditableTarget(event.target) || toolbar) && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        if (event.code === 'KeyV') { event.preventDefault(); store.setTool('select'); return }
+        if (event.code === 'KeyH') { event.preventDefault(); store.setTool('pan'); return }
+      }
+      if (isEditableTarget(event.target)) return
       if (event.key === 'Escape') {
         store.closeOverlays()
         return
@@ -167,19 +176,32 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
       }
     }
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    const holdPan = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return
+      const target = event.target
+      if (!(target instanceof HTMLElement) || !target.closest('.oao-free-canvas') || target.isContentEditable || target.closest('textarea,input:not([type="checkbox"]):not([type="radio"]),[contenteditable="true"],dialog,[role="dialog"],[data-director-desk]')) return
+      event.preventDefault()
+      setSpacePan(true)
+    }
+    window.addEventListener('keydown', holdPan, true)
+    const releasePan = (event: KeyboardEvent) => { if (event.code === 'Space') setSpacePan(false) }
+    const blur = () => setSpacePan(false)
+    window.addEventListener('keyup', releasePan)
+    window.addEventListener('blur', blur)
+    return () => { window.removeEventListener('keydown', holdPan, true); window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', releasePan); window.removeEventListener('blur', blur) }
   }, [])
 
   return (
-    <div ref={rootRef} data-oao-free-canvas className="absolute inset-0 bg-background" style={FLOW_THEME} onDragOver={handleDragOver} onDrop={handleDrop} onKeyDownCapture={event => { if (event.code === 'Space' && (event.target as HTMLElement).closest('button,select,input[type="checkbox"],[role="radio"]')) event.preventDefault() }}>
+    <div ref={rootRef} data-oao-free-canvas data-canvas-tool={spacePan ? 'pan' : tool} className="absolute inset-0 bg-background" style={FLOW_THEME} onDragOver={handleDragOver} onDrop={handleDrop}>
       <ReactFlow
         aria-label="自由画布"
         nodes={nodes}
         edges={renderEdges}
         nodeTypes={nodeTypes}
         onlyRenderVisibleElements={nodes.length >= 40}
-        nodesDraggable={!readOnly}
-        nodesConnectable={!readOnly}
+        nodesDraggable={!readOnly && tool === 'select' && !spacePan}
+        elementsSelectable={tool === 'select' && !spacePan}
+        nodesConnectable={!readOnly && tool === 'select' && !spacePan}
         edgesReconnectable={!readOnly}
         defaultEdgeOptions={defaultEdgeOptions}
         // The canvas shell is branded and the attribution is not part of the
@@ -196,6 +218,11 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
         deleteKeyCode={null}
         selectionKeyCode="Shift"
         multiSelectionKeyCode={['Meta', 'Control']}
+        selectionOnDrag={tool === 'select' && !spacePan}
+        selectionMode={SelectionMode.Partial}
+        selectNodesOnDrag={tool === 'select' && !spacePan}
+        panOnDrag={tool === 'pan' || spacePan ? true : [1]}
+        panActivationKeyCode="Space"
         panOnScroll={false}
         zoomOnDoubleClick={false}
         connectionRadius={28}
@@ -219,15 +246,15 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
           pannable
           zoomable
           position="bottom-left"
-          className="overflow-hidden rounded-xl border border-white/20 shadow-xl"
+          className="overflow-hidden rounded-xl border border-border shadow-xl"
           style={{ left: 12, bottom: hasSelection ? 216 : 72, margin: 0, width: 192, height: 120 }}
           bgColor="var(--card)"
-          maskColor="rgba(0,0,0,0.52)"
-          maskStrokeColor="rgba(255,255,255,0.65)"
+          maskColor="color-mix(in srgb, var(--background) 75%, transparent)"
+          maskStrokeColor="var(--muted-foreground)"
           maskStrokeWidth={1.5}
           nodeBorderRadius={6}
-          nodeColor={node => node.type === 'group' ? '#23252a' : node.selected ? '#dce4ef' : node.type === 'agent' ? '#91a2ba' : node.type === 'director' ? '#62c9d6' : '#69717f'}
-          nodeStrokeColor={node => node.selected ? '#ffffff' : '#979faa'}
+          nodeColor={node => node.selected ? 'var(--primary)' : 'var(--muted-foreground)'}
+          nodeStrokeColor={() => 'var(--border)'}
           onClick={(_, position) => void setCenter(position.x, position.y, { zoom: getZoom() })}
         />}
       </ReactFlow>

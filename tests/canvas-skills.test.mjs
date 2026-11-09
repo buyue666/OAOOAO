@@ -222,6 +222,7 @@ function agentHarness({ saved = true, submit } = {}) {
   const state = { projectId: 'canvas', hydrated: true, revision: 1, savedRevision: saved ? 1 : 0, nodes: [node], edges: [], patchNodes(patches) { for (const patch of patches) Object.assign(node.data, patch.data) }, setNotice() {} }
   const useCanvasStore = selector => selector(state); useCanvasStore.getState = () => state
   const hook = sourceModule('../components/free-canvas/use-agent-actions.ts', {
+    './canvas-agent-context': sourceModule('../components/free-canvas/canvas-agent-context.ts', { '@/lib/studio/prompt-references': sourceModule('../lib/studio/prompt-references.ts') }),
     react: { useCallback: fn => fn, useMemo: fn => fn(), useEffect: () => {} },
     '@/lib/studio/generation-api': { newClientRequestId: () => 'same-request' },
     '@/lib/studio/account-api': {},

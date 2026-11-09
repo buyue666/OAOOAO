@@ -4,6 +4,7 @@ import { AudioLines, Bot, Image as ImageIcon, Sparkles, Video } from 'lucide-rea
 import { useState } from 'react'
 import type { ModelConfig } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
+import { modelIconTone } from '@/lib/studio/model-icon-style'
 
 const fallbackIcons = {
   image: ImageIcon,
@@ -27,7 +28,8 @@ export function ModelIcon({ model, className }: { model?: Pick<ModelConfig, 'ico
           src={iconUrl}
           alt=""
           aria-hidden="true"
-          className={cn('absolute inset-0 size-full object-contain transition-opacity', loaded ? 'opacity-100' : 'opacity-0')}
+          data-model-icon-tone={modelIconTone(iconUrl)}
+          className={cn('studio-model-icon absolute inset-0 size-full object-contain transition-opacity', loaded ? 'opacity-100' : 'opacity-0')}
           onLoad={() => setLoadedUrl(iconUrl)}
           onError={() => setFailedUrl(iconUrl)}
         />
