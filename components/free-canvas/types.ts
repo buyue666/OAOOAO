@@ -234,6 +234,25 @@ export type DirectorNodeData = {
   title: string
   scene: DirectorSceneData
   lastCaptureAt?: number
+  assistant?: DirectorAssistantData
+}
+
+export type DirectorAssistantData = {
+  prompt: string
+  model: string
+  job?: {
+    requestId: string
+    model: string
+    system: string
+    user: string
+    baseScene: DirectorSceneData
+    taskId?: string
+    phase: 'submitting' | 'pending' | 'ready' | 'error' | 'unconfirmed'
+    content?: string
+    error?: string
+    applied?: boolean
+    approvedCost?: number
+  }
 }
 
 export type GenerationFlowNode = Node<GenerationNodeData, 'generation'>

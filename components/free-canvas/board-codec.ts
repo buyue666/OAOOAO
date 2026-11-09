@@ -153,7 +153,16 @@ function readDirectorKeys(value: unknown, fields: readonly string[], fallback: o
 }
 
 function readDirector(raw: Raw): DirectorNodeData {
-  return { kind: 'director', title: textOf(raw.title, '3D 导演台'), scene: readDirectorScene(raw.scene), ...(numberOf(raw.lastCaptureAt) ? { lastCaptureAt: numberOf(raw.lastCaptureAt) } : {}) }
+  const saved = asRecord(raw.assistant), job = asRecord(saved.job)
+  let assistant: DirectorNodeData['assistant']
+  if (raw.assistant && typeof raw.assistant === 'object') {
+    assistant = { prompt:textOf(saved.prompt).slice(0,6000),model:textOf(saved.model).slice(0,200) }
+    if (typeof job.requestId === 'string' && /^[\w-]{8,100}$/.test(job.requestId) && typeof job.system === 'string' && job.system.length <= 8000 && typeof job.user === 'string' && job.user.length <= 55000 && ['submitting','pending','ready','error','unconfirmed'].includes(String(job.phase))) {
+      const taskId = textOf(job.taskId).slice(0,200)
+      assistant.job = { requestId:job.requestId,model:textOf(job.model).slice(0,200),system:job.system,user:job.user,baseScene:readDirectorScene(job.baseScene),phase:job.phase === 'submitting' ? taskId ? 'pending' : 'unconfirmed' : job.phase as NonNullable<typeof assistant.job>['phase'],...(taskId ? {taskId} : {}),...(typeof job.content === 'string' ? {content:job.content.slice(0,60000)} : {}),...(typeof job.error === 'string' ? {error:job.error.slice(0,2000)} : {}),...(job.applied === true ? {applied:true} : {}),...(typeof job.approvedCost === 'number' && Number.isFinite(job.approvedCost) && job.approvedCost >= 0 ? {approvedCost:job.approvedCost} : {}) }
+    }
+  }
+  return { kind: 'director', title: textOf(raw.title, '3D 导演台'), scene: readDirectorScene(raw.scene), ...(assistant ? {assistant} : {}), ...(numberOf(raw.lastCaptureAt) ? { lastCaptureAt: numberOf(raw.lastCaptureAt) } : {}) }
 }
 
 function readReference(value: unknown): NodeReference | null {

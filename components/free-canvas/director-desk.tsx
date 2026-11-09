@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone as cloneSkinnedModel } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
-import { Camera, Check, Clapperboard, Crosshair, Grid3X3, Maximize2, Move3d, Plus, Rotate3d, ScanLine, Search, SlidersHorizontal, Trash2, UserRound, X } from 'lucide-react'
+import { Bot, Camera, Check, Clapperboard, Crosshair, Grid3X3, Maximize2, Move3d, Plus, Rotate3d, ScanLine, Search, SlidersHorizontal, Trash2, UserRound, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStudio } from '@/lib/studio/store'
 import { CanvasThemeButton } from './canvas-controls'
@@ -19,8 +19,15 @@ import { ACTOR_KEY_FIELDS, CAMERA_KEY_FIELDS, applyCameraMotion, directorDuratio
 import { DirectorFigureLibrary, DirectorPoseLibrary } from './director/figure-library'
 import { loadFigureModel } from './director/figure'
 import { actorPoseId, createActorFigure, updateActorFigure } from './director/figure-adapter'
-import { DEFAULT_DIRECTOR_SCENE } from './node-factory'
-import { DEFAULT_DIRECTOR_POSE_CONTROLS, type DirectorActor, type DirectorCamera, type DirectorPoseControls, type DirectorSceneData } from './types'
+import { DirectorAgentPanel } from './director/agent-panel'
+import { directorSceneKey } from './director/agent-plan'
+import { canvasModelDefaults } from './canvas-generation-policy'
+import { uploadPersistentAsset } from '@/lib/studio/account-api'
+import { availableTeamModels } from '@/lib/studio/team-generation'
+import { defaultGenerationDefaults } from '@/lib/studio/studio-models'
+import { saveTeamCanvasImage } from './team-canvas-assets'
+import { createGenerationNode, DEFAULT_DIRECTOR_SCENE } from './node-factory'
+import { DEFAULT_DIRECTOR_POSE_CONTROLS, type DirectorActor, type DirectorAssistantData, type DirectorCamera, type DirectorPoseControls, type DirectorSceneData } from './types'
 
 type Props = { nodeId: string; onClose: () => void }
 
@@ -88,10 +95,17 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
   const [saving, setSaving] = useState(false)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [previewScene, setPreviewScene] = useState<DirectorSceneData | null>(null)
+  const captureShot = useRef<(() => string) | null>(null)
+  const { state: studio } = useStudio()
+  const directorAccount = useRef(studio.user.id)
+  directorAccount.current = studio.user.id
+  const workspace = useCanvasStore(store => store.workspace)
   const timeRef = useRef(time)
   timeRef.current = time
-  const sampled = useMemo(() => sampleDirectorScene(scene, time), [scene, time])
-  const duration = directorDuration(scene)
+  const sampled = useMemo(() => sampleDirectorScene(previewScene ?? scene, time), [scene, previewScene, time])
+  const duration = directorDuration(previewScene??scene)
   useEffect(() => {
     if (!playing) return
     const start = performance.now(), offset = timeRef.current >= duration ? 0 : timeRef.current
@@ -119,10 +133,45 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
   }, [nodeId])
 
   const commit = useCallback((next: DirectorSceneData, history = true) => {
+    if(useCanvasStore.getState().workspace?.readOnly)return
+    setPreviewScene(null)
     setScene(next)
     setSaved(false)
     updateNodeData(nodeId, { scene: next }, { history })
   }, [nodeId, updateNodeData])
+
+  const preview = (next: DirectorSceneData | null) => { setPlaying(false); setPreviewScene(next); setTime(0); if(next)setViewMode('camera') }
+  const applyProposal = (next: DirectorSceneData, assistant: DirectorAssistantData) => {
+    if(workspace?.readOnly)return
+    setPlaying(false); setPreviewScene(null); setScene(copyScene(next)); setTime(0); setSaved(false)
+    setSelectedActor(null);setSelectedCamera(null);setViewMode('camera')
+    updateNodeData(nodeId,{scene:next,assistant},{history:true})
+  }
+  const createDraft = async (kind:'image'|'video', prompt:string, modelId:string) => {
+    const store=useCanvasStore.getState(), owner=studio.user.id
+    if(!store.projectId||store.workspace?.readOnly)throw new Error('当前空间不能创建生成草稿')
+    if(previewScene)throw new Error('请先退出预览或应用方案，再创建生成草稿')
+    const capture=captureShot.current
+    if(!capture)throw new Error('3D 画面尚未准备好，请稍后重试')
+    const image=capture()
+    const models=workspace?availableTeamModels(studio.models,workspace.modelIds,studio.sessionSettings):studio.models
+    const model=models.find(item=>item.id===modelId&&item.capability===kind)
+    if(!model||model.capabilities.maxReferences<1)throw new Error('请选择支持图片参考的生成模型')
+    const url=workspace?await saveTeamCanvasImage(workspace,image,'3D 导演台机位参考图'):(await uploadPersistentAsset(new File([await (await fetch(image)).blob()],'3d-director-frame.png',{type:'image/png'}),'image')).url
+    const latest=useCanvasStore.getState()
+    if(latest.projectMeta!==store.projectMeta||!latest.hydrated||owner!==directorAccount.current)return
+    const source=latest.nodes.find(item=>item.id===nodeId)
+    if(source?.type!=='director'||directorSceneKey(source.data.scene)!==directorSceneKey(scene))throw new Error('场景在上传时发生变化，请核对镜头后重新创建草稿')
+    const target=createGenerationNode(kind,{x:0,y:0},defaultGenerationDefaults(studio.sessionSettings))
+    target.data={...target.data,title:`3D 镜头 · ${kind==='image'?'图片':'视频'}生成`,prompt,model:modelId,ratio:scene.aspect,seconds:directorDuration(scene),count:1,references:[{id:url,title:'3D 机位参考图',url,mediaKind:'image',...(kind==='video'&&model.capabilities.firstFrame?{role:'first_frame' as const}:{})}]}
+    target.data=canvasModelDefaults(target.data,model)
+    latest.insertNodeNear(nodeId,'right',target)
+    await flushCanvasSave()
+    const saved=useCanvasStore.getState()
+    if(saved.projectMeta!==store.projectMeta)return
+    if(saved.revision!==saved.savedRevision)throw new Error('生成草稿已保留在本地，但尚未保存，请先处理保存问题')
+    saved.openSettings(target.id);saved.setNotice('已创建生成草稿并附上当前机位画面，请核对参数和积分后提交');onClose()
+  }
 
   const save = useCallback(async () => {
     setSaving(true)
@@ -182,6 +231,7 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
     commit({ ...scene, cameras: scene.cameras.map(camera => camera.id === id ? camera.keys?.length && CAMERA_KEY_FIELDS.some(field => field in patch) ? { ...recordCameraKey(camera, time, patch), ...Object.fromEntries(Object.entries(patch).filter(([key]) => !(CAMERA_KEY_FIELDS as readonly string[]).includes(key))) } : { ...camera, ...patch } : camera) }, false)
   }
   const recordKey = () => {
+    if(previewScene||workspace?.readOnly)return
     if (!selectedActor && !selectedCamera) return useCanvasStore.getState().setNotice('请先选择角色或机位')
     const item = scene.actors.find(actor => actor.id === selectedActor) ?? scene.cameras.find(camera => camera.id === selectedCamera)
     if ((item?.keys?.length ?? 0) >= DIRECTOR_LIMITS.keys && !item?.keys?.some(key => Math.abs(key.t - time) < .01)) return useCanvasStore.getState().setNotice('单个对象最多支持 120 个关键帧')
@@ -190,7 +240,7 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
   }
   useEffect(() => {
     const handle = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input,textarea,select'))) return
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input,textarea,select,[data-director-agent]'))) return
       if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) setPlaying(value => !value) }
       if (event.code === 'KeyK') { event.preventDefault(); recordKey() }
     }
@@ -243,6 +293,7 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
           <button type="button" aria-pressed={viewMode === 'camera'} className={cn('rounded-md px-3 py-1.5 transition-colors', viewMode === 'camera' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')} onClick={() => setViewMode('camera')}><Camera className="mr-1.5 inline size-3.5" />机位视角</button>
         </div>
         <button type="button" className="hidden items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-foreground hover:bg-muted sm:flex" onClick={capture}><Maximize2 className="size-3.5" />导出预览图</button>
+        <button type="button" aria-label="导演助手" aria-pressed={assistantOpen} className={cn('flex min-h-11 items-center gap-1.5 rounded-xl border border-border px-3 text-xs hover:bg-muted',assistantOpen&&'border-studio-accent/50 bg-studio-accent/10 text-studio-accent')} onClick={()=>{setAssistantOpen(value=>!value);setPreviewScene(null)}}><Bot className="size-4"/><span className="hidden sm:inline">导演助手</span></button>
         <button type="button" className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50" disabled={saved || saving} onClick={() => void save()}><Check className="size-3.5" />{saving ? '保存中…' : saved ? '已保存' : '保存到画布'}</button>
         <button type="button" aria-label="关闭导演台" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={onClose}><X className="size-4" /></button>
       </header>
@@ -260,15 +311,17 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
         </aside>
         <section className="order-1 flex min-h-0 min-w-0 flex-1 flex-col lg:order-2">
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs"><span className="text-muted-foreground">画幅</span>{(Object.keys(ASPECT_LABEL) as DirectorSceneData['aspect'][]).map(aspect => <button key={aspect} type="button" className={cn('rounded-md px-2.5 py-1.5', scene.aspect === aspect ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground')} onClick={() => commit({ ...scene, aspect })}>{ASPECT_LABEL[aspect]}</button>)}<label className="ml-auto flex cursor-pointer items-center gap-1.5 text-muted-foreground"><input type="checkbox" checked={scene.grid} onChange={event => commit({ ...scene, grid: event.target.checked }, false)} /><Grid3X3 className="size-3.5" />网格</label></div>
-          <div className="relative min-h-[320px] flex-1"><DirectorViewport scene={sampled} viewMode={viewMode} focusTarget={selectedObject} focusRequest={focusRequest} selectedActorId={selectedActor} selectedCameraId={selectedCamera} transformMode={transformMode} onSelect={selection => { setSelectedActor(selection?.kind === 'actor' ? selection.id : null); setSelectedCamera(selection?.kind === 'camera' ? selection.id : null); setInspectorTab('properties') }} onActorTransform={(id, patch) => setActor(id, patch)} onCameraTransform={(id, patch) => setCamera(id, patch)} /><div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[10px] text-muted-foreground">点击选择 · 拖动旋转 · 滚轮缩放 · 右键平移</div><div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card/95 p-1.5 shadow-2xl backdrop-blur"><button type="button" aria-label="选择工具" title="选择工具" aria-pressed={transformMode === 'select'} onClick={() => setTransformMode('select')} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'select' && 'bg-studio-accent/15 text-studio-accent')}><Crosshair className="size-4" /></button><button type="button" aria-label="移动工具" title="移动工具" aria-pressed={transformMode === 'translate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'translate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('translate')}><Move3d className="size-4" /></button><button type="button" aria-label="旋转工具" title="旋转工具" aria-pressed={transformMode === 'rotate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'rotate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('rotate')}><Rotate3d className="size-4" /></button><button type="button" aria-label="缩放工具" title="缩放工具" aria-pressed={transformMode === 'scale'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'scale' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('scale')}><Maximize2 className="size-4" /></button><button type="button" aria-label="聚焦当前对象" title="聚焦当前对象" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={focusSelected}><ScanLine className="size-4" /></button><button type="button" aria-label="切换网格" title="切换网格" aria-pressed={scene.grid} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', scene.grid && 'bg-studio-accent/15 text-studio-accent')} onClick={() => commit({ ...scene, grid: !scene.grid }, false)}><Grid3X3 className="size-4" /></button><button type="button" aria-label="切换姿态面板" title="切换姿态面板" aria-pressed={inspectorTab === 'pose'} className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setInspectorTab('pose')}><Rotate3d className="size-4" /></button></div></div>
+          <div className="relative min-h-[320px] flex-1">{previewScene&&<div role="status" className="absolute left-3 top-3 z-10 flex items-center gap-3 rounded-xl border border-studio-accent/40 bg-card/95 px-3 py-2 text-xs text-foreground">方案预览 · 场景未改动<button type="button" className="min-h-9 text-studio-accent underline" onClick={()=>preview(null)}>退出预览</button></div>}<DirectorViewport captureShot={captureShot} scene={sampled} viewMode={viewMode} focusTarget={previewScene?null:selectedObject} focusRequest={focusRequest} selectedActorId={previewScene?null:selectedActor} selectedCameraId={previewScene?null:selectedCamera} transformMode={previewScene||workspace?.readOnly?'select':transformMode} onSelect={selection => { if(previewScene)return; setSelectedActor(selection?.kind === 'actor' ? selection.id : null); setSelectedCamera(selection?.kind === 'camera' ? selection.id : null); setInspectorTab('properties') }} onActorTransform={(id, patch) => setActor(id, patch)} onCameraTransform={(id, patch) => setCamera(id, patch)} /><div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[10px] text-muted-foreground">点击选择 · 拖动旋转 · 滚轮缩放 · 右键平移</div><div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card/95 p-1.5 shadow-2xl backdrop-blur"><button type="button" aria-label="选择工具" title="选择工具" aria-pressed={transformMode === 'select'} onClick={() => setTransformMode('select')} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'select' && 'bg-studio-accent/15 text-studio-accent')}><Crosshair className="size-4" /></button><button type="button" aria-label="移动工具" title="移动工具" aria-pressed={transformMode === 'translate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'translate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('translate')}><Move3d className="size-4" /></button><button type="button" aria-label="旋转工具" title="旋转工具" aria-pressed={transformMode === 'rotate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'rotate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('rotate')}><Rotate3d className="size-4" /></button><button type="button" aria-label="缩放工具" title="缩放工具" aria-pressed={transformMode === 'scale'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'scale' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('scale')}><Maximize2 className="size-4" /></button><button type="button" aria-label="聚焦当前对象" title="聚焦当前对象" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={focusSelected}><ScanLine className="size-4" /></button><button type="button" aria-label="切换网格" title="切换网格" aria-pressed={scene.grid} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', scene.grid && 'bg-studio-accent/15 text-studio-accent')} onClick={() => commit({ ...scene, grid: !scene.grid }, false)}><Grid3X3 className="size-4" /></button><button type="button" aria-label="切换姿态面板" title="切换姿态面板" aria-pressed={inspectorTab === 'pose'} className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setInspectorTab('pose')}><Rotate3d className="size-4" /></button></div></div>
         </section>
-        <aside className="order-3 max-h-[42vh] w-full shrink-0 overflow-y-auto border-t border-border bg-card p-3 lg:max-h-none lg:w-72 lg:border-l lg:border-t-0">
+        <aside className={cn('order-3 max-h-[42vh] w-full shrink-0 overflow-y-auto border-t border-border bg-card p-3 lg:max-h-none lg:border-l lg:border-t-0',assistantOpen?'absolute inset-x-3 bottom-3 top-16 z-20 !max-h-none !w-auto rounded-2xl border lg:static lg:z-auto lg:!w-[340px] lg:rounded-none lg:border-0 lg:border-l':'lg:w-72')}>
+          {assistantOpen ? <DirectorAgentPanel nodeId={nodeId} scene={scene} time={time} selectedId={selectedActor??selectedCamera} previewing={Boolean(previewScene)} onPreview={preview} onApply={applyProposal} onDraft={createDraft} onClose={()=>setAssistantOpen(false)}/> : <>
           {selectedObject && <div className="mb-3 flex items-center gap-1 rounded-lg bg-muted/50 p-1 text-[11px]" role="tablist" aria-label="对象属性"><button type="button" role="tab" aria-selected={inspectorTab === 'properties'} className={cn('flex-1 rounded-md px-2 py-1.5', inspectorTab === 'properties' ? 'bg-muted text-foreground' : 'text-muted-foreground')} onClick={() => setInspectorTab('properties')}><SlidersHorizontal className="mr-1 inline size-3.5" />属性</button><button type="button" role="tab" aria-selected={inspectorTab === 'pose'} className={cn('flex-1 rounded-md px-2 py-1.5', inspectorTab === 'pose' ? 'bg-muted text-foreground' : 'text-muted-foreground')} onClick={() => setInspectorTab('pose')}><Rotate3d className="mr-1 inline size-3.5" />姿态</button></div>}
           {selectedActor && scene.actors.find(actor => actor.id === selectedActor) ? <ActorInspector actor={sampled.actors.find(actor => actor.id === selectedActor)!} tab={inspectorTab} onChange={patch => setActor(selectedActor, patch)} /> : selectedCamera && scene.cameras.find(camera => camera.id === selectedCamera) ? <CameraInspector actors={scene.actors} camera={sampled.cameras.find(camera => camera.id === selectedCamera)!} onChange={patch => setCamera(selectedCamera, patch)} /> : <div className="flex h-full min-h-24 flex-col items-center justify-center text-center text-xs text-muted-foreground"><Clapperboard className="mb-2 size-5 text-muted-foreground" /><p>选择角色或机位<br />编辑位置、姿态与镜头参数</p></div>}
           <label className="mt-4 block text-[11px] text-muted-foreground">导演备注<textarea value={scene.notes} onChange={event => commit({ ...scene, notes: event.target.value }, false)} rows={3} placeholder="记录调度、镜头意图或对白提示" className="mt-1.5 w-full resize-none rounded-lg border border-border bg-muted/50 px-2.5 py-2 text-xs text-foreground outline-none focus:border-studio-accent/60" /></label>
+        </>}
         </aside>
       </div>
-      <DirectorTimeline scene={scene} time={time} playing={playing} selectedId={selectedActor || selectedCamera} onTime={setTime} onPlaying={setPlaying} onDuration={value => { setPlaying(false); setTime(current => Math.min(current, value)); commit(resizeDirectorDuration(scene, value)) }} onRecord={recordKey} onDelete={() => { setPlaying(false); commit({ ...scene, actors: scene.actors.map(actor => actor.id === selectedActor ? { ...actor, keys: actor.keys?.filter(key => Math.abs(key.t - time) >= .03) } : actor), cameras: scene.cameras.map(camera => camera.id === selectedCamera ? { ...camera, keys: camera.keys?.filter(key => Math.abs(key.t - time) >= .03) } : camera) }) }} onMotion={motion => { if (!selectedCamera) return; setPlaying(false); setTime(0); commit(applyCameraMotion(scene, selectedCamera, motion, selectedActor ?? undefined)); setViewMode('camera') }} onSelect={(id, kind) => { setSelectedActor(kind === 'actor' ? id : null); setSelectedCamera(kind === 'camera' ? id : null); if (kind === 'camera') commit({ ...scene, activeCameraId: id }, false) }} />
+      <DirectorTimeline readOnly={Boolean(previewScene)||workspace?.readOnly} scene={previewScene??scene} time={time} playing={playing} selectedId={selectedActor || selectedCamera} onTime={setTime} onPlaying={setPlaying} onDuration={value => { setPlaying(false); setTime(current => Math.min(current, value)); commit(resizeDirectorDuration(scene, value)) }} onRecord={recordKey} onDelete={() => { setPlaying(false); commit({ ...scene, actors: scene.actors.map(actor => actor.id === selectedActor ? { ...actor, keys: actor.keys?.filter(key => Math.abs(key.t - time) >= .03) } : actor), cameras: scene.cameras.map(camera => camera.id === selectedCamera ? { ...camera, keys: camera.keys?.filter(key => Math.abs(key.t - time) >= .03) } : camera) }) }} onMotion={motion => { if (!selectedCamera) return; setPlaying(false); setTime(0); commit(applyCameraMotion(scene, selectedCamera, motion, selectedActor ?? undefined)); setViewMode('camera') }} onSelect={(id, kind) => { setSelectedActor(kind === 'actor' ? id : null); setSelectedCamera(kind === 'camera' ? id : null); if (kind === 'camera') commit({ ...scene, activeCameraId: id }, false) }} />
     </div>
   )
 }
@@ -508,7 +561,7 @@ function addWhiteBoxActor(group: THREE.Group, actor: DirectorActor) {
   return torso
 }
 
-function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selectedActorId, selectedCameraId, transformMode, onSelect, onActorTransform, onCameraTransform }: { scene: DirectorSceneData; viewMode: 'director' | 'camera'; focusTarget: DirectorActor | DirectorCamera | null | undefined; focusRequest: number; selectedActorId: string | null; selectedCameraId: string | null; transformMode: 'select' | 'translate' | 'rotate' | 'scale'; onSelect: (selection: DirectorSelection) => void; onActorTransform: (id: string, patch: Partial<DirectorActor>) => void; onCameraTransform: (id: string, patch: Partial<DirectorCamera>) => void }) {
+function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selectedActorId, selectedCameraId, transformMode, onSelect, onActorTransform, onCameraTransform, captureShot }: { captureShot: {current:(()=>string)|null}; scene: DirectorSceneData; viewMode: 'director' | 'camera'; focusTarget: DirectorActor | DirectorCamera | null | undefined; focusRequest: number; selectedActorId: string | null; selectedCameraId: string | null; transformMode: 'select' | 'translate' | 'rotate' | 'scale'; onSelect: (selection: DirectorSelection) => void; onActorTransform: (id: string, patch: Partial<DirectorActor>) => void; onCameraTransform: (id: string, patch: Partial<DirectorCamera>) => void }) {
   const mountRef = useRef<HTMLDivElement>(null)
   const [loadState, setLoadState] = useState<Partial<Record<FigureModel, 'loading' | 'ready' | 'failed'>>>({})
   const [loadAttempt, setLoadAttempt] = useState(0)
@@ -574,6 +627,20 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     })
     transformRef.current = transform
     world.add(transform.getHelper())
+    captureShot.current = () => {
+      const latest=latestSceneRef.current, active=latest.cameras.find(item=>item.id===latest.activeCameraId)??latest.cameras[0]
+      if(!active)throw new Error('当前场景没有可用机位')
+      if(latest.actors.some(actor=>actor.figureModel&&!objectRefs.current.get(`actor:${actor.id}`)?.userData.directorModelInstance))throw new Error('人物模型仍在加载，请稍后再创建草稿')
+      const shot=camera.clone()
+      shot.position.set(active.x,active.y,active.z);shot.fov=active.fov
+      if(active.rotationX||active.rotationY||active.rotationZ)shot.rotation.set(THREE.MathUtils.degToRad(active.rotationX),THREE.MathUtils.degToRad(active.rotationY),THREE.MathUtils.degToRad(active.rotationZ))
+      else shot.lookAt(active.targetX,active.targetY,active.targetZ)
+      shot.updateProjectionMatrix()
+      const hidden=[transform.getHelper(),...Array.from(objectRefs.current.entries()).filter(([id])=>id.startsWith('camera:')).map(([,object])=>object)]
+      const visible=hidden.map(object=>object.visible)
+      try { hidden.forEach(object=>object.visible=false);renderer.render(world,shot);return renderer.domElement.toDataURL('image/png') }
+      finally {hidden.forEach((object,i)=>object.visible=visible[i]);renderer.render(world,camera)}
+    }
     world.add(new THREE.HemisphereLight(0xd7edff, 0x1b2030, 1.8)); const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 7, 4); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); world.add(key)
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 12), new THREE.MeshStandardMaterial({ color: 0x101722, roughness: 0.9, metalness: 0.05 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; world.add(floor)
     floorRef.current = floor.material
@@ -606,6 +673,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     resize(); const observer = new ResizeObserver(resize); observer.observe(mount)
     let frame = 0; const animate = () => { controls.update(); renderer.render(world, camera); frame = requestAnimationFrame(animate) }; animate()
     return () => {
+      captureShot.current=null
       renderer.domElement.removeEventListener('pointerdown', pointerDown, true); renderer.domElement.removeEventListener('pointerup', pointerUp); renderer.domElement.removeEventListener('pointercancel', pointerCancel)
       cancelAnimationFrame(frame); observer.disconnect(); transform.detach(); transform.dispose(); transformRef.current = null; controls.dispose(); controlsRef.current = null; renderer.dispose(); renderer.domElement.remove(); disposeObject(world)
       for (const promise of modelCacheRef.current.values()) void promise.then(model => { if (model) disposeObject(model) })
