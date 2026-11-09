@@ -13,7 +13,7 @@ function sourceModule(path, mocks = {}) {
   return module.exports
 }
 const types = sourceModule('../components/free-canvas/types.ts')
-const codec = sourceModule('../components/free-canvas/board-codec.ts', { './types': types, './node-factory': { GENERATION_TITLES: {} } })
+const codec = sourceModule('../components/free-canvas/board-codec.ts', { './director/catalog': sourceModule('../components/free-canvas/director/catalog.ts'), './types': types, './node-factory': { GENERATION_TITLES: {} } })
 const snapshot = () => ({ id: 'synthetic-agent', type: 'agent', position: { x: 20, y: 40 }, data: { kind: 'agent', title: 'Synthetic agent', prompt: 'Original prompt', skills: [], runStatus: 'planning', runId: null, clientRequestId: 'synthetic-request', submission: { prompt: 'Original prompt', skillIds: ['synthetic-skill'], assetIds: ['synthetic-asset'] }, steps: [], context: [], pointsCost: null } })
 const reload = node => codec.readBoard(JSON.parse(JSON.stringify(codec.writeBoard([node], [])))).nodes[0]
 

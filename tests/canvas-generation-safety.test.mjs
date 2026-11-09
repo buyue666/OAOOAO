@@ -16,7 +16,7 @@ const types = sourceModule('../components/free-canvas/types.ts')
 const factory = sourceModule('../components/free-canvas/node-factory.ts')
 const layout = sourceModule('../components/free-canvas/canvas-layout.ts', { './node-factory': factory })
 const selection = sourceModule('../components/free-canvas/canvas-selection.ts')
-const codec = sourceModule('../components/free-canvas/board-codec.ts', { './types': types, './node-factory': factory })
+const codec = sourceModule('../components/free-canvas/board-codec.ts', { './director/catalog': sourceModule('../components/free-canvas/director/catalog.ts'), './types': types, './node-factory': factory })
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 const settle = () => new Promise(resolve => setImmediate(resolve))
 const plain = value => JSON.parse(JSON.stringify(value))

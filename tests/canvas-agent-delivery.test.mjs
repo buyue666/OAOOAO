@@ -21,7 +21,7 @@ const selection = sourceModule('../components/free-canvas/canvas-selection.ts')
 const references = sourceModule('../lib/studio/reference-assets.ts')
 const reference = sourceModule('../components/free-canvas/asset-reference.ts', { '@/lib/studio/reference-assets': references })
 const delivery = sourceModule('../components/free-canvas/agent-delivery.ts', { './asset-reference': reference, './node-factory': factory })
-const codec = sourceModule('../components/free-canvas/board-codec.ts', { './types': types, './node-factory': factory })
+const codec = sourceModule('../components/free-canvas/board-codec.ts', { './director/catalog': sourceModule('../components/free-canvas/director/catalog.ts'), './types': types, './node-factory': factory })
 const asset = (id, kind = 'image') => ({ id, kind, title: `Synthetic ${id}`, tags: [], data: kind === 'text' ? { content: 'Full synthetic text\nSecond paragraph' } : { serverUrl: `/api/reference-assets/${id}` }, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' })
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve)) }

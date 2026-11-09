@@ -1,6 +1,7 @@
 import type { Viewport } from '@xyflow/react'
 import type { CanvasBackendConnection, CanvasBackendNode, CanvasBackendProject } from '@/lib/studio/api'
 import { DEFAULT_DIRECTOR_SCENE, GENERATION_TITLES } from './node-factory'
+import { isFigureModel, isPoseId } from './director/catalog'
 import {
   HANDLE_IDS,
   isGenerationKind,
@@ -78,10 +79,11 @@ type CanvasNodeKindValue = GenerationKind | MediaNodeKind | 'agent' | 'director'
 
 function readDirectorScene(value: unknown): DirectorSceneData {
   const raw = asRecord(value)
+  const duration = Math.max(1, Math.min(15, Math.round(numberOf(raw.duration, 5) * 2) / 2))
   const actors = Array.isArray(raw.actors) ? raw.actors.flatMap((item, index) => {
     const actor = asRecord(item)
     const id = textOf(actor.id, `actor-${index + 1}`)
-    return [{
+    const parsed: DirectorSceneData['actors'][number] = {
       id,
       name: textOf(actor.name, `角色 ${index + 1}`),
       x: numberOf(actor.x), y: numberOf(actor.y), z: numberOf(actor.z),
@@ -93,36 +95,61 @@ function readDirectorScene(value: unknown): DirectorSceneData {
       rotationY: numberOf(actor.rotationY),
       rotationZ: numberOf(actor.rotationZ),
       pose: (actor.pose === 'hero' || actor.pose === 'walk' ? actor.pose : 'idle') as 'idle' | 'hero' | 'walk',
+      ...(isFigureModel(actor.figureModel) ? { figureModel: actor.figureModel } : {}),
+      ...(isPoseId(actor.posePreset) ? { posePreset: actor.posePreset } : {}),
       ...(readPoseControls(actor.poseControls) ? { poseControls: readPoseControls(actor.poseControls) } : {}),
       // Keep board hydration same-origin for bundled assets. Remote model URLs
       // can later be introduced through a signed asset registry, but arbitrary
       // URLs must not become implicit fetches when a board is opened.
       ...(typeof actor.modelUrl === 'string' && (actor.modelUrl.trim() === 'builtin:whitebox' || /^\/assets\/[A-Za-z0-9_./-]+\.glb(?:\?[^\s]*)?$/i.test(actor.modelUrl.trim())) ? { modelUrl: actor.modelUrl.trim() } : {}),
-    }]
+    }
+    const keys = readDirectorKeys(actor.keys, ['x', 'y', 'z', 'rotationX', 'rotationY', 'rotationZ', 'scale'], parsed, duration)
+    return [{ ...parsed, ...(keys.length ? { keys: keys as import('./types').DirectorActorKey[] } : {}) }]
   }) : DEFAULT_DIRECTOR_SCENE.actors
   const cameras = Array.isArray(raw.cameras) ? raw.cameras.flatMap((item, index) => {
     const camera = asRecord(item)
-    return [{
+    const parsed: DirectorSceneData['cameras'][number] = {
       id: textOf(camera.id, `camera-${index + 1}`),
       name: textOf(camera.name, `机位 ${index + 1}`),
       x: numberOf(camera.x), y: numberOf(camera.y, 2.2), z: numberOf(camera.z, 6.5),
       targetX: numberOf(camera.targetX), targetY: numberOf(camera.targetY, 1), targetZ: numberOf(camera.targetZ),
       fov: Math.min(100, Math.max(20, numberOf(camera.fov, 42))),
+      ...(actors.some(actor => actor.id === camera.lookAtActorId) ? { lookAtActorId: textOf(camera.lookAtActorId) } : {}),
       rotationX: numberOf(camera.rotationX),
       rotationY: numberOf(camera.rotationY),
       rotationZ: numberOf(camera.rotationZ),
-    }]
+    }
+    const keys = readDirectorKeys(camera.keys, ['x', 'y', 'z', 'rotationX', 'rotationY', 'rotationZ', 'targetX', 'targetY', 'targetZ', 'fov'], parsed, duration)
+    return [{ ...parsed, ...(keys.length ? { keys: keys as import('./types').DirectorCameraKey[] } : {}) }]
   }) : DEFAULT_DIRECTOR_SCENE.cameras
   const activeCameraId = textOf(raw.activeCameraId, cameras[0]?.id ?? DEFAULT_DIRECTOR_SCENE.activeCameraId)
   return {
     schemaVersion: 2,
     aspect: raw.aspect === '9:16' || raw.aspect === '1:1' ? raw.aspect : '16:9',
     grid: raw.grid !== false,
-    actors: actors.length ? actors : DEFAULT_DIRECTOR_SCENE.actors,
+    duration,
+    actors,
     cameras: cameras.length ? cameras : DEFAULT_DIRECTOR_SCENE.cameras,
     activeCameraId: cameras.some(camera => camera.id === activeCameraId) ? activeCameraId : cameras[0]?.id ?? DEFAULT_DIRECTOR_SCENE.activeCameraId,
     notes: textOf(raw.notes),
   }
+}
+
+function readDirectorKeys(value: unknown, fields: readonly string[], fallback: object, duration: number) {
+  if (!Array.isArray(value)) return []
+  const keys = new Map<number, { t: number; ease: 'smooth' | 'linear'; [key: string]: number | string }>()
+  for (const raw of value.slice(0, 120)) {
+    const item = asRecord(raw)
+    if (typeof item.t !== 'number' || !Number.isFinite(item.t) || item.t < 0 || item.t > duration) continue
+    const t = Math.round(item.t * 100) / 100
+    const key: { t: number; ease: 'smooth' | 'linear'; [key: string]: number | string } = { t, ease: item.ease === 'linear' ? 'linear' : 'smooth' }
+    for (const field of fields) {
+      const value = numberOf(item[field], (fallback as Record<string, number>)[field])
+      key[field] = field === 'scale' ? Math.max(.25, Math.min(4, value)) : field === 'fov' ? Math.max(20, Math.min(100, value)) : value
+    }
+    keys.set(t, key)
+  }
+  return [...keys.values()].sort((a, b) => a.t - b.t)
 }
 
 function readDirector(raw: Raw): DirectorNodeData {

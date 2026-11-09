@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -12,6 +12,13 @@ import { useStudio } from '@/lib/studio/store'
 import { CanvasThemeButton } from './canvas-controls'
 import { directorObjectIdentity, isDirectorPick, type DirectorSelection } from './director-selection'
 import { useCanvasStore } from './canvas-store'
+import { flushCanvasSave } from './canvas-persistence'
+import { DIRECTOR_LIMITS, FIGURE_LABELS, POSE_LABELS, type FigureModel } from './director/catalog'
+import { DirectorTimeline } from './director/timeline-panel'
+import { ACTOR_KEY_FIELDS, CAMERA_KEY_FIELDS, applyCameraMotion, directorDuration, recordActorKey, recordCameraKey, resizeDirectorDuration, sampleDirectorScene } from './director/timeline'
+import { DirectorFigureLibrary, DirectorPoseLibrary } from './director/figure-library'
+import { loadFigureModel } from './director/figure'
+import { actorPoseId, createActorFigure, updateActorFigure } from './director/figure-adapter'
 import { DEFAULT_DIRECTOR_SCENE } from './node-factory'
 import { DEFAULT_DIRECTOR_POSE_CONTROLS, type DirectorActor, type DirectorCamera, type DirectorPoseControls, type DirectorSceneData } from './types'
 
@@ -78,6 +85,27 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
   const [transformMode, setTransformMode] = useState<'select' | 'translate' | 'rotate' | 'scale'>('select')
   const [focusRequest, setFocusRequest] = useState(0)
   const [saved, setSaved] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [time, setTime] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const timeRef = useRef(time)
+  timeRef.current = time
+  const sampled = useMemo(() => sampleDirectorScene(scene, time), [scene, time])
+  const duration = directorDuration(scene)
+  useEffect(() => {
+    if (!playing) return
+    const start = performance.now(), offset = timeRef.current >= duration ? 0 : timeRef.current
+    let frame = 0, last = -1
+    const tick = (now: number) => {
+      const current = Math.min(duration, offset + (now - start) / 1000)
+      const renderFrame = Math.floor(current * 24)
+      if (renderFrame !== last) { setTime(current); last = renderFrame }
+      if (current >= duration) { setPlaying(false); return }
+      frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [playing, duration])
   const deskRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -96,10 +124,19 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
     updateNodeData(nodeId, { scene: next }, { history })
   }, [nodeId, updateNodeData])
 
-  const save = useCallback(() => {
-    if (node?.type === 'director') updateNodeData(nodeId, { scene, lastCaptureAt: node.data.lastCaptureAt }, { history: true })
-    setSaved(true)
-    useCanvasStore.getState().setNotice('3D 导演台已保存到画布')
+  const save = useCallback(async () => {
+    setSaving(true)
+    try {
+      if (node?.type === 'director') updateNodeData(nodeId, { scene, lastCaptureAt: node.data.lastCaptureAt }, { history: true })
+      await flushCanvasSave()
+      const store = useCanvasStore.getState()
+      if (store.revision !== store.savedRevision) throw new Error(store.saveError || '场景尚未保存，请重试')
+      setSaved(true)
+      store.setNotice('3D 导演台已保存到画布')
+    } catch (error) {
+      setSaved(false)
+      useCanvasStore.getState().setNotice(error instanceof Error ? error.message : '场景保存失败，请重试')
+    } finally { setSaving(false) }
   }, [node, nodeId, scene, updateNodeData])
 
   const capture = useCallback(() => {
@@ -115,13 +152,16 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
 
   if (!node || node.type !== 'director') return null
 
-  const addActor = () => {
+  const addActor = (figureModel: FigureModel = 'male') => {
+    if (scene.actors.length >= DIRECTOR_LIMITS.actors) return useCanvasStore.getState().setNotice('每个场景最多支持 8 个角色')
     const index = scene.actors.length + 1
     const next = copyScene(scene)
-    next.actors.push({ id: `actor-${Date.now()}`, name: `角色 ${index}`, x: (index % 3 - 1) * 1.4, y: 0, z: (index % 2) * -0.45, color: index % 2 ? '#74b9ff' : '#ff9f8a', scale: 1, rotationX: 0, rotationY: 0, rotationZ: 0, pose: 'idle' })
+    next.actors.push({ id: `actor-${Date.now()}`, name: `角色 ${index}`, x: (index % 3 - 1) * 1.4, y: 0, z: (index % 2) * -0.45, color: index % 2 ? '#74b9ff' : '#ff9f8a', scale: 1, rotationX: 0, rotationY: 0, rotationZ: 0, pose: 'idle', figureModel, posePreset: 'stand' })
     commit(next)
+    setSelectedActor(next.actors.at(-1)!.id); setSelectedCamera(null); setInspectorTab('pose')
   }
   const addCamera = () => {
+    if (scene.cameras.length >= DIRECTOR_LIMITS.cameras) return useCanvasStore.getState().setNotice('每个场景最多支持 6 个机位')
     const index = scene.cameras.length + 1
     const id = `camera-${Date.now()}`
     const next = copyScene(scene)
@@ -129,8 +169,34 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
     next.activeCameraId = id
     commit(next)
   }
-  const setActor = (id: string, patch: Partial<DirectorActor>) => commit({ ...scene, actors: scene.actors.map(actor => actor.id === id ? { ...actor, ...patch } : actor) }, false)
-  const setCamera = (id: string, patch: Partial<DirectorCamera>) => commit({ ...scene, cameras: scene.cameras.map(camera => camera.id === id ? { ...camera, ...patch } : camera) }, false)
+  const setActor = (id: string, patch: Partial<DirectorActor>) => {
+    setPlaying(false)
+    commit({ ...scene, actors: scene.actors.map(actor => {
+      if (actor.id !== id) return actor
+      if (actor.keys?.length && ACTOR_KEY_FIELDS.some(field => field in patch)) return { ...recordActorKey(actor, time, patch), ...Object.fromEntries(Object.entries(patch).filter(([key]) => !(ACTOR_KEY_FIELDS as readonly string[]).includes(key))) }
+      return { ...actor, ...patch }
+    }) }, false)
+  }
+  const setCamera = (id: string, patch: Partial<DirectorCamera>) => {
+    setPlaying(false)
+    commit({ ...scene, cameras: scene.cameras.map(camera => camera.id === id ? camera.keys?.length && CAMERA_KEY_FIELDS.some(field => field in patch) ? { ...recordCameraKey(camera, time, patch), ...Object.fromEntries(Object.entries(patch).filter(([key]) => !(CAMERA_KEY_FIELDS as readonly string[]).includes(key))) } : { ...camera, ...patch } : camera) }, false)
+  }
+  const recordKey = () => {
+    if (!selectedActor && !selectedCamera) return useCanvasStore.getState().setNotice('请先选择角色或机位')
+    const item = scene.actors.find(actor => actor.id === selectedActor) ?? scene.cameras.find(camera => camera.id === selectedCamera)
+    if ((item?.keys?.length ?? 0) >= DIRECTOR_LIMITS.keys && !item?.keys?.some(key => Math.abs(key.t - time) < .01)) return useCanvasStore.getState().setNotice('单个对象最多支持 120 个关键帧')
+    setPlaying(false)
+    commit({ ...scene, actors: scene.actors.map(actor => actor.id === selectedActor ? recordActorKey(actor, time) : actor), cameras: scene.cameras.map(camera => camera.id === selectedCamera ? recordCameraKey(camera, time) : camera) })
+  }
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input,textarea,select'))) return
+      if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) setPlaying(value => !value) }
+      if (event.code === 'KeyK') { event.preventDefault(); recordKey() }
+    }
+    window.addEventListener('keydown', handle)
+    return () => window.removeEventListener('keydown', handle)
+  })
   const removeActor = (id: string) => {
     // Removing the currently inspected actor must also clear its selection.
     // Otherwise the inspector keeps the stale id, `find()` returns undefined,
@@ -148,7 +214,7 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
   const search = objectSearch.trim().toLocaleLowerCase()
   const visibleActors = scene.actors.filter((actor) => !search || actor.name.toLocaleLowerCase().includes(search))
   const visibleCameras = scene.cameras.filter((camera) => !search || camera.name.toLocaleLowerCase().includes(search))
-  const selectedObject = selectedActor ? scene.actors.find((actor) => actor.id === selectedActor) : selectedCamera ? scene.cameras.find((camera) => camera.id === selectedCamera) : null
+  const selectedObject = selectedActor ? sampled.actors.find((actor) => actor.id === selectedActor) : selectedCamera ? sampled.cameras.find((camera) => camera.id === selectedCamera) : null
   const focusSelected = () => {
     if (!selectedObject) {
       useCanvasStore.getState().setNotice('请先选择一个角色或机位')
@@ -177,14 +243,15 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
           <button type="button" aria-pressed={viewMode === 'camera'} className={cn('rounded-md px-3 py-1.5 transition-colors', viewMode === 'camera' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')} onClick={() => setViewMode('camera')}><Camera className="mr-1.5 inline size-3.5" />机位视角</button>
         </div>
         <button type="button" className="hidden items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs text-foreground hover:bg-muted sm:flex" onClick={capture}><Maximize2 className="size-3.5" />导出预览图</button>
-        <button type="button" className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50" disabled={saved} onClick={save}><Check className="size-3.5" />{saved ? '已保存' : '保存到画布'}</button>
+        <button type="button" className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50" disabled={saved || saving} onClick={() => void save()}><Check className="size-3.5" />{saving ? '保存中…' : saved ? '已保存' : '保存到画布'}</button>
         <button type="button" aria-label="关闭导演台" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={onClose}><X className="size-4" /></button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <aside className="order-2 flex max-h-[40vh] w-full shrink-0 flex-col overflow-y-auto border-t border-border bg-card p-3 lg:order-1 lg:max-h-none lg:w-64 lg:border-t-0 lg:border-r">
+          <DirectorFigureLibrary onAdd={addActor} disabled={scene.actors.length >= DIRECTOR_LIMITS.actors} />
           <div className="mb-3 flex items-center justify-between"><span className="text-xs font-semibold">场景对象</span><span className="text-[10px] text-muted-foreground">{scene.actors.length} 角色 · {scene.cameras.length} 机位</span></div>
           <label className="mb-2 flex h-9 items-center gap-2 rounded-lg border border-border bg-muted/50 px-2.5 text-xs text-muted-foreground"><Search className="size-3.5" /><input value={objectSearch} onChange={(event) => setObjectSearch(event.target.value)} placeholder="搜索资源" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground" aria-label="搜索导演台资源" /></label>
-          <div className="mb-2 flex items-center justify-between"><span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">角色</span><button type="button" className="inline-flex items-center gap-1 text-[11px] text-studio-accent hover:text-studio-accent" onClick={addActor}><Plus className="size-3" />添加</button></div>
+          <div className="mb-2 flex items-center justify-between"><span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">角色</span><button type="button" className="inline-flex items-center gap-1 text-[11px] text-studio-accent hover:text-studio-accent" onClick={() => addActor()}><Plus className="size-3" />添加</button></div>
           <div className="flex flex-col gap-1.5">{visibleActors.map(actor => <div key={actor.id} className={cn('flex items-center gap-2 rounded-lg border px-2.5 py-2', selectedActor === actor.id ? 'border-studio-accent/60 bg-studio-accent/10' : 'border-border bg-muted/20')}><button type="button" className="min-w-0 flex-1 truncate text-left text-xs text-foreground" onClick={() => { setSelectedActor(actor.id); setSelectedCamera(null); setInspectorTab('properties') }}><UserRound className="mr-1.5 inline size-3.5 text-muted-foreground" />{actor.name}</button><button type="button" className="text-muted-foreground hover:text-destructive" aria-label={`删除${actor.name}`} onClick={() => removeActor(actor.id)}><Trash2 className="size-3.5" /></button></div>)}</div>
           <div className="my-4 h-px bg-muted" />
           <div className="mb-2 flex items-center justify-between"><span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">摄像机</span><button type="button" className="inline-flex items-center gap-1 text-[11px] text-studio-accent hover:text-studio-accent" onClick={addCamera}><Plus className="size-3" />添加</button></div>
@@ -193,14 +260,15 @@ export function DirectorDesk({ nodeId, onClose }: Props) {
         </aside>
         <section className="order-1 flex min-h-0 min-w-0 flex-1 flex-col lg:order-2">
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs"><span className="text-muted-foreground">画幅</span>{(Object.keys(ASPECT_LABEL) as DirectorSceneData['aspect'][]).map(aspect => <button key={aspect} type="button" className={cn('rounded-md px-2.5 py-1.5', scene.aspect === aspect ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground')} onClick={() => commit({ ...scene, aspect })}>{ASPECT_LABEL[aspect]}</button>)}<label className="ml-auto flex cursor-pointer items-center gap-1.5 text-muted-foreground"><input type="checkbox" checked={scene.grid} onChange={event => commit({ ...scene, grid: event.target.checked }, false)} /><Grid3X3 className="size-3.5" />网格</label></div>
-          <div className="relative min-h-[320px] flex-1"><DirectorViewport scene={scene} viewMode={viewMode} focusTarget={selectedObject} focusRequest={focusRequest} selectedActorId={selectedActor} selectedCameraId={selectedCamera} transformMode={transformMode} onSelect={selection => { setSelectedActor(selection?.kind === 'actor' ? selection.id : null); setSelectedCamera(selection?.kind === 'camera' ? selection.id : null); setInspectorTab('properties') }} onActorTransform={(id, patch) => setActor(id, patch)} onCameraTransform={(id, patch) => setCamera(id, patch)} /><div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[10px] text-muted-foreground">点击选择 · 拖动旋转 · 滚轮缩放 · 右键平移</div><div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card/95 p-1.5 shadow-2xl backdrop-blur"><button type="button" aria-label="选择工具" title="选择工具" aria-pressed={transformMode === 'select'} onClick={() => setTransformMode('select')} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'select' && 'bg-studio-accent/15 text-studio-accent')}><Crosshair className="size-4" /></button><button type="button" aria-label="移动工具" title="移动工具" aria-pressed={transformMode === 'translate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'translate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('translate')}><Move3d className="size-4" /></button><button type="button" aria-label="旋转工具" title="旋转工具" aria-pressed={transformMode === 'rotate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'rotate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('rotate')}><Rotate3d className="size-4" /></button><button type="button" aria-label="缩放工具" title="缩放工具" aria-pressed={transformMode === 'scale'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'scale' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('scale')}><Maximize2 className="size-4" /></button><button type="button" aria-label="聚焦当前对象" title="聚焦当前对象" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={focusSelected}><ScanLine className="size-4" /></button><button type="button" aria-label="切换网格" title="切换网格" aria-pressed={scene.grid} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', scene.grid && 'bg-studio-accent/15 text-studio-accent')} onClick={() => commit({ ...scene, grid: !scene.grid }, false)}><Grid3X3 className="size-4" /></button><button type="button" aria-label="切换姿态面板" title="切换姿态面板" aria-pressed={inspectorTab === 'pose'} className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setInspectorTab('pose')}><Rotate3d className="size-4" /></button></div></div>
+          <div className="relative min-h-[320px] flex-1"><DirectorViewport scene={sampled} viewMode={viewMode} focusTarget={selectedObject} focusRequest={focusRequest} selectedActorId={selectedActor} selectedCameraId={selectedCamera} transformMode={transformMode} onSelect={selection => { setSelectedActor(selection?.kind === 'actor' ? selection.id : null); setSelectedCamera(selection?.kind === 'camera' ? selection.id : null); setInspectorTab('properties') }} onActorTransform={(id, patch) => setActor(id, patch)} onCameraTransform={(id, patch) => setCamera(id, patch)} /><div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-border bg-card/95 px-3 py-1.5 text-[10px] text-muted-foreground">点击选择 · 拖动旋转 · 滚轮缩放 · 右键平移</div><div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-1rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card/95 p-1.5 shadow-2xl backdrop-blur"><button type="button" aria-label="选择工具" title="选择工具" aria-pressed={transformMode === 'select'} onClick={() => setTransformMode('select')} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'select' && 'bg-studio-accent/15 text-studio-accent')}><Crosshair className="size-4" /></button><button type="button" aria-label="移动工具" title="移动工具" aria-pressed={transformMode === 'translate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'translate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('translate')}><Move3d className="size-4" /></button><button type="button" aria-label="旋转工具" title="旋转工具" aria-pressed={transformMode === 'rotate'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'rotate' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('rotate')}><Rotate3d className="size-4" /></button><button type="button" aria-label="缩放工具" title="缩放工具" aria-pressed={transformMode === 'scale'} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', transformMode === 'scale' && 'bg-studio-accent/15 text-studio-accent')} onClick={() => setTransformMode('scale')}><Maximize2 className="size-4" /></button><button type="button" aria-label="聚焦当前对象" title="聚焦当前对象" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={focusSelected}><ScanLine className="size-4" /></button><button type="button" aria-label="切换网格" title="切换网格" aria-pressed={scene.grid} className={cn('flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground', scene.grid && 'bg-studio-accent/15 text-studio-accent')} onClick={() => commit({ ...scene, grid: !scene.grid }, false)}><Grid3X3 className="size-4" /></button><button type="button" aria-label="切换姿态面板" title="切换姿态面板" aria-pressed={inspectorTab === 'pose'} className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setInspectorTab('pose')}><Rotate3d className="size-4" /></button></div></div>
         </section>
         <aside className="order-3 max-h-[42vh] w-full shrink-0 overflow-y-auto border-t border-border bg-card p-3 lg:max-h-none lg:w-72 lg:border-l lg:border-t-0">
           {selectedObject && <div className="mb-3 flex items-center gap-1 rounded-lg bg-muted/50 p-1 text-[11px]" role="tablist" aria-label="对象属性"><button type="button" role="tab" aria-selected={inspectorTab === 'properties'} className={cn('flex-1 rounded-md px-2 py-1.5', inspectorTab === 'properties' ? 'bg-muted text-foreground' : 'text-muted-foreground')} onClick={() => setInspectorTab('properties')}><SlidersHorizontal className="mr-1 inline size-3.5" />属性</button><button type="button" role="tab" aria-selected={inspectorTab === 'pose'} className={cn('flex-1 rounded-md px-2 py-1.5', inspectorTab === 'pose' ? 'bg-muted text-foreground' : 'text-muted-foreground')} onClick={() => setInspectorTab('pose')}><Rotate3d className="mr-1 inline size-3.5" />姿态</button></div>}
-          {selectedActor && scene.actors.find(actor => actor.id === selectedActor) ? <ActorInspector actor={scene.actors.find(actor => actor.id === selectedActor)!} tab={inspectorTab} onChange={patch => setActor(selectedActor, patch)} /> : selectedCamera && scene.cameras.find(camera => camera.id === selectedCamera) ? <CameraInspector camera={scene.cameras.find(camera => camera.id === selectedCamera)!} onChange={patch => setCamera(selectedCamera, patch)} /> : <div className="flex h-full min-h-24 flex-col items-center justify-center text-center text-xs text-muted-foreground"><Clapperboard className="mb-2 size-5 text-muted-foreground" /><p>选择角色或机位<br />编辑位置、姿态与镜头参数</p></div>}
+          {selectedActor && scene.actors.find(actor => actor.id === selectedActor) ? <ActorInspector actor={sampled.actors.find(actor => actor.id === selectedActor)!} tab={inspectorTab} onChange={patch => setActor(selectedActor, patch)} /> : selectedCamera && scene.cameras.find(camera => camera.id === selectedCamera) ? <CameraInspector actors={scene.actors} camera={sampled.cameras.find(camera => camera.id === selectedCamera)!} onChange={patch => setCamera(selectedCamera, patch)} /> : <div className="flex h-full min-h-24 flex-col items-center justify-center text-center text-xs text-muted-foreground"><Clapperboard className="mb-2 size-5 text-muted-foreground" /><p>选择角色或机位<br />编辑位置、姿态与镜头参数</p></div>}
           <label className="mt-4 block text-[11px] text-muted-foreground">导演备注<textarea value={scene.notes} onChange={event => commit({ ...scene, notes: event.target.value }, false)} rows={3} placeholder="记录调度、镜头意图或对白提示" className="mt-1.5 w-full resize-none rounded-lg border border-border bg-muted/50 px-2.5 py-2 text-xs text-foreground outline-none focus:border-studio-accent/60" /></label>
         </aside>
       </div>
+      <DirectorTimeline scene={scene} time={time} playing={playing} selectedId={selectedActor || selectedCamera} onTime={setTime} onPlaying={setPlaying} onDuration={value => { setPlaying(false); setTime(current => Math.min(current, value)); commit(resizeDirectorDuration(scene, value)) }} onRecord={recordKey} onDelete={() => { setPlaying(false); commit({ ...scene, actors: scene.actors.map(actor => actor.id === selectedActor ? { ...actor, keys: actor.keys?.filter(key => Math.abs(key.t - time) >= .03) } : actor), cameras: scene.cameras.map(camera => camera.id === selectedCamera ? { ...camera, keys: camera.keys?.filter(key => Math.abs(key.t - time) >= .03) } : camera) }) }} onMotion={motion => { if (!selectedCamera) return; setPlaying(false); setTime(0); commit(applyCameraMotion(scene, selectedCamera, motion, selectedActor ?? undefined)); setViewMode('camera') }} onSelect={(id, kind) => { setSelectedActor(kind === 'actor' ? id : null); setSelectedCamera(kind === 'camera' ? id : null); if (kind === 'camera') commit({ ...scene, activeCameraId: id }, false) }} />
     </div>
   )
 }
@@ -211,8 +279,8 @@ function ActorInspector({ actor, tab = 'properties', onChange }: { actor: Direct
   const controls = { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...(actor.poseControls ?? {}) }
   const setPoseControls = (patch: Partial<DirectorPoseControls>) => onChange({ poseControls: { ...controls, ...patch } })
   const applyPreset = (preset: typeof POSE_PRESETS[number]) => onChange({ pose: preset.pose, poseControls: { ...DEFAULT_DIRECTOR_POSE_CONTROLS, ...preset.controls } })
-  if (tab === 'pose') return <PoseInspector actor={actor} controls={controls} setPoseControls={setPoseControls} applyPreset={applyPreset} />
-  return <Inspector title={actor.name} subtitle="角色"><Field label="名称"><input className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={actor.name} onChange={event => onChange({ name: event.target.value })} /></Field>{tab === 'properties' ? <><Field label="模型"><select className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={actor.modelUrl === 'builtin:whitebox' ? 'builtin:whitebox' : (actor.modelUrl || DEFAULT_MODEL_URL)} onChange={event => onChange({ modelUrl: event.target.value })}><option value={DEFAULT_MODEL_URL}>Quaternius 人形（CC0）</option><option value="builtin:whitebox">白盒预览</option></select></Field><Field label="颜色"><input type="color" value={actor.color} onChange={event => onChange({ color: event.target.value })} /></Field><Field label="位置"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={actor.x} onChange={(value) => onChange({ x: value })} /><NumberField label="Y" value={actor.y} onChange={(value) => onChange({ y: value })} /><NumberField label="Z" value={actor.z} onChange={(value) => onChange({ z: value })} /></div></Field><Field label="旋转（度）"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={actor.rotationX} onChange={(value) => onChange({ rotationX: value })} /><NumberField label="Y" value={actor.rotationY} onChange={(value) => onChange({ rotationY: value })} /><NumberField label="Z" value={actor.rotationZ} onChange={(value) => onChange({ rotationZ: value })} /></div></Field><Field label="统一缩放"><input className="min-w-0 accent-studio-accent" type="range" min="0.5" max="2" step="0.05" value={actor.scale} onChange={event => onChange({ scale: Number(event.target.value) })} /><span className="min-w-7 text-right text-[10px] text-muted-foreground">{actor.scale.toFixed(2)}</span></Field></> : <><Field label="姿态"><select value={actor.pose} onChange={event => onChange({ pose: event.target.value as DirectorActor['pose'] })}><option value="idle">待机</option><option value="hero">英雄站姿</option><option value="walk">行走</option></select></Field><div className="grid grid-cols-3 gap-2"><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'idle' ? 'border-studio-accent/60 bg-studio-accent/10 text-studio-accent' : 'border-border text-muted-foreground')} onClick={() => onChange({ pose: 'idle' })}>待机</button><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'hero' ? 'border-studio-accent/60 bg-studio-accent/10 text-studio-accent' : 'border-border text-muted-foreground')} onClick={() => onChange({ pose: 'hero' })}>英雄</button><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'walk' ? 'border-studio-accent/60 bg-studio-accent/10 text-studio-accent' : 'border-border text-muted-foreground')} onClick={() => onChange({ pose: 'walk' })}>行走</button></div><p className="text-[11px] leading-5 text-muted-foreground">姿态会同步影响角色的骨骼关节，方便预演动作与构图。</p></>}</Inspector>
+  if (tab === 'pose') return <PoseInspector actor={actor} controls={controls} setPoseControls={setPoseControls} applyPreset={applyPreset} onChange={onChange} />
+  return <Inspector title={actor.name} subtitle="角色"><Field label="名称"><input className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={actor.name} onChange={event => onChange({ name: event.target.value })} /></Field>{tab === 'properties' ? <><Field label="模型"><select className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={actor.figureModel ? `figure:${actor.figureModel}` : (actor.modelUrl || DEFAULT_MODEL_URL)} onChange={event => onChange(event.target.value.startsWith('figure:') ? { figureModel: event.target.value.slice(7) as FigureModel, modelUrl: undefined, posePreset: actor.posePreset ?? 'stand', poseControls: { ...DEFAULT_DIRECTOR_POSE_CONTROLS } } : { figureModel: undefined, posePreset: undefined, modelUrl: event.target.value })}><option value="figure:male">男性人台</option><option value="figure:female">女性人台</option><option value={DEFAULT_MODEL_URL}>经典角色（旧版）</option><option value="builtin:whitebox">简化白盒</option></select></Field><Field label="颜色"><input type="color" value={actor.color} onChange={event => onChange({ color: event.target.value })} /></Field><Field label="位置"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={actor.x} onChange={(value) => onChange({ x: value })} /><NumberField label="Y" value={actor.y} onChange={(value) => onChange({ y: value })} /><NumberField label="Z" value={actor.z} onChange={(value) => onChange({ z: value })} /></div></Field><Field label="旋转（度）"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={actor.rotationX} onChange={(value) => onChange({ rotationX: value })} /><NumberField label="Y" value={actor.rotationY} onChange={(value) => onChange({ rotationY: value })} /><NumberField label="Z" value={actor.rotationZ} onChange={(value) => onChange({ rotationZ: value })} /></div></Field><Field label="统一缩放"><input className="min-w-0 accent-studio-accent" type="range" min="0.5" max="2" step="0.05" value={actor.scale} onChange={event => onChange({ scale: Number(event.target.value) })} /><span className="min-w-7 text-right text-[10px] text-muted-foreground">{actor.scale.toFixed(2)}</span></Field></> : <><Field label="姿态"><select value={actor.pose} onChange={event => onChange({ pose: event.target.value as DirectorActor['pose'] })}><option value="idle">待机</option><option value="hero">英雄站姿</option><option value="walk">行走</option></select></Field><div className="grid grid-cols-3 gap-2"><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'idle' ? 'border-studio-accent/60 bg-studio-accent/10 text-studio-accent' : 'border-border text-muted-foreground')} onClick={() => onChange({ pose: 'idle' })}>待机</button><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'hero' ? 'border-studio-accent/60 bg-studio-accent/10 text-studio-accent' : 'border-border text-muted-foreground')} onClick={() => onChange({ pose: 'hero' })}>英雄</button><button type="button" className={cn('rounded-md border px-2 py-2 text-[11px]', actor.pose === 'walk' ? 'border-studio-accent/60 bg-studio-accent/10 text-studio-accent' : 'border-border text-muted-foreground')} onClick={() => onChange({ pose: 'walk' })}>行走</button></div><p className="text-[11px] leading-5 text-muted-foreground">姿态会同步影响角色的骨骼关节，方便预演动作与构图。</p></>}</Inspector>
 }
 
 function isPosePresetActive(actor: DirectorActor, controls: DirectorPoseControls, preset: typeof POSE_PRESETS[number]) {
@@ -221,11 +289,15 @@ function isPosePresetActive(actor: DirectorActor, controls: DirectorPoseControls
   return (Object.keys(DEFAULT_DIRECTOR_POSE_CONTROLS) as (keyof DirectorPoseControls)[]).every(key => controls[key] === expected[key])
 }
 
-function PoseInspector({ actor, controls, setPoseControls, applyPreset }: { actor: DirectorActor; controls: DirectorPoseControls; setPoseControls: (patch: Partial<DirectorPoseControls>) => void; applyPreset: (preset: typeof POSE_PRESETS[number]) => void }) {
+function PoseInspector({ actor, controls, setPoseControls, applyPreset, onChange }: { onChange: (patch: Partial<DirectorActor>) => void; actor: DirectorActor; controls: DirectorPoseControls; setPoseControls: (patch: Partial<DirectorPoseControls>) => void; applyPreset: (preset: typeof POSE_PRESETS[number]) => void }) {
   const activePreset = POSE_PRESETS.find(preset => isPosePresetActive(actor, controls, preset))
   return <Inspector title={actor.name} subtitle="姿态">
+    <Field label="人物模型"><select aria-label="姿态人物模型" className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={actor.figureModel ?? 'legacy'} onChange={event => onChange({ figureModel: event.target.value as FigureModel, modelUrl: undefined, posePreset: 'stand', poseControls: { ...DEFAULT_DIRECTOR_POSE_CONTROLS } })}>{!actor.figureModel && <option value="legacy" disabled>当前角色</option>}<option value="male">男性人台</option><option value="female">女性人台</option></select></Field>
+    {actor.figureModel ? <DirectorPoseLibrary model={actor.figureModel} value={actorPoseId(actor)} onSelect={posePreset => onChange({ posePreset, poseControls: { ...DEFAULT_DIRECTOR_POSE_CONTROLS } })} /> : <>
     <div className="flex items-center justify-between"><div className="flex items-center gap-2"><span className="text-[11px] text-muted-foreground">姿势预设</span>{activePreset ? <span className="inline-flex items-center gap-1 rounded-full border border-studio-accent/50 bg-studio-accent/10 px-1.5 py-0.5 text-[9px] font-medium text-studio-accent"><Check className="size-2.5" />当前：{activePreset.label}</span> : <span className="rounded-full border border-border bg-muted/30 px-1.5 py-0.5 text-[9px] text-muted-foreground">自定义姿态</span>}</div><button type="button" className="text-[10px] text-studio-accent hover:text-studio-accent" onClick={() => setPoseControls(DEFAULT_DIRECTOR_POSE_CONTROLS)}>重置关节</button></div>
     <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="姿态预设">{POSE_PRESETS.map(preset => { const selected = isPosePresetActive(actor, controls, preset); return <button key={preset.id} type="button" aria-pressed={selected} aria-label={`${preset.label}姿态${selected ? '（当前）' : ''}`} className={cn('relative rounded-md border px-1.5 py-2 text-[10px] transition-colors', selected ? 'border-studio-accent bg-studio-accent/15 font-medium text-studio-accent ring-1 ring-studio-accent/40' : 'border-border text-muted-foreground hover:border-border hover:bg-muted/60 hover:text-foreground')} onClick={() => applyPreset(preset)}>{selected && <Check aria-hidden="true" className="absolute right-1 top-1 size-2.5 text-studio-accent" />}{preset.label}</button> })}</div>
+    </>}
+    <button type="button" className="min-h-9 w-full rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted hover:text-foreground" onClick={() => setPoseControls(DEFAULT_DIRECTOR_POSE_CONTROLS)}>重置关节微调</button>
     <p className="text-[10px] leading-5 text-muted-foreground">先选姿势，再用下方滑杆微调关节；角度会保存到当前角色。</p>
     <div className="flex flex-col gap-4">{POSE_CONTROL_SECTIONS.map(section => <section key={section.title}><h4 className="mb-2 border-b border-border pb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground">{section.title}</h4><div className="flex flex-col gap-2.5">{section.items.map(item => <PoseSlider key={item.key} label={item.label} value={controls[item.key]} onChange={value => setPoseControls({ [item.key]: value })} />)}</div></section>)}</div>
   </Inspector>
@@ -235,8 +307,8 @@ function PoseSlider({ label, value, onChange }: { label: string; value: number; 
   return <label className="block text-[10px] text-muted-foreground"><span className="mb-1 flex items-center justify-between gap-2"><span>{label}</span><output className="rounded bg-muted/70 px-1.5 py-0.5 tabular-nums text-[9px] text-muted-foreground">{Math.round(value)}°</output></span><input aria-label={label} type="range" min="-240" max="240" step="1" value={value} onChange={event => onChange(Number(event.target.value))} className="h-1.5 w-full accent-studio-accent" /></label>
 }
 
-function CameraInspector({ camera, onChange }: { camera: DirectorCamera; onChange: (patch: Partial<DirectorCamera>) => void }) {
-  return <Inspector title={camera.name} subtitle="机位"><Field label="名称"><input className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={camera.name} onChange={event => onChange({ name: event.target.value })} /></Field><Field label="位置"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={camera.x} onChange={(value) => onChange({ x: value })} /><NumberField label="Y" value={camera.y} onChange={(value) => onChange({ y: value })} /><NumberField label="Z" value={camera.z} onChange={(value) => onChange({ z: value })} /></div></Field><Field label="旋转（度）"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={camera.rotationX} onChange={(value) => onChange({ rotationX: value })} /><NumberField label="Y" value={camera.rotationY} onChange={(value) => onChange({ rotationY: value })} /><NumberField label="Z" value={camera.rotationZ} onChange={(value) => onChange({ rotationZ: value })} /></div></Field><Field label="焦距 / FOV"><input className="min-w-0 accent-studio-accent" type="range" min="20" max="90" value={camera.fov} onChange={event => onChange({ fov: Number(event.target.value) })} /><span className="text-[10px] text-muted-foreground">{camera.fov}°</span></Field><p className="text-[11px] leading-5 text-muted-foreground">机位位置、旋转和焦距会实时影响镜头；切换到“机位视角”可预览当前镜头。</p></Inspector>
+function CameraInspector({ camera, onChange, actors }: { actors: DirectorActor[]; camera: DirectorCamera; onChange: (patch: Partial<DirectorCamera>) => void }) {
+  return <Inspector title={camera.name} subtitle="机位"><Field label="运镜目标"><select aria-label="运镜目标人物" className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={camera.lookAtActorId ?? ''} onChange={event => onChange({ lookAtActorId: event.target.value || undefined })}><option value="">自动选择角色</option>{actors.map(actor => <option key={actor.id} value={actor.id}>{actor.name}</option>)}</select></Field><Field label="名称"><input className="h-9 w-full min-w-0 rounded-md border border-border bg-muted/50 px-2 text-xs text-foreground" value={camera.name} onChange={event => onChange({ name: event.target.value })} /></Field><Field label="位置"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={camera.x} onChange={(value) => onChange({ x: value })} /><NumberField label="Y" value={camera.y} onChange={(value) => onChange({ y: value })} /><NumberField label="Z" value={camera.z} onChange={(value) => onChange({ z: value })} /></div></Field><Field label="旋转（度）"><div className="grid grid-cols-3 gap-2"><NumberField label="X" value={camera.rotationX} onChange={(value) => onChange({ rotationX: value })} /><NumberField label="Y" value={camera.rotationY} onChange={(value) => onChange({ rotationY: value })} /><NumberField label="Z" value={camera.rotationZ} onChange={(value) => onChange({ rotationZ: value })} /></div></Field><Field label="焦距 / FOV"><input className="min-w-0 accent-studio-accent" type="range" min="20" max="90" value={camera.fov} onChange={event => onChange({ fov: Number(event.target.value) })} /><span className="text-[10px] text-muted-foreground">{camera.fov}°</span></Field><p className="text-[11px] leading-5 text-muted-foreground">机位位置、旋转和焦距会实时影响镜头；切换到“机位视角”可预览当前镜头。</p></Inspector>
 }
 
 function Inspector({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) { return <div><div className="mb-3 flex items-center justify-between gap-2"><h3 className="truncate text-xs font-semibold text-foreground">{title}</h3>{subtitle && <span className="text-[10px] text-muted-foreground">{subtitle}</span>}</div><div className="flex flex-col gap-3">{children}</div></div> }
@@ -246,7 +318,8 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
 function disposeObject(root: THREE.Object3D, options?: { skipGeometry?: boolean }) {
   root.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
-    if (!options?.skipGeometry) child.geometry.dispose()
+    if (!options?.skipGeometry && !child.userData.sharedFigureGeometry) child.geometry.dispose()
+    if (child instanceof THREE.SkinnedMesh) child.skeleton.dispose()
     const materials = Array.isArray(child.material) ? child.material : [child.material]
     materials.forEach(material => material.dispose())
   })
@@ -437,9 +510,12 @@ function addWhiteBoxActor(group: THREE.Group, actor: DirectorActor) {
 
 function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selectedActorId, selectedCameraId, transformMode, onSelect, onActorTransform, onCameraTransform }: { scene: DirectorSceneData; viewMode: 'director' | 'camera'; focusTarget: DirectorActor | DirectorCamera | null | undefined; focusRequest: number; selectedActorId: string | null; selectedCameraId: string | null; transformMode: 'select' | 'translate' | 'rotate' | 'scale'; onSelect: (selection: DirectorSelection) => void; onActorTransform: (id: string, patch: Partial<DirectorActor>) => void; onCameraTransform: (id: string, patch: Partial<DirectorCamera>) => void }) {
   const mountRef = useRef<HTMLDivElement>(null)
+  const [loadState, setLoadState] = useState<Partial<Record<FigureModel, 'loading' | 'ready' | 'failed'>>>({})
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const resizeViewportRef = useRef<() => void>(() => {})
   const controlsRef = useRef<OrbitControls | null>(null)
   const modelCacheRef = useRef(new Map<string, Promise<THREE.Object3D | null>>())
   const transformRef = useRef<TransformControls | null>(null)
@@ -450,6 +526,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
   const floorRef = useRef<THREE.MeshStandardMaterial | null>(null)
   const selectRef = useRef(onSelect)
   const viewModeRef = useRef(viewMode)
+  const previousViewMode = useRef<string | null>(null)
   selectRef.current = onSelect
   viewModeRef.current = viewMode
   const latestSceneRef = useRef(scene)
@@ -462,8 +539,9 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
   // Pose sliders, transforms and camera settings are applied in the lightweight
   // effect below so a preset switch does not tear down and reload the scene.
   const sceneStructureKey = JSON.stringify({
+    loadAttempt,
     grid: scene.grid,
-    actors: scene.actors.map(actor => ({ id: actor.id, modelUrl: actor.modelUrl || DEFAULT_MODEL_URL })),
+    actors: scene.actors.map(actor => ({ id: actor.id, figureModel: actor.figureModel, modelUrl: actor.modelUrl || DEFAULT_MODEL_URL })),
     cameras: scene.cameras.map(camera => camera.id),
   })
 
@@ -474,7 +552,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     try { renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true }) } catch { mount.innerHTML = '<div class="flex h-full items-center justify-center text-sm text-muted-foreground">当前浏览器不支持 WebGL 预览</div>'; return }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setClearColor(0x080b0f, 1); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; mount.append(renderer.domElement); renderer.domElement.dataset.directorViewport = 'true'; rendererRef.current = renderer
     const world = new THREE.Scene(); sceneRef.current = world
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100); camera.position.set(0, 2.8, 6.3); cameraRef.current = camera
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100); camera.position.set(0, 2.3, 4.8); cameraRef.current = camera
     const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 1.05, 0); controls.enableDamping = true; controls.minDistance = 2.2; controls.maxDistance = 16; controlsRef.current = controls
     const transform = new TransformControls(camera, renderer.domElement)
     let transformed = false
@@ -517,7 +595,15 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     renderer.domElement.addEventListener('pointerdown', pointerDown, true)
     renderer.domElement.addEventListener('pointerup', pointerUp)
     renderer.domElement.addEventListener('pointercancel', pointerCancel)
-    const resize = () => { const width = mount.clientWidth || 1; const height = mount.clientHeight || 1; renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix() }; resize(); const observer = new ResizeObserver(resize); observer.observe(mount)
+    const resize = () => {
+      const [w, h] = latestSceneRef.current.aspect.split(':').map(Number), ratio = w / h
+      const width = Math.min(mount.clientWidth || 1, (mount.clientHeight || 1) * ratio), height = width / ratio
+      renderer.setSize(width, height, false)
+      Object.assign(renderer.domElement.style, { position: 'absolute', width: `${width}px`, height: `${height}px`, left: '50%', top: '50%', transform: 'translate(-50%,-50%)' })
+      camera.aspect = ratio; camera.updateProjectionMatrix()
+    }
+    resizeViewportRef.current = resize
+    resize(); const observer = new ResizeObserver(resize); observer.observe(mount)
     let frame = 0; const animate = () => { controls.update(); renderer.render(world, camera); frame = requestAnimationFrame(animate) }; animate()
     return () => {
       renderer.domElement.removeEventListener('pointerdown', pointerDown, true); renderer.domElement.removeEventListener('pointerup', pointerUp); renderer.domElement.removeEventListener('pointercancel', pointerCancel)
@@ -526,6 +612,8 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       modelCacheRef.current.clear()
     }
   }, [])
+
+  useEffect(() => { resizeViewportRef.current() }, [scene.aspect])
 
   useEffect(() => {
     const dark = theme === 'dark'
@@ -597,7 +685,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     }
     const appendActor = (actor: DirectorActor, model: THREE.Object3D | null) => {
       if (!active) return
-      const group = new THREE.Group(); group.userData.directorObject = true; group.userData.directorActorId = actor.id; group.userData.poseOffset = { x: 0, y: actor.pose === 'walk' ? .2 : 0, z: actor.pose === 'hero' ? -.08 : 0 }; group.position.set(actor.x, actor.y, actor.z); group.rotation.set(THREE.MathUtils.degToRad(actor.rotationX || 0) + group.userData.poseOffset.x, THREE.MathUtils.degToRad(actor.rotationY || 0) + group.userData.poseOffset.y, THREE.MathUtils.degToRad(actor.rotationZ || 0) + group.userData.poseOffset.z); group.scale.setScalar(actor.scale); objectRefs.current.set(`actor:${actor.id}`, group)
+      const group = new THREE.Group(); group.userData.directorObject = true; group.userData.directorActorId = actor.id; group.userData.poseOffset = { x: 0, y: !actor.figureModel && actor.pose === 'walk' ? .2 : 0, z: !actor.figureModel && actor.pose === 'hero' ? -.08 : 0 }; group.position.set(actor.x, actor.y, actor.z); group.rotation.set(THREE.MathUtils.degToRad(actor.rotationX || 0) + group.userData.poseOffset.x, THREE.MathUtils.degToRad(actor.rotationY || 0) + group.userData.poseOffset.y, THREE.MathUtils.degToRad(actor.rotationZ || 0) + group.userData.poseOffset.z); group.scale.setScalar(actor.scale); objectRefs.current.set(`actor:${actor.id}`, group)
       const instance = modelInstance(actor, model)
       // Keep a procedural mannequin underneath every actor. Some valid GLB
       // files can instantiate without producing visible pixels in a user's
@@ -616,6 +704,24 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       world.add(group)
     }
     scene.actors.forEach(actor => {
+      if (actor.figureModel) {
+        appendActor(actor, null)
+        const model = actor.figureModel
+        setLoadState(current => ({ ...current, [model]: 'loading' }))
+        void loadFigureModel(undefined, model).then(ready => {
+          if (!active) return
+          setLoadState(current => ({ ...current, [model]: ready ? 'ready' : 'failed' }))
+          if (!ready) return
+          const group = objectRefs.current.get(`actor:${actor.id}`)
+          const currentActor = latestSceneRef.current.actors.find(item => item.id === actor.id)
+          if (!(group instanceof THREE.Group) || !currentActor) return
+          const instance = createActorFigure(currentActor)
+          const fallback = group.userData.directorFallbackRoot as THREE.Object3D | undefined
+          if (fallback) { group.remove(fallback); disposeObject(fallback); delete group.userData.directorFallbackRoot }
+          group.add(instance); group.userData.directorModelInstance = instance
+        })
+        return
+      }
       const requested = actor.modelUrl === 'builtin:whitebox' ? '' : (actor.modelUrl || DEFAULT_MODEL_URL)
       if (!requested) { appendActor(actor, null); return }
       // Put the procedural mannequin in the scene immediately. A remote or
@@ -649,7 +755,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     scene.actors.forEach((actor) => {
       const group = objectRefs.current.get(`actor:${actor.id}`)
       if (!(group instanceof THREE.Group)) return
-      const poseOffset = { x: 0, y: actor.pose === 'walk' ? .2 : 0, z: actor.pose === 'hero' ? -.08 : 0 }
+      const poseOffset = { x: 0, y: !actor.figureModel && actor.pose === 'walk' ? .2 : 0, z: !actor.figureModel && actor.pose === 'hero' ? -.08 : 0 }
       group.userData.poseOffset = poseOffset
       group.position.set(actor.x, actor.y, actor.z)
       group.rotation.set(
@@ -659,7 +765,9 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
       )
       group.scale.setScalar(actor.scale)
       const model = group.userData.directorModelInstance as THREE.Object3D | undefined
-      if (model) {
+      if (model && actor.figureModel) {
+        updateActorFigure(model as THREE.Group, actor)
+      } else if (model) {
         if (model.userData.directorModelColor !== actor.color) {
           tintModel(model, actor.color)
           model.userData.directorModelColor = actor.color
@@ -712,9 +820,10 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     const active = scene.cameras.find((item) => item.id === scene.activeCameraId) ?? scene.cameras[0]
     if (viewMode === 'camera' && active) {
       camera.position.set(active.x, active.y, active.z); camera.fov = active.fov; controls?.target.set(active.targetX, active.targetY, active.targetZ); if (active.rotationX || active.rotationY || active.rotationZ) camera.rotation.set(THREE.MathUtils.degToRad(active.rotationX || 0), THREE.MathUtils.degToRad(active.rotationY || 0), THREE.MathUtils.degToRad(active.rotationZ || 0)); else camera.lookAt(active.targetX, active.targetY, active.targetZ); if (controls) { controls.enabled = false; controls.update() }
-    } else {
-      camera.position.set(0, 2.8, 6.3); camera.fov = 42; controls?.target.set(0, 1.05, 0); camera.lookAt(0, 1.05, 0); if (controls) { controls.enabled = true; controls.update() }
+    } else if (previousViewMode.current !== 'director') {
+      camera.position.set(0, 2.3, 4.8); camera.fov = 42; controls?.target.set(0, 1.05, 0); camera.lookAt(0, 1.05, 0); if (controls) { controls.enabled = true; controls.update() }
     }
+    previousViewMode.current = viewMode
     camera.updateProjectionMatrix()
   }, [scene.activeCameraId, scene.cameras, viewMode])
   useEffect(() => {
@@ -722,6 +831,7 @@ function DirectorViewport({ scene, viewMode, focusTarget, focusRequest, selected
     if (!camera || !controls || !focusTarget || focusRequest === 0) return
     if ('fov' in focusTarget) { camera.position.set(focusTarget.x, focusTarget.y, focusTarget.z); controls.target.set(focusTarget.targetX, focusTarget.targetY, focusTarget.targetZ) } else { camera.position.set(focusTarget.x + 3.5, Math.max(2.4, focusTarget.y + 2.1), focusTarget.z + 4.5); controls.target.set(focusTarget.x, focusTarget.y + 1, focusTarget.z) }
     camera.lookAt(controls.target); controls.update()
-  }, [focusRequest, focusTarget])
-  return <div ref={mountRef} data-director-viewport className="absolute inset-0 overflow-hidden" />
+  }, [focusRequest])
+  const pending = Object.entries(loadState).filter(([model, status]) => status !== 'ready' && scene.actors.some(actor => actor.figureModel === model))
+  return <><div ref={mountRef} data-director-viewport className="absolute inset-0 overflow-hidden" />{pending.length > 0 && <div className="absolute left-3 top-3 max-w-[calc(100%-1.5rem)] rounded-lg border border-border bg-card/95 px-3 py-2 text-xs shadow" role="status">{pending.map(([model, status]) => <div key={model} className="flex items-center gap-2"><span>{FIGURE_LABELS[model as FigureModel]}{status === 'failed' ? '加载失败，正在使用简化预览' : '正在加载…'}</span>{status === 'failed' && <button type="button" className="min-h-8 text-studio-accent underline" onClick={() => setLoadAttempt(value => value + 1)}>重试</button>}</div>)}</div>}</>
 }

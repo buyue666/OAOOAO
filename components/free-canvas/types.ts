@@ -139,7 +139,14 @@ export type DirectorActor = {
   poseControls?: DirectorPoseControls
   /** Optional same-origin GLB model. Missing values use the bundled CC0 model. */
   modelUrl?: string
+  /** New human rigs retain their own identity; legacy modelUrl scenes stay readable. */
+  figureModel?: import('./director/catalog').FigureModel
+  posePreset?: import('./director/catalog').PoseId
+  keys?: DirectorActorKey[]
 }
+
+export type DirectorActorKey = Pick<DirectorActor, 'x' | 'y' | 'z' | 'rotationX' | 'rotationY' | 'rotationZ' | 'scale'> & { t: number; ease: 'smooth' | 'linear' }
+export type DirectorCameraKey = Pick<DirectorCamera, 'x' | 'y' | 'z' | 'rotationX' | 'rotationY' | 'rotationZ' | 'targetX' | 'targetY' | 'targetZ' | 'fov'> & { t: number; ease: 'smooth' | 'linear' }
 
 /** Fine-grained, human-readable joint controls used by the director pose tab. */
 export type DirectorPoseControls = {
@@ -206,6 +213,8 @@ export type DirectorCamera = {
   rotationX: number
   rotationY: number
   rotationZ: number
+  keys?: DirectorCameraKey[]
+  lookAtActorId?: string
 }
 
 export type DirectorSceneData = {
@@ -217,6 +226,7 @@ export type DirectorSceneData = {
   cameras: DirectorCamera[]
   activeCameraId: string
   notes: string
+  duration?: number
 }
 
 export type DirectorNodeData = {

@@ -35331,3 +35331,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+========================================================================
+Director human models and pose helpers
+
+Human meshes: Quaternius Universal Base Characters, CC0 1.0.
+Derived male/female assets and the figure/pose utilities: video-canvas
+(https://github.com/zaylora/video-canvas), revision 548062a86e35fbd45ef3b3744d87aefcf5ff6d92.
+Code: MIT License, Copyright (c) 2026 Smooth.
+Complete MIT permission notice: components/free-canvas/director/VIDEO-CANVAS-LICENSE.txt.
+Model provenance and CC0 notice: public/assets/director/HUMAN-MODELS-LICENSE.txt.
+The figure utilities are adapted to OAOOAO scene coordinates, lifecycle and UI.

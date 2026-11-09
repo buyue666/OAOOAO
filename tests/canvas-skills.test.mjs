@@ -268,7 +268,7 @@ test('normalized generation-store Agent errors retain the same charge identity f
 
 test('board roundtrip preserves Agent skill selection, collapse and uncertain submission', () => {
   const types = sourceModule('../components/free-canvas/types.ts')
-  const codec = sourceModule('../components/free-canvas/board-codec.ts', { './types': types, './node-factory': { GENERATION_TITLES: {} } })
+  const codec = sourceModule('../components/free-canvas/board-codec.ts', { './director/catalog': sourceModule('../components/free-canvas/director/catalog.ts'), './types': types, './node-factory': { GENERATION_TITLES: {} } })
   const node = { id: 'agent', type: 'agent', position: { x: 20, y: 40 }, data: { kind: 'agent', title: '助手', prompt: '任务', skills: [helper.canvasSkillOf(asset('skill'))], collapsed: true, runStatus: 'unconfirmed', runId: null, clientRequestId: 'stable', submission: { prompt: '原始任务', skillIds: ['skill'], assetIds: [] }, steps: [], context: [], pointsCost: null } }
   const written = codec.writeBoard([node], [])
   const restored = codec.readBoard(written).nodes[0]

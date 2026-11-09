@@ -1,0 +1,7 @@
+male.glb、female.glb 由 Quaternius 的 Universal Base Characters（Standard 免费版）中的
+Superhero_Male_FullBody、Superhero_Female_FullBody 处理而来：
+去掉了眼睛、眉毛和全部贴图，只保留身体网格和人形骨骼（男女骨骼名称完全相同，姿势数据共用），统一成一个中性灰材质。
+
+原作者：Quaternius（https://quaternius.com/packs/universalbasecharacters.html）
+许可证：CC0 1.0 Universal（公共领域，可商用，无需署名）
+https://creativecommons.org/publicdomain/zero/1.0/
