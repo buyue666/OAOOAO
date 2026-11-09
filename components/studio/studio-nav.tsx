@@ -19,6 +19,8 @@ import {
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Tooltip } from './ui'
+import { workspaceHref } from '@/lib/studio/workspace-navigation'
+import { useWorkspace } from '@/lib/studio/workspace-context'
 
 export interface StudioNavItem {
   label: string
@@ -124,12 +126,14 @@ export function StudioNavLink({
   onNavigate?: () => void
 }) {
   const tx = useUiText()
+  const workspace = useWorkspace()
   const Icon = item.icon
   const label = tx(item.label)
-  const active = isNavItemActive(pathname, item)
+  const href = workspace.identity ? workspace.href(item.href) : workspaceHref(pathname, item.href)
+  const active = href !== item.href ? item.href === '/studio' ? pathname.endsWith('/canvas') : item.href === '/projects' ? !pathname.endsWith('/canvas') : false : isNavItemActive(pathname, item)
   const link = (
     <Link
-      href={item.href}
+      href={href}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       aria-label={collapsed ? label : undefined}

@@ -21,7 +21,9 @@ const navigation = {
 }
 const routes = await loadModule('../lib/studio/project-route.ts')
 const CreativeWorkspace = () => null
-const imports = { 'next/navigation': navigation, 'react/jsx-runtime': jsxRuntime, '@/components/studio/creative-workspace': { CreativeWorkspace }, '@/lib/studio/project-route': routes }
+const DramaDetailPage = () => null
+const DramaPage = () => null
+const imports = { '@/components/studio/drama-detail-page': { DramaDetailPage }, '@/components/studio/drama-page': { DramaPage }, 'next/navigation': navigation, 'react/jsx-runtime': jsxRuntime, '@/components/studio/creative-workspace': { CreativeWorkspace }, '@/lib/studio/project-route': routes }
 const RootPage = (await loadModule('../app/projects/[projectId]/page.tsx', imports)).default
 const SectionPage = (await loadModule('../app/projects/[projectId]/[section]/page.tsx', imports)).default
 const DramaIndex = (await loadModule('../app/drama/page.tsx', imports)).default
@@ -37,8 +39,8 @@ test('malformed invitation codes redirect safely without a second URI decode', a
   }
 })
 
-test('drama index enters the current project creation flow rather than the removed analyze endpoint', async () => {
-  await assert.rejects(Promise.resolve().then(() => DramaIndex()), (error) => error.destination === '/projects')
+test('drama index exposes the staged production workflow with no removed analyzer endpoint', async () => {
+  assert.equal((await DramaIndex()).type, DramaPage)
 })
 
 test('actual project root routes a canvas ID into the real editor and preserves repeated query values', async () => {
@@ -53,7 +55,7 @@ test('all old canvas section URLs redirect before any legacy demo component can 
 
 test('actual drama routes retain the real workspace and requested view', async () => {
   const page = await RootPage({ params: Promise.resolve({ projectId: 'drama-test' }) })
-  assert.equal(page.type, CreativeWorkspace)
+  assert.equal(page.type, DramaDetailPage)
   assert.equal(page.props.projectId, 'drama-test')
   const section = await SectionPage({ params: Promise.resolve({ projectId: 'drama-test', section: 'characters' }) })
   assert.equal(section.type, CreativeWorkspace)

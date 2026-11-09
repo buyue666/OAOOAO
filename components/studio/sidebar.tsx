@@ -10,10 +10,13 @@ import { useStudio } from '@/lib/studio/store'
 import { cn } from '@/lib/utils'
 import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 import { StorageUsageLink } from './storage-usage'
+import { workspaceHref } from '@/lib/studio/workspace-navigation'
+import { useWorkspace } from '@/lib/studio/workspace-context'
 
 function SidebarContent() {
   const tx = useUiText()
   const pathname = usePathname()
+  const workspace = useWorkspace()
   const { state, toggleSidebar } = useStudio()
   const collapsed = state.sidebarCollapsed
   const showAdmin = state.backendStatus === 'connected' && state.user.role === 'admin'
@@ -31,7 +34,7 @@ function SidebarContent() {
       <div className={cn('flex h-14 shrink-0 items-center', collapsed ? 'justify-center px-3' : 'justify-between px-3')}>
         {!collapsed && (
           <Link
-            href="/studio"
+            href={workspace.identity ? workspace.href('/studio') : workspaceHref(pathname, '/studio')}
             aria-label={tx("返回工作台")}
             className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
           >
@@ -56,12 +59,12 @@ function SidebarContent() {
       </nav>
 
       <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2">
-        {state.backendStatus==='connected'&&<StorageUsageLink collapsed={collapsed} />}
+        {state.backendStatus==='connected'&&<StorageUsageLink collapsed={collapsed} teamId={workspace.identity?.teamId} />}
         <nav aria-label={tx("创作记录与工具")} className="mb-1 flex flex-col gap-1 border-b border-sidebar-border pb-2">
-          {studioSecondaryNav.map((item) => (
+          {studioSecondaryNav.filter(item => !workspace.identity || item.href !== '/skills').map((item) => (
             <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
           ))}
-          <StudioToolsNav pathname={pathname} collapsed={collapsed} idSuffix="desktop" />
+          {!workspace.identity && <StudioToolsNav pathname={pathname} collapsed={collapsed} idSuffix="desktop" />}
         </nav>
         {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} collapsed={collapsed} />}
         <StudioNavLink item={studioSettingsNav} pathname={pathname} collapsed={collapsed} />

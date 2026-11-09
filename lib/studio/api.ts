@@ -1,6 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { CanvasBoard, CanvasNodeData, Project } from './types'
-import type { DramaProject, DramaSourceAsset } from './drama-types'
+import type { DramaBrief, DramaProject, DramaSourceAsset } from './drama-types'
 import type { SiteSettings } from './admin-types'
 import type { CommercePolicy, PurchaseReadiness } from './commerce-policy'
 
@@ -386,6 +386,7 @@ export async function createDramaProject(input: {
   style?: string
   ratio?: string
   initialScript?: string
+  brief?: DramaBrief
   sourceHandoffId?: string
   sourceAssets?: DramaSourceAsset[]
 }) {
@@ -397,6 +398,7 @@ export async function createDramaProject(input: {
       ...(input.style ? { style: input.style } : {}),
       ...(input.ratio ? { ratio: input.ratio } : {}),
       ...(input.initialScript ? { initialScript: input.initialScript } : {}),
+      ...(input.brief ? { brief: input.brief } : {}),
       ...(input.sourceHandoffId ? { sourceHandoffId: input.sourceHandoffId } : {}),
       ...(input.sourceAssets?.length ? { sourceAssets: input.sourceAssets } : {}),
     }),

@@ -1,0 +1,14 @@
+/* Motion Prompt #153 · MIT License (c) 2026 Shohei Ohtaki · https://showheyohtaki.github.io/motion-prompt/#153 */
+.upload { --tilt-x: 0rad; --tilt-y: 0rad; position: relative; display: flex; width: 72px; height: 90px; flex: none; align-items: flex-start; justify-content: center; padding: 8px 6px 20px; perspective: 520px; color: var(--muted-foreground); border-radius: 14px; cursor: pointer; outline: none; }
+.back, .card { position: absolute; top: 7px; width: 52px; height: 62px; border: 1px dashed color-mix(in srgb, var(--foreground) 25%, transparent); border-radius: 10px; background: var(--muted); transition: transform 400ms cubic-bezier(.215,.61,.355,1), border-color 400ms, box-shadow 400ms; }
+.back { transform: rotate(7deg) translate(2px, 1px); opacity: .45; }
+.card { display: grid; place-items: center; overflow: hidden; transform: rotate(-7deg) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)); }
+.glare { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle 130px at var(--glare-x, 50%) var(--glare-y, 50%), rgb(255 255 255 / .42), transparent); opacity: 0; transition: opacity 400ms cubic-bezier(.215,.61,.355,1); }
+.caption { position: absolute; bottom: 2px; font-size: 10px; line-height: 14px; white-space: nowrap; }
+.upload:hover:not(:disabled) .card, .upload:focus-visible .card { transform: rotate(-3deg) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translateY(-2px); border-color: var(--studio-accent); color: var(--studio-accent); box-shadow: 0 6px 16px rgb(0 0 0 / .1); }
+.upload:hover:not(:disabled) .back, .upload:focus-visible .back { transform: rotate(11deg) translate(4px, 1px); }
+.upload:hover:not(:disabled) .glare { opacity: 1; }
+.upload:focus-visible { box-shadow: 0 0 0 2px var(--studio-accent); }
+.upload:disabled { opacity: .4; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .back, .card, .glare { transition: none; transform: none !important; } .glare { display: none; } }
+@media (max-width: 480px) { .upload { width: 60px; height: 78px; } .card, .back { width: 44px; height: 52px; } }

@@ -39,7 +39,7 @@ function TeamWorkspaceContent({ teamId }: { teamId: string }) {
           {isTeamManager(team.role) && <TabsTrigger value="events" className="min-h-11 px-3"><History />操作记录</TabsTrigger>}
           <TabsTrigger value="settings" className="min-h-11 px-3"><Settings2 />团队设置</TabsTrigger>
         </TabsList></div>
-        <TabsContent value="projects"><TeamProjects team={team} /></TabsContent>
+        <TabsContent value="projects"><TeamProjects team={team} intent={search.get('intent') || undefined} /></TabsContent>
         {isTeamManager(team.role) && <TabsContent value="members"><TeamMembers team={team} /></TabsContent>}
         <TabsContent value="usage"><TeamUsagePanel team={team} /></TabsContent>
         {isTeamManager(team.role) && <TabsContent value="events"><TeamEvents teamId={team.id} /></TabsContent>}

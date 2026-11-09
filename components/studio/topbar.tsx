@@ -18,6 +18,7 @@ import { useCheckIn } from '@/lib/studio/use-check-in'
 import { checkInDisplay } from '@/lib/studio/check-in-rules'
 import { AccountWatermarkMenuItem } from './account-watermark'
 import { WorkspaceCredits, WorkspaceSwitcher } from './workspace-switcher'
+import { useWorkspace } from '@/lib/studio/workspace-context'
 
 const creditChipClass = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)]'
 const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70'
@@ -29,6 +30,7 @@ const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const tx = useUiText()
   const pathname = usePathname()
+  const workspace = useWorkspace()
   const router = useRouter()
   const { state, toggleTheme, refreshSession } = useStudio()
   const { locale, toggleLocale, t } = useLocale()
@@ -48,13 +50,13 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const rechargeEnabled = state.sessionSettings?.operationMode === 'commercial'
   const { unread: notificationCount } = useAnnouncements()
   const creditsLabel = tx('{0} 积分', [state.credits.toLocaleString(locale)])
-  const teamSpace = /^\/teams\/[a-f0-9-]{36}(?:\/|$)/i.test(pathname)
-  const checkIn = useCheckIn({ accountId: state.user.id, connected: isConnected, active: accountOpen, refreshSession })
+  const teamSpace = Boolean(workspace.identity) || /^\/teams\/[a-f0-9-]{36}(?:\/|$)/i.test(pathname)
+  const checkIn = useCheckIn({ accountId: state.user.id, connected: isConnected, active: accountOpen && !teamSpace, refreshSession })
   const checkInDetails = checkIn.status ? checkInDisplay(checkIn.status, locale) : null
   function capturePlansDestination(event: React.MouseEvent<HTMLAnchorElement>) {
     const returnTo = safeReturnPath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
     const destination = event.currentTarget.dataset?.storefront === 'plans' ? '/plans' : '/credits'
-    const href = `${destination}?returnTo=${encodeURIComponent(returnTo)}`
+    const href = `${destination}?${teamSpace && destination === '/plans' ? 'edition=team&' : ''}returnTo=${encodeURIComponent(returnTo)}`
     event.currentTarget.href = href
     try { sessionStorage.setItem(RETURN_PATH_KEY, returnTo) } catch { /* Explicit query retains the return target. */ }
     // Keep modified clicks as native link navigation while reading location at activation time.
@@ -116,7 +118,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {isStudioPreview() && !isConnected && <StatusBadge tone="muted">免登录预览</StatusBadge>}
-        {isConnected && (teamSpace ? <WorkspaceCredits pathname={pathname} /> : rechargeEnabled ? (
+        {isConnected && (teamSpace ? <WorkspaceCredits pathname={workspace.identity ? `/teams/${workspace.identity.teamId}` : pathname} /> : rechargeEnabled ? (
           <a href="/credits" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={tx("{0}，查看积分超市", [creditsLabel])} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
             <Coins className="size-4 text-studio-accent" aria-hidden="true" />
             <span className="tabular-nums">{creditsLabel}</span>
@@ -170,9 +172,9 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               <div className="border-b border-border px-2.5 pb-2.5 pt-1.5">
                 <p className="truncate text-sm font-semibold text-foreground">{state.user.name}</p>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">{state.user.email || tx('未设置邮箱')}</p>
-                <p className="mt-1.5 text-xs font-medium text-studio-accent">{teamSpace && '个人 '}{creditsLabel} · {tx(state.user.plan)}</p>
+                {!teamSpace && <p className="mt-1.5 text-xs font-medium text-studio-accent">{creditsLabel} · {tx(state.user.plan)}</p>}
                 <WorkspaceSwitcher active={accountOpen} onSelect={() => setAccountOpen(false)} />
-                <div className="mt-3 rounded-lg border border-studio-accent/20 bg-studio-accent/5 p-2.5">
+                {!teamSpace && <div className="mt-3 rounded-lg border border-studio-accent/20 bg-studio-accent/5 p-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0"><p className="flex items-center gap-1 text-xs font-semibold"><CalendarCheck className="size-3.5" aria-hidden="true" />{tx("每日签到")}</p><p className="mt-1 text-[11px] text-muted-foreground">{checkInDetails?.title ?? (checkIn.loading ? tx('正在读取…') : tx('查看今日签到状态'))}</p></div>
                     <button type="button" role="menuitem" onClick={() => void (checkIn.status ? checkIn.claim() : checkIn.refresh())} disabled={checkIn.loading || checkIn.claiming || Boolean(checkIn.status && (!checkIn.status.enabled || checkIn.status.claimed))} className="rounded-md bg-studio-accent px-3 py-1.5 text-xs font-semibold text-studio-accent-foreground transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-60">{checkIn.claiming ? tx('领取中…') : checkIn.loading ? tx('读取中…') : checkIn.status?.claimed ? tx('已签到') : checkIn.status?.enabled ? tx('签到领取') : checkIn.status ? tx('未开放') : tx('重新读取')}</button>
@@ -180,14 +182,14 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                   {checkInDetails && (checkIn.status?.enabled || checkIn.status?.claimed) && <div className="mt-2 space-y-1 border-t border-studio-accent/15 pt-2 text-[11px] leading-4 text-muted-foreground"><p>{checkInDetails.rule}</p><p>{checkInDetails.validity}</p></div>}
                   {checkIn.status && <p className="mt-1.5 text-[10px] text-muted-foreground">{checkIn.status.date} {tx(" · 按北京时间每日一次")}</p>}
                   {checkIn.error && <p role="status" className="mt-1.5 text-[11px] leading-4 text-destructive">{checkIn.error}</p>}
-                </div>
+                </div>}
               </div>
               <div className="mt-1 flex flex-col gap-0.5">
-                <Link href="/account" role="menuitem" onClick={() => setAccountOpen(false)} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted">
-                  <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />{tx("账户与套餐")}</Link>
-                {rechargeEnabled && <a href="/credits" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Coins className="size-4 text-muted-foreground" aria-hidden="true" />{tx("积分超市")}</a>}
+                <Link href={workspace.identity ? `/teams/${workspace.identity.teamId}?tab=settings` : '/account'} role="menuitem" onClick={() => setAccountOpen(false)} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted">
+                  <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />{tx(teamSpace ? '团队设置与套餐' : '账户与套餐')}</Link>
+                {!teamSpace && rechargeEnabled && <a href="/credits" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Coins className="size-4 text-muted-foreground" aria-hidden="true" />{tx("积分超市")}</a>}
                 {rechargeEnabled && <a href="/plans" data-storefront="plans" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Crown className="size-4 text-muted-foreground" aria-hidden="true" />{tx("会员套餐")}</a>}
-                <AccountWatermarkMenuItem onSelect={() => setAccountOpen(false)} />
+                {!teamSpace && <AccountWatermarkMenuItem onSelect={() => setAccountOpen(false)} />}
                 <button type="button" role="menuitem" onClick={() => { toggleTheme(); setAccountOpen(false) }} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted">
                   {state.theme === 'dark' ? <Sun className="size-4 text-muted-foreground" aria-hidden="true" /> : <Moon className="size-4 text-muted-foreground" aria-hidden="true" />}{themeLabel}
                 </button>

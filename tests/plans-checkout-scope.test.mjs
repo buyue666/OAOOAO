@@ -99,7 +99,8 @@ test('the actual topbar activation handler captures current query and hash, incl
   const helpers = { exports: {} }; new Function('module', 'exports', compile(readFileSync(new URL('../lib/studio/return-path.ts', import.meta.url), 'utf8')))(helpers, helpers.exports)
   const location = { pathname: '/projects/real', search: '?section=shots', hash: '#selected-shot' }; const pushes = [], storage = []
   const module = { exports: {} }
-  new Function('module', 'exports', 'window', 'router', 'sessionStorage', 'safeReturnPath', 'RETURN_PATH_KEY', compile(`export ${handler.getText(ast)}`))(module, module.exports, { location }, { push: value => pushes.push(value) }, { setItem: (...args) => storage.push(args) }, helpers.exports.safeReturnPath, helpers.exports.RETURN_PATH_KEY)
+  const initialize = teamSpace => new Function('module', 'exports', 'window', 'router', 'sessionStorage', 'safeReturnPath', 'RETURN_PATH_KEY', 'teamSpace', compile(`export ${handler.getText(ast)}`))(module, module.exports, { location }, { push: value => pushes.push(value) }, { setItem: (...args) => storage.push(args) }, helpers.exports.safeReturnPath, helpers.exports.RETURN_PATH_KEY, teamSpace)
+  initialize(false)
   const event = { currentTarget: { href: '/plans' }, button: 0, preventDefault() { this.prevented = true } }
   module.exports.capturePlansDestination(event)
   assert.equal(new URL(pushes[0], 'https://local.invalid').pathname, '/credits')
@@ -112,4 +113,7 @@ test('the actual topbar activation handler captures current query and hash, incl
   module.exports.capturePlansDestination(membership)
   assert.equal(new URL(pushes[1], 'https://local.invalid').pathname, '/plans')
   assert.equal(new URL(pushes[1], 'https://local.invalid').searchParams.get('returnTo'), '/projects/real?section=assets#selected-shot')
+  initialize(true)
+  module.exports.capturePlansDestination(membership)
+  assert.equal(new URL(pushes[2], 'https://local.invalid').searchParams.get('edition'), 'team')
 })

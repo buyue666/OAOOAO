@@ -35,6 +35,14 @@ implementers receive only requirements and client contracts.
 
 ## Team workspace contract
 
+The web client keeps login identity separate from working identity. Selecting a
+team persists for that login account across navigation and reload; only selecting
+personal space clears it. Creation, projects, assets, history, wallet, capacity and
+settings use the selected team's existing scoped APIs and project ACLs. Unsupported
+personal creation tools are hidden in team mode, and direct personal creation URLs
+return to the team project chooser/canvas. No workspace preference grants access
+or substitutes the team's identity for the authenticated actor in audit records.
+
 Agent run views additionally return `summary`, `planningPoints`,
 `planApproval.executionEstimatedPoints`, and `outputs`. Planning cost is the
 current non-refunded planner job; the execution estimate covers the proposed
@@ -104,8 +112,8 @@ plan approval remains required.
   checkout and generation remain unchanged. Production cutover still requires
   migration, real auth/storage/provider checks and a review of configured prices.
 - Team and project detail routes expose role-scoped project, membership, usage,
-  asset and generation controls. Account-menu space switching follows the URL;
-  it does not convert personal resources or grant site administrators membership.
+  asset and generation controls. Account-menu space switching persists the selected
+  working identity; it does not convert personal resources or grant membership.
   Administrator team listings support keyword search and scoped pagination.
 - All binary provider results, including speech and video-content downloads,
   pass through the workspace-aware generated-media writer. Workers retain the
@@ -121,6 +129,40 @@ plan approval remains required.
   only; seats, storage, concurrency and model permissions remain authoritative
   resource fields. Team and personal cards share twelve named color themes,
   including four gradients. Existing automatic assignments retain their order.
+
+## Short-drama production contract
+
+- Owned drama projects accept a `brief` with original story text, audience, tone,
+  target episode count/duration and a story bible. Production settings and editorial
+  changes remain part of the project document and use optimistic `updatedAt` saves.
+- `POST /api/drama/projects/:id/production/quote` estimates a selected model for
+  `analysis|outline|script|assets|storyboard|image|video|audio`. Creating production
+  through `POST /production` requires `expectedUpdatedAt`, `approvedCost` and a
+  stable `clientRequestId`. The standard job/wallet transaction rejects increased
+  prices; identical retries return the same job and changed retries conflict.
+- `GET /production` returns the latest 100 owned production tasks and whitelisted
+  structured proposals. `POST /production/:taskId/cancel` uses ordinary cancellation
+  and refund rules. These routes never include team jobs or another user's jobs.
+- `POST /production/:taskId/apply` adopts a successful result explicitly, under
+  storage/project/job locks and an expected revision. Generated IDs, URLs and job
+  state cannot be injected through text proposals. Applying a task twice is safe.
+  Global analysis/outline/assets proposals are independent of the selected episode.
+  Episode/shot proposals require the original target to still exist.
+- Adoption can append episodes/shots or replace blank/unproduced entries. It refuses
+  replacement that would discard authored scripts, task references or media. Asset
+  settings and references are preserved by name. Adopting media requires a persistent
+  owned media record; previous adopted takes remain in the project.
+- The client separates story, scripts, reusable assets, shot design, generation and
+  delivery; AI results remain proposals until adopted. Image/video/audio generation
+  uses real selected providers. Composition is offered only when the existing render
+  capability is available. Development verification uses synthetic disposable data.
+
+Agent attachments support owned image/video/audio assets plus bounded UTF-8 text
+documents (TXT, Markdown, JSON, CSV, SRT, VTT). Named `@「filename」` references resolve
+to stable owned asset IDs, with legacy numbered references retained. The planner
+receives validated text and metadata; providing a media attachment does not imply
+that a text-only planner has visually inspected it. At most 12 attachments are
+accepted; text is limited to 1 MiB/24,000 characters per file and bounded overall.
 
 ## Personal plan model access
 

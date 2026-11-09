@@ -8,10 +8,13 @@ import { Suspense, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
+import { workspaceHref } from '@/lib/studio/workspace-navigation'
+import { useWorkspace } from '@/lib/studio/workspace-context'
 
 function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => void }) {
   const tx = useUiText()
   const pathname = usePathname()
+  const workspace = useWorkspace()
   const { state } = useStudio()
   const showAdmin = state.backendStatus === 'connected' && state.user.role === 'admin'
 
@@ -33,7 +36,7 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
     >
       <aside role="dialog" aria-modal="true" aria-label={tx("工作台导航")} className="motion-drawer-left flex h-full w-64 max-w-[85vw] flex-col border-r border-sidebar-border">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-3">
-          <Link href="/studio" onClick={onClose} aria-label={tx("返回工作台")} className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+          <Link href={workspace.identity ? workspace.href('/studio') : workspaceHref(pathname, '/studio')} onClick={onClose} aria-label={tx("返回工作台")} className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
             <SiteBrand imageClassName="h-6 max-w-[176px]" />
           </Link>
           <button type="button" onClick={onClose} aria-label={tx("关闭导航")} className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
@@ -49,10 +52,10 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
 
         <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2">
           <nav aria-label={tx("创作记录与工具")} className="mb-1 flex flex-col gap-1 border-b border-sidebar-border pb-2">
-            {studioSecondaryNav.map((item) => (
+            {studioSecondaryNav.filter(item => !workspace.identity || item.href !== '/skills').map((item) => (
               <StudioNavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
             ))}
-            <StudioToolsNav pathname={pathname} onNavigate={onClose} idSuffix="mobile" />
+            {!workspace.identity && <StudioToolsNav pathname={pathname} onNavigate={onClose} idSuffix="mobile" />}
           </nav>
           {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} onNavigate={onClose} />}
           <StudioNavLink item={studioSettingsNav} pathname={pathname} onNavigate={onClose} />

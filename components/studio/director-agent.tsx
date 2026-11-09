@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { agentPlanCosts, directorRequestPrompt, remapDirectorReferences, type DirectorScene } from '@/lib/studio/director-workspace'
 import type { CanvasSkill } from '@/lib/studio/canvas-skills'
 import { libraryAssetMediaUrl } from '@/lib/studio/reference-assets'
+import { AGENT_FILE_ACCEPT, AGENT_FILE_LIMIT, agentFileKind, normalizeAgentText, validateAgentFiles, type AgentFileKind } from '@/lib/studio/agent-files'
 import { DirectorComposer, DirectorWorkspaceView, type DirectorDraft, type DirectorReference } from './director-workspace'
 import { ControlButton, Modal, StatusBadge, type Tone } from './ui'
 
@@ -82,7 +83,7 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
       setMessages(saved.messages); setPending(saved.pending); setStorageBlocked(false)
       if (saved.pending) {
         setInput(saved.pending.displayText)
-        const restored: Reference[] = saved.pending.assetIds.map((id, index) => ({ id, assetId: id, title: saved.pending!.refTitles[index] || '参考图片', status: 'ready' }))
+        const restored: Reference[] = saved.pending.assetIds.map((id, index) => ({ id, assetId: id, kind: saved.pending!.refKinds?.[index] || 'image', title: saved.pending!.refTitles[index] || '参考文件', status: 'ready' }))
         refsRef.current = restored; setRefs(restored)
         setSkills((saved.pending.skillIds || []).map((id, index) => ({ id, title: `已选技能 ${index + 1}`, prompt: '' })))
       }
@@ -122,18 +123,25 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     let next: Reference = { ...ref, status: 'uploading', error: undefined }
     updateReference(next)
     try {
-      if (!next.uploaded) { const uploaded = await uploadPersistentAsset(ref.file, 'image'); if (!current()) return; next = { ...next, uploaded }; updateReference(next) }
-      const uploaded = next.uploaded!
-      const asset = await createLibraryAsset({ kind: 'image', title: ref.title, source: 'assistant-reference', tags: ['创作参考'], data: { storageKey: uploaded.key, serverUrl: uploaded.url, dataUrl: uploaded.url, mimeType: uploaded.mimeType, bytes: uploaded.bytes } })
-      if (current()) updateReference({ ...next, assetId: asset.id, preview: uploaded.url, status: 'ready' })
+      const kind = next.kind || 'image'
+      if (kind === 'text') {
+        const content = normalizeAgentText(await ref.file.text())
+        if (!current()) return
+        const asset = await createLibraryAsset({ kind: 'text', title: ref.title, source: 'assistant-reference', tags: ['创作参考'], data: { content, textContent: content, mimeType: ref.file.type || 'text/plain', bytes: ref.file.size } })
+        if (current()) updateReference({ ...next, assetId: asset.id, status: 'ready' })
+      } else {
+        if (!next.uploaded) { const uploaded = await uploadPersistentAsset(ref.file, kind); if (!current()) return; next = { ...next, uploaded }; updateReference(next) }
+        const uploaded = next.uploaded!
+        const asset = await createLibraryAsset({ kind, title: ref.title, source: 'assistant-reference', tags: ['创作参考'], data: { storageKey: uploaded.key, serverUrl: uploaded.url, url: uploaded.url, ...(kind === 'image' ? { dataUrl: uploaded.url } : {}), mimeType: uploaded.mimeType, bytes: uploaded.bytes } })
+        if (current()) updateReference({ ...next, assetId: asset.id, preview: kind === 'image' ? uploaded.url : undefined, status: 'ready' })
+      }
     } catch (reason) { if (current()) updateReference({ ...next, status: 'error', error: errorText(reason) }) }
   }
   function addFiles(files: File[]) {
     if (!connected || submitting || pending) return
-    if (refsRef.current.length + files.length > 4) { setError('一次最多添加 4 张参考图。'); return }
-    const invalid = files.find((file) => !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 20 * 1024 * 1024)
-    if (invalid) { setError(`「${invalid.name}」无法添加。请选择不超过 20 MB 的 PNG、JPEG、WebP 或 GIF 图片。`); return }
-    const added: Reference[] = files.map((file) => ({ id: crypto.randomUUID(), title: file.name, file, status: 'uploading' }))
+    const validation = validateAgentFiles(files, refsRef.current.length)
+    if (validation) { setError(validation); return }
+    const added: Reference[] = files.map((file) => ({ id: crypto.randomUUID(), title: file.name, kind: agentFileKind(file), file, status: 'uploading' }))
     refsRef.current = [...refsRef.current, ...added]; setRefs([...refsRef.current]); setError('')
     for (const ref of added) void upload(ref)
   }
@@ -141,7 +149,7 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     if (submitLock.current || !ready || storageBlocked || !canPlan || (!pending && (!input.trim() || unfinishedRefs))) return
     const token = identityRef.current
     const current = () => alive.current && token === identityRef.current
-    const request: Pending = pending ?? { clientRequestId: newClientRequestId('assistant'), displayText: input.trim(), prompt: standalone ? directorRequestPrompt(input, verifiedContext, scene, refs.map(ref => ({ id: ref.assetId!, title: ref.title }))) : buildAssistantPrompt(input, verifiedContext), surface: verifiedContext.surface, projectId: verifiedContext.projectId, assetIds: refs.map((ref) => ref.assetId!), refTitles: refs.map((ref) => ref.title), ...(standalone ? { skillIds: skills.map(skill => skill.id), publicPrompt: input.trim() } : {}) }
+    const request: Pending = pending ?? { clientRequestId: newClientRequestId('assistant'), displayText: input.trim(), prompt: directorRequestPrompt(input, verifiedContext, scene, refs.map(ref => ({ id: ref.assetId!, title: ref.title, kind: ref.kind }))), surface: verifiedContext.surface, projectId: verifiedContext.projectId, assetIds: refs.map((ref) => ref.assetId!), refTitles: refs.map((ref) => ref.title), refKinds: refs.map(ref => ref.kind || 'image'), skillIds: skills.map(skill => skill.id), publicPrompt: input.trim() }
     try { persist(messages, request) } catch { setError('浏览器无法保存请求恢复标识，请允许本站本地存储后重试。请求尚未发送。'); return }
     submitLock.current = true; setSubmitting(true); setPending(request); setError('')
     try {
@@ -169,12 +177,12 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     setInput(value => remapDirectorReferences(value, previous, next))
     refsRef.current = next; setRefs([...next])
   }
-  function pickReference(asset: { id: string; title: string; src: string }) {
+  function pickReference(asset: { id: string; title: string; src: string; kind?: AgentFileKind }) {
     if (submitting || pending || !connected) return
     const existing = refsRef.current.find(reference => reference.assetId === asset.id)
     if (existing) { removeReference(existing.id); return }
-    if (refsRef.current.length >= 4) { setError('一次最多添加 4 张参考图。'); return }
-    refsRef.current = [...refsRef.current, { id: asset.id, title: asset.title, preview: asset.src, assetId: asset.id, status: 'ready' }]
+    if (refsRef.current.length >= AGENT_FILE_LIMIT) { setError(`一次最多添加 ${AGENT_FILE_LIMIT} 个参考文件。`); return }
+    refsRef.current = [...refsRef.current, { id: asset.id, title: asset.title, kind: asset.kind || 'image', preview: !asset.kind || asset.kind === 'image' ? asset.src : undefined, assetId: asset.id, status: 'ready' }]
     setRefs([...refsRef.current]); setError('')
   }
   async function retryTask(runId: string, taskId: string) {
@@ -195,13 +203,13 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     const draft = { input, refs, skills, scene }
     return <DirectorWorkspaceView scene={scene} onScene={setScene} onStarter={(nextScene, prompt) => { if (locked) return; setScene(nextScene); setInput(prompt); document.getElementById(inputId)?.focus() }} hasMessages={messages.length > 0} runs={runItems} selectedRunId={activeRunId} onSelectRun={setSelectedRunId}
       clearButton={<button type="button" disabled={locked} onClick={clearConversation} className={cn('inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40', focus)}><Trash2 className="size-3.5" aria-hidden="true" />清空对话</button>}
-      composer={<DirectorComposer inputId={inputId} draft={draft} setInput={setInput} setSkills={setSkills} context={verifiedContext} disabled={locked} canSubmit={ready && !storageBlocked && canPlan && !locked && Boolean(input.trim()) && !unfinishedRefs} submitting={submitting} connected={connected} canPlan={canPlan} onSubmit={() => void send()} onUpload={() => fileRef.current?.click()} onRemoveReference={removeReference} onRetryUpload={reference => void upload(reference)} onPickReference={pickReference} onSelectProject={onChooseProject ? id => onChooseProject(id, draft) : undefined} error={error} compact={messages.length > 0}
+      composer={<DirectorComposer inputId={inputId} draft={draft} setInput={setInput} setSkills={setSkills} context={verifiedContext} disabled={locked} canSubmit={ready && !storageBlocked && canPlan && !locked && Boolean(input.trim()) && !unfinishedRefs} submitting={submitting} connected={connected} canPlan={canPlan} onSubmit={() => void send()} onUpload={() => fileRef.current?.click()} onFiles={addFiles} onRemoveReference={removeReference} onRetryUpload={reference => void upload(reference)} onPickReference={pickReference} onSelectProject={onChooseProject ? id => onChooseProject(id, draft) : undefined} error={error} compact={messages.length > 0}
         storageNotice={storageBlocked && <p className="mb-3 text-xs leading-5 text-muted-foreground">请求恢复记录无法安全读取，已暂停新提交。<Link href="/tasks" className="underline">前往生成记录核对</Link>，确认没有待处理任务后可清除本站的损坏对话记录并刷新。</p>}
         recovery={pending && !submitting && <div className="mb-3 rounded-xl border border-studio-warn/30 p-3"><p className="text-xs leading-5">有一笔提交待确认。恢复时沿用原内容、素材、技能和请求标识。</p><ControlButton size="sm" className="mt-2" disabled={!canPlan} onClick={() => void send()}><RotateCcw className="size-3.5" />恢复上次提交</ControlButton></div>} />}
       conversation={<div ref={scrollRef} className="min-h-36 flex-1 space-y-4 overflow-y-auto p-4 lg:min-h-0" aria-label="对话记录">{messages.map(message => <article key={message.id} className={cn('rounded-xl p-3', message.role === 'user' ? 'ml-4 bg-studio-accent/7' : 'mr-2 bg-muted/40')}><p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">{message.role === 'user' ? <FileText className="size-3.5" aria-hidden="true" /> : <Bot className="size-3.5 text-studio-accent" aria-hidden="true" />}{message.role === 'user' ? '你的需求' : '创作助手'}</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{message.text}</p>{message.refs?.length ? <p className="mt-2 break-words text-xs text-muted-foreground">参考：{message.refs.join('、')}</p> : null}{message.runId && <button type="button" aria-pressed={activeRunId === message.runId} onClick={() => setSelectedRunId(message.runId)} className={cn('mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs', activeRunId === message.runId ? 'bg-studio-accent/10 font-medium text-studio-accent' : 'text-muted-foreground hover:bg-muted', focus)}>{activeRunId === message.runId ? <Check className="size-3.5" /> : <ArrowRight className="size-3.5" />}查看任务方案</button>}</article>)}</div>}
       panel={activeRun ? <AgentRunPanel run={activeRun} connected={connected} onControl={action => control(activeRun, action)} onRetryTask={taskId => retryTask(activeRun.id, taskId)} expanded /> : <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />{ready ? '正在读取服务端任务状态…' : '正在恢复对话…'}</p>}>
       {activeRunId && queryErrors[activeRunId] && <p role="alert" className="text-xs text-studio-warn">状态暂未确认：{queryErrors[activeRunId]} <button className="underline" type="button" onClick={() => setPollRevision(value => value + 1)}>重新检查</button></p>}
-      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden aria-label="上传参考图片" onChange={event => { addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
+      <input ref={fileRef} type="file" accept={AGENT_FILE_ACCEPT} multiple hidden aria-label="上传参考文件" onChange={event => { addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
     </DirectorWorkspaceView>
   }
 
@@ -219,16 +227,12 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
         <div className={cn('mt-6 grid gap-2.5', emptyStateLayout === 'grid' && !compact && 'lg:grid-cols-3')}>{suggestions.map((suggestion, index) => <button key={suggestion} type="button" disabled={Boolean(pending) || submitting} onClick={() => { setInput(suggestion); document.getElementById(inputId)?.focus() }} className={cn('group flex flex-col gap-4 rounded-xl border p-4 text-left text-sm leading-6 motion-safe:transition-[transform,background-color] motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 disabled:opacity-50', index === 0 ? 'border-violet-400/25 bg-violet-500/7 hover:bg-violet-500/12' : index === 1 ? 'border-cyan-400/25 bg-cyan-500/6 hover:bg-cyan-500/10' : 'border-amber-400/25 bg-amber-500/6 hover:bg-amber-500/10', focus)}><span className="text-[10px] font-medium tracking-widest text-muted-foreground">0{index + 1}</span><span className="line-clamp-3 flex-1 break-words">{suggestion}</span><ArrowRight className="size-4 text-muted-foreground motion-safe:transition-transform motion-safe:group-hover:translate-x-1" aria-hidden="true" /></button>)}</div>
       </div> : <div className="mx-auto flex max-w-3xl flex-col gap-5">{messages.map((message) => <article key={message.id} className={cn('min-w-0 rounded-2xl border p-4', message.role === 'user' ? 'ml-5 border-cyan-400/15 bg-cyan-500/5' : 'mr-2 border-violet-400/20 bg-card')}><p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">{message.role === 'user' ? <FileText className="size-3.5" /> : <Bot className="size-3.5 text-violet-500" />}{message.role === 'user' ? '你的想法' : '创作助手'}</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{message.text}</p>{message.refs?.length ? <p className="mt-2 text-xs text-muted-foreground">参考：{message.refs.join('、')}</p> : null}{message.runId && <div className="mt-4 border-t border-border/70 pt-3">{runs[message.runId] ? <AgentRunPanel run={runs[message.runId]} connected={connected} onControl={(action) => control(runs[message.runId!], action)} onRetryTask={async (taskId) => { const token = identityRef.current; await generation.retryAgentTask(message.runId!, taskId); const updated = await generation.getAgent(message.runId!); if (alive.current && token === identityRef.current) setRuns((current) => ({ ...current, [updated.id]: updated })) }} /> : <p className="text-xs text-muted-foreground">正在读取服务端任务状态…</p>}{queryErrors[message.runId] && <p role="alert" className="mt-2 text-xs text-studio-warn">状态暂未确认：{queryErrors[message.runId]} <button className="underline" type="button" onClick={() => setPollRevision((value) => value + 1)}>重新检查</button></p>}</div>}</article>)}</div>}
     </div>
-    <form onSubmit={(event) => { event.preventDefault(); void send() }} className={cn('shrink-0 border-t border-border bg-card/90', compact ? 'p-3' : 'p-4 sm:p-5')}>
-      {error && <p role="alert" className="mb-3 rounded-lg border border-amber-400/25 bg-amber-500/8 p-3 text-xs leading-5 text-foreground">{error}</p>}
-      {storageBlocked && <p className="mb-3 text-xs leading-5 text-muted-foreground">请求恢复记录无法安全读取，已暂停新提交。<Link href="/tasks" className="underline">前往任务中心核对</Link>，确认没有待处理任务后可清除本站的损坏对话记录并刷新。</p>}
-      {pending && !submitting && <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/25 p-3"><p className="text-xs leading-5">有一笔提交待确认。恢复时沿用原内容和请求标识。</p><ControlButton size="sm" disabled={!canPlan} onClick={() => void send()}><RotateCcw className="size-3.5" />恢复上次提交</ControlButton></div>}
-      {refs.length > 0 && <ul className="mb-3 flex flex-wrap gap-2">{refs.map((ref) => <li key={ref.id} className="max-w-full rounded-lg border border-border px-2 py-1.5 text-xs"><span className="flex items-center gap-2"><span className="max-w-44 truncate">{ref.title}</span>{ref.status === 'uploading' ? <Loader2 className="size-3 animate-spin motion-reduce:animate-none" /> : ref.status === 'ready' ? <Check className="size-3 text-success" /> : <button className="text-destructive underline" type="button" disabled={!connected || submitting || Boolean(pending)} onClick={() => void upload(ref)}>重试上传</button>}<button type="button" disabled={submitting || Boolean(pending)} aria-label={`移除参考 ${ref.title}`} className={cn('rounded p-1 hover:bg-muted', focus)} onClick={() => removeReference(ref.id)}><X className="size-3" /></button></span>{ref.error && <span role="alert" className="mt-1 block max-w-64 text-destructive">{ref.error}</span>}</li>)}</ul>}
-      <div className="rounded-xl border border-violet-400/30 bg-background p-2 focus-within:ring-2 focus-within:ring-violet-400/15"><label htmlFor={inputId} className="sr-only">告诉创作助手你的想法</label><textarea id={inputId} value={input} maxLength={4000} disabled={submitting || Boolean(pending)} onChange={(event) => setInput(event.target.value)} rows={compact ? 3 : 4} placeholder={verifiedContext.projectTitle ? '针对这个项目，你想探索或调整什么？' : '写下你的目标或已有内容，从这里一起开始…'} className="w-full resize-y rounded-lg bg-transparent px-2 py-1.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
-        <div className="flex items-center justify-between gap-2 px-1 pb-1"><input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.target.value = '' }} /><button type="button" disabled={!connected || submitting || Boolean(pending) || refs.length >= 4} onClick={() => fileRef.current?.click()} className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40', focus)}><Paperclip className="size-4" aria-hidden="true" />参考图</button><button type="submit" disabled={!ready || storageBlocked || !canPlan || submitting || Boolean(pending) || !input.trim() || unfinishedRefs} className={cn('inline-flex min-h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-xs font-semibold text-white shadow-sm shadow-violet-500/20 motion-safe:transition-transform motion-safe:hover:-translate-y-0.5 disabled:transform-none disabled:cursor-not-allowed disabled:opacity-40', focus)}>{submitting ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <Send className="size-4" />}{submitting ? '正在提交' : '请助手规划'}</button></div>
-      </div>
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{!connected ? state.backendStatus === 'unauthenticated' ? <Link href="/login" className="underline">登录后使用创作助手</Link> : '服务暂不可用，写好的内容会留在此处，恢复连接后再提交。' : !canPlan ? '暂未配置可用的文字规划模型，请联系管理员。' : 'Enter 换行，Ctrl / ⌘ + Enter 提交。生成步骤须确认；参考图先保存到你的素材库。'}</p>
-    </form>
+    <div className={cn('shrink-0 border-t border-border bg-card/90', compact ? 'p-3' : 'p-4')}>
+      <DirectorComposer inputId={inputId} draft={{ input, refs, skills, scene }} setInput={setInput} setSkills={setSkills} context={verifiedContext} disabled={submitting || Boolean(pending)} canSubmit={ready && !storageBlocked && canPlan && !submitting && !pending && Boolean(input.trim()) && !unfinishedRefs} submitting={submitting} connected={connected} canPlan={canPlan} onSubmit={() => void send()} onUpload={() => fileRef.current?.click()} onFiles={addFiles} onRemoveReference={removeReference} onRetryUpload={reference => void upload(reference)} onPickReference={pickReference} error={error} compact
+        storageNotice={storageBlocked && <p className="mb-3 text-xs text-muted-foreground">请求恢复记录无法安全读取，请先到生成记录核对。</p>}
+        recovery={pending && !submitting && <ControlButton className="mb-3" onClick={() => void send()} disabled={!canPlan}>恢复上次提交</ControlButton>} />
+      <input ref={fileRef} type="file" accept={AGENT_FILE_ACCEPT} multiple hidden aria-label="上传参考文件" onChange={event => { addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
+    </div>
   </section>
 }
 

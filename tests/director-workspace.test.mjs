@@ -11,7 +11,8 @@ async function moduleUrl(path, imports = {}) {
 }
 const context = await moduleUrl('../lib/studio/director-context.ts')
 const mentions = await moduleUrl('../lib/studio/prompt-references.ts')
-const { directorRequestPrompt, remapDirectorReferences, agentPlanCosts } = await import(await moduleUrl('../lib/studio/director-workspace.ts', { './director-context': context, './prompt-references': mentions }))
+const files = await moduleUrl('../lib/studio/agent-files.ts')
+const { directorRequestPrompt, remapDirectorReferences, agentPlanCosts } = await import(await moduleUrl('../lib/studio/director-workspace.ts', { './director-context': context, './prompt-references': mentions, './agent-files': files }))
 const references = [{ id: 'owned-a', title: '耳机正面' }, { id: 'owned-b', title: '场景参考' }]
 
 test('Agent mentions bind to owned asset IDs and the chosen scene without claiming visual understanding', () => {

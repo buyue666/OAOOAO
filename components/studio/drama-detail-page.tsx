@@ -1,119 +1,67 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Check, Clapperboard, FileText, Loader2, Save, Sparkles, Users, WandSparkles } from 'lucide-react'
-import { getDramaProject, saveDramaProject } from '@/lib/studio/api'
-import type { DramaEpisode, DramaProject } from '@/lib/studio/drama-types'
-import { ControlButton, EmptyState, Notice, SectionHeading, StatusBadge } from './ui'
+import { useState } from 'react'
+import { ArrowLeft, ArrowRight, Check, CheckCheck, Clapperboard, Loader2, Plus, RefreshCw, Save, Settings2, Sparkles } from 'lucide-react'
+import { useStudio } from '@/lib/studio/store'
+import { useDramaProduction } from '@/lib/studio/use-drama-production'
+import { dramaProductionLabels, dramaStageCompletion, dramaWorkspaceStages, newDramaEpisode, type DramaProductionStage, type DramaWorkspaceStage } from '@/lib/studio/drama-production'
+import type { DramaShot } from '@/lib/studio/drama-types'
+import { cn } from '@/lib/utils'
+import { ControlButton, Modal, Notice, StatusBadge } from './ui'
+import { DramaAssetEditor, dramaField, DramaScriptEditor, DramaShotEditor, DramaStoryEditor } from './drama-editors'
+import { DramaDelivery, DramaModelSettings, DramaProposal, DramaShotProduction } from './drama-production-panels'
 
-type DetailTab = 'script' | 'storyboard' | 'assets'
-
-function activeEpisode(project: DramaProject | null, id: string) {
-  if (!project?.episodes?.length) return null
-  return project.episodes.find((episode) => episode.id === id) ?? project.episodes[0]
-}
-
-function episodeScript(episode: DramaEpisode | null) {
-  return episode?.script || episode?.outline || ''
-}
-
+const workspaceFor: Record<DramaProductionStage, DramaWorkspaceStage> = { analysis: 'story', outline: 'script', script: 'script', assets: 'assets', storyboard: 'storyboard', image: 'production', video: 'production', audio: 'production' }
 export function DramaDetailPage({ projectId }: { projectId: string }) {
-  const [project, setProject] = useState<DramaProject | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [tab, setTab] = useState<DetailTab>('script')
-  const [episodeId, setEpisodeId] = useState('')
-  const [title, setTitle] = useState('')
-  const [summary, setSummary] = useState('')
-  const [style, setStyle] = useState('')
-  const [script, setScript] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError('')
-    void getDramaProject(projectId).then((loaded) => {
-      if (cancelled) return
-      setProject(loaded)
-      setTitle(loaded.title)
-      setSummary(loaded.summary)
-      setStyle(loaded.style)
-      const first = loaded.episodes?.find((episode) => episode.id === loaded.activeEpisodeId) ?? loaded.episodes?.[0]
-      setEpisodeId(first?.id ?? '')
-      setScript(episodeScript(first ?? null))
-    }).catch((reason) => {
-      if (!cancelled) setError(reason instanceof Error ? reason.message : '短剧项目加载失败')
-    }).finally(() => {
-      if (!cancelled) setLoading(false)
-    })
-    return () => { cancelled = true }
-  }, [projectId])
-
-  const episode = useMemo(() => activeEpisode(project, episodeId), [episodeId, project])
-
-  function selectEpisode(nextId: string) {
-    const next = activeEpisode(project, nextId)
-    setEpisodeId(nextId)
-    setScript(episodeScript(next))
-    setNotice('')
-  }
-
-  async function save() {
-    if (!project || saving) return
-    setSaving(true)
-    setError('')
-    setNotice('')
-    try {
-      const nextEpisodes = project.episodes.map((item) => item.id === episode?.id ? { ...item, script } : item)
-      const saved = await saveDramaProject(project.id, { ...project, title: title.trim() || project.title, summary, style, activeEpisodeId: episode?.id ?? project.activeEpisodeId, episodes: nextEpisodes }, project.updatedAt)
-      setProject(saved)
-      setNotice('已保存，刷新页面后内容仍会保留。')
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '短剧项目保存失败')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (loading) return <div className="mx-auto flex min-h-[calc(100dvh-60px)] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 size-4 animate-spin" />正在加载短剧项目…</div>
-
-  if (!project) return <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-5 py-16"><div className="studio-surface p-7 text-center"><p className="text-sm font-semibold text-foreground">无法打开短剧项目</p><p className="mt-2 text-xs leading-5 text-destructive">{error || '项目不存在或不属于当前账号。'}</p><Link href="/drama" className="mt-5 inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground hover:bg-muted">返回短剧制作</Link></div></div>
-
-  return (
-    <div className="mx-auto flex w-full max-w-[1680px] flex-col gap-5 px-4 py-5 md:px-7 md:py-7">
-      <header className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <Link href="/drama" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3.5" />短剧制作</Link>
-          <div className="mt-3 flex items-center gap-3"><div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-studio-accent/20 bg-studio-accent/10 text-studio-accent"><Clapperboard className="size-5" /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="truncate text-xl font-semibold tracking-[-0.035em] text-foreground md:text-2xl">{title || project.title}</h1><StatusBadge tone={project.status === 'archived' ? 'muted' : 'accent'}>{project.status === 'archived' ? '已归档' : '进行中'}</StatusBadge></div><p className="mt-1 truncate text-xs text-muted-foreground">{summary || '还没有填写故事简介'}</p></div></div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2"><ControlButton variant="secondary" onClick={() => setTab('assets')}><Users className="size-3.5" />角色与素材</ControlButton><ControlButton variant="primary" onClick={() => void save()} disabled={saving}><Save className="size-3.5" />{saving ? '正在保存' : '保存项目'}</ControlButton></div>
-      </header>
-
-      {error && <Notice tone="danger">{error}</Notice>}
-      {notice && <Notice tone="success"><Check className="mr-1.5 inline size-4" />{notice}</Notice>}
-
-      <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)_300px]">
-        <aside className="studio-surface h-fit p-2" aria-label="短剧分集">
-          <p className="px-2.5 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">分集</p>
-          <div className="space-y-1">{project.episodes.map((item, index) => <button key={item.id} type="button" onClick={() => selectEpisode(item.id)} className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${item.id === episode?.id ? 'bg-studio-accent/12 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}><span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-current/25 text-[10px]">{item.episodeNumber ?? index + 1}</span><span className="min-w-0 flex-1 truncate">{item.title || `第 ${index + 1} 集`}</span></button>)}</div>
-          {project.episodes.length === 0 && <p className="px-2.5 py-4 text-xs leading-5 text-muted-foreground">还没有分集，可以先回到列表生成大纲。</p>}
-        </aside>
-
-        <main className="min-w-0">
-          <div className="studio-segmented flex w-fit max-w-full items-center gap-1 border border-border bg-muted p-1" role="tablist" aria-label="短剧工作区"><button type="button" role="tab" aria-selected={tab === 'script'} onClick={() => setTab('script')} className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ${tab === 'script' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><FileText className="size-3.5" />剧本</button><button type="button" role="tab" aria-selected={tab === 'storyboard'} onClick={() => setTab('storyboard')} className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ${tab === 'storyboard' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Clapperboard className="size-3.5" />分镜</button><button type="button" role="tab" aria-selected={tab === 'assets'} onClick={() => setTab('assets')} className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ${tab === 'assets' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Users className="size-3.5" />角色与场景</button></div>
-          {tab === 'script' && <section className="studio-surface mt-4 p-4 md:p-5"><SectionHeading title={episode?.title || '剧本正文'} description={episode ? '在这里直接编辑当前分集，保存后写回短剧项目。' : '当前项目还没有分集正文。'} /><textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={!episode} placeholder="输入这一集的剧本正文、场景和对白…" className="studio-field mt-4 min-h-[420px] w-full resize-y border border-border bg-card px-3 py-3 text-sm leading-7 text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15 disabled:cursor-not-allowed disabled:opacity-60" /></section>}
-          {tab === 'storyboard' && <section className="mt-4 space-y-3"><SectionHeading title="分镜" description="镜头生成和状态都留在当前短剧项目内。" />{episode?.shots?.length ? episode.shots.map((shot, index) => <article key={shot.id} className="studio-surface p-4"><div className="flex items-start gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted text-xs font-semibold text-muted-foreground">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-foreground">{shot.title || `镜头 ${index + 1}`}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{shot.description || shot.imagePrompt || '还没有镜头描述。'}</p></div><StatusBadge tone={shot.generationStatus === 'success' ? 'success' : shot.generationStatus === 'error' ? 'danger' : 'muted'}>{shot.generationStatus === 'success' ? '已完成' : shot.generationStatus === 'error' ? '需重试' : '待生成'}</StatusBadge></div></article>) : <EmptyState title="还没有分镜" description="先在剧本页完善当前分集，后续可在这里继续整理镜头。" action={<ControlButton variant="secondary" size="sm" onClick={() => setTab('script')}><FileText className="size-3.5" />编辑剧本</ControlButton>} />}</section>}
-          {tab === 'assets' && <section className="mt-4 space-y-3"><SectionHeading title="角色与场景" description="短剧资产独立于自由画布和通用素材库。" /><div className="grid gap-3 sm:grid-cols-3"><div className="studio-surface p-4"><p className="text-xs text-muted-foreground">角色</p><p className="mt-2 text-2xl font-semibold text-foreground">{project.characters.length}</p></div><div className="studio-surface p-4"><p className="text-xs text-muted-foreground">场景</p><p className="mt-2 text-2xl font-semibold text-foreground">{project.scenes.length}</p></div><div className="studio-surface p-4"><p className="text-xs text-muted-foreground">道具</p><p className="mt-2 text-2xl font-semibold text-foreground">{project.props.length}</p></div></div><EmptyState title="资产编辑区已就绪" description="角色与场景会随着剧本拆解逐步补充，当前数据会随项目一起保存。" /></section>}
-        </main>
-
-        <aside className="space-y-4">
-          <section className="studio-surface p-4"><SectionHeading title="项目设置" /><div className="mt-4 space-y-3"><label className="block"><span className="mb-1.5 block text-xs font-medium text-foreground">项目名称</span><input value={title} onChange={(event) => setTitle(event.target.value)} className="studio-field h-9 w-full border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" /></label><label className="block"><span className="mb-1.5 block text-xs font-medium text-foreground">故事简介</span><textarea value={summary} onChange={(event) => setSummary(event.target.value)} className="studio-field min-h-20 w-full resize-y border border-border bg-card px-3 py-2 text-sm leading-5 text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" /></label><label className="block"><span className="mb-1.5 block text-xs font-medium text-foreground">视觉风格</span><input value={style} onChange={(event) => setStyle(event.target.value)} className="studio-field h-9 w-full border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-studio-accent/60 focus:ring-2 focus:ring-studio-accent/15" /></label><p className="text-xs leading-5 text-muted-foreground">比例：<span className="font-medium text-foreground">{project.ratio || '9:16'}</span></p></div></section>
-          <section className="lg-glass rounded-xl border border-border p-4"><div className="flex items-center gap-2"><WandSparkles className="size-4 text-studio-accent" /><h2 className="text-sm font-semibold text-foreground">独立生产线</h2></div><p className="mt-2 text-xs leading-5 text-muted-foreground">短剧项目在这里完成剧本、分镜和资产整理。自由画布是另一套独立的生成系统，不会把节点偷偷送到其他页面。</p><div className="mt-3 flex items-start gap-2 text-xs text-success"><Check className="mt-0.5 size-3.5 shrink-0" />保存后刷新仍可继续编辑</div></section>
-        </aside>
-      </div>
+  const { state } = useStudio()
+  return <DramaWorkspace key={`${state.user.id}:${projectId}`} projectId={projectId} accountId={state.user.id} />
+}
+function DramaWorkspace({ projectId, accountId }: { projectId: string; accountId: string }) {
+  const { state } = useStudio()
+  const production = useDramaProduction(projectId, accountId, state.liveModels)
+  const { project, change } = production
+  const [stage, setStage] = useState<DramaWorkspaceStage>('story'), [episodeId, setEpisodeId] = useState(''), [shotId, setShotId] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false), [instructions, setInstructions] = useState('')
+  const [selectedTask, setSelectedTask] = useState<string | null>(null), [replace, setReplace] = useState(false)
+  const episode = project?.episodes.find(ep => ep.id === (episodeId || project.activeEpisodeId)) || project?.episodes[0]
+  const shot = episode?.shots.find(item => item.id === shotId) || episode?.shots[0]
+  const proposal = production.tasks.find(task => task.id === selectedTask)
+  const completion = project ? dramaStageCompletion(project, episode) : null
+  const locked = production.working || production.quoting || Boolean(production.pending)
+  const prepare = async (step: DramaProductionStage) => { if (await production.prepare(step, episode?.id, shot?.id, instructions) === 'settings') setSettingsOpen(true) }
+  const patchShot = (data: Partial<DramaShot>) => change(p => ({ ...p, episodes: p.episodes.map(ep => ep.id === episode?.id ? { ...ep, shots: ep.shots.map(item => item.id === shot?.id ? { ...item, ...data } : item) } : ep) }))
+  if (production.loading) return <div className="flex min-h-[60dvh] items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 size-4 animate-spin" />正在加载短剧项目…</div>
+  if (!project) return <div className="mx-auto max-w-xl p-8"><Notice tone="danger">{production.error || '项目不存在或不属于当前账号。'}</Notice><Link href="/drama" className="mt-4 inline-block text-sm underline">返回短剧制作</Link></div>
+  const tasks = production.tasks.filter(task => !task.episodeId || ['analysis', 'outline', 'assets'].includes(task.stage) || task.episodeId === episode?.id)
+  const nextStage = dramaWorkspaceStages[Math.min(5, dramaWorkspaceStages.findIndex(item => item.id === stage) + 1)]
+  return <div className="mx-auto w-full max-w-[1800px] space-y-5 px-3 py-5 sm:px-6 lg:px-7" data-testid="drama-production-workspace">
+    <header className="flex flex-wrap items-center justify-between gap-4"><div className="min-w-0"><Link href="/drama" className="inline-flex min-h-8 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3.5" />短剧制作</Link><div className="mt-2 flex flex-wrap items-center gap-2.5"><Clapperboard className="size-6 text-studio-accent" /><h1 className="max-w-[min(70vw,640px)] truncate text-xl font-semibold tracking-tight" title={project.title}>{project.title}</h1><StatusBadge tone={production.dirty ? 'warning' : 'muted'}>{production.dirty ? '有未保存修改' : '已保存'}</StatusBadge></div><p className="mt-1.5 text-xs text-muted-foreground">{project.episodes.length} 集 · {project.episodes.reduce((n, ep) => n + ep.shots.length, 0)} 镜头 · {project.ratio}</p></div><div className="flex flex-wrap gap-2"><Link href={`/projects/${encodeURIComponent(project.id)}/canvas`} className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs hover:bg-muted">镜头画布</Link><ControlButton disabled={production.working} onClick={() => setSettingsOpen(true)}><Settings2 className="size-3.5" />制作设置</ControlButton><ControlButton variant="primary" disabled={production.saving || production.working || !production.dirty} onClick={() => void production.save()}>{production.saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}保存项目</ControlButton></div></header>
+    <nav aria-label="短剧制作流程" className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">{dramaWorkspaceStages.map((item, index) => <button key={item.id} type="button" disabled={production.working} aria-current={stage === item.id ? 'step' : undefined} onClick={() => setStage(item.id)} className={cn('flex min-h-16 min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors', stage === item.id ? 'border-studio-accent/60 bg-studio-accent/6 shadow-sm' : 'border-border bg-card hover:bg-muted')}><span className={cn('grid size-7 shrink-0 place-items-center rounded-full text-xs', stage === item.id ? 'bg-studio-accent text-studio-accent-foreground' : completion?.[item.id] ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground')}>{completion?.[item.id] && stage !== item.id ? <Check className="size-3.5" /> : String(index + 1).padStart(2, '0')}</span><span className="min-w-0"><span className="block text-xs font-medium">{item.label}</span><span className="mt-1 block truncate text-[10px] text-muted-foreground">{item.caption}</span></span></button>)}</nav>
+    {production.error && <Notice tone="danger">{production.error}</Notice>}{production.notice && <Notice tone="success">{production.notice}</Notice>}
+    {production.pending && !production.working && <Notice tone="warning">上次提交尚待确认。恢复时会沿用同一请求，避免重复计费。<ControlButton className="ml-2" size="sm" onClick={() => void production.submit(true)}>恢复上次提交</ControlButton></Notice>}
+    <div className="grid items-start gap-4 xl:grid-cols-[174px_minmax(0,1fr)_274px]">
+      <aside className="studio-surface min-w-0 rounded-xl p-2 xl:sticky xl:top-4"><div className="flex items-center justify-between px-2 py-2"><h2 className="text-xs font-semibold">分集</h2><ControlButton aria-label="添加分集" variant="ghost" size="sm" disabled={production.working} onClick={() => { const next = newDramaEpisode(project.episodes.length); change(p => ({ ...p, episodes: [...p.episodes, next], activeEpisodeId: next.id })); setEpisodeId(next.id); setShotId(''); setStage('script') }}><Plus className="size-3.5" /></ControlButton></div><div className="flex gap-1 overflow-x-auto xl:max-h-[65dvh] xl:flex-col xl:overflow-y-auto">{project.episodes.map((ep, index) => <button type="button" key={ep.id} disabled={production.working} aria-pressed={episode?.id === ep.id} onClick={() => { setEpisodeId(ep.id); setShotId(''); change(p => ({ ...p, activeEpisodeId: ep.id })) }} className={cn('flex min-h-14 min-w-32 shrink-0 items-center gap-2 rounded-lg px-2.5 text-left xl:w-full xl:min-w-0', episode?.id === ep.id ? 'bg-studio-accent/8 text-studio-accent' : 'text-muted-foreground hover:bg-muted')}><span className="text-xs tabular-nums">{String(index + 1).padStart(2, '0')}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{ep.title}</span><span className="mt-1 block text-[10px] opacity-70">{ep.shots.length} 镜头{ep.script ? ' · 已有剧本' : ''}</span></span></button>)}</div></aside>
+      <main className="min-w-0" inert={production.working || undefined}>
+        {stage === 'story' && <DramaStoryEditor project={project} change={change} onAnalyze={() => void prepare('analysis')} />}
+        {stage === 'script' && <DramaScriptEditor project={project} episode={episode} change={change} onOutline={() => void prepare('outline')} onScript={() => void prepare('script')} />}
+        {stage === 'assets' && <DramaAssetEditor project={project} change={change} onBreakdown={() => void prepare('assets')} onError={production.setError} />}
+        {stage === 'storyboard' && <DramaShotEditor project={project} episode={episode} shot={shot} change={change} onSelect={setShotId} onDesign={() => void prepare('storyboard')} />}
+        {stage === 'production' && <DramaShotEditor project={project} episode={episode} shot={shot} change={change} onSelect={setShotId} onDesign={() => void prepare('storyboard')} production={current => <DramaShotProduction shot={current} locked={locked} patch={patchShot} generate={step => void prepare(step)} />} />}
+        {stage === 'delivery' && <DramaDelivery project={project} episode={episode} renderAvailable={production.renderAvailable} working={production.working} onRender={() => { if (episode) void production.render(episode.id) }} onStoryboard={() => setStage('storyboard')} />}
+      </main>
+      <aside className="min-w-0 space-y-4 xl:sticky xl:top-4"><section className="studio-surface rounded-xl p-4"><div className="flex items-center justify-between"><h2 className="text-xs font-semibold">本集制作记录</h2><button type="button" aria-label="刷新制作记录" onClick={production.refresh} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted"><RefreshCw className="size-3.5" /></button></div>{production.taskError && <p role="alert" className="mt-2 text-xs text-destructive">{production.taskError}</p>}<div className="mt-3 max-h-[60dvh] space-y-2 overflow-y-auto">{tasks.length ? tasks.map(task => <article key={task.id} className="rounded-lg border border-border p-3"><div className="flex items-center justify-between gap-2"><p className="text-xs font-medium">{dramaProductionLabels[task.stage]}</p><StatusBadge tone={task.status === 'error' ? 'danger' : task.appliedAt ? 'success' : task.status === 'success' ? 'accent' : 'muted'}>{task.appliedAt ? '已采用' : task.status === 'success' ? '待审核' : task.status === 'error' ? '失败' : task.status === 'cancelled' ? '已取消' : task.status === 'pending' ? '排队中' : '生成中'}</StatusBadge></div><p className="mt-2 truncate text-[10px] text-muted-foreground" title={task.model}>{task.model} · {task.pointsCost} 积分</p><p className="mt-1 text-[10px] text-muted-foreground">{new Date(task.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>{(task.error || task.proposalError) && <p className="mt-2 break-words text-xs text-destructive">{task.error || task.proposalError}</p>}<div className="mt-2 flex flex-wrap gap-1">{task.status === 'success' && <ControlButton size="sm" onClick={() => { setSelectedTask(task.id); setReplace(false) }}>预览{task.appliedAt ? '' : '与采用'}</ControlButton>}{['pending', 'running', 'paused'].includes(task.status) && <ControlButton size="sm" variant="ghost" onClick={() => void production.cancel(task.id)}>取消任务</ControlButton>}</div></article>) : <p className="py-5 text-xs leading-6 text-muted-foreground">完成故事设定后，从各阶段的 AI 按钮提交制作任务。结果会保留在这里。</p>}</div></section>
+        <section className="studio-surface rounded-xl p-4"><h2 className="text-xs font-semibold">补充制作要求</h2><textarea aria-label="补充制作要求" value={instructions} onChange={event => setInstructions(event.target.value.slice(0, 4000))} rows={4} className={cn(dramaField, 'mt-3 resize-y text-xs leading-6')} placeholder="本次 AI 步骤需要特别注意什么？" /><p className="mt-2 text-[10px] leading-5 text-muted-foreground">每步先预估积分，生成结果由你审核采用。</p></section>
+        <div className="flex items-center justify-between text-xs text-muted-foreground"><span>下一步</span><ControlButton size="sm" variant="ghost" onClick={() => setStage(nextStage.id)}>{nextStage.label}<ArrowRight className="size-3.5" /></ControlButton></div>
+      </aside>
     </div>
-  )
+    <Modal open={Boolean(production.quote)} title="确认制作任务" description="费用根据所选模型与当前参数预估。" onClose={production.closeQuote} footer={<><ControlButton disabled={production.working || Boolean(production.pending)} onClick={production.closeQuote}>取消</ControlButton><ControlButton variant="primary" disabled={production.working || production.dirty || production.recoveryBlocked} onClick={() => void production.submit()}>{production.working ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}确认生成 · {production.quote?.points ?? 0} 积分</ControlButton></>}>
+      {production.quote && <div className="space-y-4 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">制作步骤</span><span>{dramaProductionLabels[production.quote.input.stage]}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">模型</span><span className="break-all text-right">{state.liveModels.find(model => model.id === production.quote!.input.model)?.name || production.quote.input.model}</span></div><div className="flex justify-between"><span className="text-muted-foreground">预计消耗</span><strong className="text-studio-accent">{production.quote.points} 积分</strong></div><p className="rounded-xl bg-muted/50 p-3 text-xs leading-6 text-muted-foreground">生成完成后先预览，再采用到项目。已有内容会保留到你确认采用时。</p>{production.dirty && <Notice tone="warning">项目内容已经变化，请关闭窗口并重新预估。</Notice>}{production.pending && <Notice tone="warning">提交结果待确认，请使用“恢复上次提交”。</Notice>}{production.error && <Notice tone="danger">{production.error}</Notice>}</div>}
+    </Modal>
+    <Modal open={Boolean(proposal)} title={proposal ? `${dramaProductionLabels[proposal.stage]} · 预览方案` : '预览方案'} onClose={() => { if (!production.working) setSelectedTask(null) }} className="sm:max-w-4xl" footer={<><ControlButton disabled={production.working} onClick={() => setSelectedTask(null)}>关闭</ControlButton>{proposal && !proposal.appliedAt && !proposal.proposalError && <ControlButton variant="primary" disabled={production.working || Boolean(production.pending)} onClick={async () => { const next = await production.adopt(proposal, replace); if (next) { setSelectedTask(null); setStage(workspaceFor[proposal.stage]); if (proposal.stage === 'outline') setEpisodeId(next.activeEpisodeId || '') } }}>{production.working ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCheck className="size-3.5" />}采用并保存</ControlButton>}</>}>
+      {proposal && <div className="space-y-4">{proposal.baseUpdatedAt !== project.updatedAt && !proposal.appliedAt && <Notice tone="warning">项目在提交后已有编辑，请核对方案再采用。</Notice>}{production.error && <Notice tone="danger">{production.error}</Notice>}{proposal.proposalError && <Notice tone="danger">{proposal.proposalError}</Notice>}{proposal.proposal ? <DramaProposal task={proposal} /> : proposal.result?.url || proposal.result?.results?.[0]?.url ? proposal.stage === 'image' ? <img src={proposal.result?.url || proposal.result?.results?.[0]?.url} alt="待采用分镜图" className="max-h-[65dvh] w-full object-contain" /> : proposal.stage === 'audio' ? <audio src={proposal.result?.url || proposal.result?.results?.[0]?.url} controls preload="none" /> : <video src={proposal.result?.url || proposal.result?.results?.[0]?.url} controls preload="none" className="max-h-[65dvh] w-full object-contain" /> : <p className="whitespace-pre-wrap break-words text-sm">{proposal.result?.content || '暂无可预览结果'}</p>}{!proposal.appliedAt && ['outline', 'storyboard'].includes(proposal.stage) && <fieldset className="space-y-2 rounded-xl border border-border p-3 text-xs"><legend className="px-1 font-medium">采用方式</legend><label className="flex items-center gap-2"><input type="radio" checked={!replace} onChange={() => setReplace(false)} />追加{proposal.stage === 'outline' ? '分集，保留已有内容' : '镜头，保留已有制作'}</label><label className="flex items-center gap-2"><input type="radio" checked={replace} onChange={() => setReplace(true)} />替换{proposal.stage === 'outline' ? '空白分集' : '尚未制作的镜头'}（含已有产物时会阻止替换）</label></fieldset>}</div>}
+    </Modal>
+    <Modal open={settingsOpen} title="制作设置" description="模型由你选择。每次生成前会根据本次设置预估积分。" onClose={() => setSettingsOpen(false)} className="sm:max-w-2xl" footer={<ControlButton onClick={() => setSettingsOpen(false)}>完成设置</ControlButton>}><DramaModelSettings project={project} models={state.liveModels} change={change} /></Modal>
+    {production.quoting && <div role="status" className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card px-4 py-3 text-xs shadow-lg"><Loader2 className="size-4 animate-spin" />正在保存并预估积分…</div>}
+  </div>
 }

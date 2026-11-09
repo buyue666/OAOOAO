@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, FolderLock, Images, Settings2, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -21,7 +22,9 @@ export function TeamProjectWorkspace({ teamId, projectId }: { teamId: string; pr
 function ProjectContent({ teamId, projectId }: { teamId: string; projectId: string }) {
   const teamQuery = useTeamQuery<{ team: TeamSummary }>(`/api/teams/${encodeURIComponent(teamId)}`)
   const projectQuery = useTeamQuery<{ project: TeamProject }>(`/api/teams/${encodeURIComponent(teamId)}/projects/${encodeURIComponent(projectId)}`)
-  const [tab, setTab] = useState('assets')
+  const search = useSearchParams(), router = useRouter()
+  const tab = ['assets', 'generation', 'settings'].includes(search.get('tab') || '') ? search.get('tab')! : 'assets'
+  const setTab = (value: string) => router.replace(`/teams/${teamId}/projects/${projectId}?tab=${encodeURIComponent(value)}`, { scroll: false })
   const [references, setReferences] = useState<TeamAsset[]>([])
   const team = teamQuery.data?.team, project = projectQuery.data?.project
   const loading = teamQuery.isLoading || projectQuery.isLoading

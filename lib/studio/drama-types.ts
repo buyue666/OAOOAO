@@ -12,6 +12,10 @@ export type DramaReviewStatus = 'draft' | 'content_review' | 'approved' | 'visua
 
 export type DramaVideoMode = 'storyboard' | 'direct' | 'reference'
 
+export type DramaBrief = { sourceText: string; genre: string; audience: string; tone: string; targetEpisodes: number; episodeSeconds: number }
+export type DramaStoryBible = { logline: string; theme: string; world: string; conflict: string; audience: string; visualStyle: string; characterNotes: string[]; risks: string[] }
+export type DramaTake = { id: string; kind: 'image' | 'video' | 'audio'; url: string; createdAt: string }
+
 export type DramaAssetReference = {
   id: string
   url: string
@@ -78,6 +82,12 @@ export type DramaShot = {
   imagePrompt: string
   videoPrompt: string
   cameraMotion: string
+  shotSize?: string
+  cameraAngle?: string
+  lighting?: string
+  soundDesign?: string
+  continuity?: string
+  takes?: DramaTake[]
   startFramePrompt?: string
   endFramePrompt?: string
   negativePrompt?: string
@@ -122,6 +132,7 @@ export type DramaEpisode = {
   shots: DramaShot[]
   productionPaused?: boolean
   renderTask?: DramaRenderTask
+  targetSeconds?: number
   [key: string]: unknown
 }
 
@@ -142,6 +153,9 @@ export type DramaProject = {
   defaultVideoMode: DramaVideoMode
   episodes: DramaEpisode[]
   sourceAssets?: DramaSourceAsset[]
+  brief?: DramaBrief
+  storyBible?: DramaStoryBible
+  productionSettings?: { textModel?: string; imageModel?: string; videoModel?: string; audioModel?: string; resolution?: string; quality?: string; videoQuality?: string; voice?: string }
   createdAt: string
   updatedAt: string
 }

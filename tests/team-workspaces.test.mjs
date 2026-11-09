@@ -15,6 +15,7 @@ const all = node => node && typeof node === 'object' ? [node, ...[node.props?.ch
 const text = node => typeof node === 'string' ? node : node && typeof node === 'object' ? [node.props?.children].flat(Infinity).map(text).join('') : ''
 const controls = new Proxy({}, { has: () => true, get: (_, key) => String(key) })
 const teamHelpers = load('lib/studio/team-types.ts')
+const workspaceContext = { useWorkspace: () => ({ ready: true, identity: null, select() {}, href: target => target }) }
 const modelHelpers = load('lib/studio/studio-models.ts')
 const generationHelpers = load('lib/studio/team-generation.ts', { './studio-models': modelHelpers })
 const pricingHelpers = load('lib/studio/team-admin.ts')
@@ -26,6 +27,7 @@ function hooks() {
     react: {
       useState(initial) { const index = s++; if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial; return [states[index], value => { states[index] = typeof value === 'function' ? value(states[index]) : value }] },
       useRef(value) { return refs[r++] ??= { current: value } },
+      useId: () => 'workspace-options-test',
       useCallback: fn => fn,
       useEffect(fn, deps) { const index = e++; if (!effects[index] || deps.some((dep, i) => dep !== effects[index][i])) { effects[index] = deps; queued.push(fn) } },
     },
@@ -67,13 +69,21 @@ test('dynamic team routes await their parameters and render the real workspace e
 
 test('account workspace options expose the selected space and close the account menu on selection', () => {
   let closed = 0, requested
-  const module = load('components/studio/workspace-switcher.tsx', { 'react/jsx-runtime': jsx, 'next/link': { default: 'Link' }, 'next/navigation': { usePathname: () => `/teams/${team.id}/projects/${project.id}` }, 'lucide-react': controls, '@/lib/studio/team-types': teamHelpers, '@/lib/studio/team-api': { teamIdFromPath: () => team.id, useTeamQuery: path => { requested = path; return { data: { teams: [team] } } } } })
-  const tree = module.WorkspaceSwitcher({ active: true, onSelect: () => closed++ })
+  const h = hooks()
+  const module = load('components/studio/workspace-switcher.tsx', { react: h.react, '@/lib/studio/workspace-context': workspaceContext, 'react/jsx-runtime': jsx, 'next/link': { default: 'Link' }, 'next/navigation': { usePathname: () => `/teams/${team.id}/projects/${project.id}` }, 'lucide-react': controls, '@/lib/studio/team-types': teamHelpers, '@/lib/studio/team-api': { teamIdFromPath: () => team.id, useTeamQuery: path => { requested = path; return { data: { teams: [team] } } } } })
+  const render = (active = true) => h.render(() => module.WorkspaceSwitcher({ active, onSelect: () => closed++ }))
+  const initial = render()
+  assert.equal(all(initial).find(node => node.props?.['aria-controls']).props['aria-expanded'], false)
+  assert.equal(all(initial).find(node => node.props?.id === 'workspace-options-test').props.hidden, true)
+  all(initial).find(node => node.props?.['aria-controls']).props.onClick()
+  const tree = render()
+  assert.equal(all(tree).find(node => node.props?.['aria-controls']).props['aria-expanded'], true)
   assert.equal(tree.props.role, 'group')
   const options = all(tree).filter(node => node.props?.role === 'menuitemradio')
   assert.deepEqual(options.map(node => [node.props.href, node.props['aria-checked']]), [['/studio', false], [`/teams/${team.id}`, true]])
   options[0].props.onClick(); assert.equal(closed, 1)
-  module.WorkspaceSwitcher({ active: false }); assert.equal(requested, null, 'A closed account popup does not fetch teams')
+  render(false); assert.equal(requested, null, 'A closed account popup does not fetch teams')
+  assert.equal(all(render()).find(node => node.props?.['aria-controls']).props['aria-expanded'], false)
 })
 
 test('team model restrictions include allowed request aliases and reject disabled or unrelated models', () => {
@@ -85,7 +95,7 @@ test('team model restrictions include allowed request aliases and reject disable
 
 test('the header shows the team wallet and a direct usage link, including explicit unavailable state', () => {
   let response = { data: { balance: 5000 } }, requested
-  const module = load('components/studio/workspace-switcher.tsx', { 'react/jsx-runtime': jsx, 'next/link': { default: 'Link' }, 'next/navigation': {}, 'lucide-react': controls, '@/lib/studio/team-types': teamHelpers, '@/lib/studio/team-api': { teamIdFromPath: () => team.id, useTeamQuery: path => { requested = path; return response } } })
+  const module = load('components/studio/workspace-switcher.tsx', { react: {}, '@/lib/studio/workspace-context': workspaceContext, 'react/jsx-runtime': jsx, 'next/link': { default: 'Link' }, 'next/navigation': {}, 'lucide-react': controls, '@/lib/studio/team-types': teamHelpers, '@/lib/studio/team-api': { teamIdFromPath: () => team.id, useTeamQuery: path => { requested = path; return response } } })
   const node = module.WorkspaceCredits({ pathname: `/teams/${team.id}` })
   assert.equal(requested, `/api/teams/${team.id}/usage`); assert.equal(node.props.href, `/teams/${team.id}?tab=usage`); assert.match(text(node), /团队 5,000 积分/)
   response = { error: new Error('Unavailable') }

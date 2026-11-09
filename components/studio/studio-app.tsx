@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 import { HomepageAnnouncement } from '@/components/homepage-announcement'
 import { RETURN_PATH_KEY } from '@/lib/studio/return-path'
 import { isStudioPreview } from '@/lib/studio/preview-mode'
+import { useWorkspace } from '@/lib/studio/workspace-context'
+import { workspaceDestination } from '@/lib/studio/workspace-navigation'
 
 function isProtectedStudioRoute(pathname: string) {
   return pathname === '/studio'
@@ -44,6 +46,10 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+  const workspace = useWorkspace()
+  const destination = workspaceDestination(pathname, workspace.identity)
+  const workspaceRedirecting = state.backendStatus === 'connected' && workspace.ready && destination !== pathname
+  useEffect(() => { if (workspaceRedirecting) router.replace(destination) }, [workspaceRedirecting, destination, router])
 
   const isLanding = pathname === '/'
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/plans' || pathname === '/credits'
@@ -67,9 +73,10 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
     try { sessionStorage.setItem(RETURN_PATH_KEY, `${pathname}${window.location.search}${window.location.hash}`) } catch {}
   }, [pathname, isProtectedRoute, authChecking, authRedirecting])
 
-  if (authChecking || authRedirecting) {
+  if (authChecking || authRedirecting || isProtectedRoute && (!state.hydrated || state.backendStatus === 'checking')) {
     return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{tx(authRedirecting ? '正在前往登录页…' : '正在检查登录状态…')}</main>
   }
+  if (state.backendStatus === 'connected' && (!workspace.ready || workspaceRedirecting)) return <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-sm text-muted-foreground">{tx('正在切换工作空间…')}</main>
 
   /**
    * ��½ҳ����¼���ײ����̨���Դ�������ʽ�����׹���̨��ǣ�

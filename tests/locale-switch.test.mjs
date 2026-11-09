@@ -17,7 +17,7 @@ function load(path, imports) {
 const icons = new Proxy({}, {get: () => () => null})
 const cn = (...values) => values.filter(Boolean).join(' ')
 const inertUi = {ControlButton: ({children,variant,size,...props}) => React.createElement('button',props,children),StatusBadge:({children})=>React.createElement('span',null,children),Tooltip:({children})=>children,MediaThumb:()=>null,IconAction:()=>null,SegmentedControl:({options})=>React.createElement('div',null,options.map(item=>React.createElement('span',{key:item.value},englishText(item.label))))}
-const base = {react:React,'react/jsx-runtime':runtime,'lucide-react':icons,'@/lib/utils':{cn},'@/lib/studio/i18n':englishLocale,'./ui':inertUi}
+const base = {'@/lib/studio/workspace-context':{useWorkspace:()=>({ready:true,identity:null,select(){},href:target=>target})},react:React,'react/jsx-runtime':runtime,'lucide-react':icons,'@/lib/utils':{cn},'@/lib/studio/i18n':englishLocale,'./ui':inertUi}
 const html = (type,props) => renderToStaticMarkup(React.createElement(type,props))
 
 test('locale provider toggles both ways, updates html language, remembers reloads, and synchronizes tabs',()=>{
@@ -58,7 +58,7 @@ test('English copy formats owned prices and durations without translating interp
 })
 
 test('navigation and page titles respond to English while preserving user project names',()=>{
-  const nav=load('components/studio/studio-nav.tsx',{...base,'next/link':({children,...props})=>React.createElement('a',props,children),'next/navigation':{useRouter:()=>({push(){}})}})
+  const nav=load('components/studio/studio-nav.tsx',{...base,'@/lib/studio/workspace-navigation':load('lib/studio/workspace-navigation.ts',{}),'next/link':({children,...props})=>React.createElement('a',props,children),'next/navigation':{useRouter:()=>({push(){}})}})
   const result=html(nav.StudioNavLink,{item:nav.studioPrimaryNav[2],pathname:'/assets'})
   assert.match(result,/Creative assets/);assert.doesNotMatch(result,/创作资产/)
   assert.equal(nav.localizedStudioPageTitle('/video',undefined,englishText),'Video generation')

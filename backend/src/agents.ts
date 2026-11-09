@@ -66,13 +66,13 @@ async function persistStepAssets(client:PoolClient,run:Json,step:Json,job:Json){
 }
 async function stepInput(ctx:Context,client:PoolClient,run:Json,step:Json):Promise<Json>{
   const spec=step.specification;const references:Json[]=[];const text:string[]=[];
-  for(const id of spec.referenceAssetIds){const asset=(await client.query('SELECT * FROM oaooao_library_assets WHERE id=$1 AND user_id=$2',[id,run.user_id])).rows[0];if(!asset)throw httpError(404,'Selected reference asset was removed');if(asset.kind==='text')text.push(String(asset.document.data.content||asset.document.data.textContent||''));else if(asset.kind==='image'&&['image','video'].includes(spec.type))references.push({type:'image',url:asset.document.data.serverUrl||asset.document.data.url});else throw httpError(422,'Plan reference type is unsupported');}
+  for(const id of spec.referenceAssetIds){const asset=(await client.query('SELECT * FROM oaooao_library_assets WHERE id=$1 AND user_id=$2',[id,run.user_id])).rows[0];if(!asset)throw httpError(404,'Selected reference asset was removed');if(asset.kind==='text')text.push(String(asset.document.data.content||asset.document.data.textContent||''));else if((asset.kind==='image'&&['image','video'].includes(spec.type))||(['video','audio'].includes(asset.kind)&&spec.type==='video'))references.push({type:asset.kind,url:asset.document.data.serverUrl||asset.document.data.url||asset.document.data.dataUrl});else throw httpError(422,'Plan reference type is unsupported');}
   for(const id of new Set([...spec.dependsOn,...spec.referenceStepIds])){
     const previous=(await client.query('SELECT j.* FROM oaooao_agent_steps s JOIN oaooao_generation_jobs j ON j.id=s.job_id WHERE s.run_id=$1 AND s.step_id=$2',[run.id,id])).rows[0];if(!previous||previous.status!=='success')throw httpError(409,'Plan dependencies are not complete');
     if(previous.kind==='text')text.push(String(previous.result.content||''));
     if(spec.referenceStepIds.includes(id)){const items=previous.result.results||[previous.result];for(const item of items)references.push({type:'image',url:item.url||item.remoteUrl});}
   }
-  const context=text.map(t=>t.slice(0,8000)).join('\n\n').slice(0,32000);
+  const context=text.map(t=>t.slice(0,24000)).join('\n\n').slice(0,32000);
   return{prompt:spec.prompt+(context?'\n\nContext from earlier completed steps or selected text assets:\n'+context:''),config:spec.config,context:{projectId:run.input.projectId,conversationId:run.input.conversationId,runId:run.id,stepId:step.step_id,parentTaskId:run.job_id,approvedCost:spec.estimatedCost},source:run.input.surface,...(references.length?{references}:{})};
 }
 export async function advanceAgentRuns(ctx:Context):Promise<void>{
@@ -123,7 +123,7 @@ export async function registerAgentRoutes(app:FastifyInstance,ctx:Context){
         if(row.kind!=='text'||!(doc.source==='canvas-skill'||data.skillVersion===1||Array.isArray(doc.tags)&&doc.tags.includes('技能'))||!prompt.trim()||prompt.length>4000)throw httpError(422,'Selected asset is not a valid prompt skill');
         skills.push({id,title:String(doc.title||'').slice(0,80),prompt:prompt.trim()});
       }
-      const assets=[];for(const id of body.assetIds||[]){const asset=(await client.query('SELECT * FROM oaooao_library_assets WHERE id=$1 AND user_id=$2',[id,user.id])).rows[0];if(!asset)throw httpError(404,'Referenced asset not found');assets.push({id:asset.id,kind:asset.kind,title:asset.document.title,text:asset.kind==='text'?String(asset.document.data.content||asset.document.data.textContent||'').slice(0,8000):undefined});}
+      const assets=[];for(const id of body.assetIds||[]){const asset=(await client.query('SELECT * FROM oaooao_library_assets WHERE id=$1 AND user_id=$2',[id,user.id])).rows[0];if(!asset)throw httpError(404,'Referenced asset not found');assets.push({id:asset.id,kind:asset.kind,title:asset.document.title,text:asset.kind==='text'?String(asset.document.data.content||asset.document.data.textContent||'').slice(0,24000):undefined});}
       const settings=await getSettings(ctx,client);const count=Number((await client.query("SELECT count(*) n FROM oaooao_agent_runs WHERE user_id=$1 AND state IN ('planning','awaiting_approval','running','paused')",[user.id])).rows[0].n);if(count>=Number(settings.generationConcurrency.agent||1))throw httpError(429,'Agent concurrency limit reached');
       const models=(settings.logicalModels||[]).filter((m:Json)=>m.enabled&&(!body.modelIds?.length||body.modelIds.includes(m.id))).map((m:Json)=>({id:m.id,name:m.name,capability:m.capability}));if(!models.length)throw httpError(503,'No enabled generation models are available');
       const runId=randomUUID();const prompt=JSON.stringify({request:body.prompt,publicPrompt:body.publicPrompt,preferences:body.preferences||{},skills,assets,models,snapshot:projectSnapshot||body.snapshot});if(prompt.length>256000)throw httpError(413,'Agent context is too large');

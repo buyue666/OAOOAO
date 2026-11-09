@@ -1,6 +1,7 @@
 import type { AssistantContext } from './director-context'
 import { buildAssistantPrompt } from './director-context'
 import { promptReferenceMentions, referenceMentionLabel } from './prompt-references'
+import { agentPromptReferences, type AgentFileKind } from './agent-files'
 
 export const directorScenes = [
   { id: 'general', label: '通用创作', title: '从一个想法，开始创作。', description: '说出目标，一起整理成可确认、可继续的创作步骤。', placeholder: '描述你想创作什么，也可以添加素材、选择技能……', guidance: '' },
@@ -17,13 +18,14 @@ export const directorStarters = [
   { scene: 'character', title: '建立一个角色设定', description: '整理外观、服饰与参考视图', prompt: '设计一位普通身材的亚洲男性角色，穿日常休闲服装。先整理人物设定，再规划正面、侧面和背面参考图。' },
 ] as const
 
-export type DirectorPromptReference = { id: string; title: string }
+export type DirectorPromptReference = { id: string; title: string; kind?: AgentFileKind }
 
 /** Resolve visible mentions to stable owned IDs before the planner sees them. */
 export function directorRequestPrompt(value: string, context: AssistantContext, scene: DirectorScene, references: readonly DirectorPromptReference[]) {
-  const manifest = references.map((reference, index) => ({ label: referenceMentionLabel(references.map(() => ({ type: 'image' })), index), assetId: reference.id, title: reference.title.slice(0, 250) }))
+  const mapped = agentPromptReferences(references)
+  const manifest = references.map((reference, index) => ({ label: referenceMentionLabel(mapped, index), assetId: reference.id, kind: reference.kind || 'image', title: reference.title.slice(0, 250) }))
   let text = '', end = 0
-  for (const mention of promptReferenceMentions(value, references.map(() => ({ type: 'image' })))) {
+  for (const mention of promptReferenceMentions(value, mapped)) {
     text += value.slice(end, mention.start) + `${manifest[mention.index].label}（素材 ID：${manifest[mention.index].assetId}）`
     end = mention.end
   }
@@ -34,10 +36,10 @@ export function directorRequestPrompt(value: string, context: AssistantContext, 
 /** Removing/reordering attachments must never silently point a mention to another image. */
 export function remapDirectorReferences(value: string, previous: readonly DirectorPromptReference[], next: readonly DirectorPromptReference[]) {
   let text = '', end = 0
-  for (const mention of promptReferenceMentions(value, previous.map(() => ({ type: 'image' })))) {
+  for (const mention of promptReferenceMentions(value, agentPromptReferences(previous))) {
     const reference = previous[mention.index]
     const index = next.findIndex(item => item.id === reference.id)
-    text += value.slice(end, mention.start) + (index < 0 ? `（已移除：${reference.title}）` : referenceMentionLabel(next.map(() => ({ type: 'image' })), index))
+    text += value.slice(end, mention.start) + (index < 0 ? `（已移除：${reference.title}）` : referenceMentionLabel(agentPromptReferences(next), index))
     end = mention.end
   }
   return text + value.slice(end)

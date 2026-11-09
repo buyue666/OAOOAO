@@ -5,8 +5,16 @@ import { HardDrive } from 'lucide-react'
 import { formatStorageBytes, useStorageUsage } from '@/lib/studio/account-storage'
 import { useUiText } from '@/lib/studio/i18n'
 import { cn } from '@/lib/utils'
+import { useTeamQuery } from '@/lib/studio/team-api'
+import type { TeamUsage } from '@/lib/studio/team-types'
 
-export function StorageUsageLink({collapsed=false,detail=false}:{collapsed?:boolean;detail?:boolean}) {
+export function StorageUsageLink(props:{collapsed?:boolean;detail?:boolean;teamId?:string}) { return props.teamId ? <TeamStorageUsageLink teamId={props.teamId} collapsed={props.collapsed} /> : <PersonalStorageUsageLink {...props} /> }
+function TeamStorageUsageLink({teamId,collapsed}:{teamId:string;collapsed?:boolean}) {
+  const query=useTeamQuery<TeamUsage>(`/api/teams/${teamId}/usage`,15000),usage=query.data?.storage
+  const caption=usage?`${formatStorageBytes(usage.usedBytes)} / ${formatStorageBytes(usage.quotaBytes)}`:query.error?'团队容量读取失败':'正在读取团队容量'
+  return <Link href={`/teams/${teamId}?tab=usage`} title={caption} aria-label={`管理团队存储空间：${caption}`} className={cn('flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',collapsed&&'justify-center px-2')}><HardDrive className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />{!collapsed&&<span className="min-w-0 flex-1"><span className="block text-[11px] font-medium">团队存储空间</span><span className="mt-1 block text-[11px] text-muted-foreground">{caption}</span></span>}</Link>
+}
+function PersonalStorageUsageLink({collapsed=false,detail=false}:{collapsed?:boolean;detail?:boolean}) {
   const {usage,error}=useStorageUsage(),tx=useUiText()
   const full=Boolean(usage&&!usage.unlimited&&usage.usedBytes>=usage.quotaBytes)
   const caption=usage?`${formatStorageBytes(usage.usedBytes)} / ${usage.unlimited?tx('不限容量'):formatStorageBytes(usage.quotaBytes)}`:error?tx('容量读取失败'):tx('正在读取容量')

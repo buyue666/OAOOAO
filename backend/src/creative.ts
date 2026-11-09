@@ -11,6 +11,7 @@ import { registerMedia, validateLibraryMedia, encoderAvailable, ownedMedia, owne
 import { cancelJob, finishJob, jobEvent, startWorker } from './worker.js';
 import { registerAccountStorage } from './account-storage.js';
 import { lockStorage, lockDocumentMedia } from './storage-quota.js';
+import { registerDramaProduction } from './drama-production.js';
 
 const ok=(data:unknown)=>({code:0,data});
 const iso=(v:unknown)=>new Date(v as string).toISOString();
@@ -148,7 +149,7 @@ async function registerProjects(app:FastifyInstance,ctx:Context){
     app.post(root,{bodyLimit:3*1024*1024},async request=>{const user=await ctx.requireUser(request);const body=object(request.body);const title=string(body.title,'title',250);const handoff=body.sourceHandoffId?string(body.sourceHandoffId,'sourceHandoffId',200):null;
       let document:Json;
       if(kind==='canvas')document=normalizeProject(kind,body.project?object(body.project):{},true);
-      else{const episodeId=randomUUID();document=normalizeProject(kind,{summary:body.summary||'',style:body.style||'',ratio:body.ratio||'9:16',status:'active',characters:[],scenes:[],props:[],clues:[],defaultVideoMode:'storyboard',activeEpisodeId:episodeId,sourceAssets:body.sourceAssets||[],episodes:[{id:episodeId,title:'�� 1 ��',script:body.initialScript||'',outline:'',hook:'',nextPreview:'',sourceRange:'',reviewStatus:'draft',shots:[]}]});}
+      else{const episodeId=randomUUID();document=normalizeProject(kind,{summary:body.summary||'',style:body.style||'',ratio:body.ratio||'9:16',...(body.brief?{brief:{sourceText:String(body.brief.sourceText||'').slice(0,100000),genre:String(body.brief.genre||'').slice(0,200),audience:String(body.brief.audience||'').slice(0,1000),tone:String(body.brief.tone||'').slice(0,1000),targetEpisodes:Math.max(1,Math.min(60,Number(body.brief.targetEpisodes)||5)),episodeSeconds:Math.max(5,Math.min(1800,Number(body.brief.episodeSeconds)||60))}}:{}),status:'active',characters:[],scenes:[],props:[],clues:[],defaultVideoMode:'storyboard',activeEpisodeId:episodeId,sourceAssets:body.sourceAssets||[],episodes:[{id:episodeId,title:'第 1 集',script:body.initialScript||'',outline:'',hook:'',nextPreview:'',sourceRange:'',reviewStatus:'draft',shots:[]}]});}
       const project=await transaction(ctx.db,async client=>{await lockDocumentMedia(client,user.id,document);if(handoff){await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`handoff:${user.id}:${kind}:${handoff}`]);const found=(await client.query('SELECT * FROM oaooao_projects WHERE user_id=$1 AND kind=$2 AND source_handoff_id=$3',[user.id,kind,handoff])).rows[0];if(found)return found;}const id=kind==='drama'?`drama-${randomUUID()}`:randomUUID();return(await client.query('INSERT INTO oaooao_projects(id,user_id,kind,title,source_handoff_id,document) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[id,user.id,kind,title,handoff,document])).rows[0];});return ok({project:projectView(project)});
     });
     app.get(root+'/:id',async request=>{const user=await ctx.requireUser(request);const row=(await ctx.db.query('SELECT * FROM oaooao_projects WHERE id=$1 AND user_id=$2 AND kind=$3',[(request.params as any).id,user.id,kind])).rows[0];if(!row)throw httpError(404,'Project not found');return ok({project:projectView(row)});});
@@ -237,7 +238,7 @@ export async function registerCreative(app:FastifyInstance,ctx:Context){
     const user=await ctx.requireUser(request),input=generationInput('video',request.body);
     return transaction(ctx.db,async client=>{await verifyContext(ctx,client,user.id,input);const selected=await resolveProvider(ctx,'video',input,client,user.id);return {points:Number(selected.cost),estimated:true};});
   });
-  await registerMedia(app,ctx);await registerAccountStorage(app,ctx);await registerProjects(app,ctx);await registerLibrary(app,ctx);await registerAgents(app,ctx);await registerAdmin(app,ctx);await registerRenderAndVersions(app,ctx);
+  await registerMedia(app,ctx);await registerAccountStorage(app,ctx);await registerProjects(app,ctx);await registerLibrary(app,ctx);await registerAgents(app,ctx);await registerAdmin(app,ctx);await registerRenderAndVersions(app,ctx);await registerDramaProduction(app,ctx);
   for(const kind of ['text','image','video','audio'] as GenerationKind[]){
     const prefix=kind==='video'?'video-tasks':`${kind}-tasks`;
     const create=async(request:FastifyRequest,reply:FastifyReply)=>{const user=await ctx.requireUser(request);const input=generationInput(kind,request.body);const requestId=String(request.headers['x-vozeb-pro-client-request-id']||input.context.clientRequestId||randomUUID());const attempt=Number(request.headers['x-vozeb-pro-attempt-no']||input.context.attemptNo||1);const row=await createJob(ctx,user.id,kind,input,requestId,attempt);await points(ctx,user.id,reply);reply.code(202);return{task:taskView(row)};};
