@@ -150,8 +150,9 @@ plan approval remains required.
   Episode/shot proposals require the original target to still exist.
 - Adoption can append episodes/shots or replace blank/unproduced entries. It refuses
   replacement that would discard authored scripts, task references or media. Asset
-  settings and references are preserved by name. Adopting media requires a persistent
-  owned media record; previous adopted takes remain in the project.
+  settings and references are preserved by name. Adopting media uses library ownership
+  validation: a persistent owned file or an owned successful provider CDN output.
+  CDN-only channel policy is retained; previous adopted takes remain in the project.
 - The client separates story, scripts, reusable assets, shot design, generation and
   delivery; AI results remain proposals until adopted. Image/video/audio generation
   uses real selected providers. Composition is offered only when the existing render

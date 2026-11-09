@@ -5,6 +5,7 @@ import { createJob, inputHash, taskView } from './creative.js';
 import { resolveProvider, type GenerationKind, type Json } from './providers.js';
 import { lockDocumentMedia, lockStorage } from './storage-quota.js';
 import { cancelJob } from './worker.js';
+import { validateLibraryMedia } from './media.js';
 
 export const dramaStages = ['analysis', 'outline', 'script', 'assets', 'storyboard', 'image', 'video', 'audio'] as const;
 export type DramaStage = typeof dramaStages[number];
@@ -197,8 +198,11 @@ export async function registerDramaProduction(app: FastifyInstance, ctx: Context
         const shot = document.episodes?.find((ep: Json) => ep.id === job.input.context.episodeId)?.shots?.find((item: Json) => item.id === job.input.context.shotId);
         if (!shot) throw httpError(409, '目标镜头已被移除');
         const media = job.result?.results?.[0] || job.result;
-        const url = clean(media?.url || media?.remoteUrl, 2000), key = /^\/api\/reference-assets\/([a-f0-9-]{36})$/i.exec(url)?.[1];
-        if (!key || !(await client.query('SELECT id FROM oaooao_media WHERE id=$1 AND user_id=$2 AND persistent', [key, user.id])).rowCount) throw httpError(422, '结果尚未保存为当前账号的持久素材');
+        const asset = { kind: stage, data: { url: clean(media?.url || media?.remoteUrl, 16000) } };
+        // Use the same ownership rules as the library, including verified CDN-only
+        // outputs from channels configured not to copy generated files into storage.
+        await validateLibraryMedia(ctx, user.id, asset);
+        const url = asset.data.url;
         const field = stage === 'image' ? 'storyboardImageUrl' : stage === 'video' ? 'videoUrl' : 'audioUrl';
         shot.takes ||= [];
         if (shot[field] && !shot.takes.some((take: Json) => take.kind === stage && take.url === shot[field])) shot.takes.push({ id: randomUUID(), kind: stage, url: shot[field], createdAt: version(row) });

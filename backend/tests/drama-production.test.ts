@@ -110,7 +110,7 @@ test('image adoption requires persistent owned results and preserves each previo
     const first = one.json().data.id, png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrGkAAAAASUVORK5CYII=','base64');
     const foreign = await saveMedia(f.app.ctx, f.users[1].id, png, true);
     await f.db.query("UPDATE oaooao_generation_jobs SET status='success',result=$2 WHERE id=$1", [first, { url: foreign.url }]);
-    assert.equal((await f.invoke(`/${first}/apply`, { expectedUpdatedAt: f.project.updatedAt })).statusCode, 422);
+    assert.equal((await f.invoke(`/${first}/apply`, { expectedUpdatedAt: f.project.updatedAt })).statusCode, 404);
     const media = await saveMedia(f.app.ctx, f.users[0].id, png, true);
     await f.db.query('UPDATE oaooao_generation_jobs SET result=$2 WHERE id=$1', [first, { url: media.url }]);
     const applied = await f.invoke(`/${first}/apply`, { expectedUpdatedAt: f.project.updatedAt }); assert.equal(applied.statusCode, 200, applied.body);
@@ -120,5 +120,20 @@ test('image adoption requires persistent owned results and preserves each previo
     await f.db.query("UPDATE oaooao_generation_jobs SET status='success',result=$2 WHERE id=$1", [second, { url: secondMedia.url }]);
     const adopted = await f.invoke(`/${second}/apply`, { expectedUpdatedAt: project.updatedAt }); assert.equal(adopted.statusCode, 200, adopted.body);
     const shot = adopted.json().data.project.episodes[0].shots[0]; assert.equal(shot.storyboardImageUrl, secondMedia.url); assert.equal(shot.takes[0].url, media.url);
+  } finally { await f.cleanup(); }
+});
+
+test('owned CDN-only output adoption preserves the channel storage policy without downloading a copy', async () => {
+  const f = await fixture(); try {
+    const episode = f.project.episodes[0], shotId = randomUUID();
+    await f.db.query('UPDATE oaooao_projects SET document=$2 WHERE id=$1', [f.project.id, { ...f.project, episodes: [{ ...episode, shots: [{ id: shotId, imagePrompt: 'Synthetic CDN frame', duration: 5 }] }] }]);
+    const submitted = await f.submit({ stage: 'image', model: 'fixture-image', episodeId: episode.id, shotId });
+    assert.equal(submitted.statusCode, 202, submitted.body);
+    const id = submitted.json().data.id, url = 'https://cdn.example.invalid/owned-output.png?signature=synthetic';
+    await f.db.query("UPDATE oaooao_generation_jobs SET status='success',result=$2 WHERE id=$1", [id, { url }]);
+    const applied = await f.invoke(`/${id}/apply`, { expectedUpdatedAt: f.project.updatedAt });
+    assert.equal(applied.statusCode, 200, applied.body);
+    assert.equal(applied.json().data.project.episodes[0].shots[0].storyboardImageUrl, url);
+    assert.equal(Number((await f.db.query('SELECT count(*) n FROM oaooao_media')).rows[0].n), 0);
   } finally { await f.cleanup(); }
 });
