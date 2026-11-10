@@ -61,8 +61,8 @@ test('私有 Blob 不生成可泄露的直链', async () => {
 
 test('从根目录运行时可以验证全部原有迁移及其校验和', async () => {
   const migrations = await readMigrations();
-  assert.equal(migrations.length, 19);
+  assert.equal(migrations.length, 20);
   for (const migration of migrations) assert.equal(migration.checksum, createHash('sha256').update(migration.sql).digest('hex'));
   assert.equal(migrations[0].name, '001-core.sql');
-  assert.equal(migrations.at(-1)?.name, '019-default-creative-plugins.sql');
+  assert.equal(migrations.at(-1)?.name, '020-creative-reference-catalog.sql');
 });

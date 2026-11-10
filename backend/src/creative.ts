@@ -12,6 +12,9 @@ import { cancelJob, finishJob, jobEvent, startWorker } from './worker.js';
 import { registerAccountStorage } from './account-storage.js';
 import { lockStorage, lockDocumentMedia } from './storage-quota.js';
 import { registerDramaProduction } from './drama-production.js';
+import { creativeReferencePath, creativeReferenceRow } from './creative-reference-store.js';
+import { registerCreativeReferences } from './creative-references.js';
+import { assertImageReferencePolicy } from './image-reference-policy.js';
 
 const ok=(data:unknown)=>({code:0,data});
 const iso=(v:unknown)=>new Date(v as string).toISOString();
@@ -68,7 +71,10 @@ export function generationInput(kind:GenerationKind,raw:unknown):Json{
 async function verifyContext(ctx:Context,client:PoolClient,userId:string,input:Json){
   if(input.context?.projectId){const row=await client.query('SELECT id FROM oaooao_projects WHERE id=$1 AND user_id=$2',[input.context.projectId,userId]);if(!row.rowCount)throw httpError(404,'Project not found');}
   if(input.context?.parentTaskId){const row=await client.query('SELECT id FROM oaooao_generation_jobs WHERE id=$1 AND user_id=$2 AND team_id IS NULL',[input.context.parentTaskId,userId]);if(!row.rowCount)throw httpError(404,'Parent task not found');}
-  for(const ref of input.references||[]){if(typeof ref.url!=='string')continue;let url:URL;try{url=new URL(ref.url,ctx.config.origin);}catch{throw httpError(400,'Invalid reference URL');}if(url.origin===new URL(ctx.config.origin).origin){const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);if(!match)throw httpError(400,'Unsupported local reference');await ownedMediaInfo(ctx,userId,match[1],client);}}
+  for(const ref of input.references||[]){if(typeof ref.url!=='string')continue;let url:URL;try{url=new URL(ref.url,ctx.config.origin);}catch{throw httpError(400,'Invalid reference URL');}if(url.origin===new URL(ctx.config.origin).origin){
+    const catalogId=creativeReferencePath(url.pathname);
+    if(catalogId&&!url.search&&!url.hash){await creativeReferenceRow(ctx,catalogId,client);continue;}
+    const match=/^\/api\/(?:media|reference-assets|generation-log-assets)\/([a-f0-9-]{36})$/i.exec(url.pathname);if(!match)throw httpError(400,'Unsupported local reference');await ownedMediaInfo(ctx,userId,match[1],client);}}
   const mask=input.edit?.mask;
   if(mask&&typeof mask.url==='string'){
     let url:URL;try{url=new URL(mask.url,ctx.config.origin);}catch{throw httpError(400,'Invalid edit mask URL');}
@@ -111,6 +117,7 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
       assertPlanGenerationAllowed(plan,kind);
     }
     const provider=await resolveProvider(ctx,kind,input,client,userId);
+    if(kind==='image')assertImageReferencePolicy(input,provider.config.capabilityProfile||{});
     if(input.context?.approvedCost!==undefined&&creditUnits(provider.cost)>creditUnits(input.context.approvedCost))throw httpError(409,'Model pricing increased after plan approval; create a new plan before continuing');
     const totalLimit=settings.generationCostControl?.dailyTotalPointSpend;
     if(Number(totalLimit)>0){await client.query("SELECT pg_advisory_xact_lock(hashtextextended('generation:global-budget',0))");const total=(await client.query("SELECT coalesce(sum(cost),0)::text amount FROM oaooao_generation_jobs WHERE created_at>=date_trunc('day',now()) AND status NOT IN ('error','cancelled')")).rows[0].amount;if(creditUnits(total)+creditUnits(provider.cost)>creditUnits(totalLimit))throw httpError(429,'Global daily generation spending limit reached');}
@@ -234,6 +241,11 @@ async function registerRenderAndVersions(app:FastifyInstance,ctx:Context){
   app.post('/api/drama/projects/:id/export-jianying',async request=>{const user=await ctx.requireUser(request);const found=await ctx.db.query("SELECT id FROM oaooao_projects WHERE id=$1 AND user_id=$2 AND kind='drama'",[(request.params as any).id,user.id]);if(!found.rowCount)throw httpError(404,'Project not found');throw httpError(503,'Jianying export format is not configured in this independent backend');});
 }
 export async function registerCreative(app:FastifyInstance,ctx:Context){
+  await registerCreativeReferences(app,ctx);
+  app.post('/api/image-tasks/quote',async request=>{
+    const user=await ctx.requireUser(request),input=generationInput('image',request.body);
+    return transaction(ctx.db,async client=>{await verifyContext(ctx,client,user.id,input);const selected=await resolveProvider(ctx,'image',input,client,user.id);assertImageReferencePolicy(input,selected.config.capabilityProfile||{});return {points:Number(selected.cost),estimated:true};});
+  });
   app.post('/api/video-generation-tasks/quote',{bodyLimit:34*1024*1024},async request=>{
     const user=await ctx.requireUser(request),input=generationInput('video',request.body);
     return transaction(ctx.db,async client=>{await verifyContext(ctx,client,user.id,input);const selected=await resolveProvider(ctx,'video',input,client,user.id);return {points:Number(selected.cost),estimated:true};});

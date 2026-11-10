@@ -9,6 +9,7 @@ import { httpError, safeFetch, transaction, type Context } from './core.js';
 import { storageConfig, assertStorageConfigured, objectLocation, putObject, getObject, headObject, downloadObjectUrl, type ObjectLocation } from './object-storage.js';
 import { assertStorageAvailable, lockStorage } from './storage-quota.js';
 import { readTeamAsset } from './team-assets.js';
+import { creativeReferencePath, readCreativeReference } from './creative-reference-store.js';
 
 export const MAX_MEDIA_BYTES = 24 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
@@ -90,6 +91,10 @@ export async function readReference(ctx: Context, userId: string, reference: Rec
   if (typeof reference.dataUrl==='string') { const bytes=decodeDataUrl(reference.dataUrl); return {bytes,mimeType:sniffMedia(bytes)}; }
   const raw = String(reference.url || '');
   const url = new URL(raw,ctx.config.origin);
+  if (url.origin === new URL(ctx.config.origin).origin && !url.search && !url.hash) {
+    const catalogId = creativeReferencePath(url.pathname);
+    if (catalogId) return readCreativeReference(ctx, catalogId);
+  }
   if(ctx.workspace&&url.origin===new URL(ctx.config.origin).origin){
     const match=/^\/api\/teams\/([^/]+)\/assets\/([a-f0-9-]{36})\/content$/i.exec(url.pathname);
     if(!match||match[1]!==ctx.workspace.teamId||url.search)throw httpError(403,'参考素材不属于当前团队项目');

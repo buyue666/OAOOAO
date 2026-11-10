@@ -317,3 +317,6 @@ Video resolution pricing
   and total ceilings include the frame images. An absent list permits only
   frame-role images. UI mode `frames` combines first frame, optional last frame
   and supported ordinary references; requests still use explicit frame roles.
+
+Curated person, garment and pose references, authenticated catalog media and
+image quote behavior are documented in [CREATIVE_REFERENCES.md](docs/CREATIVE_REFERENCES.md).
