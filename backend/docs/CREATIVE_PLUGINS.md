@@ -9,12 +9,18 @@ continue to enforce ownership, membership and quotes independently.
   and returns the confirmed installed IDs. The server rejects unknown IDs,
   non-boolean state and extra fields; callers cannot choose another account.
 - Authenticated sessions include `settings.installedPlugins`, avoiding an extra
-  startup request. New and existing accounts begin without optional tools.
+  startup request. Creative Assistant (`agent`) and Open canvas (`canvas`) are
+  installed by default; the other tools remain opt-in.
 - Changes lock the account row in a transaction. Installing 3D Director also
   installs Open canvas; removing Open canvas removes its dependent director.
   Repeated requests are idempotent, and concurrent toggles retain unrelated IDs.
 - Migration `018-creative-plugins.sql` adds only the account installation table.
   Uninstall deletes preference rows; it never deletes or modifies creative data.
+- Migration `019-default-creative-plugins.sql` adds these two defaults to existing
+  accounts once, preserving other installations and their original timestamps.
+  An account-insert trigger seeds the same defaults for all future account
+  creation paths, within the account transaction. GET/session reads, profile
+  updates and migration reruns never reinstall a tool the user has removed.
 
 The client catalog contains metadata only. Tool pages use client-side dynamic
 imports behind installation gates, and their links disable Next.js prefetching.
