@@ -9,6 +9,6 @@
 .upload:hover:not(:disabled) .back, .upload:focus-visible .back { transform: rotate(11deg) translate(4px, 1px); }
 .upload:hover:not(:disabled) .glare { opacity: 1; }
 .upload:focus-visible { box-shadow: 0 0 0 2px var(--studio-accent); }
-.upload:disabled { opacity: .4; cursor: not-allowed; }
+.upload:disabled { opacity: .7; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) { .back, .card, .glare { transition: none; transform: none !important; } .glare { display: none; } }
 @media (max-width: 480px) { .upload { width: 60px; height: 78px; } .card, .back { width: 44px; height: 52px; } }

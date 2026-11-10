@@ -20,6 +20,7 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
   return (
     <button
       type="button"
+      data-control-variant={variant}
       className={cn(
         'studio-control inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60 disabled:pointer-events-none disabled:opacity-45',
         variant === 'primary' && 'studio-control-primary border-foreground bg-foreground text-background shadow-[var(--lg-shadow-2)] hover:opacity-90 disabled:border-foreground/30 disabled:bg-foreground/55 disabled:text-background/90 disabled:opacity-100',
@@ -371,7 +372,7 @@ export function FilterChips<T extends string>({ value, onChange, options, classN
             aria-pressed={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              'h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60',
+              'studio-choice h-9 shrink-0 rounded-lg border px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/60',
               active
                 ? 'bg-studio-accent/12 text-studio-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--studio-accent)_24%,transparent)]'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',

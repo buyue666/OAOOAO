@@ -1,0 +1,34 @@
+/* Shared actions use explicit surfaces so dark controls remain readable. */
+.studio-action, .studio-choice {
+  border-color: var(--input);
+  background: var(--card);
+  color: var(--foreground);
+}
+.studio-action:hover:not(:disabled), .studio-choice:hover:not(:disabled) { background: var(--muted); border-color: var(--muted-foreground); }
+.studio-action-primary { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+.studio-action-primary:hover:not(:disabled) { background: var(--foreground); color: var(--background); filter: brightness(.94); }
+.studio-action:disabled { opacity: .7; }
+.studio-choice[aria-pressed='true'] { background: var(--studio-accent); color: var(--studio-accent-foreground); border-color: var(--studio-accent); box-shadow: inset 0 0 0 1px currentColor; }
+
+.dark :is(.studio-action, .studio-choice, .studio-control[data-control-variant='secondary'], .studio-select-trigger, [data-slot='button'][data-variant='outline']) {
+  background: #242830;
+  color: #f0f3f8;
+  border-color: #738094;
+}
+.dark :is(.studio-action, .studio-choice, .studio-control[data-control-variant='secondary'], .studio-select-trigger, [data-slot='button'][data-variant='outline']):hover:not(:disabled) { background: #343c49; border-color: #a6b5ca; color: #ffffff; }
+.dark :is(.studio-icon-action, .studio-control[data-control-variant='ghost'], [data-slot='button'][data-variant='ghost']) { color: #d9e0eb; }
+.dark :is(.studio-icon-action, .studio-control[data-control-variant='ghost'], [data-slot='button'][data-variant='ghost']):hover:not(:disabled) { background: #343c49; color: #ffffff; }
+.dark .studio-action.studio-action-primary, .dark .studio-action.studio-action-primary:hover:not(:disabled) { background: #f0f3f8; border-color: #f0f3f8; color: #15181e; }
+.dark .studio-choice[aria-pressed='true'], .dark .studio-choice[aria-pressed='true']:hover:not(:disabled) { background: #6ee7d1; border-color: #9ff3e3; color: #10231f; }
+.dark :is(.studio-action, .studio-control, .studio-icon-action, [data-slot='button']):disabled { opacity: 1; background: #20252d; border-color: #515b6b; color: #aeb8c8; box-shadow: none; }
+.dark .studio-action.studio-action-primary:disabled, .dark .studio-control.studio-control-primary:disabled { background: #3c4655; color: #d3dbe7; border-color: #66758a; }
+.dark .studio-select-option.is-selected { background: #25483f; border-color: #76cbb7; color: #cbfff3; }
+.dark .studio-select-option.is-selected:hover { background: #315e51; }
+.dark .studio-segmented { background: #14171d; border-color: #66758a; gap: 4px; padding: 4px; }
+.dark .studio-segmented > span[aria-hidden='true'] { background: transparent; box-shadow: none; }
+.dark .studio-segmented [role='tab'] { min-height: 32px; color: #d5deeb; border: 1px solid transparent; }
+.dark .studio-segmented [role='tab']:hover { background: #343c49; color: #ffffff; }
+.dark .studio-segmented [role='tab'][aria-selected='true'] { background: #d9f5ed; border-color: #9edcca; color: #12251f; font-weight: 700; }
+
+
+@media (forced-colors: active) { .studio-choice[aria-pressed="true"] { border: 2px solid Highlight; outline: 1px solid Highlight; } }

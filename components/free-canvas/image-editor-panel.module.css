@@ -3,9 +3,9 @@
   --editor-surface: #171a1d;
   --editor-surface-soft: #202428;
   --editor-border: rgb(255 255 255 / 13%);
-  --editor-border-strong: rgb(255 255 255 / 22%);
+  --editor-border-strong: #7a8798;
   --editor-text: #f5f7f8;
-  --editor-muted: #afb8c1;
+  --editor-muted: #c6d0db;
   --editor-accent: #c7f3e8;
   --editor-input: #101315;
   --editor-checker: #272d32;
@@ -77,7 +77,7 @@
 .iconButton:disabled,
 .toolButton:disabled,
 .operationButton:disabled,
-.actionButton:disabled { cursor: not-allowed; opacity: .38; }
+.actionButton:disabled { cursor: not-allowed; opacity: .7; }
 .iconButton svg,
 .toolButton svg,
 .operationButton svg,
@@ -520,6 +520,21 @@
 .panel[data-editor-theme='light'] .promptTextarea { background: #fff; }
 .panel[data-editor-theme='light'] .primaryAction { background: #111820; border-color: #111820; color: #fff; }
 .panel[data-editor-theme='light'] .primaryAction:hover { background: #27323c; border-color: #27323c; color: #fff; }
+
+.panel[data-editor-theme='dark'] .operationButton,
+.panel[data-editor-theme='dark'] .actionButton:not(.primaryAction) { border-color: #657487; background: #252c35; color: #eef3fa; }
+.panel[data-editor-theme='dark'] .operationButton:hover,
+.panel[data-editor-theme='dark'] .actionButton:not(.primaryAction):hover { border-color: #9daec5; background: #364251; color: #ffffff; }
+.panel[data-editor-theme='dark'] .operationButtonActive,
+.panel[data-editor-theme='dark'] .operationButtonActive:hover { border-color: #a7edda; background: #2c5247; color: #d1fff0; box-shadow: inset 0 -2px 0 #8fe9cf; }
+.panel[data-editor-theme='dark'] .operationButtonActive svg { background: #173a31; border-color: #98e6ce; color: #c6ffec; }
+.panel[data-editor-theme='dark'] .toolButton,
+.panel[data-editor-theme='dark'] .iconButton { color: #d6e0ed; }
+.panel[data-editor-theme='dark'] .toolButtonActive { border-color: #9ce7d1; background: #2c5247; color: #d1fff0; }
+.panel[data-editor-theme='dark'] .toolButton:disabled,
+.panel[data-editor-theme='dark'] .iconButton:disabled,
+.panel[data-editor-theme='dark'] .actionButton:disabled { opacity: 1; color: #9ca9bb; background: #222933; border-color: #4e5b6e; }
+.panel :is(.toolButton,.iconButton,.operationButton,.actionButton):focus-visible { outline: 2px solid var(--editor-accent); outline-offset: 2px; }
 
 @keyframes regionMarkerIn {
   from { opacity: 0; transform: scale(.72); }

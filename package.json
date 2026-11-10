@@ -1,6 +1,6 @@
 {
   "name": "oaooao-studio",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@12.3.4",
   "scripts": {

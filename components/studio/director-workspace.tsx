@@ -20,7 +20,7 @@ import { AGENT_FILE_LIMIT, agentPromptReferences, type AgentFileKind } from '@/l
 import { insertReferenceMention, referenceMentionLabel } from '@/lib/studio/prompt-references'
 
 const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-const toolClass = cn('inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-9', focus)
+const toolClass = cn('studio-action inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors disabled:cursor-not-allowed sm:min-h-9', focus)
 
 export type DirectorReference = { id: string; title: string; kind?: AgentFileKind; file?: File; preview?: string; uploaded?: { key: string; url: string; bytes: number; mimeType: string }; assetId?: string; status: 'uploading' | 'ready' | 'error'; error?: string }
 export type DirectorDraft = { input: string; refs: DirectorReference[]; skills: CanvasSkill[]; scene: DirectorScene }
@@ -85,7 +85,7 @@ export function DirectorComposer({ inputId, draft, setInput, setSkills, context,
           <button type="button" className={toolClass} onClick={() => setPicker('skills')} disabled={disabled || !connected}><Puzzle className="size-4" aria-hidden="true" />{tx('技能')}{draft.skills.length > 0 && <span>{draft.skills.length}</span>}</button>
           {onSelectProject && <button type="button" className={cn(toolClass, context.projectId && 'text-studio-accent')} onClick={() => setPicker('project')} disabled={disabled || !connected || draft.refs.some(reference => reference.status === 'uploading')}><FolderOpen className="size-4" aria-hidden="true" /><span>{tx(context.projectId ? '切换项目' : '关联项目')}</span><ChevronDown className="size-3" aria-hidden="true" /></button>}
           <span className="flex-1" />
-          <button type="submit" disabled={!canSubmit} className={cn('ml-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-studio-accent px-4 text-xs font-semibold text-studio-accent-foreground shadow-sm transition-colors hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40 max-[480px]:mt-1 max-[480px]:w-full sm:min-h-10', focus)}>{submitting ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowUpRight className="size-4" aria-hidden="true" />}{tx(submitting ? '正在提交' : '生成任务方案')}</button>
+          <button type="submit" disabled={!canSubmit} className={cn('studio-control ml-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-studio-accent px-4 text-xs font-semibold text-studio-accent-foreground shadow-sm transition-colors hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40 max-[480px]:mt-1 max-[480px]:w-full sm:min-h-10', focus)}>{submitting ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowUpRight className="size-4" aria-hidden="true" />}{tx(submitting ? '正在提交' : '生成任务方案')}</button>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-start justify-between gap-2 px-1 text-[11px] leading-5 text-muted-foreground">

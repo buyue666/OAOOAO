@@ -4,6 +4,8 @@
 
 **把想法变成画面、镜头与故事。**
 
+当前版本：**v0.1.0** · [版本说明](CHANGELOG.md)
+
 一个连接 AI 生成、自由画布、创作项目与运营管理的开源创作工作台。
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-171717?style=flat-square&logo=nextdotjs)](https://nextjs.org/)
