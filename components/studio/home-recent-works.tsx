@@ -7,6 +7,7 @@ import { ArrowRight, Clapperboard, PanelsTopLeft, RefreshCw } from 'lucide-react
 import { listDramaProjects, type DramaProjectSummary } from '@/lib/studio/api'
 import { subscribeAccountData } from '@/lib/studio/account-data-sync'
 import { useStudio } from '@/lib/studio/store'
+import { usePlugins } from '@/lib/studio/plugin-context'
 import { MediaThumb } from './ui'
 
 type RecentProject = { id: string; title: string; cover: string; updatedAt: string; kind: 'creative' | 'canvas'; href: string }
@@ -24,6 +25,9 @@ function projectCover(project: DramaProjectSummary) {
 export function RecentWorks() {
   const tx = useUiText()
   const { state } = useStudio()
+  const plugins = usePlugins()
+  const dramaInstalled = plugins.isInstalled('drama')
+  const canvasInstalled = plugins.isInstalled('canvas')
   const [dramas, setDramas] = useState<DramaProjectSummary[]>([])
   const [loadedFor, setLoadedFor] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,7 +41,7 @@ export function RecentWorks() {
     setDramas([])
     setLoadedFor('')
     setError('')
-    if (!connected) { setLoading(false); return }
+    if (!connected || !dramaInstalled) { setLoading(false); return }
     setLoading(true)
     void listDramaProjects().then((result) => {
       if (!disposed) { setDramas(result.projects ?? []); setLoadedFor(state.user.id) }
@@ -45,12 +49,14 @@ export function RecentWorks() {
       if (!disposed) setError(reason instanceof Error ? reason.message : '项目读取失败')
     }).finally(() => { if (!disposed) setLoading(false) })
     return () => { disposed = true }
-  }, [connected, state.user.id, revision])
+  }, [connected, state.user.id, revision, dramaInstalled])
 
   const projects: RecentProject[] = connected ? [
-    ...(loadedFor === state.user.id ? dramas : []).map((project): RecentProject => ({ id: project.id, title: project.title, cover: projectCover(project), updatedAt: project.updatedAt, kind: 'creative', href: `/projects/${encodeURIComponent(project.id)}` })),
-    ...state.projects.map((project): RecentProject => ({ id: project.id, title: project.title, cover: project.cover, updatedAt: project.updatedAt, kind: 'canvas', href: `/canvas/${encodeURIComponent(project.id)}` })),
+    ...(dramaInstalled && loadedFor === state.user.id ? dramas : []).map((project): RecentProject => ({ id: project.id, title: project.title, cover: projectCover(project), updatedAt: project.updatedAt, kind: 'creative', href: `/projects/${encodeURIComponent(project.id)}` })),
+    ...(canvasInstalled ? state.projects : []).map((project): RecentProject => ({ id: project.id, title: project.title, cover: project.cover, updatedAt: project.updatedAt, kind: 'canvas', href: `/canvas/${encodeURIComponent(project.id)}` })),
   ].sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0)).slice(0, 4) : []
+
+  if (!dramaInstalled && !canvasInstalled) return null
 
   return (
     <section aria-labelledby="recent-title" className="flex flex-col gap-3">
@@ -59,14 +65,14 @@ export function RecentWorks() {
           <h2 id="recent-title" className="text-sm font-semibold text-foreground">{tx("接着上次的想法")}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{tx("最近编辑的项目与画布。")}</p>
         </div>
-        <Link href="/projects" className="inline-flex items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">{tx("全部项目")}<ArrowRight className="size-3.5" aria-hidden="true" /></Link>
+        <Link prefetch={false} href="/projects" className="inline-flex items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">{tx("全部项目")}<ArrowRight className="size-3.5" aria-hidden="true" /></Link>
       </div>
       {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><p className="text-muted-foreground">{tx("部分项目暂时无法读取：")}{error}</p><button type="button" onClick={() => setRevision((value) => value + 1)} className="inline-flex items-center gap-1.5 rounded px-2 py-1 hover:bg-muted"><RefreshCw className="size-3.5" aria-hidden="true" />{tx("重新读取")}</button></div>}
       {projects.length ? (
         <ul aria-label={tx("最近项目列表")} className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
           {projects.map((project) => {
             const Icon = project.kind === 'creative' ? Clapperboard : PanelsTopLeft
-            return <li key={`${project.kind}-${project.id}`} className="min-w-0"><Link href={project.href} className="studio-surface group flex h-full flex-col overflow-hidden transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"><MediaThumb src={project.cover} alt="" fallback={project.title} className="aspect-[16/10] w-full shrink-0" /><span className="flex min-w-0 flex-1 flex-col gap-2 p-3.5"><span className="truncate text-sm font-medium">{project.title}</span><span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Icon className="size-3" aria-hidden="true" />{project.kind === 'creative' ? tx('创作项目') : tx('自由画布')}<span className="ml-auto">{dateLabel(project.updatedAt)}</span></span></span></Link></li>
+            return <li key={`${project.kind}-${project.id}`} className="min-w-0"><Link prefetch={false} href={project.href} className="studio-surface group flex h-full flex-col overflow-hidden transition-colors hover:border-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"><MediaThumb src={project.cover} alt="" fallback={project.title} className="aspect-[16/10] w-full shrink-0" /><span className="flex min-w-0 flex-1 flex-col gap-2 p-3.5"><span className="truncate text-sm font-medium">{project.title}</span><span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Icon className="size-3" aria-hidden="true" />{project.kind === 'creative' ? tx('创作项目') : tx('自由画布')}<span className="ml-auto">{dateLabel(project.updatedAt)}</span></span></span></Link></li>
           })}
         </ul>
       ) : loading || state.backendStatus === 'checking' ? <p role="status" className="rounded-lg border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">{tx("正在读取最近项目…")}</p> : !error && (

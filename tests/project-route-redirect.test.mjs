@@ -20,10 +20,8 @@ const navigation = {
   notFound() { throw Object.assign(new Error('Not found'), { status: 404 }) },
 }
 const routes = await loadModule('../lib/studio/project-route.ts')
-const CreativeWorkspace = () => null
-const DramaDetailPage = () => null
-const DramaPage = () => null
-const imports = { '@/components/studio/drama-detail-page': { DramaDetailPage }, '@/components/studio/drama-page': { DramaPage }, 'next/navigation': navigation, 'react/jsx-runtime': jsxRuntime, '@/components/studio/creative-workspace': { CreativeWorkspace }, '@/lib/studio/project-route': routes }
+const PluginDramaPage = () => null
+const imports = { '@/components/studio/plugins/plugin-workspaces': { PluginDramaPage }, 'next/navigation': navigation, 'react/jsx-runtime': jsxRuntime, '@/lib/studio/project-route': routes }
 const RootPage = (await loadModule('../app/projects/[projectId]/page.tsx', imports)).default
 const SectionPage = (await loadModule('../app/projects/[projectId]/[section]/page.tsx', imports)).default
 const DramaIndex = (await loadModule('../app/drama/page.tsx', imports)).default
@@ -40,7 +38,7 @@ test('malformed invitation codes redirect safely without a second URI decode', a
 })
 
 test('drama index exposes the staged production workflow with no removed analyzer endpoint', async () => {
-  assert.equal((await DramaIndex()).type, DramaPage)
+  assert.equal((await DramaIndex()).type, PluginDramaPage)
 })
 
 test('actual project root routes a canvas ID into the real editor and preserves repeated query values', async () => {
@@ -55,11 +53,11 @@ test('all old canvas section URLs redirect before any legacy demo component can 
 
 test('actual drama routes retain the real workspace and requested view', async () => {
   const page = await RootPage({ params: Promise.resolve({ projectId: 'drama-test' }) })
-  assert.equal(page.type, DramaDetailPage)
+  assert.equal(page.type, PluginDramaPage)
   assert.equal(page.props.projectId, 'drama-test')
   const section = await SectionPage({ params: Promise.resolve({ projectId: 'drama-test', section: 'characters' }) })
-  assert.equal(section.type, CreativeWorkspace)
-  assert.equal(section.props.initialView, 'characters')
+  assert.equal(section.type, PluginDramaPage)
+  assert.equal(section.props.section, 'characters')
 })
 
 test('project identifiers cannot turn a compatibility redirect into another route or origin', async () => {

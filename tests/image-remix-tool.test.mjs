@@ -7,7 +7,7 @@ import ts from 'typescript'
 const root = new URL('../', import.meta.url)
 const read = async (path) => readFile(new URL(path, root), 'utf8')
 
-const componentCode = ts.transpileModule(await read('components/studio/tools-page.tsx'), {
+const componentCode = ts.transpileModule(await read('components/studio/tools/ai-tryon-tool.tsx'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
 }).outputText
 
@@ -23,7 +23,7 @@ function tryOnHarness() {
   const requests = [], destinations = []
   const model = { id: 'fixture-image', shortName: 'Fixture', capabilities: { ratios: ['2:3'], resolutions: ['1K'], maxBatchSize: 1 } }
   const imports = {
-    './ui': { ModelNote: 'ModelNote' },
+    '../ui': { ModelNote: 'ModelNote' },
     'react': {
       useState(initial) {
         const index = cursor++
@@ -47,7 +47,7 @@ function tryOnHarness() {
     if (!(name in imports)) throw new Error(`Unexpected runtime dependency: ${name}`)
     return imports[name]
   }, exports)
-  const tool = elements(exports.ToolsPage({ tool: 'tryon' })).find((node) => typeof node.type === 'function').type
+  const tool = exports.default
   const render = () => { cursor = 0; return elements(tool()) }
   const field = (id) => render().find((node) => node.props['data-testid'] === id)
   const selectReferences = () => {
@@ -91,9 +91,10 @@ test('try-on combines edited presets and supplementary instructions without repl
 
 test('image remix tool is reachable from the protected studio shell', async () => {
   const [page, component, shell, nav] = await Promise.all([
-    read('app/tools/page.tsx'), read('components/studio/tools-page.tsx'), read('components/studio/studio-app.tsx'), read('components/studio/studio-nav.tsx'),
+    read('app/tools/page.tsx'), read('components/studio/tools/image-remix-tool.tsx'), read('components/studio/studio-app.tsx'), read('components/studio/studio-nav.tsx'),
   ])
-  assert.match(page, /ToolsPage/)
+  assert.match(page, /PluginCenter/)
+  assert.match(await read('app/tools/[tool]/page.tsx'), /ToolsPage/)
   assert.match(component, /data-testid="image-remix-tool"/)
   assert.match(component, /data-testid="image-remix-collapse"/)
   assert.match(nav, /href: '\/tools'/)
@@ -101,7 +102,7 @@ test('image remix tool is reachable from the protected studio shell', async () =
 })
 
 test('image remix source uses private uploads and the existing task pipeline', async () => {
-  const component = await read('components/studio/tools-page.tsx')
+  const component = await read('components/studio/tools/image-remix-tool.tsx')
   assert.match(component, /uploadPersistentAsset\(file, 'image'\)/)
   assert.match(component, /generation\.createText/)
   assert.match(component, /generation\.createImage/)
@@ -110,10 +111,10 @@ test('image remix source uses private uploads and the existing task pipeline', a
 })
 
 test('creative tools expose an AI try-on workflow with library sources', async () => {
-  const [component, references, backend] = await Promise.all([read('components/studio/tools-page.tsx'), read('lib/studio/reference-assets.ts'), read('backend/src/creative.ts')])
+  const [component, references, backend] = await Promise.all([read('components/studio/tools/ai-tryon-tool.tsx'), read('lib/studio/reference-assets.ts'), read('backend/src/creative.ts')])
   assert.match(component, /data-testid="ai-tryon-tool"/)
-  assert.match(component, /data-testid="creative-tools-collapse"/)
-  assert.match(component, /data-testid="tool-ai-tryon"/)
+  assert.match(await read('components/studio/tools-page.tsx'), /data-testid="creative-tools-collapse"/)
+  assert.match(await read('components/studio/tools-page.tsx'), /data-testid="tool-ai-tryon"/)
   assert.match(component, /useLibraryAssets\(\{ kind: 'image'/)
   assert.match(component, /createLibraryAsset\(/)
   assert.match(component, /title: 'AI换装'/)

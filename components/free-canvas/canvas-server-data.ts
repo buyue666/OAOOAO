@@ -63,6 +63,17 @@ async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>
   return { kind: 'ok', data: payload.data }
 }
 
+/** Check before reading tool data; uninstalled canvas routes stay light. */
+export async function loadCanvasPluginAccess(): Promise<{ installed: boolean; error: string | null }> {
+  const outcome = await loadFromBackend<{ installedPlugins: string[] }>('/api/account/plugins')
+  if (outcome.kind === 'unauthorized') {
+    if (isStudioPreview()) return { installed: false, error: null }
+    redirect('/login')
+  }
+  if (outcome.kind !== 'ok') return { installed: false, error: outcome.kind === 'error' ? outcome.message : '插件状态读取失败' }
+  return { installed: outcome.data.installedPlugins?.includes('canvas') === true, error: null }
+}
+
 export async function loadCanvasSummaries(): Promise<{ projects: CanvasSummary[]; error: string | null }> {
   const outcome = await loadFromBackend<{ projects: CanvasSummary[] }>('/api/canvas/projects?page=1&pageSize=100')
   if (outcome.kind === 'unauthorized') {

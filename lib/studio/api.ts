@@ -48,6 +48,7 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionSettings = {
+  installedPlugins?: string[]
   personalModelIds?: string[]
   site?: SiteSettings
   operationMode?: 'self_use' | 'commercial'

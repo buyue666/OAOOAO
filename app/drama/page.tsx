@@ -1,5 +1,5 @@
-import { DramaPage } from '@/components/studio/drama-page'
+import { PluginDramaPage } from '@/components/studio/plugins/plugin-workspaces'
 
 export default function Page() {
-  return <DramaPage />
+  return <PluginDramaPage />
 }

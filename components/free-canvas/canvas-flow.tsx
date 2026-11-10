@@ -12,7 +12,7 @@ import { MediaNode } from './nodes/media-node'
 import { DirectorNode } from './nodes/director-node'
 import type { FreeCanvasNode } from './types'
 import { CANVAS_MAX_ZOOM, CANVAS_MIN_ZOOM } from './canvas-navigation'
-import { DirectorDesk } from './director-desk'
+import { PluginDirectorDesk } from './plugin-director'
 
 const nodeTypes = {
   generation: GenerationNode,
@@ -258,7 +258,7 @@ export function CanvasFlow({ initialViewport }: { initialViewport: Viewport }) {
           onClick={(_, position) => void setCenter(position.x, position.y, { zoom: getZoom() })}
         />}
       </ReactFlow>
-      {directorNodeId ? <DirectorDesk nodeId={directorNodeId} onClose={() => useCanvasStore.getState().setDirectorNodeId(null)} /> : null}
+      {directorNodeId ? <PluginDirectorDesk nodeId={directorNodeId} onClose={() => useCanvasStore.getState().setDirectorNodeId(null)} /> : null}
     </div>
   )
 }

@@ -36,7 +36,7 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
     >
       <aside role="dialog" aria-modal="true" aria-label={tx("工作台导航")} className="motion-drawer-left flex h-full w-64 max-w-[85vw] flex-col border-r border-sidebar-border">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-3">
-          <Link href={workspace.identity ? workspace.href('/studio') : workspaceHref(pathname, '/studio')} onClick={onClose} aria-label={tx("返回工作台")} className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+          <Link prefetch={false} href={workspace.identity ? workspace.href('/studio') : workspaceHref(pathname, '/studio')} onClick={onClose} aria-label={tx("返回工作台")} className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
             <SiteBrand imageClassName="h-6 max-w-[176px]" />
           </Link>
           <button type="button" onClick={onClose} aria-label={tx("关闭导航")} className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
@@ -55,7 +55,7 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
             {studioSecondaryNav.filter(item => !workspace.identity || item.href !== '/skills').map((item) => (
               <StudioNavLink key={item.href} item={item} pathname={pathname} onNavigate={onClose} />
             ))}
-            {!workspace.identity && <StudioToolsNav pathname={pathname} onNavigate={onClose} idSuffix="mobile" />}
+            <StudioToolsNav pathname={pathname} onNavigate={onClose} idSuffix="mobile" />
           </nav>
           {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} onNavigate={onClose} />}
           <StudioNavLink item={studioSettingsNav} pathname={pathname} onNavigate={onClose} />

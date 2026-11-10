@@ -1,8 +1,9 @@
-import { CanvasEditor } from '@/components/free-canvas/canvas-editor'
-import { loadTeamCanvas } from '@/components/free-canvas/canvas-server-data'
+import { PluginCanvasEditor } from '@/components/free-canvas/plugin-canvas'
+import { loadCanvasPluginAccess, loadTeamCanvas } from '@/components/free-canvas/canvas-server-data'
 
 export default async function TeamCanvasPage({ params }: { params: Promise<{ teamId: string; projectId: string }> }) {
   const { teamId, projectId } = await params
-  const { project, workspace, error } = await loadTeamCanvas(teamId, projectId)
-  return <CanvasEditor key={`${teamId}:${projectId}`} projectId={projectId} project={project} workspace={workspace} loadError={error} />
+  const access = await loadCanvasPluginAccess()
+  const { project, workspace, error } = access.installed ? await loadTeamCanvas(teamId, projectId) : { project: null, workspace: undefined, error: access.error }
+  return <PluginCanvasEditor key={`${teamId}:${projectId}`} loaded={access.installed || Boolean(access.error)} projectId={projectId} project={project} workspace={workspace} loadError={error} />
 }

@@ -2,6 +2,9 @@
 
 Video capability, quote, reference and pricing contracts are documented in [VIDEO_CAPABILITIES.md](VIDEO_CAPABILITIES.md).
 
+Optional creative tool installation and loading are documented in
+[CREATIVE_PLUGINS.md](docs/CREATIVE_PLUGINS.md).
+
 ## Goal
 
 Replace the derivative business backend while preserving the OAOOAO frontend's

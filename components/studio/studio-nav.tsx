@@ -21,6 +21,9 @@ import { cn } from '@/lib/utils'
 import { Tooltip } from './ui'
 import { workspaceHref } from '@/lib/studio/workspace-navigation'
 import { useWorkspace } from '@/lib/studio/workspace-context'
+import { usePlugins } from '@/lib/studio/plugin-context'
+import { creativePlugins, type CreativePluginId } from '@/lib/studio/creative-plugins'
+import { pluginIcons } from './plugins/plugin-icon'
 
 export interface StudioNavItem {
   label: string
@@ -31,7 +34,7 @@ export interface StudioNavItem {
 }
 
 export interface StudioToolNavItem extends StudioNavItem {
-  key: 'remix' | 'tryon'
+  key: CreativePluginId
 }
 
 export const studioPrimaryNav: readonly StudioNavItem[] = [
@@ -47,10 +50,9 @@ export const studioSecondaryNav: readonly StudioNavItem[] = [
 
 export const studioToolsNav: StudioNavItem = { label: '创作工具', href: '/tools', icon: WandSparkles, matches: ['/tools'] }
 
-export const studioToolItems: readonly StudioToolNavItem[] = [
-  { key: 'remix', label: '图片复刻', href: '/tools/remix', icon: WandSparkles, matches: ['/tools/remix'] },
-  { key: 'tryon', label: 'AI 换装', href: '/tools/tryon', icon: Shirt, matches: ['/tools/tryon'] },
-]
+export const studioToolItems: readonly StudioToolNavItem[] = creativePlugins.map(plugin => ({
+  key: plugin.id, label: plugin.name, href: plugin.href, icon: pluginIcons[plugin.icon], matches: [plugin.href],
+}))
 
 export const studioAdminNav: StudioNavItem = { label: '管理员后台', href: '/admin', icon: ShieldCheck, matches: ['/admin'] }
 export const studioSettingsNav: StudioNavItem = { label: '设置', href: '/settings', icon: Settings, matches: ['/settings'] }
@@ -75,7 +77,7 @@ const rootTitles: Record<string, string> = {
   account: '账户',
   settings: '设置',
   plans: '套餐',
-  tools: '创作工具',
+  tools: '插件中心',
   teams: '团队空间',
 }
 
@@ -134,6 +136,7 @@ export function StudioNavLink({
   const link = (
     <Link
       href={href}
+      prefetch={false}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       aria-label={collapsed ? label : undefined}
@@ -165,6 +168,9 @@ export function StudioToolsNav({
 }) {
   const tx = useUiText()
   const router = useRouter()
+  const plugins = usePlugins()
+  const workspace = useWorkspace()
+  const installedTools = studioToolItems.filter(item => plugins.isInstalled(item.key) && (!workspace.identity || item.key === 'canvas' || item.key === 'director'))
   const active = isNavItemActive(pathname, studioToolsNav)
   const [open, setOpen] = useState(active)
   const submenuId = `studio-tools-subnav-${idSuffix}`
@@ -183,7 +189,7 @@ export function StudioToolsNav({
       data-active={active ? 'true' : 'false'}
       onClick={() => {
         if (collapsed) {
-          router.push(studioToolItems[0].href)
+          router.push('/tools'); onNavigate?.()
           return
         }
         setOpen((value) => !value)
@@ -204,13 +210,15 @@ export function StudioToolsNav({
       {collapsed ? <Tooltip label={tx(studioToolsNav.label)} side="right" className="flex w-full justify-center">{parent}</Tooltip> : parent}
       {!collapsed && open && (
         <div id={submenuId} className="ml-3 flex flex-col gap-1 border-l border-sidebar-border pl-3" aria-label={tx("创作工具子菜单")}>
-          {studioToolItems.map((item) => {
+          <Link href="/tools" prefetch={false} onClick={onNavigate} aria-current={pathname === '/tools' ? 'page' : undefined} className={cn('flex min-h-10 items-center gap-2 rounded-md px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', pathname === '/tools' ? 'bg-studio-accent/10 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Puzzle className="size-3.5 shrink-0" aria-hidden="true" />{tx('插件中心')}</Link>
+          {installedTools.map((item) => {
             const ItemIcon = item.icon
             const itemActive = isNavItemActive(pathname, item)
             return (
               <Link
                 key={item.key}
-                href={item.href}
+                href={workspace.identity ? workspace.href('/studio') : item.href}
+                prefetch={false}
                 onClick={onNavigate}
                 aria-current={itemActive ? 'page' : undefined}
                 data-active={itemActive ? 'true' : 'false'}

@@ -1,5 +1,7 @@
 'use client'
 
+import '@xyflow/react/dist/style.css'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ReactFlowProvider, useReactFlow, type Viewport, type XYPosition } from '@xyflow/react'

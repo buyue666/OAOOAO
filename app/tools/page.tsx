@@ -1,6 +1,6 @@
-import { ToolsPage } from '@/components/studio/tools-page'
+import { PluginCenter } from '@/components/studio/plugins/plugin-center'
 
 export default function Page() {
-  return <ToolsPage tool="remix" />
+  return <PluginCenter />
 }
 

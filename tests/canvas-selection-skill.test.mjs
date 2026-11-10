@@ -9,7 +9,7 @@ function sourceModule(path, mocks = {}, globals = {}) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
   const module = { exports: {} }
-  new Function('require', 'module', 'exports', ...Object.keys(globals), code)(name => Object.hasOwn(mocks, name) ? mocks[name] : require(name), module, module.exports, ...Object.values(globals))
+  new Function('require', 'module', 'exports', ...Object.keys(globals), code)(name => name.endsWith('.css') ? {} : Object.hasOwn(mocks, name) ? mocks[name] : require(name), module, module.exports, ...Object.values(globals))
   return module.exports
 }
 const skills = sourceModule('../lib/studio/canvas-skills.ts')

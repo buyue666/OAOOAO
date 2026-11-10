@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { httpError, object, transaction, type Context } from './core.js';
 import { getSettings, publicSettings } from './settings.js';
 import { personalGenerationPlan } from './entitlements.js';
+import { accountInstalledPlugins, registerCreativePlugins } from './creative-plugins.js';
 
 const capabilities = ['image', 'video', 'text', 'audio'] as const;
 export async function accountModelDefaults(ctx: Context, userId: string, client?: PoolClient): Promise<Record<string,string>> {
@@ -25,9 +26,10 @@ export async function userSessionSettings(ctx: Context, userId: string, settings
     const key = kind + 'Model';
     if (!availableDefault(available, key, defaults[key] || '')) defaults[key] = publicSettings(available).logicalModels.find((model: any) => model.capability === kind)?.id || '';
   }
-  return { ...visible, defaultModels: defaults, userDefaultModels: chosen, ...(personalModelIds !== undefined ? { personalModelIds } : {}) };
+  return { ...visible, defaultModels: defaults, userDefaultModels: chosen, installedPlugins: await accountInstalledPlugins(ctx, userId), ...(personalModelIds !== undefined ? { personalModelIds } : {}) };
 }
 export async function registerAccountPreferences(app: FastifyInstance, ctx: Context) {
+  await registerCreativePlugins(app, ctx);
   app.get('/api/account/model-defaults', async request => {
     const user = await ctx.requireUser(request);
     return { defaultModels: await accountModelDefaults(ctx, user.id) };

@@ -34,6 +34,7 @@ function SidebarContent() {
       <div className={cn('flex h-14 shrink-0 items-center', collapsed ? 'justify-center px-3' : 'justify-between px-3')}>
         {!collapsed && (
           <Link
+            prefetch={false}
             href={workspace.identity ? workspace.href('/studio') : workspaceHref(pathname, '/studio')}
             aria-label={tx("返回工作台")}
             className="flex h-9 w-auto shrink-0 items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
@@ -64,7 +65,7 @@ function SidebarContent() {
           {studioSecondaryNav.filter(item => !workspace.identity || item.href !== '/skills').map((item) => (
             <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
           ))}
-          {!workspace.identity && <StudioToolsNav pathname={pathname} collapsed={collapsed} idSuffix="desktop" />}
+          <StudioToolsNav pathname={pathname} collapsed={collapsed} idSuffix="desktop" />
         </nav>
         {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} collapsed={collapsed} />}
         <StudioNavLink item={studioSettingsNav} pathname={pathname} collapsed={collapsed} />

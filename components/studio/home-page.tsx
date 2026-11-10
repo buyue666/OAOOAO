@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { ArrowRight, Bot, Clapperboard, Image as ImageIcon, Layers3, Sparkles, Video, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CreativeProjectStarter } from './creative-project-starter'
+import { PluginProjectStarter } from './plugins/plugin-workspaces'
 import { RecentWorks } from './home-recent-works'
 import { useSiteBrand } from '@/components/site-brand'
 import { SiteFooter } from '@/components/site-footer'
@@ -32,12 +32,12 @@ export function HomePage() {
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">{tx("今天，做点什么？")}</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">{tx("从一张图开始，或把一个想法发展成完整作品。")}</p>
         </div>
-        <Link href="/works" className="inline-flex items-center gap-2 rounded-md py-2 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
+        <Link prefetch={false} href="/works" className="inline-flex items-center gap-2 rounded-md py-2 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
           {tx("继续上次的生成")}<ArrowRight className="size-4" aria-hidden="true" />
         </Link>
       </header>
 
-      <Link href="/agent" className="group relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-violet-400/25 bg-gradient-to-br from-violet-500/12 via-card to-cyan-400/10 p-5 shadow-lg shadow-violet-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 sm:flex-row sm:items-center sm:justify-between sm:p-7 motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-0.5">
+      <Link prefetch={false} href="/agent" className="group relative flex flex-col gap-5 overflow-hidden rounded-2xl border border-violet-400/25 bg-gradient-to-br from-violet-500/12 via-card to-cyan-400/10 p-5 shadow-lg shadow-violet-950/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 sm:flex-row sm:items-center sm:justify-between sm:p-7 motion-safe:transition-transform motion-safe:duration-200 motion-safe:hover:-translate-y-0.5">
         <span className="pointer-events-none absolute -right-8 -top-16 size-56 rounded-full border border-violet-400/10 bg-gradient-to-br from-violet-400/5 to-cyan-300/10" aria-hidden="true" />
         <span className="relative flex items-start gap-4"><span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-violet-400/25 bg-violet-500/12 text-violet-600 dark:text-violet-300"><Bot className="size-6" aria-hidden="true" /></span><span><span className="flex items-center gap-2 text-xs font-medium text-violet-600 dark:text-violet-300"><Sparkles className="size-3.5" aria-hidden="true" />{tx("创作助手")}</span><span className="mt-1 block text-xl font-semibold tracking-tight">{tx("有个想法，先一起聊聊")}</span><span className="mt-2 block max-w-xl text-sm leading-6 text-muted-foreground">{tx("带上目标、已有文字或参考图。先完善方向，再查看并确认生成计划。")}</span></span></span>
         <span className="relative inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-violet-500/20 sm:self-center">{tx("打开创作助手")}<ArrowRight className="size-4 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" aria-hidden="true" /></span>
@@ -63,7 +63,7 @@ export function HomePage() {
             </div>
           </div>
         </div>
-        <div hidden={mode !== 'project'}><CreativeProjectStarter brief={brief} onBriefChange={setBrief} /></div>
+        {mode === 'project' && <PluginProjectStarter brief={brief} onBriefChange={setBrief} />}
       </section>
 
       <section aria-labelledby="directions-title">
@@ -91,7 +91,7 @@ export function HomePage() {
 function QuickEntry({ href, title, description, details, icon: Icon, tone }: { href: string; title: string; description: string; details: string; icon: LucideIcon; tone: 'cyan' | 'amber' }) {
   const tx = useUiText()
   return (
-    <Link href={href} className={cn('group flex min-h-44 flex-col rounded-xl border p-5 motion-safe:transition-[transform,background-color] motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70', tone === 'cyan' ? 'border-cyan-400/25 bg-gradient-to-br from-cyan-500/8 to-transparent hover:bg-cyan-500/5' : 'border-amber-400/25 bg-gradient-to-br from-amber-500/8 to-transparent hover:bg-amber-500/5')}>
+    <Link prefetch={false} href={href} className={cn('group flex min-h-44 flex-col rounded-xl border p-5 motion-safe:transition-[transform,background-color] motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70', tone === 'cyan' ? 'border-cyan-400/25 bg-gradient-to-br from-cyan-500/8 to-transparent hover:bg-cyan-500/5' : 'border-amber-400/25 bg-gradient-to-br from-amber-500/8 to-transparent hover:bg-amber-500/5')}>
       <span className="flex items-center justify-between"><span className={cn('flex size-10 items-center justify-center rounded-xl', tone === 'cyan' ? 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300')}><Icon className="size-5" aria-hidden="true" /></span><ArrowRight className="size-4 text-muted-foreground motion-safe:transition-transform motion-safe:group-hover:translate-x-1" aria-hidden="true" /></span>
       <span className="mt-5 text-base font-semibold">{title}</span>
       <span className="mt-1 text-sm text-muted-foreground">{description}</span>

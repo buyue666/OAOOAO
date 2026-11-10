@@ -9,7 +9,7 @@ import { SiteBrandMetadata } from '@/components/site-brand'
 import { SiteAnnouncements } from '@/components/site-announcements'
 import { SitePopups } from '@/components/site-popups'
 import { WorkspaceProvider } from '@/lib/studio/workspace-context'
-import '@xyflow/react/dist/style.css'
+import { PluginProvider } from '@/lib/studio/plugin-context'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -32,7 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <LocaleProvider>
           <StudioProvider>
             <SiteBrandMetadata />
-            <WorkspaceProvider><GenerationProvider><SiteAnnouncements><StudioApp>{children}</StudioApp><SitePopups /></SiteAnnouncements></GenerationProvider></WorkspaceProvider>
+            <WorkspaceProvider><PluginProvider><GenerationProvider><SiteAnnouncements><StudioApp>{children}</StudioApp><SitePopups /></SiteAnnouncements></GenerationProvider></PluginProvider></WorkspaceProvider>
           </StudioProvider>
         </LocaleProvider>
         {process.env.VERCEL === '1' && <Analytics />}

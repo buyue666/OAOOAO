@@ -204,9 +204,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       } })
       // The same request token guards the dependent project query as well.
       // An old account's delayed list can never populate the next account.
-      void listCanvasProjects().then((result) => {
-        if (current()) dispatch({ type: 'HYDRATE', payload: { projects: result.projects.map(projectFromCanvasSummary) } })
-      }).catch(() => { /* Keep genuine cached rows for this account; never synthesize projects. */ })
+      if (settings?.installedPlugins?.some(id => id === 'canvas' || id === 'agent')) {
+        void listCanvasProjects().then((result) => {
+          if (current()) dispatch({ type: 'HYDRATE', payload: { projects: result.projects.map(projectFromCanvasSummary) } })
+        }).catch(() => { /* Keep genuine cached rows for this account; never synthesize projects. */ })
+      } else dispatch({ type: 'HYDRATE', payload: { projects: [], selectedProjectId: '' } })
       return { status: 'connected' }
     } catch (error) {
       if (!current()) return { status: 'superseded' }

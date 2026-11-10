@@ -21,7 +21,7 @@ function callback(name, bindings) {
   return evaluate(`export ${statement.getText(parsed)}`, { useCallback: (fn) => fn, ...helpers, ...bindings })[name]
 }
 function deferred() { let resolve; let reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
-function snapshot(id, models = [{ id: 'synthetic-model' }]) { return { user: { id, username: id, pointsBalance: 17 }, models, settings: { site: { title: 'Synthetic' } } } }
+function snapshot(id, models = [{ id: 'synthetic-model' }]) { return { user: { id, username: id, pointsBalance: 17 }, models, settings: { site: { title: 'Synthetic' }, installedPlugins: ['canvas'] } } }
 const apiSource = readFileSync(new URL('../lib/studio/api.ts', import.meta.url), 'utf8')
 const apiAst = ts.createSourceFile('api.ts', apiSource, ts.ScriptTarget.ES2022, true)
 const mapper = apiAst.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === 'backendUserToStudioUser')
@@ -103,6 +103,16 @@ test('a late old session cannot replace a newer account or trigger its project r
   assert.equal(harness.state.user.id, 'account-b')
   assert.equal(harness.projects.length, 1)
   assert.equal(harness.state.credits, 17)
+})
+
+test('accounts without project tools do not request the canvas list at login', async () => {
+  const harness = sessionHarness()
+  const current = harness.refreshSession(), result = snapshot('minimal-account')
+  result.settings.installedPlugins = []
+  harness.sessions[0].resolve(result)
+  await current
+  assert.equal(harness.projects.length, 0)
+  assert.deepEqual(harness.state.projects, [])
 })
 
 test('a late project response from the previous account cannot populate the new account', async () => {

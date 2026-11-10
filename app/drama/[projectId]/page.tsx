@@ -1,6 +1,6 @@
-import { DramaDetailPage } from '@/components/studio/drama-detail-page'
+import { PluginDramaPage } from '@/components/studio/plugins/plugin-workspaces'
 
 export default async function Page({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
-  return <DramaDetailPage key={projectId} projectId={projectId} />
+  return <PluginDramaPage key={projectId} projectId={projectId} />
 }

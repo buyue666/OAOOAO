@@ -58,7 +58,7 @@ test('English copy formats owned prices and durations without translating interp
 })
 
 test('navigation and page titles respond to English while preserving user project names',()=>{
-  const nav=load('components/studio/studio-nav.tsx',{...base,'@/lib/studio/workspace-navigation':load('lib/studio/workspace-navigation.ts',{}),'next/link':({children,...props})=>React.createElement('a',props,children),'next/navigation':{useRouter:()=>({push(){}})}})
+  const nav=load('components/studio/studio-nav.tsx',{...base,'@/lib/studio/plugin-context':{usePlugins:()=>({isInstalled:()=>false})},'@/lib/studio/creative-plugins':load('lib/studio/creative-plugins.ts',{}),'./plugins/plugin-icon':{pluginIcons:{}},'@/lib/studio/workspace-navigation':load('lib/studio/workspace-navigation.ts',{}),'next/link':({children,...props})=>React.createElement('a',props,children),'next/navigation':{useRouter:()=>({push(){}})}})
   const result=html(nav.StudioNavLink,{item:nav.studioPrimaryNav[2],pathname:'/assets'})
   assert.match(result,/Creative assets/);assert.doesNotMatch(result,/创作资产/)
   assert.equal(nav.localizedStudioPageTitle('/video',undefined,englishText),'Video generation')

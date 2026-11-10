@@ -7,7 +7,7 @@ export function parseWorkspaceIdentity(raw: string | null): { teamId: string; pr
 }
 
 export function workspaceDestination(pathname: string, identity: { teamId: string; projectId?: string } | null) {
-  if (!identity || workspaceIdentity(pathname)) return pathname
+  if (!identity || workspaceIdentity(pathname) || pathname === '/tools') return pathname
   const scope = `/teams/${identity.teamId}${identity.projectId ? `/projects/${identity.projectId}` : ''}`
   if (/^\/(?:studio|image|video|agent|canvas|drama|tools|skills)(?:\/|$)/.test(pathname)) return workspaceHref(scope, '/studio')
   if (/^\/projects(?:\/|$)/.test(pathname)) return workspaceHref(scope, '/projects')
