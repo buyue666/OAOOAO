@@ -25,7 +25,7 @@ function backendUrlFor(pathWithQuery: string) {
  * 服务端首屏读取画布数据：把浏览器的 Cookie 原样转发给后端，与 /api 代理的鉴权方式一致。
  * 数据随页面一起渲染，客户端不需要在挂载后再发起请求。
  */
-async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>> {
+async function loadFromBackend<T>(pathWithQuery: string, allowUnwrapped = false): Promise<LoadOutcome<T>> {
   // cookies() 必须在读取环境变量之前调用。这样即使构建时没有注入后端地址，
   // 页面也会保持动态渲染，不会把“后端服务未配置”错误固化进静态 HTML。
   const cookieHeader = (await cookies()).toString()
@@ -56,22 +56,34 @@ async function loadFromBackend<T>(pathWithQuery: string): Promise<LoadOutcome<T>
   if (response.status === 401) return { kind: 'unauthorized' }
   if (response.status === 404) return { kind: 'not-found' }
 
-  const payload = (await response.json().catch(() => null)) as { msg?: string; error?: string; data?: T } | null
-  if (!response.ok || !payload?.data) {
+  const decoded: unknown = await response.json().catch(() => null)
+  const payload = decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+    ? decoded as { code?: number; msg?: string; error?: string; data?: T }
+    : null
+  if (!response.ok || payload?.error || (typeof payload?.code === 'number' && payload.code !== 0)) {
     return { kind: 'error', message: payload?.msg || payload?.error || `画布服务返回 ${response.status}` }
   }
-  return { kind: 'ok', data: payload.data }
+  // Account endpoints return their data directly; project endpoints use { data }.
+  // Keep this explicit so an unrelated HTTP 200 payload is never an empty canvas.
+  const data = payload && 'data' in payload ? payload.data : allowUnwrapped ? payload : null
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { kind: 'error', message: '画布服务数据格式异常，请稍后重试' }
+  }
+  return { kind: 'ok', data: data as T }
 }
 
 /** Check before reading tool data; uninstalled canvas routes stay light. */
 export async function loadCanvasPluginAccess(): Promise<{ installed: boolean; error: string | null }> {
-  const outcome = await loadFromBackend<{ installedPlugins: string[] }>('/api/account/plugins')
+  const outcome = await loadFromBackend<{ installedPlugins: string[] }>('/api/account/plugins', true)
   if (outcome.kind === 'unauthorized') {
     if (isStudioPreview()) return { installed: false, error: null }
     redirect('/login')
   }
   if (outcome.kind !== 'ok') return { installed: false, error: outcome.kind === 'error' ? outcome.message : '插件状态读取失败' }
-  return { installed: outcome.data.installedPlugins?.includes('canvas') === true, error: null }
+  if (!Array.isArray(outcome.data.installedPlugins) || outcome.data.installedPlugins.some(id => typeof id !== 'string')) {
+    return { installed: false, error: '插件状态数据格式异常，请稍后重试' }
+  }
+  return { installed: outcome.data.installedPlugins.includes('canvas'), error: null }
 }
 
 export async function loadCanvasSummaries(): Promise<{ projects: CanvasSummary[]; error: string | null }> {

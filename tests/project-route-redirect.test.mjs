@@ -71,8 +71,99 @@ async function canvasLoader(response, environment = 'production') {
     'next/navigation': navigation,
     '@/lib/studio/preview-mode': preview,
     './canvas-workspace': await loadModule('../components/free-canvas/canvas-workspace.ts'),
-  }, { process: { env: { OAOAO_BACKEND_URL: 'http://synthetic.invalid' } }, fetch: async () => response })
+  }, { process: { env: { OAOAO_BACKEND_URL: 'http://synthetic.invalid' } }, fetch: async (...args) => typeof response === 'function' ? response(...args) : response.clone() })
 }
+
+test('canvas plugin access accepts the account API direct response and keeps cookie forwarding', async () => {
+  const loader = await canvasLoader((url, init) => {
+    assert.equal(String(url), 'http://synthetic.invalid/api/account/plugins')
+    assert.equal(init.headers.cookie, 'synthetic-session=fixture')
+    assert.equal(init.cache, 'no-store')
+    return Response.json({ installedPlugins: ['agent', 'canvas'] })
+  })
+  assert.deepEqual(await loader.loadCanvasPluginAccess(), { installed: true, error: null })
+})
+
+test('canvas plugin access also accepts an enveloped account response', async () => {
+  const loader = await canvasLoader(Response.json({ code: 0, data: { installedPlugins: ['canvas'] } }))
+  assert.deepEqual(await loader.loadCanvasPluginAccess(), { installed: true, error: null })
+})
+
+test('uninstalled canvas stays uninstalled and its page never fetches project data', async () => {
+  const requested = []
+  const loader = await canvasLoader(url => {
+    requested.push(new URL(url).pathname)
+    return Response.json({ installedPlugins: ['agent'] })
+  })
+  const PluginCanvasIndex = () => null
+  const page = (await loadModule('../app/canvas/page.tsx', {
+    '@/components/free-canvas/plugin-canvas': { PluginCanvasIndex },
+    '@/components/free-canvas/canvas-server-data': loader,
+    'react/jsx-runtime': jsxRuntime,
+  })).default
+  const result = await page()
+  assert.deepEqual(requested, ['/api/account/plugins'])
+  assert.deepEqual(result.props, { loaded: false, projects: [], loadError: null })
+})
+
+test('installed canvas page loads the real project envelope after the direct plugin response', async () => {
+  const projects = [{ id: 'canvas-fixture', title: 'Synthetic saved canvas', nodeCount: 2, connectionCount: 1 }]
+  const requested = []
+  const loader = await canvasLoader(url => {
+    const parsed = new URL(url)
+    requested.push(parsed.pathname)
+    if (parsed.pathname === '/api/account/plugins') return Response.json({ installedPlugins: ['canvas'] })
+    assert.equal(parsed.pathname, '/api/canvas/projects')
+    assert.equal(parsed.searchParams.get('pageSize'), '100')
+    return Response.json({ code: 0, data: { projects } })
+  })
+  const PluginCanvasIndex = () => null
+  const page = (await loadModule('../app/canvas/page.tsx', {
+    '@/components/free-canvas/plugin-canvas': { PluginCanvasIndex },
+    '@/components/free-canvas/canvas-server-data': loader,
+    'react/jsx-runtime': jsxRuntime,
+  })).default
+  assert.deepEqual((await page()).props, { loaded: true, projects, loadError: null })
+  assert.deepEqual(requested, ['/api/account/plugins', '/api/canvas/projects'])
+})
+
+test('a valid empty canvas list is not a service failure', async () => {
+  const loader = await canvasLoader(Response.json({ code: 0, data: { projects: [] } }))
+  assert.deepEqual(await loader.loadCanvasSummaries(), { projects: [], error: null })
+})
+
+test('plugin access rejects malformed successful payloads instead of hiding a service error', async () => {
+  for (const payload of [{}, { installedPlugins: 'canvas' }, { installedPlugins: [null] }, { data: null }, null, []]) {
+    const loader = await canvasLoader(Response.json(payload))
+    const result = await loader.loadCanvasPluginAccess()
+    assert.equal(result.installed, false)
+    assert.match(result.error, /数据格式/)
+    assert.doesNotMatch(result.error, /返回 200/)
+  }
+})
+
+test('successful non-JSON responses are shown as invalid data', async () => {
+  const loader = await canvasLoader(new Response('<html>Gateway response</html>', { status: 200 }))
+  const result = await loader.loadCanvasPluginAccess()
+  assert.equal(result.installed, false)
+  assert.match(result.error, /数据格式/)
+})
+
+test('plugin access preserves service failures and redirects expired production sessions', async () => {
+  const offline = await canvasLoader(Response.json({ error: '测试服务暂不可用' }, { status: 503 }))
+  assert.deepEqual(await offline.loadCanvasPluginAccess(), { installed: false, error: '测试服务暂不可用' })
+  const unsigned = await canvasLoader(Response.json({}, { status: 401 }))
+  await assert.rejects(unsigned.loadCanvasPluginAccess(), error => error.destination === '/login')
+  const preview = await canvasLoader(Response.json({}, { status: 401 }), 'development')
+  assert.deepEqual(await preview.loadCanvasPluginAccess(), { installed: false, error: null })
+})
+
+test('business error payloads cannot grant plugin access even with HTTP 200', async () => {
+  for (const payload of [{ code: 1, msg: '插件状态查询失败', data: { installedPlugins: ['canvas'] } }, { error: '插件状态查询失败', installedPlugins: ['canvas'] }]) {
+    const loader = await canvasLoader(Response.json(payload))
+    assert.deepEqual(await loader.loadCanvasPluginAccess(), { installed: false, error: '插件状态查询失败' })
+  }
+})
 
 test('redirect destination checks the owner-backed project and rejects unknown IDs with 404', async () => {
   const loader = await canvasLoader(new Response('{}', { status: 404 }))
