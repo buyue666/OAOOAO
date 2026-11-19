@@ -147,7 +147,7 @@ test('home page renders unified mode bar and composer for personal and team work
     if (name === '@/lib/studio/video-policy') return { selectableVideoDurations: () => [] }
     if (name === '@/lib/studio/agent-files') return { AGENT_FILE_ACCEPT: 'image/*', AGENT_FILE_LIMIT: 12, validateAgentFiles: () => '' }
     if (name === '@/lib/studio/create-intent') return { readIntentFiles: async () => ({ files: [], failed: [] }), saveCreateIntent: () => ({ saved: true, droppedFiles: 0 }) }
-    if (name === '@/lib/studio/workspace-navigation') return { workspaceHref: (root, target) => `${root}${target}`, workspaceRoot: ({ teamId }) => `/teams/${teamId}` }
+    if (name === '@/lib/studio/workspace-navigation') return { workspaceHref: (root, target) => `${root}${target === '/image' || target === '/video' ? `/studio${target}` : target}`, workspaceRoot: ({ teamId }) => `/teams/${teamId}` }
     if (name === '@/components/site-brand') return { useSiteBrand: () => ({ title: 'OAO' }) }
     if (name === '@/components/site-footer') return { SiteFooter: () => null }
     if (name === './home-composer') return composerMod.exports
@@ -166,6 +166,10 @@ test('home page renders unified mode bar and composer for personal and team work
   assert.match(personalHtml, /图片生成/)
   assert.match(personalHtml, /视频生成/)
   assert.match(personalHtml, /完整作品/)
+  assert.match(personalHtml, /data-studio-spotlight="image"/)
+  assert.match(personalHtml, /data-studio-spotlight="video"/)
+  assert.match(personalHtml, /图片工作台/)
+  assert.match(personalHtml, /视频工作台/)
 
   const teamHtml = renderToStaticMarkup(React.createElement(homeMod.exports.HomePage, {
     team: { id: 't1', name: '设计组', role: 'owner', modelIds: [] },
@@ -174,4 +178,6 @@ test('home page renders unified mode bar and composer for personal and team work
   assert.match(teamHtml, /图片生成/)
   assert.match(teamHtml, /视频生成/)
   assert.match(teamHtml, /团队项目/)
+  assert.match(teamHtml, /href="\/teams\/t1\/studio\/image"/)
+  assert.match(teamHtml, /href="\/teams\/t1\/studio\/video"/)
 })

@@ -4,7 +4,7 @@ import { useUiText } from '@/lib/studio/i18n'
 import Link from 'next/link'
 import type { RefObject } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
-import { ArrowUp, ArrowUpRight, Check, ChevronDown, Clock, LoaderCircle, Puzzle, Ratio, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { ArrowUp, ArrowUpRight, Bot, Check, ChevronDown, Clapperboard, Clock, Image as ImageIcon, LoaderCircle, Puzzle, Ratio, SlidersHorizontal, Sparkles, Video } from 'lucide-react'
 import type { ModelConfig } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
 import { ModelIcon } from './model-icon'
@@ -156,10 +156,19 @@ export function GenerationPanel(props: GenerationPanelProps) {
             <Link
               prefetch={false}
               href={directHref}
-              className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              className="studio-jimeng-workbench-btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent"
             >
+              {mode === 'image' ? (
+                <ImageIcon className="size-3.5 text-studio-accent" aria-hidden="true" />
+              ) : mode === 'video' ? (
+                <Video className="size-3.5 text-studio-accent" aria-hidden="true" />
+              ) : mode === 'agent' ? (
+                <Bot className="size-3.5 text-studio-accent" aria-hidden="true" />
+              ) : (
+                <Clapperboard className="size-3.5 text-studio-accent" aria-hidden="true" />
+              )}
               <span>{tx(directLabel || '工作台')}</span>
-              <ArrowUpRight className="size-3.5" aria-hidden="true" />
+              <ArrowUpRight className="size-3.5 text-studio-accent" aria-hidden="true" />
             </Link>
           )}
         </div>

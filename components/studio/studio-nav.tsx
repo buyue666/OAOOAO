@@ -7,13 +7,14 @@ import {
   ChevronDown,
   FolderOpen,
   History,
+  Image as ImageIcon,
   LayoutGrid,
   Library,
   Puzzle,
   WandSparkles,
   Settings,
-  Shirt,
   ShieldCheck,
+  Video,
   type LucideIcon,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -39,7 +40,9 @@ export interface StudioToolNavItem extends StudioNavItem {
 }
 
 export const studioPrimaryNav: readonly StudioNavItem[] = [
-  { label: '开始创作', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent', '/image', '/video'] },
+  { label: '开始创作', href: '/studio', icon: LayoutGrid, matches: ['/studio', '/agent'] },
+  { label: '图片工作台', href: '/image', icon: ImageIcon, matches: ['/image', '/studio/image'] },
+  { label: '视频工作台', href: '/video', icon: Video, matches: ['/video', '/studio/video'] },
   { label: '我的项目', href: '/projects', icon: FolderOpen, matches: ['/projects', '/drama', '/canvas'] },
   { label: '创作资产', href: '/assets', icon: Library, matches: ['/assets'] },
 ]
@@ -142,7 +145,17 @@ export function StudioNavLink({
   const team = workspace.identity || workspaceIdentity(pathname)
   const section = workspaceSection(pathname)
   if (team && item.href === '/skills') return null
-  const active = team ? item.href === '/studio' ? ['/studio', '/studio/image', '/studio/video'].includes(section) : item.href === '/projects' ? section === '/teams' : false : isNavItemActive(pathname, item)
+  const active = team
+    ? item.href === '/studio'
+      ? section === '/studio'
+      : item.href === '/image'
+        ? section === '/studio/image'
+        : item.href === '/video'
+          ? section === '/studio/video'
+          : item.href === '/projects'
+            ? section === '/teams'
+            : false
+    : isNavItemActive(pathname, item)
   const link = (
     <Link
       href={href}

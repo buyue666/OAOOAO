@@ -2,8 +2,9 @@
 
 import { useUiText } from '@/lib/studio/i18n'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, FileAudio, FileText, FileVideo, Image as ImageIcon, Plus, Sparkles, X } from 'lucide-react'
+import { ArrowRight, FileAudio, FileText, FileVideo, Image as ImageIcon, Plus, Sparkles, Video, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type ComposerSlashSkill = {
@@ -368,6 +369,110 @@ export function ReferenceMaterials({
         </>
       )}
     </div>
+  )
+}
+
+type StudioWorkbenchSpotlightProps = {
+  imageHref: string
+  videoHref: string
+  className?: string
+}
+
+/**
+ * 首页核心工作台直达双卡：把图片工作台与视频工作台放到首屏主视觉下方，
+ * 让用户一眼可见并一键进入完整工作台（个人空间与团队空间共用）。
+ */
+export function StudioWorkbenchSpotlight({ imageHref, videoHref, className }: StudioWorkbenchSpotlightProps) {
+  const tx = useUiText()
+  const studios = [
+    {
+      id: 'image',
+      href: imageHref,
+      title: '图片工作台',
+      badge: '专业生图',
+      description: '文生图、多图参考、局部重绘与高清精修',
+      image: '/media/generated/landing-image-v1.png',
+      icon: ImageIcon,
+      variantClass: 'studio-workbench-image',
+      badgeClass: 'bg-emerald-500/12 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300',
+      iconClass: 'bg-emerald-500/14 text-emerald-600 dark:bg-emerald-400/18 dark:text-emerald-300',
+    },
+    {
+      id: 'video',
+      href: videoHref,
+      title: '视频工作台',
+      badge: '镜头生成',
+      description: '文生视频、首尾帧控制、多参考与运镜时长调节',
+      image: '/media/generated/landing-video-v1.png',
+      icon: Video,
+      variantClass: 'studio-workbench-video',
+      badgeClass: 'bg-sky-500/12 text-sky-700 dark:bg-sky-400/15 dark:text-sky-300',
+      iconClass: 'bg-sky-500/14 text-sky-600 dark:bg-sky-400/18 dark:text-sky-300',
+    },
+  ] as const
+
+  return (
+    <section aria-label={tx('专业工作台')} className={cn('w-full max-w-[900px]', className)}>
+      <div className="mb-2.5 flex items-center justify-between px-1">
+        <span className="text-xs font-semibold tracking-[0.02em] text-muted-foreground">
+          {tx('专业工作台')}
+        </span>
+        <span className="text-[11px] text-muted-foreground/80">
+          {tx('直接进入完整工作台')}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {studios.map((studio) => {
+          const Icon = studio.icon
+          return (
+            <Link
+              key={studio.id}
+              href={studio.href}
+              prefetch={false}
+              data-studio-spotlight={studio.id}
+              className={cn(
+                'studio-workbench-card group flex items-center gap-3.5 overflow-hidden rounded-2xl p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent',
+                studio.variantClass,
+              )}
+            >
+              <div className="relative h-[82px] w-[104px] shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted sm:w-[114px]">
+                <Image
+                  src={studio.image}
+                  alt=""
+                  fill
+                  sizes="120px"
+                  className="object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                />
+                <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+                <span className={cn('absolute bottom-1.5 left-1.5 flex size-6 items-center justify-center rounded-lg backdrop-blur-md', studio.iconClass)}>
+                  <Icon className="size-3.5" aria-hidden="true" />
+                </span>
+              </div>
+
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground">
+                    {tx(studio.title)}
+                  </span>
+                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold', studio.badgeClass)}>
+                    {tx(studio.badge)}
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-xs leading-[18px] text-muted-foreground">
+                  {tx(studio.description)}
+                </p>
+                <div className="pt-0.5">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-foreground/[0.06] px-2.5 py-1 text-[11px] font-semibold text-foreground transition-colors duration-150 group-hover:bg-foreground group-hover:text-background dark:bg-white/10 dark:group-hover:bg-white dark:group-hover:text-neutral-950">
+                    <span>{tx('进入工作台')}</span>
+                    <ArrowRight className="size-3 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+                  </span>
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

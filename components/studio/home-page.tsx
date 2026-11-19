@@ -16,7 +16,7 @@ import type { ModelConfig } from '@/lib/studio/types'
 import { workspaceHref, workspaceRoot } from '@/lib/studio/workspace-navigation'
 import type { TeamProject, TeamSummary } from '@/lib/studio/team-types'
 import { SiteFooter } from '@/components/site-footer'
-import { PromptComposer, type ComposerSlashSkill } from './home-composer'
+import { PromptComposer, StudioWorkbenchSpotlight, type ComposerSlashSkill } from './home-composer'
 import { GenerationPanel, parseSeconds } from './home-generation-panel'
 import { RecentWorks } from './home-recent-works'
 import { HomeShowcase, type ShowcasePreset } from './home-showcase'
@@ -358,11 +358,11 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
       ]
 
   const directEntry = mode === 'agent'
-    ? { href: '/agent', label: '直接进入' }
+    ? { href: '/agent', label: '进入创作助手' }
     : mode === 'image'
-      ? { href: href('/image'), label: '图片工作台' }
+      ? { href: href('/image'), label: '进入图片工作台' }
       : mode === 'video'
-        ? { href: href('/video'), label: '视频工作台' }
+        ? { href: href('/video'), label: '进入视频工作台' }
         : { href: href('/projects'), label: '全部项目' }
 
   const placeholders: Record<Exclude<EntryMode, 'project'>, string> = {
@@ -539,6 +539,12 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
                 </Link>
               )}
             </div>
+
+            <StudioWorkbenchSpotlight
+              imageHref={href('/image')}
+              videoHref={href('/video')}
+              className="mt-6"
+            />
           </>
         )}
       </section>
