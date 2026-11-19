@@ -43,9 +43,14 @@ export type GenerationPanelProps = {
   ratioOptions: string[]
   ratio: string
   onRatioChange: (value: string) => void
+  formatRatio?: (value: string) => string
+  resolutionOptions?: string[]
+  resolution?: string
+  onResolutionChange?: (value: string) => void
   qualityOptions: string[]
   quality: string
   onQualityChange: (value: string) => void
+  formatQuality?: (value: string) => string
   durationOptions: string[]
   durationRange: { min: number; max: number } | null
   fixedDuration: string | null
@@ -53,6 +58,9 @@ export type GenerationPanelProps = {
   onSecondsChange: (value: number) => void
   onSecondsCommit: () => void
   estimatedCredits: number | null
+  creditNote?: string
+  compatibilityNote?: string
+  submitLabel?: string
   canStart: boolean
   starting: boolean
   startError: string
@@ -64,11 +72,12 @@ export type GenerationPanelProps = {
  */
 export function GenerationPanel(props: GenerationPanelProps) {
   const tx = useUiText()
-  const { mode, estimatedCredits, canStart, starting, startError } = props
+  const { mode, estimatedCredits, creditNote, compatibilityNote, submitLabel, canStart, starting, startError } = props
   const hasModelControls = mode === 'image' || mode === 'video'
+  const showResolution = mode === 'image' && (props.resolutionOptions?.length ?? 0) > 1 && Boolean(props.onResolutionChange)
   const modelUnavailable = hasModelControls && !props.selectedModel
   const note = directorNotes[mode]
-  const gridClass = mode === 'video'
+  const gridClass = mode === 'video' || showResolution
     ? 'xl:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))]'
     : 'xl:grid-cols-[minmax(0,1.6fr)_repeat(2,minmax(0,1fr))]'
 
@@ -80,8 +89,11 @@ export function GenerationPanel(props: GenerationPanelProps) {
             <span className="text-xs font-medium text-muted-foreground">{tx("模型")}</span>
             <ModelPicker {...props} />
           </div>
-          <ParamSelect label={tx("比例")} value={props.ratio} options={props.ratioOptions} onChange={props.onRatioChange} />
-          <ParamSelect label={tx("清晰度")} value={props.quality} options={props.qualityOptions} onChange={props.onQualityChange} />
+          <ParamSelect label={tx("比例")} value={props.ratio} options={props.ratioOptions} onChange={props.onRatioChange} formatOption={props.formatRatio} />
+          {showResolution && (
+            <ParamSelect label={tx("分辨率")} value={props.resolution ?? props.resolutionOptions![0]} options={props.resolutionOptions!} onChange={props.onResolutionChange!} />
+          )}
+          <ParamSelect label={tx("清晰度")} value={props.quality} options={props.qualityOptions} onChange={props.onQualityChange} formatOption={props.formatQuality} />
           {mode === 'video' && (
             <DurationControl
               durationOptions={props.durationOptions}
@@ -106,6 +118,10 @@ export function GenerationPanel(props: GenerationPanelProps) {
         </dl>
       )}
 
+      {compatibilityNote && (
+        <p role="status" className="rounded-md border border-border bg-card px-3 py-2 text-xs leading-5 text-muted-foreground">{compatibilityNote}</p>
+      )}
+
       {startError && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm leading-6 text-destructive">{startError}</p>
       )}
@@ -113,7 +129,9 @@ export function GenerationPanel(props: GenerationPanelProps) {
       <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">{tx("预计消耗")}</p>
-          {modelUnavailable ? <p className="mt-0.5 text-sm font-medium text-foreground">{tx("模型配置完成后可估算")}</p> : estimatedCredits !== null ? (
+          {modelUnavailable ? <p className="mt-0.5 text-sm font-medium text-foreground">{tx("模型配置完成后可估算")}</p> : creditNote ? (
+            <p className="mt-0.5 text-sm font-medium text-foreground">{creditNote}</p>
+          ) : estimatedCredits !== null ? (
             <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
               <span className="text-xl font-semibold tabular-nums text-foreground">{estimatedCredits.toLocaleString()}</span>
               <span className="text-sm text-muted-foreground">{tx("积分 · 按当前模型与参数估算")}</span>
@@ -133,7 +151,7 @@ export function GenerationPanel(props: GenerationPanelProps) {
           {starting ? (
             <><LoaderCircle className="size-4 animate-spin" aria-hidden="true" />{tx("正在进入工作台…")}</>
           ) : (
-            <>{tx("开始创作")}<ArrowRight className="size-4" aria-hidden="true" /></>
+            <>{submitLabel || tx("开始创作")}<ArrowRight className="size-4" aria-hidden="true" /></>
           )}
         </button>
       </div>
@@ -230,14 +248,14 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
   )
 }
 
-function ParamSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+function ParamSelect({ label, value, options, onChange, formatOption }: { label: string; value: string; options: string[]; onChange: (value: string) => void; formatOption?: (value: string) => string }) {
   const tx = useUiText()
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <select value={value} disabled={!options.length} onChange={(event) => onChange(event.target.value)} className={cn(fieldClass, 'disabled:text-muted-foreground')}>
         {!options.length && <option value="">{tx("暂无可用选项")}</option>}
-        {options.map((item) => <option key={item} value={item}>{item}</option>)}
+        {options.map((item) => <option key={item} value={item}>{formatOption ? formatOption(item) : item}</option>)}
       </select>
     </label>
   )

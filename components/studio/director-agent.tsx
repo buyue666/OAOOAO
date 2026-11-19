@@ -15,6 +15,7 @@ import { agentPlanCosts, directorRequestPrompt, remapDirectorReferences, type Di
 import type { CanvasSkill } from '@/lib/studio/canvas-skills'
 import { libraryAssetMediaUrl } from '@/lib/studio/reference-assets'
 import { AGENT_FILE_ACCEPT, AGENT_FILE_LIMIT, agentFileKind, normalizeAgentText, validateAgentFiles, type AgentFileKind } from '@/lib/studio/agent-files'
+import { consumeCreateIntent, dataUrlToFile } from '@/lib/studio/create-intent'
 import { DirectorComposer, DirectorWorkspaceView, type DirectorDraft, type DirectorReference } from './director-workspace'
 import { ControlButton, Modal, StatusBadge, type Tone } from './ui'
 
@@ -57,6 +58,7 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
   const [pollRevision, setPollRevision] = useState(0)
   const submitLock = useRef(false)
   const refsRef = useRef<Reference[]>(initialDraft?.refs || [])
+  const pendingIntentFilesRef = useRef<File[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const alive = useRef(true)
@@ -78,9 +80,11 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     }
   }, [connected])
   useEffect(() => {
+    let hasPending = false
     try {
       const saved = parseAssistantThread(window.localStorage.getItem(scope), verifiedContext.surface, verifiedContext.projectId)
       setMessages(saved.messages); setPending(saved.pending); setStorageBlocked(false)
+      hasPending = Boolean(saved.pending)
       if (saved.pending) {
         setInput(saved.pending.displayText)
         const restored: Reference[] = saved.pending.assetIds.map((id, index) => ({ id, assetId: id, kind: saved.pending!.refKinds?.[index] || 'image', title: saved.pending!.refTitles[index] || '参考文件', status: 'ready' }))
@@ -88,8 +92,25 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
         setSkills((saved.pending.skillIds || []).map((id, index) => ({ id, title: `已选技能 ${index + 1}`, prompt: '' })))
       }
     } catch (reason) { setStorageBlocked(true); setError(errorText(reason)) }
+    const intent = consumeCreateIntent('agent')
+    if (intent) {
+      if (hasPending) {
+        setError('当前有待恢复的提交，已保留原请求内容；完成或清空后可继续使用新的描述。')
+      } else {
+        if (intent.prompt.trim()) setInput(intent.prompt)
+        const restoredFiles = intent.files.map(dataUrlToFile).filter((item): item is File => Boolean(item))
+        if (restoredFiles.length) pendingIntentFilesRef.current = restoredFiles
+      }
+    }
     setReady(true)
   }, [scope, verifiedContext.surface, verifiedContext.projectId])
+  useEffect(() => {
+    if (!connected || !ready || submitting || pending || !pendingIntentFilesRef.current.length) return
+    const filesToUpload = pendingIntentFilesRef.current
+    pendingIntentFilesRef.current = []
+    addFiles(filesToUpload)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, ready, submitting, pending])
   function persist(nextMessages: Message[], request: Pending | null) {
     window.localStorage.setItem(scope, JSON.stringify({ version: 2, messages: nextMessages.slice(-40), pending: request }))
   }
