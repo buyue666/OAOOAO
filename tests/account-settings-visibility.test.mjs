@@ -128,6 +128,7 @@ test('the account menu hides disabled entries and closes an already-open dialog'
     '@/lib/studio/use-account-settings-visibility': { useAccountSettingsVisibility: () => visibility },
     './account-watermark': { AccountWatermarkDialog: 'WatermarkDialog' }, './account-adult-content': { AccountAdultContentDialog: 'AdultDialog' },
     './workspace-switcher': { WorkspaceSwitcher: 'WorkspaceSwitcher' }, '@/lib/studio/workspace-context': { useWorkspace: () => ({ identity: null }) },
+    '@/lib/studio/workspace-navigation': { workspaceSection: path => path },
   })
   function nodes(value) { return !value || typeof value !== 'object' ? [] : Array.isArray(value) ? value.flatMap(nodes) : [value, ...nodes(value.props?.children)] }
   const render = () => nodes(h.render(api.Topbar, { onMenuClick() {} }))

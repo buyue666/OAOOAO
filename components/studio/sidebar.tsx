@@ -54,20 +54,23 @@ function SidebarContent() {
         </button>
       </div>
 
-      <nav aria-label={tx("主导航")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto border-t border-sidebar-border p-2 pt-3">
+      <nav aria-label={tx("主导航")} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2.5 pt-2">
         {studioPrimaryNav.map((item) => (
           <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
         ))}
       </nav>
 
-      <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border p-2">
+      <div className="mx-3 h-px shrink-0 bg-sidebar-border/60" />
+
+      <div className="flex shrink-0 flex-col gap-1 px-2.5 py-2.5">
         {state.backendStatus==='connected'&&<StorageUsageLink collapsed={collapsed} teamId={workspace.identity?.teamId} />}
-        <nav aria-label={tx("创作记录与工具")} className="mb-1 flex flex-col gap-1 border-b border-sidebar-border pb-2">
+        <nav aria-label={tx("创作记录与工具")} className="mb-1 flex flex-col gap-1 pb-1.5">
           {studioSecondaryNav.filter(item => !workspace.identity || item.href !== '/skills').map((item) => (
             <StudioNavLink key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
           ))}
           <StudioToolsNav pathname={pathname} collapsed={collapsed} idSuffix="desktop" />
         </nav>
+        <div className="mx-1 mb-1 h-px bg-sidebar-border/60" />
         {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} collapsed={collapsed} />}
         <StudioNavLink item={studioSettingsNav} pathname={pathname} collapsed={collapsed} />
         <WechatContactButton config={state.sessionSettings?.site?.wechatContact} collapsed={collapsed} />

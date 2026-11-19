@@ -32,47 +32,29 @@ export type CreateIntent = {
   prompt: string
   files: IntentFile[]
   createdAt: number
-  /** 目标项目（短剧等需要项目上下文的模式）。 */
+  /** 目标团队（团队创作空间内跳转时携带，避免跨空间误消费）。 */
+  teamId?: string
+  /** 目标项目（短剧或团队项目等需要项目上下文的模式）。 */
   projectId?: string
   /** 首页就地编辑的生成参数，进入工作台后继续沿用。 */
   settings?: {
     model?: string
     ratio?: string
+    resolution?: string
     quality?: string
     seconds?: number
   }
 }
 
-/** 保存创作意图。文件过大时截断并如实记录，避免超出 sessionStorage 配额。 */
+/** 原子保存所有参考；空间不足时留在首页，不能默默丢弃文件。 */
 export function saveCreateIntent(intent: Omit<CreateIntent, 'createdAt'>): { saved: boolean; droppedFiles: number } {
   if (typeof window === 'undefined') return { saved: false, droppedFiles: 0 }
-  let files = intent.files.slice(0, 6)
-  let dropped = intent.files.length - files.length
-  const write = () => {
-    const payload: CreateIntent = { ...intent, files, createdAt: Date.now() }
-    window.sessionStorage.setItem(KEY, JSON.stringify(payload))
-  }
   try {
-    write()
-    return { saved: true, droppedFiles: dropped }
+    const payload: CreateIntent = { ...intent, createdAt: Date.now() }
+    window.sessionStorage.setItem(KEY, JSON.stringify(payload))
+    return { saved: true, droppedFiles: 0 }
   } catch {
-    // 配额不足：逐个丢弃文件后重试，仍然保留提示词与模式（它们才是关键）。
-    while (files.length) {
-      files = files.slice(0, -1)
-      dropped += 1
-      try {
-        write()
-        return { saved: true, droppedFiles: dropped }
-      } catch {
-        // 继续丢弃
-      }
-    }
-    try {
-      write()
-      return { saved: true, droppedFiles: dropped }
-    } catch {
-      return { saved: false, droppedFiles: dropped }
-    }
+    return { saved: false, droppedFiles: 0 }
   }
 }
 
@@ -82,30 +64,42 @@ export function saveCreateIntent(intent: Omit<CreateIntent, 'createdAt'>): { sav
  * 读取即删除：这样刷新工作台不会重复套用，用户手动清空提示词后刷新
  * 也不会被「复活」的旧意图覆盖。
  */
-export function consumeCreateIntent(mode?: CreateMode): CreateIntent | null {
+export function consumeCreateIntent(mode?: CreateMode, scope?: { teamId?: string }): CreateIntent | null {
   if (typeof window === 'undefined') return null
   const raw = window.sessionStorage.getItem(KEY)
   if (!raw) return null
-  window.sessionStorage.removeItem(KEY)
   try {
     const parsed = JSON.parse(raw) as CreateIntent
-    if (!parsed || typeof parsed !== 'object') return null
-    if (!parsed.createdAt || Date.now() - parsed.createdAt > MAX_AGE_MS) return null
-    if (mode && parsed.mode !== mode) return null
+    if (!parsed || typeof parsed !== 'object') {
+      window.sessionStorage.removeItem(KEY)
+      return null
+    }
+    if (!parsed.createdAt || Date.now() - parsed.createdAt > MAX_AGE_MS) {
+      window.sessionStorage.removeItem(KEY)
+      return null
+    }
+    if (mode && parsed.mode !== mode) {
+      return null
+    }
+    if (scope && (parsed.teamId ?? '') !== (scope.teamId ?? '')) return null
+    window.sessionStorage.removeItem(KEY)
     return {
       mode: parsed.mode,
       prompt: typeof parsed.prompt === 'string' ? parsed.prompt : '',
       files: Array.isArray(parsed.files) ? parsed.files.filter((file) => file && typeof file.dataUrl === 'string') : [],
       createdAt: parsed.createdAt,
+      teamId: typeof parsed.teamId === 'string' ? parsed.teamId : undefined,
       projectId: typeof parsed.projectId === 'string' ? parsed.projectId : undefined,
       settings: parsed.settings && typeof parsed.settings === 'object' ? {
         model: typeof parsed.settings.model === 'string' ? parsed.settings.model : undefined,
         ratio: typeof parsed.settings.ratio === 'string' ? parsed.settings.ratio : undefined,
+        resolution: typeof parsed.settings.resolution === 'string' ? parsed.settings.resolution : undefined,
         quality: typeof parsed.settings.quality === 'string' ? parsed.settings.quality : undefined,
         seconds: Number.isFinite(Number(parsed.settings.seconds)) ? Number(parsed.settings.seconds) : undefined,
       } : undefined,
     }
   } catch {
+    window.sessionStorage.removeItem(KEY)
     return null
   }
 }
@@ -124,7 +118,7 @@ export function readFileAsDataUrl(file: File): Promise<string> {
 export async function readIntentFiles(files: File[]): Promise<{ files: IntentFile[]; failed: string[] }> {
   const converted: IntentFile[] = []
   const failed: string[] = []
-  for (const file of files.slice(0, 6)) {
+  for (const file of files) {
     try {
       converted.push({ name: file.name, type: file.type, dataUrl: await readFileAsDataUrl(file) })
     } catch {

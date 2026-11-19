@@ -602,13 +602,13 @@ export function ImageWorkspace() {
    * `consumeCreateIntent` 读取即清除，因此不会在刷新后重复套用。
    */
   useEffect(() => {
-    if (teamMedia) return
-    const intent = consumeCreateIntent('image')
+    const intent = consumeCreateIntent('image', { teamId: teamMedia?.team.id })
     if (!intent) return
     intentDraft.current = true
     if (intent.prompt.trim()) setPrompt(intent.prompt)
     if (intent.settings?.model) setModelId(intent.settings.model)
     if (intent.settings?.ratio) setRatio(intent.settings.ratio)
+    if (intent.settings?.resolution) setResolution(intent.settings.resolution)
     if (intent.settings?.quality) setQuality(intent.settings.quality)
     if (intent.files.length) {
       void ingestIntentFiles(intent.files, setUploads, setNotice)
@@ -1646,8 +1646,7 @@ export function VideoWorkspace() {
 
   /** 套用首页传来的创作意图（提示词 + 参考文件），替换写死的示例文案。 */
   useEffect(() => {
-    if (teamMedia) return
-    const intent = consumeCreateIntent('video')
+    const intent = consumeCreateIntent('video', { teamId: teamMedia?.team.id })
     if (!intent) return
     intentDraft.current = true
     if (intent.prompt.trim()) setPrompt(intent.prompt)
@@ -1655,7 +1654,22 @@ export function VideoWorkspace() {
     if (intent.settings?.ratio) setRatio(intent.settings.ratio)
     if (intent.settings?.quality) setQuality(intent.settings.quality)
     if (intent.settings?.seconds) setDuration(`${intent.settings.seconds} 秒`)
-    if (intent.files.length) void ingestIntentFiles(intent.files, setUploads, setNotice)
+    if (intent.files.length) {
+      const targetModel = videoModelList.find((item) => item.id === (intent.settings?.model || modelId)) ?? videoModelList[0]
+      if (targetModel?.capabilities.multiReference) {
+        setMode('references')
+        void ingestIntentFiles(intent.files, setUploads, setNotice)
+      } else if (targetModel?.capabilities.firstFrame) {
+        setMode('frames')
+        const [first, ...rest] = intent.files
+        if (first) void ingestIntentFiles([first], setFirstFrameUploads, setNotice)
+        if (rest.length && targetModel.capabilities.videoPolicy?.frameReferenceTypes?.includes('image')) {
+          void ingestIntentFiles(rest, setUploads, setNotice)
+        }
+      } else {
+        void ingestIntentFiles(intent.files, setUploads, setNotice)
+      }
+    }
     setNotice({ tone: 'accent', text: `已带入首页的创作描述${intent.files.length ? `与 ${intent.files.length} 个参考文件` : ''}。` })
     // 只在挂载时消费一次意图。
     // eslint-disable-next-line react-hooks/exhaustive-deps

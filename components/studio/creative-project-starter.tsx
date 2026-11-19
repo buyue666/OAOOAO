@@ -13,6 +13,7 @@ import { useStudio } from '@/lib/studio/store'
 type StarterProps = {
   brief?: string
   onBriefChange?: (value: string) => void
+  initialFiles?: File[]
   onCreated?: (project: DramaProject) => void
 }
 
@@ -24,7 +25,7 @@ type SavedReference = {
 const inputClass = 'w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/70 disabled:opacity-60'
 
 /** 创建服务器项目；参考图同时保存到资产库，失败重试沿用本次已上传的素材。 */
-export function CreativeProjectStarter({ brief: controlledBrief, onBriefChange, onCreated }: StarterProps = {}) {
+export function CreativeProjectStarter({ brief: controlledBrief, onBriefChange, initialFiles, onCreated }: StarterProps = {}) {
   const router = useRouter()
   const { state } = useStudio()
   const [title, setTitle] = useState('')
@@ -58,13 +59,24 @@ export function CreativeProjectStarter({ brief: controlledBrief, onBriefChange, 
   useEffect(() => {
     sessionRef.current += 1
     savedRefs.current.clear()
-    setFiles([])
+    const validInitial = (initialFiles ?? [])
+      .filter((file) => file.type.startsWith('image/') && file.size <= 20 * 1024 * 1024)
+      .slice(0, 6)
+    setFiles(validInitial)
     setError('')
     pendingRef.current = false
     setCreating(false)
     setStage('')
     return () => { sessionRef.current += 1 }
   }, [state.user.id, connected])
+
+  useEffect(() => {
+    if (!initialFiles?.length) return
+    setFiles((current) => {
+      if (current.length) return current
+      return initialFiles.filter((file) => file.type.startsWith('image/') && file.size <= 20 * 1024 * 1024).slice(0, 6)
+    })
+  }, [initialFiles])
 
   function changeBrief(value: string) {
     if (onBriefChange) onBriefChange(value)
