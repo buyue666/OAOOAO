@@ -482,7 +482,7 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
                       if (mode === 'video') setVideoRatio(value)
                       else setImageRatio(value)
                     }}
-                    formatRatio={(value) => ratioLabel(value)}
+                    formatRatio={(value) => value === 'auto' || value === 'adaptive' ? ratioLabel(value) : value}
                     resolutionOptions={mode === 'image' ? imageResolutionOptions : undefined}
                     resolution={mode === 'image' ? imageResolution : undefined}
                     onResolutionChange={mode === 'image' ? setImageResolution : undefined}
