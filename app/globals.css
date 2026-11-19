@@ -1041,6 +1041,183 @@
   background: transparent;
 }
 
+/* Studio home: subtle centered ambient glow & micro-dot matrix (non-animated, zero filter on shell). */
+.studio-app-shell[data-studio-route='home'] > .relative {
+  background-image:
+    radial-gradient(64% 38% at 50% 90px, color-mix(in srgb, var(--studio-accent) 10%, transparent), transparent 72%),
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--foreground) 7%, transparent) 1px, transparent 0);
+  background-size: 100% 100%, 24px 24px;
+  background-position: top center, 0 0;
+}
+
+.dark .studio-app-shell[data-studio-route='home'] > .relative {
+  background-image:
+    radial-gradient(64% 38% at 50% 90px, rgba(56, 189, 248, 0.085), rgba(94, 234, 212, 0.04) 45%, transparent 74%),
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.045) 1px, transparent 0);
+  background-size: 100% 100%, 24px 24px;
+}
+
+html[data-oao-skin] .studio-app-shell[data-studio-route='home'] .studio-topbar {
+  background: transparent;
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
+/* Jimeng-inspired luminous capsule mode switcher */
+.studio-jimeng-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 9999px;
+  border: 1px solid rgba(17, 18, 20, 0.08);
+  background: rgba(17, 18, 20, 0.045);
+  padding: 4px;
+  box-shadow: inset 0 1px 2px rgba(17, 18, 20, 0.04);
+}
+
+.dark .studio-jimeng-switcher {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.studio-jimeng-tab {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  padding: 0 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  transition: color 160ms var(--lg-ease-out), background-color 160ms var(--lg-ease-out), box-shadow 180ms var(--lg-ease-out), transform 140ms var(--lg-ease-out);
+}
+
+.studio-jimeng-tab:hover {
+  color: var(--foreground);
+}
+
+.studio-jimeng-tab-active {
+  background: #141518;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(17, 18, 20, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.dark .studio-jimeng-tab-active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.85) 100%),
+    linear-gradient(105deg, rgba(255, 226, 206, 0.72) 0%, rgba(235, 245, 248, 0.85) 45%, rgba(160, 238, 255, 0.8) 100%);
+  color: #141518;
+  box-shadow: 0 6px 20px rgba(125, 227, 255, 0.18), 0 2px 6px rgba(0, 0, 0, 0.32);
+}
+
+/* Sculptural unified composer card */
+.studio-jimeng-composer {
+  position: relative;
+  border: 1px solid rgba(17, 18, 20, 0.09);
+  border-radius: 24px !important;
+  background:
+    radial-gradient(85% 110% at 88% 92%, rgba(15, 118, 110, 0.055), rgba(56, 189, 248, 0.03) 48%, transparent 74%),
+    #ffffff;
+  box-shadow: 0 18px 48px -18px rgba(17, 24, 39, 0.12), 0 2px 6px rgba(17, 24, 39, 0.04);
+  transition: border-color 180ms var(--lg-ease-out), box-shadow 220ms var(--lg-ease-out);
+}
+
+.dark .studio-jimeng-composer {
+  border-color: rgba(255, 255, 255, 0.095);
+  background:
+    radial-gradient(85% 110% at 88% 92%, rgba(94, 234, 212, 0.085), rgba(56, 189, 248, 0.05) 46%, transparent 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.008) 100%),
+    #181a1f;
+  box-shadow: 0 22px 54px -20px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.075);
+}
+
+.studio-jimeng-composer:focus-within {
+  border-color: color-mix(in srgb, var(--studio-accent) 44%, rgba(17, 18, 20, 0.12));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--studio-accent) 12%, transparent),
+    0 20px 52px -18px rgba(17, 24, 39, 0.16);
+}
+
+.dark .studio-jimeng-composer:focus-within {
+  border-color: color-mix(in srgb, var(--studio-accent) 48%, rgba(255, 255, 255, 0.14));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--studio-accent) 14%, transparent),
+    0 24px 60px -20px rgba(0, 0, 0, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+.studio-jimeng-composer textarea:focus,
+.studio-jimeng-composer textarea:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.studio-jimeng-pill {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px !important;
+  border: 1px solid rgba(17, 18, 20, 0.09);
+  background: rgba(17, 18, 20, 0.035);
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--foreground);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.studio-jimeng-pill:hover {
+  border-color: rgba(17, 18, 20, 0.18);
+  background: rgba(17, 18, 20, 0.065);
+}
+
+.dark .studio-jimeng-pill {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.dark .studio-jimeng-pill:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.095);
+}
+
+.studio-jimeng-chip {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px !important;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.studio-jimeng-chip:hover {
+  border-color: color-mix(in srgb, var(--foreground) 22%, var(--border));
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.dark .studio-jimeng-chip {
+  border-color: rgba(255, 255, 255, 0.075);
+  background: rgba(255, 255, 255, 0.045);
+  color: #c2c6d0;
+}
+
+.dark .studio-jimeng-chip:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.09);
+  color: #f4f4f5;
+}
+
 .studio-home-prompt {
   border: 1px solid var(--lg-edge);
   border-radius: var(--radius-2xl);

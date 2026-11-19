@@ -4,7 +4,7 @@ import { useUiText } from '@/lib/studio/i18n'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Bot, Clapperboard, Image as ImageIcon, Layers3, Puzzle, Sparkles, Video, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Bot, Clapperboard, Image as ImageIcon, Puzzle, Video, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStudio } from '@/lib/studio/store'
 import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioLabel } from '@/lib/studio/studio-models'
@@ -15,43 +15,52 @@ import { readIntentFiles, saveCreateIntent } from '@/lib/studio/create-intent'
 import type { ModelConfig } from '@/lib/studio/types'
 import { workspaceHref, workspaceRoot } from '@/lib/studio/workspace-navigation'
 import type { TeamProject, TeamSummary } from '@/lib/studio/team-types'
-import { useSiteBrand } from '@/components/site-brand'
 import { SiteFooter } from '@/components/site-footer'
-import { PromptComposer } from './home-composer'
+import { PromptComposer, type ComposerSlashSkill } from './home-composer'
 import { GenerationPanel, parseSeconds } from './home-generation-panel'
 import { RecentWorks } from './home-recent-works'
+import { HomeShowcase, type ShowcasePreset } from './home-showcase'
 import { PluginProjectStarter } from './plugins/plugin-workspaces'
 import { TeamProjects } from './team-projects'
 
 type EntryMode = 'agent' | 'image' | 'video' | 'project'
 
-const directions: ReadonlyArray<{
-  title: string
-  mode: EntryMode
-  modeLabel: string
-  brief: string
-  icon: LucideIcon
-}> = [
+const QUICK_SKILLS: ReadonlyArray<ComposerSlashSkill & { mode: Exclude<EntryMode, 'project'> }> = [
   {
-    title: '让产品成为主角',
+    id: 'product-short',
+    label: '产品质感短片',
     mode: 'agent',
-    modeLabel: '创作助手',
-    brief: '制作一支 15 秒的产品短片。用三个镜头分别表现产品的整体造型、材质细节和使用场景，保持产品外观一致。',
-    icon: Layers3,
+    prompt: '制作一支 15 秒的产品短片。用三个镜头分别表现产品的整体造型、材质细节和使用场景，保持产品外观一致。',
   },
   {
-    title: '视觉概念与主画面探索',
-    mode: 'image',
-    modeLabel: '图片生成',
-    brief: '雨夜东京街角的复古咖啡馆橱窗，暖黄色室内灯光洒在湿润的石板路上，玻璃上挂着细密水珠，电影感构图与柔和胶片质感。',
-    icon: ImageIcon,
-  },
-  {
-    title: '讲一个有转折的镜头',
+    id: 'cinema-long-take',
+    label: '电影级长镜头运镜',
     mode: 'video',
-    modeLabel: '视频生成',
-    brief: '清晨海边，一位旅人沿沙滩慢慢前行，海风轻拂衣摆，镜头从远景平稳推进到侧脸近景，暖色逆光，写实电影质感。',
-    icon: Clapperboard,
+    prompt: '清晨海边，一位旅人沿沙滩慢慢前行，海风轻拂衣摆，镜头从远景平稳推进到侧脸近景，暖色逆光，写实电影质感。',
+  },
+  {
+    id: 'storyboard',
+    label: '创作分镜',
+    mode: 'agent',
+    prompt: '为一段 30 秒的都市深夜邂逅短片设计 6 个连续分镜，明确景别、机位运动、灯光色调和人物情绪转折。',
+  },
+  {
+    id: 'style-master',
+    label: '视觉概念主画面',
+    mode: 'image',
+    prompt: '雨夜东京街角的复古咖啡馆橱窗，暖黄色室内灯光洒在湿润的石板路上，玻璃上挂着细密水珠，电影感构图与柔和胶片质感。',
+  },
+  {
+    id: 'narrative-director',
+    label: '叙事短片导演',
+    mode: 'agent',
+    prompt: '围绕「失而复得的旧怀表」撰写 4 幕短片大纲，拆解出核心角色设定与关键场景参考图需求。',
+  },
+  {
+    id: 'micro-expression',
+    label: '情绪特写镜头',
+    mode: 'video',
+    prompt: '室内窗边柔光特写，人物听到远处脚步声后眼神从平静转为微惊，浅景深虚化背景，胶片电影质感。',
   },
 ]
 
@@ -79,7 +88,6 @@ function groupByProvider(models: ModelConfig[], fallbackLabel: string) {
 export function HomePage({ team, project }: { team?: TeamSummary; project?: TeamProject } = {}) {
   const tx = useUiText()
   const router = useRouter()
-  const brand = useSiteBrand()
   const { state, estimateCredits, defaultModels } = useStudio()
   const href = (target: string) => team ? workspaceHref(workspaceRoot({ teamId: team.id, projectId: project?.id }), target) : target
   const canCreate = team?.role !== 'reviewer'
@@ -266,6 +274,23 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
     setFiles(nextFiles.slice(0, AGENT_FILE_LIMIT))
   }
 
+  function applyQuickBrief(nextPrompt: string, nextMode?: EntryMode) {
+    setPrompt(nextPrompt)
+    if (nextMode && (!team || nextMode !== 'agent')) {
+      setMode(nextMode === 'project' ? (team ? 'image' : 'agent') : nextMode)
+    }
+    setStartError('')
+    requestAnimationFrame(() => {
+      const input = document.getElementById('home-prompt')
+      input?.focus()
+      input?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
+  }
+
+  function handlePresetApply(preset: ShowcasePreset) {
+    applyQuickBrief(preset.prompt, preset.mode)
+  }
+
   async function startCreation() {
     if (submitLock.current || starting || mode === 'project') return
     if (!canStart) {
@@ -333,50 +358,40 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
       ]
 
   const directEntry = mode === 'agent'
-    ? { href: '/agent', label: '直接打开创作助手' }
+    ? { href: '/agent', label: '直接进入' }
     : mode === 'image'
-      ? { href: href('/image'), label: '直接打开图片工作台' }
+      ? { href: href('/image'), label: '图片工作台' }
       : mode === 'video'
-        ? { href: href('/video'), label: '直接打开视频工作台' }
-        : { href: href('/projects'), label: '浏览全部项目' }
+        ? { href: href('/video'), label: '视频工作台' }
+        : { href: href('/projects'), label: '全部项目' }
 
   const placeholders: Record<Exclude<EntryMode, 'project'>, string> = {
-    agent: tx('描述你想完成的画面、短片或故事，支持上传参考图、视频、音频或剧本，先一起梳理方向并确认生成计划…'),
-    image: tx('描述画面主体、场景、光线、风格与构图，或添加参考图继续修改…'),
-    video: tx('描述主体动作、镜头运动与画面氛围，也可添加图片作为首帧或画面参考…'),
+    agent: tx('输入想法、剧本或上传参考，支持 / 唤起技能，和创作助手一起构思…'),
+    image: tx('描述画面主体、场景、光线、风格与构图，或点击左侧卡片上传参考图…'),
+    video: tx('描述主体动作、镜头运动与画面氛围，也可上传参考图作为首帧或画面参考…'),
   }
 
-  const modeHints: Record<Exclude<EntryMode, 'project'>, string> = {
-    agent: tx('支持图片、视频、音频与文档'),
-    image: tx('最多带入 6 张参考图片'),
-    video: tx('图片参考将带入视频工作台'),
-  }
+  const heroTitle = team
+    ? `${team.name}${project ? ` · ${project.title}` : ''}，${tx('今天想创作什么？')}`
+    : tx('你好，今天想要创作什么？')
+
+  const displayedSkills = team ? QUICK_SKILLS.filter((skill) => skill.mode !== 'agent') : QUICK_SKILLS
 
   return (
-    <div className="studio-home mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 pb-16 pt-7 sm:px-6 lg:px-8 lg:pt-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-muted-foreground">
-            {team ? `${team.name} · ${tx('团队空间')}${project ? ` / ${project.title}` : ''}` : <>{brand.title} {tx('· 创作空间')}</>}
+    <div className="studio-home mx-auto flex w-full max-w-[1160px] flex-col gap-10 px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
+      <section className="flex flex-col items-center">
+        <h1 className="text-center text-[26px] font-semibold tracking-[-0.03em] text-foreground sm:text-[32px]">
+          {heroTitle}
+        </h1>
+        {!canCreate && (
+          <p className="mt-2.5 text-center text-sm text-muted-foreground">
+            {tx('你是审阅成员，可以查看已授权的项目和生成结果。')}
           </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">{tx('今天，做点什么？')}</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {tx(team
-              ? canCreate
-                ? '先在这里写下描述或添加参考，随时切换图片、视频或团队项目，把同一份想法带入对应流程。'
-                : '你是审阅成员，可以查看已授权的项目和生成结果。'
-              : '先在这里写下想法或添加参考，再随时切换创作助手、图片、视频或完整作品。')}
-          </p>
-        </div>
-        <Link prefetch={false} href={href('/works')} className="inline-flex min-h-11 items-center gap-2 rounded-md py-2 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70">
-          {tx('继续上次的生成')}<ArrowRight className="size-4" aria-hidden="true" />
-        </Link>
-      </header>
+        )}
 
-      {canCreate && (
-        <section data-tour="creator" className="studio-surface" aria-label={tx('开始创作')}>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2.5 sm:px-4">
-            <div role="group" aria-label={tx('创作方式')} className="flex flex-wrap gap-1">
+        {canCreate && (
+          <>
+            <div role="group" aria-label={tx('创作方式')} className="studio-jimeng-switcher mt-5 max-w-full overflow-x-auto">
               {modeTabs.map((entry) => {
                 const Icon = entry.icon
                 const active = mode === entry.id
@@ -387,165 +402,156 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
                     aria-pressed={active}
                     onClick={() => setMode(entry.id)}
                     className={cn(
-                      'inline-flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
-                      active ? 'bg-foreground text-background shadow-xs' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      'studio-jimeng-tab shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
+                      active && 'studio-jimeng-tab-active',
                     )}
                   >
                     <Icon className="size-4" aria-hidden="true" />
-                    {tx(entry.title)}
+                    <span>{tx(entry.title)}</span>
                   </button>
                 )
               })}
             </div>
-            <Link
-              prefetch={false}
-              href={directEntry.href}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-            >
-              {tx(directEntry.label)}<ArrowRight className="size-3.5" aria-hidden="true" />
-            </Link>
-          </div>
 
-          {mode === 'project' ? (
-            team ? (
-              <div className="p-5 sm:p-7">
-                <TeamProjects team={team} intent="create" />
-              </div>
-            ) : (
-              <PluginProjectStarter
-                brief={prompt}
-                onBriefChange={setPrompt}
-                initialFiles={compatibleFiles}
-              />
-            )
-          ) : (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault()
-                void startCreation()
-              }}
-            >
-              <PromptComposer
-                value={prompt}
-                onChange={(next) => {
-                  setPrompt(next)
-                  if (startError) setStartError('')
-                }}
-                onSubmitShortcut={() => void startCreation()}
-                files={files}
-                onFilesChange={handleFilesChange}
-                placeholder={placeholders[mode]}
-                accept={mode === 'agent' ? AGENT_FILE_ACCEPT : 'image/*'}
-                maxFiles={AGENT_FILE_LIMIT}
-                fileError={fileError}
-                modeHint={modeHints[mode]}
-                hideSkillsLink={Boolean(team)}
-                isFileCompatible={mode === 'agent' ? undefined : isMediaCompatibleImage}
-                incompatibleLabel={mode === 'agent' ? undefined : tx('仅创作助手')}
-              />
-              <GenerationPanel
-                mode={mode}
-                selectedModel={selectedModel}
-                modelOptions={activeModels}
-                groupedModels={groupedModels}
-                dropdownOpen={dropdownOpen}
-                pickerRef={pickerRef}
-                onToggleDropdown={() => setDropdownOpen((open) => !open)}
-                onSelectModel={(id) => {
-                  if (mode === 'video') setVideoModelId(id)
-                  else setImageModelId(id)
-                  setDropdownOpen(false)
-                }}
-                ratioOptions={mode === 'video' ? videoRatioOptions : imageRatioOptions}
-                ratio={mode === 'video' ? videoRatio : imageRatio}
-                onRatioChange={(value) => {
-                  if (mode === 'video') setVideoRatio(value)
-                  else setImageRatio(value)
-                }}
-                formatRatio={(value) => ratioLabel(value, selectedModel?.capabilities.outputDimensions, mode === 'image' ? imageResolution : undefined, selectedModel?.capabilities.outputDimensionsByResolution)}
-                resolutionOptions={mode === 'image' ? imageResolutionOptions : undefined}
-                resolution={mode === 'image' ? imageResolution : undefined}
-                onResolutionChange={mode === 'image' ? setImageResolution : undefined}
-                qualityOptions={mode === 'video' ? videoQualityOptions : imageQualityOptionsList}
-                quality={mode === 'video' ? videoQuality : imageQuality}
-                onQualityChange={(value) => {
-                  if (mode === 'video') setVideoQuality(value)
-                  else setImageQuality(value)
-                }}
-                formatQuality={(value) => qualityLabel(value, selectedModel?.capabilities.qualityLabels)}
-                durationOptions={videoAllowedDurations}
-                durationRange={videoDurationRule}
-                fixedDuration={videoFixedDuration}
-                seconds={videoSeconds}
-                onSecondsChange={setVideoSeconds}
-                onSecondsCommit={() => {
-                  if (!videoDurationRule) return
-                  setVideoSeconds((current) => Math.max(videoDurationRule.min, Math.min(videoDurationRule.max, Number.isFinite(current) ? Math.round(current) : videoDurationRule.min)))
-                }}
-                estimatedCredits={estimatedCredits}
-                creditNote={team ? tx('进入团队项目工作台后按实际参数核对积分') : undefined}
-                compatibilityNote={compatibilityNote}
-                submitLabel={mode === 'agent' ? tx('进入创作助手') : mode === 'image' ? tx('带入图片工作台') : tx('带入视频工作台')}
-                canStart={canStart}
-                starting={starting}
-                startError={startError}
-              />
-            </form>
-          )}
-        </section>
-      )}
+            <div data-tour="creator" role="region" aria-label={tx('开始创作')} className="studio-jimeng-composer mt-5 w-full max-w-[900px]">
+              {mode === 'project' ? (
+                <div className="p-5 sm:p-6">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-foreground">{team ? tx('新建团队项目') : tx('创建完整作品')}</span>
+                    <Link
+                      prefetch={false}
+                      href={directEntry.href}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    >
+                      {tx(directEntry.label)}<ArrowRight className="size-3.5" aria-hidden="true" />
+                    </Link>
+                  </div>
+                  {team ? (
+                    <TeamProjects team={team} intent="create" />
+                  ) : (
+                    <PluginProjectStarter
+                      brief={prompt}
+                      onBriefChange={setPrompt}
+                      initialFiles={compatibleFiles}
+                    />
+                  )}
+                </div>
+              ) : (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    void startCreation()
+                  }}
+                >
+                  <PromptComposer
+                    value={prompt}
+                    onChange={(next) => {
+                      setPrompt(next)
+                      if (startError) setStartError('')
+                    }}
+                    onSubmitShortcut={() => void startCreation()}
+                    files={files}
+                    onFilesChange={handleFilesChange}
+                    placeholder={placeholders[mode]}
+                    accept={mode === 'agent' ? AGENT_FILE_ACCEPT : 'image/*'}
+                    maxFiles={AGENT_FILE_LIMIT}
+                    fileError={fileError}
+                    isFileCompatible={mode === 'agent' ? undefined : isMediaCompatibleImage}
+                    incompatibleLabel={mode === 'agent' ? undefined : tx('仅创作助手')}
+                    slashSkills={displayedSkills}
+                    onSelectSlashSkill={(skill) => {
+                      applyQuickBrief(skill.prompt, skill.mode)
+                    }}
+                  />
+                  <GenerationPanel
+                    mode={mode}
+                    selectedModel={selectedModel}
+                    modelOptions={activeModels}
+                    groupedModels={groupedModels}
+                    dropdownOpen={dropdownOpen}
+                    pickerRef={pickerRef}
+                    onToggleDropdown={() => setDropdownOpen((open) => !open)}
+                    onSelectModel={(id) => {
+                      if (mode === 'video') setVideoModelId(id)
+                      else setImageModelId(id)
+                      setDropdownOpen(false)
+                    }}
+                    ratioOptions={mode === 'video' ? videoRatioOptions : imageRatioOptions}
+                    ratio={mode === 'video' ? videoRatio : imageRatio}
+                    onRatioChange={(value) => {
+                      if (mode === 'video') setVideoRatio(value)
+                      else setImageRatio(value)
+                    }}
+                    formatRatio={(value) => ratioLabel(value, selectedModel?.capabilities.outputDimensions, mode === 'image' ? imageResolution : undefined, selectedModel?.capabilities.outputDimensionsByResolution)}
+                    resolutionOptions={mode === 'image' ? imageResolutionOptions : undefined}
+                    resolution={mode === 'image' ? imageResolution : undefined}
+                    onResolutionChange={mode === 'image' ? setImageResolution : undefined}
+                    qualityOptions={mode === 'video' ? videoQualityOptions : imageQualityOptionsList}
+                    quality={mode === 'video' ? videoQuality : imageQuality}
+                    onQualityChange={(value) => {
+                      if (mode === 'video') setVideoQuality(value)
+                      else setImageQuality(value)
+                    }}
+                    formatQuality={(value) => qualityLabel(value, selectedModel?.capabilities.qualityLabels)}
+                    durationOptions={videoAllowedDurations}
+                    durationRange={videoDurationRule}
+                    fixedDuration={videoFixedDuration}
+                    seconds={videoSeconds}
+                    onSecondsChange={setVideoSeconds}
+                    onSecondsCommit={() => {
+                      if (!videoDurationRule) return
+                      setVideoSeconds((current) => Math.max(videoDurationRule.min, Math.min(videoDurationRule.max, Number.isFinite(current) ? Math.round(current) : videoDurationRule.min)))
+                    }}
+                    estimatedCredits={estimatedCredits}
+                    creditNote={team ? tx('进入工作台后按实际参数核对积分') : undefined}
+                    compatibilityNote={compatibilityNote}
+                    submitLabel={mode === 'agent' ? tx('开始创作') : mode === 'image' ? tx('生成图片') : tx('生成视频')}
+                    directHref={directEntry.href}
+                    directLabel={directEntry.label}
+                    hideSkillsLink={Boolean(team)}
+                    canStart={canStart}
+                    starting={starting}
+                    startError={startError}
+                  />
+                </form>
+              )}
+            </div>
+
+            <div className="mt-4 flex w-full max-w-[900px] flex-wrap items-center justify-center gap-2" aria-label={tx('快捷灵感技能')}>
+              {displayedSkills.map((skill) => (
+                <button
+                  key={skill.id}
+                  type="button"
+                  onClick={() => applyQuickBrief(skill.prompt, skill.mode)}
+                  className="studio-jimeng-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                >
+                  <span>/ {tx(skill.label)}</span>
+                </button>
+              ))}
+              {!team && (
+                <Link
+                  prefetch={false}
+                  href="/skills"
+                  className="studio-jimeng-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                >
+                  <span>{tx('更多技能')}</span>
+                  <ArrowRight className="size-3" aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+          </>
+        )}
+      </section>
 
       {team ? (
-        <Link prefetch={false} href={href('/tools')} className="inline-flex min-h-11 w-fit items-center gap-2 rounded-md border border-border px-4 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
-          <Puzzle className="size-4" aria-hidden="true" />{tx('功能中心')}<ArrowRight className="size-4" aria-hidden="true" />
-        </Link>
+        <div className="flex justify-center">
+          <Link prefetch={false} href={href('/tools')} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+            <Puzzle className="size-4" aria-hidden="true" />{tx('功能中心')}<ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        </div>
       ) : (
         <>
-          <section aria-labelledby="directions-title">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <h2 id="directions-title" className="text-sm font-semibold">{tx('从一个方向开始')}</h2>
-                <p className="mt-1 text-xs text-muted-foreground">{tx('点击任意方向，描述会填入上方输入框并切换到对应模式，随时可再切换。')}</p>
-              </div>
-            </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              {directions.map((direction) => {
-                const Icon = direction.icon
-                return (
-                  <button
-                    key={direction.title}
-                    type="button"
-                    onClick={() => {
-                      setPrompt(direction.brief)
-                      setMode(direction.mode)
-                      setStartError('')
-                      requestAnimationFrame(() => {
-                        const input = document.getElementById('home-prompt')
-                        input?.focus()
-                        input?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-                      })
-                    }}
-                    className="group flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-                  >
-                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
-                      <Icon className="size-4" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-foreground">{tx(direction.title)}</span>
-                      </span>
-                      <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">{tx(direction.brief)}</span>
-                      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-studio-accent">
-                        <Sparkles className="size-3" aria-hidden="true" />{tx('填入并切至')}{tx(direction.modeLabel)}
-                      </span>
-                    </span>
-                    <ArrowRight className="mt-1 size-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:group-hover:translate-x-0.5" aria-hidden="true" />
-                  </button>
-                )
-              })}
-            </div>
-          </section>
-
+          <HomeShowcase onApplyPreset={handlePresetApply} />
           <RecentWorks />
         </>
       )}

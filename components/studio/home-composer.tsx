@@ -2,10 +2,16 @@
 
 import { useUiText } from '@/lib/studio/i18n'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, FileAudio, FileText, FileVideo, Image as ImageIcon, Paperclip, Puzzle, X } from 'lucide-react'
+import { ArrowRight, FileAudio, FileText, FileVideo, Image as ImageIcon, Plus, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+export type ComposerSlashSkill = {
+  id: string
+  label: string
+  prompt: string
+  mode?: 'agent' | 'image' | 'video'
+}
 
 type PromptComposerProps = {
   value: string
@@ -17,10 +23,10 @@ type PromptComposerProps = {
   accept?: string
   maxFiles?: number
   fileError?: string
-  modeHint?: string
-  hideSkillsLink?: boolean
   isFileCompatible?: (file: File) => boolean
   incompatibleLabel?: string
+  slashSkills?: readonly ComposerSlashSkill[]
+  onSelectSlashSkill?: (skill: ComposerSlashSkill) => void
   className?: string
 }
 
@@ -29,8 +35,8 @@ function fileKey(file: File) {
 }
 
 /**
- * 创作描述：工作台的主输入区。参考素材与技能库入口紧贴输入框，
- * 支持拖拽与粘贴素材，输入法组合态不会触发快捷提交。
+ * 创作描述：参考素材卡片左置倾角叠放，紧邻无框输入区，
+ * 支持拖拽、粘贴与 `/` 快捷技能唤起，输入法组合态不会误触提交。
  */
 export function PromptComposer({
   value,
@@ -42,15 +48,33 @@ export function PromptComposer({
   accept,
   maxFiles = 12,
   fileError,
-  modeHint,
-  hideSkillsLink = false,
   isFileCompatible,
   incompatibleLabel,
+  slashSkills,
+  onSelectSlashSkill,
   className,
 }: PromptComposerProps) {
   const tx = useUiText()
   const [dragging, setDragging] = useState(false)
+  const [slashOpen, setSlashOpen] = useState(false)
   const dragDepth = useRef(0)
+  const tileInputRef = useRef<HTMLInputElement>(null)
+  const [tilePreview, setTilePreview] = useState('')
+
+  useEffect(() => {
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+      setTilePreview('')
+      return
+    }
+    const firstImage = files.find((file) => file.type.startsWith('image/') && typeof Blob !== 'undefined' && file instanceof Blob)
+    if (!firstImage) {
+      setTilePreview('')
+      return
+    }
+    const url = URL.createObjectURL(firstImage)
+    setTilePreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [files])
 
   function mergeIncoming(incoming: File[]) {
     if (!incoming.length) return
@@ -95,61 +119,135 @@ export function PromptComposer({
       {dragging && (
         <div
           role="status"
-          className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-studio-accent bg-background/95 text-sm font-medium text-studio-accent"
+          className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-[20px] border-2 border-dashed border-studio-accent bg-background/95 text-sm font-medium text-studio-accent"
         >
           {tx('松开添加参考素材')}
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
-        <label htmlFor="home-prompt" className="text-sm font-semibold text-foreground">{tx('创作描述')}</label>
-        <p className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="hidden sm:inline">{tx('Ctrl/⌘ + Enter 开始创作')}</span>
-          <span className="tabular-nums">{value.length} {tx('字')}</span>
-        </p>
-      </div>
-      <textarea
-        id="home-prompt"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
-            event.preventDefault()
-            onSubmitShortcut()
-          }
-        }}
-        placeholder={placeholder}
-        rows={5}
-        className="mt-2.5 block min-h-[152px] w-full resize-y bg-transparent px-5 pb-3 text-base leading-7 text-foreground outline-none placeholder:text-muted-foreground lg:min-h-[196px]"
-      />
-      {fileError && (
-        <p role="alert" className="mx-5 mb-2 rounded-md border border-destructive/30 bg-destructive/8 px-3 py-1.5 text-xs leading-5 text-destructive">
-          {fileError}
-        </p>
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 border-t border-border px-4 py-3">
-        <ReferenceMaterials
-          files={files}
-          onFilesChange={onFilesChange}
+
+      <div className="flex items-start gap-3.5 px-4 pt-4 pb-2 sm:gap-4 sm:px-5 sm:pt-5">
+        <button
+          type="button"
+          disabled={files.length >= maxFiles}
+          onClick={() => tileInputRef.current?.click()}
+          aria-label={files.length ? tx('继续添加参考素材 ({0}/{1})', [files.length, maxFiles]) : tx('添加参考素材')}
+          className={cn(
+            'group/tile relative flex size-[70px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-2xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-50 sm:size-[78px]',
+            '-rotate-3 hover:rotate-0',
+            tilePreview
+              ? 'border-border/80 bg-muted shadow-sm'
+              : 'border-dashed border-foreground/15 bg-foreground/[0.04] text-muted-foreground hover:border-foreground/30 hover:bg-foreground/[0.07] hover:text-foreground',
+          )}
+        >
+          {tilePreview ? (
+            <>
+              <img src={tilePreview} alt="" className="size-full object-cover" />
+              <span className="absolute inset-0 bg-black/25 transition-colors group-hover/tile:bg-black/40" />
+              <span className="relative z-10 flex size-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm">
+                <Plus className="size-4" aria-hidden="true" />
+              </span>
+              {files.length > 1 && (
+                <span className="absolute right-1.5 top-1.5 z-10 rounded-full bg-black/75 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white">
+                  {files.length}
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <Plus className="size-5 transition-transform duration-150 group-hover/tile:scale-110" aria-hidden="true" />
+              <span className="mt-1 text-[11px] font-medium">{files.length ? `${files.length}/${maxFiles}` : tx('上传参考')}</span>
+            </>
+          )}
+        </button>
+
+        <input
+          ref={tileInputRef}
+          type="file"
           accept={accept}
-          maxFiles={maxFiles}
-          isFileCompatible={isFileCompatible}
-          incompatibleLabel={incompatibleLabel}
+          multiple
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(event) => {
+            mergeIncoming(Array.from(event.target.files ?? []))
+            event.target.value = ''
+          }}
         />
-        <div className="flex flex-wrap items-center gap-3">
-          {modeHint && <span className="text-xs text-muted-foreground">{modeHint}</span>}
-          {!hideSkillsLink && (
-            <Link
-              href="/skills"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+
+        <div className="relative min-w-0 flex-1">
+          <textarea
+            id="home-prompt"
+            aria-label={tx('创作描述')}
+            value={value}
+            onChange={(event) => {
+              const next = event.target.value
+              onChange(next)
+              if (slashSkills?.length) {
+                setSlashOpen(next === '/' || /(?:^|\s)\/$/.test(next))
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && slashOpen) {
+                setSlashOpen(false)
+                return
+              }
+              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
+                event.preventDefault()
+                onSubmitShortcut()
+              }
+            }}
+            placeholder={placeholder}
+            rows={4}
+            className="block min-h-[86px] w-full resize-none bg-transparent py-1 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground/80 sm:min-h-[98px]"
+          />
+
+          {slashOpen && slashSkills && slashSkills.length > 0 && (
+            <div
+              role="listbox"
+              aria-label={tx('快捷技能模板')}
+              className="lg-glass-overlay motion-panel absolute left-0 top-[calc(100%+4px)] z-40 w-full max-w-[380px] rounded-2xl border border-border p-1.5 shadow-[var(--lg-shadow-4)]"
             >
-              <Puzzle className="size-3.5" aria-hidden="true" />
-              {tx('技能中心')}<span className="sr-only">{tx('（在新标签页打开）')}</span>
-            </Link>
+              <p className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{tx('选择一个创作技能')}</p>
+              {slashSkills.map((skill) => (
+                <button
+                  key={skill.id}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onClick={() => {
+                    setSlashOpen(false)
+                    onSelectSlashSkill?.(skill)
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                >
+                  <Sparkles className="size-3.5 shrink-0 text-studio-accent" aria-hidden="true" />
+                  <span className="truncate">/ {tx(skill.label)}</span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>
+
+      {files.length > 0 && (
+        <div className="px-4 pb-2 pt-1 sm:px-5">
+          <ReferenceMaterials
+            files={files}
+            onFilesChange={onFilesChange}
+            accept={accept}
+            maxFiles={maxFiles}
+            isFileCompatible={isFileCompatible}
+            incompatibleLabel={incompatibleLabel}
+            hideAddButton
+          />
+        </div>
+      )}
+
+      {fileError && (
+        <p role="alert" className="mx-4 mb-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs leading-5 text-destructive sm:mx-5">
+          {fileError}
+        </p>
+      )}
     </div>
   )
 }
@@ -161,6 +259,7 @@ type ReferenceMaterialsProps = {
   maxFiles?: number
   isFileCompatible?: (file: File) => boolean
   incompatibleLabel?: string
+  hideAddButton?: boolean
 }
 
 /** 参考素材展示缩略图与移除按钮，追加新文件或移除单个文件无需重选整批。 */
@@ -171,10 +270,10 @@ export function ReferenceMaterials({
   maxFiles = 12,
   isFileCompatible,
   incompatibleLabel,
+  hideAddButton = false,
 }: ReferenceMaterialsProps) {
   const tx = useUiText()
   const inputRef = useRef<HTMLInputElement>(null)
-
   const [previewUrls, setPreviewUrls] = useState<Map<string, string>>(() => new Map())
 
   useEffect(() => {
@@ -205,7 +304,7 @@ export function ReferenceMaterials({
   }
 
   return (
-    <div role="group" aria-label={tx('参考素材')} className="flex min-w-0 flex-wrap items-center gap-2">
+    <div role="group" aria-label={tx('参考素材')} className="flex min-w-0 flex-wrap items-center gap-1.5">
       {files.map((file) => {
         const key = fileKey(file)
         const isImage = file.type.startsWith('image/')
@@ -216,54 +315,58 @@ export function ReferenceMaterials({
           <span
             key={key}
             className={cn(
-              'inline-flex max-w-full items-center gap-1.5 rounded-lg border py-1 pl-1.5 pr-1 text-xs',
-              compatible ? 'border-border bg-card text-foreground' : 'border-dashed border-border/80 bg-muted/40 text-muted-foreground',
+              'inline-flex max-w-full items-center gap-1.5 rounded-full border py-1 pl-1.5 pr-1.5 text-xs',
+              compatible ? 'border-border bg-muted/60 text-foreground' : 'border-dashed border-border/80 bg-muted/30 text-muted-foreground',
             )}
           >
             {url ? (
-              <img src={url} alt="" className={cn('size-6 shrink-0 rounded object-cover', !compatible && 'opacity-50')} />
+              <img src={url} alt="" className={cn('size-5 shrink-0 rounded-full object-cover', !compatible && 'opacity-50')} />
             ) : (
-              <span className="flex size-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                <Icon className="size-3.5" aria-hidden="true" />
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground">
+                <Icon className="size-3" aria-hidden="true" />
               </span>
             )}
-            <span className="max-w-36 truncate">{file.name}</span>
+            <span className="max-w-32 truncate">{file.name}</span>
             {!compatible && incompatibleLabel && (
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{incompatibleLabel}</span>
+              <span className="rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{incompatibleLabel}</span>
             )}
             <button
               type="button"
               aria-label={tx('移除参考 {0}', [file.name])}
               onClick={() => onFilesChange(files.filter((item) => item !== file))}
-              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             >
               <X className="size-3" aria-hidden="true" />
             </button>
           </span>
         )
       })}
-      <button
-        type="button"
-        disabled={files.length >= maxFiles}
-        onClick={() => inputRef.current?.click()}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-dashed border-border bg-card px-2.5 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <Paperclip className="size-3.5" aria-hidden="true" />
-        {files.length ? tx('继续添加 ({0}/{1})', [files.length, maxFiles]) : tx('添加参考素材')}
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        multiple
-        className="hidden"
-        tabIndex={-1}
-        aria-hidden="true"
-        onChange={(event) => {
-          addFiles(Array.from(event.target.files ?? []))
-          event.target.value = ''
-        }}
-      />
+      {!hideAddButton && (
+        <>
+          <button
+            type="button"
+            disabled={files.length >= maxFiles}
+            onClick={() => inputRef.current?.click()}
+            className="studio-jimeng-pill disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {files.length ? tx('继续添加 ({0}/{1})', [files.length, maxFiles]) : tx('添加参考素材')}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={accept}
+            multiple
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(event) => {
+              addFiles(Array.from(event.target.files ?? []))
+              event.target.value = ''
+            }}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -276,7 +379,7 @@ type InspirationShortcutsProps<T extends InspirationScene> = {
   className?: string
 }
 
-/** 灵感模板：16:9 缩略图、类型标签与「继续创作」入口。选择后把描述填入输入区并切换模式。 */
+/** 灵感模板：16:9 缩略图、类型标签与「继续创作」入口。 */
 export function InspirationShortcuts<T extends InspirationScene>({ scenes, onSelect, className }: InspirationShortcutsProps<T>) {
   const tx = useUiText()
   return (

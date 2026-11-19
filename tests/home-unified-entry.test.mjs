@@ -153,6 +153,7 @@ test('home page renders unified mode bar and composer for personal and team work
     if (name === './home-composer') return composerMod.exports
     if (name === './home-generation-panel') return panelMod.exports
     if (name === './home-recent-works') return { RecentWorks: () => null }
+    if (name === './home-showcase') return { HomeShowcase: () => null }
     if (name === './plugins/plugin-workspaces') return { PluginProjectStarter: () => null }
     if (name === './team-projects') return { TeamProjects: () => null }
     return require(name)

@@ -11,6 +11,7 @@ import { useLocale } from '@/lib/studio/i18n'
 import { StatusBadge, Tooltip } from './ui'
 import { isStudioPreview } from '@/lib/studio/preview-mode'
 import { localizedStudioPageTitle } from './studio-nav'
+import { workspaceSection } from '@/lib/studio/workspace-navigation'
 import { cn } from '@/lib/utils'
 import { AnnouncementList, useAnnouncements } from '@/components/site-announcements'
 import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
@@ -48,6 +49,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   const projectId = pathname.startsWith('/projects/') ? pathname.split('/')[2] : undefined
   const projectTitle = projectId ? state.projects.find((project) => project.id === projectId)?.title : undefined
+  const isHome = workspaceSection(pathname) === '/studio'
   const pageTitle = localizedStudioPageTitle(pathname, projectTitle, tx)
   const themeLabel = tx(state.theme === 'dark' ? '切换到浅色主题' : '切换到深色主题')
   const localeLabel = locale === 'zh-CN' ? t('switchToEnglish') : t('switchToChinese')
@@ -118,12 +120,12 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   return (
     <>
-    <header className="studio-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3 md:px-5">
+    <header className={cn('studio-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 px-3 md:px-6', !isHome && 'border-b')}>
       <div className="flex min-w-0 items-center gap-2">
         <button type="button" data-tour="mobile-menu" onClick={onMenuClick} aria-label={tx("打开导航")} className={cn(iconButtonClass, 'lg:hidden')}>
           <Menu className="size-5" aria-hidden="true" />
         </button>
-        <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground" aria-current="page">{pageTitle}</p>
+        <p className={cn('truncate text-sm font-semibold tracking-[-0.01em] text-foreground', isHome && 'lg:sr-only')} aria-current="page">{pageTitle}</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -173,9 +175,16 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               aria-haspopup={isConnected ? 'menu' : undefined}
               data-tour="account"
               aria-label={isConnected ? tx('打开账户菜单') : tx('登录')}
-              className="flex size-9 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-foreground transition-colors duration-150 hover:border-studio-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+              className={cn(
+                'flex items-center justify-center overflow-hidden rounded-full text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
+                isConnected
+                  ? 'size-9 border border-border bg-muted text-foreground hover:border-studio-accent/60'
+                  : 'h-9 gap-1.5 bg-foreground px-4 text-background hover:bg-foreground/90',
+              )}
             >
-              {isConnected ? state.user.name.split(/\s+/).map((item) => item[0]).join('').slice(0, 2).toUpperCase() : <LogIn className="size-4" aria-hidden="true" />}
+              {isConnected
+                ? state.user.name.split(/\s+/).map((item) => item[0]).join('').slice(0, 2).toUpperCase()
+                : <><LogIn className="size-3.5" aria-hidden="true" /><span>{tx('登录')}</span></>}
             </button>
           </Tooltip>
           {isConnected && (
