@@ -58,8 +58,11 @@ test('English copy formats owned prices and durations without translating interp
 })
 
 test('navigation and page titles respond to English while preserving user project names',()=>{
-  const nav=load('components/studio/studio-nav.tsx',{...base,'@/lib/studio/plugin-context':{usePlugins:()=>({isInstalled:()=>false})},'@/lib/studio/creative-plugins':load('lib/studio/creative-plugins.ts',{}),'./plugins/plugin-icon':{pluginIcons:{}},'@/lib/studio/workspace-navigation':load('lib/studio/workspace-navigation.ts',{}),'next/link':({children,...props})=>React.createElement('a',props,children),'next/navigation':{useRouter:()=>({push(){}})}})
-  const result=html(nav.StudioNavLink,{item:nav.studioPrimaryNav[2],pathname:'/assets'})
+  const routes=load('lib/studio/workspace-navigation.ts',{})
+  const plugins=load('lib/studio/creative-plugins.ts',{'./creative-plugin-releases.json':JSON.parse(read('lib/studio/creative-plugin-releases.json'))})
+  const features=load('lib/studio/workspace-features.ts',{'./workspace-navigation':routes,'./creative-plugins':plugins})
+  const nav=load('components/studio/studio-nav.tsx',{...base,'@/lib/studio/plugin-context':{usePlugins:()=>({isInstalled:()=>false})},'@/lib/studio/creative-plugins':plugins,'./plugins/plugin-icon':{pluginIcons:{}},'@/lib/studio/workspace-navigation':routes,'@/lib/studio/workspace-features':features,'next/link':({children,...props})=>React.createElement('a',props,children),'next/navigation':{useRouter:()=>({push(){}})}})
+  const result=html(nav.StudioNavLink,{item:nav.studioPrimaryNav.find(item=>item.href==='/assets'),pathname:'/assets'})
   assert.match(result,/Creative assets/);assert.doesNotMatch(result,/创作资产/)
   assert.equal(nav.localizedStudioPageTitle('/video',undefined,englishText),'Video generation')
   assert.equal(nav.localizedStudioPageTitle('/projects/one/shots','参考图片',englishText),'参考图片 · Shots')
@@ -112,6 +115,7 @@ test('both workspaces keep typed prompts and the resolved media payload when Eng
     const references=[{id:'first',type:'image',url:'https://example.invalid/参考图片.png',role:'first_frame'}]
     const prompt='一只猫在抓老鼠，保持背景',payloads=[]
     const values={tx:englishText,submitBlock:'',prompt,liveReady:true,submitting:false,setSubmitting(){},resolveImageReferences:async()=>references,resolveVideoReferences:async()=>references,count:'1',maxBatch:1,generation:{createImage:async payload=>payloads.push(payload),createVideo:async payload=>payloads.push(payload)},model:{id:'canonical-model'},ratio:'16:9',resolution:'1K',quality:'480p',duration:'15 秒',advancedValues:{},resolveGenerationKind:()=> 'edit',state:{selectedProjectId:null},setNotice(){},serializePromptReferences:value=>value,privateVideo:undefined,privateOptions:{}}
+    Object.assign(values,{effectiveSeconds:15,effectiveRatio:'16:9',seedance:false,seedanceConfig:{},mode:'text',teamMedia:null})
     const code=ts.transpileModule(`export ${submit.getText(ast)}`,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,module={exports:{}}
     new Function('module','exports',...Object.keys(values),code)(module,module.exports,...Object.values(values))
     await module.exports.submit({preventDefault(){}})
@@ -121,7 +125,7 @@ test('both workspaces keep typed prompts and the resolved media payload when Eng
 })
 
 test('completed task chrome is English while the saved task title remains unchanged',()=>{
-  const live=load('components/studio/live-generation.tsx',{...base,'@/lib/studio/generation-store':{useGeneration:()=>({})},'@/lib/studio/generation-api':{isActiveStatus:()=>false}})
+  const live=load('components/studio/live-generation.tsx',{...base,'@/lib/studio/generation-store':{useGeneration:()=>({})},'@/lib/studio/generation-api':{isActiveStatus:()=>false},'@/lib/studio/store':{useStudio:()=>({state:{sessionSettings:{logicalModels:[]}}})},'@/lib/studio/model-display':compileLocaleModule('lib/studio/model-display.ts')})
   const output=html(live.GenerationTaskCard,{compact:true,task:{id:'12345678',title:'一只猫在抓老鼠',model:'canonical-model',status:'success',media:[],pointsCost:20,createdAt:Date.UTC(2026,10,5)}})
   assert.match(output,/Completed/);assert.match(output,/Used 20 credits/);assert.match(output,/一只猫在抓老鼠/)
 })

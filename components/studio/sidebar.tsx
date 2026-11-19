@@ -12,6 +12,7 @@ import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studio
 import { StorageUsageLink } from './storage-usage'
 import { workspaceHref } from '@/lib/studio/workspace-navigation'
 import { useWorkspace } from '@/lib/studio/workspace-context'
+import { WechatContactButton } from './wechat-contact-button'
 
 function SidebarContent() {
   const tx = useUiText()
@@ -69,6 +70,7 @@ function SidebarContent() {
         </nav>
         {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} collapsed={collapsed} />}
         <StudioNavLink item={studioSettingsNav} pathname={pathname} collapsed={collapsed} />
+        <WechatContactButton config={state.sessionSettings?.site?.wechatContact} collapsed={collapsed} />
       </div>
     </aside>
   )

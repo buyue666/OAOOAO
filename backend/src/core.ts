@@ -115,8 +115,8 @@ export function createContext(db: Pool, config: AppConfig): Context {
 export async function rateLimit(ctx: Context, key: string, limit: number, seconds: number) {
   const {rows} = await ctx.db.query(`INSERT INTO oaooao_rate_limits(key,count,expires_at) VALUES($1,1,now()+make_interval(secs=>$2))
     ON CONFLICT(key) DO UPDATE SET count=CASE WHEN oaooao_rate_limits.expires_at<now() THEN 1 ELSE oaooao_rate_limits.count+1 END,
-    expires_at=CASE WHEN oaooao_rate_limits.expires_at<now() THEN now()+make_interval(secs=>$2) ELSE oaooao_rate_limits.expires_at END RETURNING count`,[hashToken(key),seconds]);
-  if (rows[0].count > limit) throw httpError(429, 'Too many requests; try again later');
+    expires_at=CASE WHEN oaooao_rate_limits.expires_at<now() THEN now()+make_interval(secs=>$2) ELSE oaooao_rate_limits.expires_at END RETURNING count,greatest(1,ceil(extract(epoch FROM expires_at-now()))) AS retry_seconds`,[hashToken(key),seconds]);
+  if (rows[0].count > limit) throw Object.assign(httpError(429, 'Too many requests; try again later'),{retryAfterSeconds:Number(rows[0].retry_seconds)||seconds});
 }
 export function isPublicAddress(address: string): boolean {
   try { const parsed = ipaddr.process(address); return parsed.range() === 'unicast'; } catch { return false; }
@@ -127,7 +127,7 @@ export async function publicAddress(hostname: string) {
   if (!records.length || records.some(record => !isPublicAddress(record.address))) throw httpError(400,'Private or reserved network destinations are prohibited');
   return records[0];
 }
-export async function safeFetch(input: string | URL, init: {method?: string;headers?: Record<string,string>;body?: string | Buffer;timeoutMs?: number;maxBytes?: number;publicRedirects?:number} = {}): Promise<Response> {
+export async function safeFetch(input: string | URL, init: {method?: string;headers?: Record<string,string>;body?: string | Buffer;timeoutMs?: number;maxBytes?: number;publicRedirects?:number;onChunk?:(chunk:Buffer)=>void;totalTimeoutMs?:number} = {}): Promise<Response> {
   let url: URL;
   try { url = new URL(input); } catch { throw httpError(400,'Invalid upstream URL'); }
   if (!['https:','http:'].includes(url.protocol) || url.username || url.password) throw httpError(400,'Invalid upstream URL');
@@ -149,11 +149,13 @@ export async function safeFetch(input: string | URL, init: {method?: string;head
         reject(httpError(502,'Upstream redirects are not allowed')); return;
       }
       const chunks: Buffer[]=[]; let length=0;
-      response.on('data',(chunk:Buffer) => {length+=chunk.length;if(length>(init.maxBytes || 10*1024*1024)){request.destroy();reject(httpError(502,'Upstream response too large'));}else chunks.push(chunk);});
+      response.on('data',(chunk:Buffer) => {length+=chunk.length;if(length>(init.maxBytes || 10*1024*1024)){request.destroy();reject(httpError(502,'Upstream response too large'));}else {chunks.push(chunk);try{if(status>=200&&status<300)init.onChunk?.(chunk);}catch(error){request.destroy();reject(error);}}});
       response.on('end',() => { const headers=new Headers(); for(const [name,value] of Object.entries(response.headers)) if(value) headers.set(name,Array.isArray(value)?value.join(','):value); resolve(new Response(status===204 || status===304 ? null : Buffer.concat(chunks),{status,headers})); });
       response.on('error',() => reject(httpError(502,'Upstream response interrupted','unavailable')));
     });
     request.setTimeout(init.timeoutMs || 30000,() => {request.destroy();reject(httpError(504,'Upstream request timed out','unavailable'));});
+    const deadline=init.totalTimeoutMs?setTimeout(()=>{request.destroy();reject(httpError(504,'Upstream request timed out','unavailable'));},init.totalTimeoutMs):undefined;
+    deadline?.unref();request.once('close',()=>{if(deadline)clearTimeout(deadline);});
     request.on('error',() => reject(httpError(502,'Upstream connection failed','unavailable')));
     if(init.body) request.write(init.body);request.end();
   });

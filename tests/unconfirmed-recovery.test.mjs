@@ -155,34 +155,17 @@ const leftover = await page.evaluate(() => {
 })
 check('恢复后不再残留未确认缓存', leftover === 0, `剩余 ${leftover} 条`)
 
-/**
- * ⑦ 服务端清理：关闭本脚本产生的任务。
- *
- * 本脚本会制造「结果未知」的任务，它们会停在 `running / needs_review`，
- * 并**占用生成并发名额**。不清理会让**后续脚本**提交时收到并发上限
- * （实测：紧跟其后的 `business-flow` 因此整段失败，看起来像功能回归）。
- * 这里用管理端的人工接管接口把它们确认为失败。
- */
-const closed = await page.evaluate(async () => {
-  const list = await (await fetch('/api/admin/generation-operations?page=1&pageSize=100', { cache: 'no-store' })).json()
-  const active = (list?.data?.items ?? []).filter((item) => item.executionPhase === 'needs_review' && ['pending', 'running'].includes(item.status))
-  let done = 0
-  for (const task of active) {
-    const response = await fetch(`/api/admin/generation-operations/${task.type}/${task.id}/review`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'confirm_failed', reason: '验收脚本产生的模拟失败任务，人工确认关闭' }),
-    })
-    if (response.ok) done += 1
-  }
-  return { active: active.length, done }
-})
-const remainingActive = await page.evaluate(async () => {
-  const list = await (await fetch('/api/admin/generation-operations?page=1&pageSize=100', { cache: 'no-store' })).json()
-  return (list?.data?.items ?? []).filter((item) => ['pending', 'running'].includes(item.status)).length
-})
-check('清理本脚本产生的待人工确认任务（不占用后续脚本的并发名额）', remainingActive === 0,
-  `关闭 ${closed.done}/${closed.active}，剩余活动任务 ${remainingActive}`)
+/* ⑦ 取消本脚本任务；后台会自动完成取消、超时或失败结算。 */
+const cancelled = await page.evaluate(async (taskId) => {
+  if (!taskId) return false
+  const response = await fetch(`/api/image-tasks/${encodeURIComponent(taskId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ status: 'cancelled' }),
+  })
+  return response.ok
+}, idempotency.first)
+check('本脚本生成任务已请求取消，由后台自动结算', cancelled, `task=${idempotency.first || '未创建'}`)
 
 console.log(`\n总计 ${results.length} 项，失败 ${results.filter((item) => !item.ok).length} 项`)
 const failed = results.filter((item) => !item.ok)

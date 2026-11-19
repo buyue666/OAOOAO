@@ -1,8 +1,8 @@
-import { Bot, Box, Clapperboard, PanelsTopLeft, Shirt, WandSparkles } from 'lucide-react'
+import { Grid3X3, Bot, Box, Clapperboard, PanelsTopLeft, Shirt, WandSparkles } from 'lucide-react'
 import type { CreativePluginId } from '@/lib/studio/creative-plugins'
 import { cn } from '@/lib/utils'
 
-export const pluginIcons = { remix: WandSparkles, tryon: Shirt, agent: Bot, drama: Clapperboard, canvas: PanelsTopLeft, director: Box }
+export const pluginIcons = { perler: Grid3X3, remix: WandSparkles, tryon: Shirt, agent: Bot, drama: Clapperboard, canvas: PanelsTopLeft, director: Box }
 const tones: Record<CreativePluginId, string> = {
   remix: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   tryon: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',

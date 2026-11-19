@@ -3,6 +3,7 @@ import { httpError, object, pagination, string, transaction, type Context } from
 import { creditDecimal, creditUnits } from './wallet.js';
 import { assertTeamSeats, lockTeam, teamEvent, teamView, type TeamRow } from './team-access.js';
 import { grantTeamCredits } from './team-wallet.js';
+import { teamPurchaseReadiness } from './commerce.js';
 
 function integer(value: unknown, min: number, max: number, name: string) {
   if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max) throw httpError(400, `${name}必须是 ${min} 至 ${max} 的整数`);
@@ -23,7 +24,7 @@ export function teamPlanView(row: TeamRow) {
 export async function registerTeamPlans(app: FastifyInstance, ctx: Context) {
   app.get('/api/team-plans', async () => {
     const rows = (await ctx.db.query('SELECT * FROM oaooao_team_plans ORDER BY id DESC')).rows;
-    return { plans: rows.map(row => teamPlanView(row.enabled ? row : { ...row, price_cents: null })), purchaseEnabled: false };
+    return { plans: rows.map(row => teamPlanView(row.enabled ? row : { ...row, price_cents: null })), ...await teamPurchaseReadiness(ctx) };
   });
   app.get('/api/admin/team-plans', async request => {
     await ctx.requireUser(request, 'commerce.manage');
@@ -69,6 +70,7 @@ export async function registerTeamPlans(app: FastifyInstance, ctx: Context) {
     if (reason.length < 5 || !/^[\w-]{8,100}$/.test(key) || body.confirmManualGrant !== true) throw httpError(400, '请确认人工开通，并填写至少 5 字的依据和有效幂等标识');
     return transaction(ctx.db, async db => {
       const team = await lockTeam(db, teamId);
+      if ((await db.query("SELECT 1 FROM oaooao_orders WHERE metadata->'teamPurchase'->>'teamId'=$1 AND (status='refunding' OR status='pending' AND expires_at>now()) LIMIT 1",[teamId])).rowCount) throw httpError(409,'团队有待付款或退款处理中的订单，请先处理原订单');
       const previous = (await db.query("SELECT details FROM oaooao_team_events WHERE team_id=$1 AND action='subscription.assigned' AND details->>'operationId'=$2", [teamId, key])).rows[0];
       if (previous) { if (previous.details.planId !== planId || previous.details.seats !== seats) throw httpError(409, '此操作标识已用于不同的团队权益'); return { ok: true } }
       const now = (await db.query('SELECT clock_timestamp() at')).rows[0].at as Date;

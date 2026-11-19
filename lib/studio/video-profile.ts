@@ -24,6 +24,28 @@ export type VideoPricing = ReferencePrices & {
   [key: string]: unknown
 }
 export type VideoProfile = Record<string, unknown>
+export const DOUBAO_VIDEO_PRICING_TEMPLATE = 'doubao-video'
+export const isConditionalVideoPricing = (template: unknown) => template === 'reference-video-output' || template === DOUBAO_VIDEO_PRICING_TEMPLATE
+
+const commonVideoRatios = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', '3:2', '2:3']
+const ratioList = (value: unknown) => Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string' && !!item.trim()).map(item => item.trim()))] : undefined
+export function videoAspectRatios(profile: VideoProfile) {
+  return ratioList(profile.aspectRatios) ?? ratioList(profile.nativeAspectRatios) ?? [...commonVideoRatios]
+}
+export function videoAspectRatioChoices(profile: VideoProfile) {
+  return [...new Set([...(ratioList(profile.nativeAspectRatios) ?? [...commonVideoRatios, 'adaptive', 'auto']), ...videoAspectRatios(profile)])]
+}
+export function addVideoAspectRatio(profile: VideoProfile, raw: string) {
+  const value = raw.trim().replace(/：/g, ':').replace(/\s+/g, '')
+  const match = /^(\d{1,4}):(\d{1,4})$/.exec(value)
+  if (!['auto', 'adaptive'].includes(value) && (!match || Number(match[1]) < 1 || Number(match[2]) < 1)) throw new Error('请输入有效比例，例如 16:9、9:16，或 auto、adaptive')
+  const ratios = videoAspectRatios(profile)
+  if (ratios.includes(value)) throw new Error('该比例已启用')
+  const native = ratioList(profile.nativeAspectRatios)
+  if (native && !native.includes(value)) throw new Error('此渠道当前模型不支持该比例')
+  if (ratios.length >= 32) throw new Error('最多配置 32 个比例')
+  return [...ratios, value]
+}
 export const referencePriceKeys = ['extraImage', 'extraVideo', 'extraAudio', 'referenceVideoPerSecond', 'referenceAudioPerSecond'] as const
 
 export function resolutionPricing(profile: VideoProfile, quality: string, fallbackRate?: number): ResolutionPricing {
@@ -33,7 +55,7 @@ export function resolutionPricing(profile: VideoProfile, quality: string, fallba
   return {
     ...row,
     generationRate: Object.hasOwn(row, 'generationRate') ? row.generationRate : pricing.resolutionRates?.[quality] ?? fallbackRate,
-    ...(profile.videoPricingTemplate === 'reference-video-output' ? {referenceVideoGenerationRate: Object.hasOwn(row, 'referenceVideoGenerationRate') ? row.referenceVideoGenerationRate : row.referenceDurationTiers ? row.referenceDurationTiers[0]?.prices.referenceVideoPerSecond : referencePrices.referenceVideoPerSecond} : {}),
+    ...(isConditionalVideoPricing(profile.videoPricingTemplate) ? {referenceVideoGenerationRate: Object.hasOwn(row, 'referenceVideoGenerationRate') ? row.referenceVideoGenerationRate : profile.videoPricingTemplate === DOUBAO_VIDEO_PRICING_TEMPLATE ? undefined : row.referenceDurationTiers ? row.referenceDurationTiers[0]?.prices.referenceVideoPerSecond : referencePrices.referenceVideoPerSecond} : {}),
     generationDurationRates: row.generationDurationRates ?? pricing.durationRates?.[quality],
     referencePrices,
   }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { createBillingOrder, createCheckout, request, type Checkout } from './api'
+import { createBillingOrder, createCheckout, request, type Checkout, type TeamPurchaseInput } from './api'
 
 type Input = { accountId: string; connected: boolean; refreshSession: () => Promise<{ status: string; error?: string }>; onReady: (checkout: Checkout) => void }
 type Attempt = { accountId: string; productId: string; provider: string; id?: string }
@@ -31,7 +31,7 @@ export function useBillingCheckout({ accountId, connected, refreshSession, onRea
   const checkout = record?.epoch === epoch && connected ? record.checkout : null
   const current = () => mounted.current && scope.current.epoch === epoch && scope.current.connected && scope.current.accountId === accountId
 
-  async function purchase(productId: string, provider: string) {
+  async function purchase(productId: string, provider: string, team?: TeamPurchaseInput) {
     if (!current() || !accountId) throw new Error('请先登录后再购买商品。')
     if (!provider) throw new Error('当前没有可用的支付方式。')
     if (!productId) throw new Error('该周期没有可购买的商品。')
@@ -39,13 +39,14 @@ export function useBillingCheckout({ accountId, connected, refreshSession, onRea
     if (attempt.current && !attempt.current.id) throw new Error('上一笔订单的创建结果尚未确认，请先到账户的订单记录核对，避免重复创建。')
     purchaseLock.current = epoch
     const accountEpoch = scope.current.accountEpoch
+    const productKey = team ? JSON.stringify([team.teamPlanId, team.seats, team.expectedAmountCents, team.teamId, team.teamName]) : productId
     let order = attempt.current
     try {
-      if (!order || order.productId !== productId || order.provider !== provider) {
-        order = { accountId, productId, provider }
+      if (!order || order.productId !== productKey || order.provider !== provider) {
+        order = { accountId, productId: productKey, provider }
         attempt.current = order
         try {
-          const created = await createBillingOrder(productId, provider)
+          const created = await createBillingOrder(productId, provider, team ? { ...team, idempotencyKey: crypto.randomUUID() } : undefined)
           if (!created.order.id) throw new Error('未返回订单编号，请先到账户的订单记录核对。')
           // Preserve a confirmed ID across a temporary disconnect, never across an account change.
           if (scope.current.accountEpoch === accountEpoch && attempt.current === order) order.id = String(created.order.id)
@@ -73,7 +74,7 @@ export function useBillingCheckout({ accountId, connected, refreshSession, onRea
     const valid = () => current() && recordRef.current?.checkout.orderId === orderId
     queryLock.current = epoch; setQuerying(true); setStatus('查询中…')
     try {
-      const result = await request<{ order: { status: string } }>(`/api/billing/orders/${encodeURIComponent(orderId)}`)
+      const result = await request<{ order: { status: string } }>(`/api/billing/orders/${encodeURIComponent(orderId)}?verify=1`)
       if (!valid()) return
       const labels: Record<string, string> = { paid: '支付成功', pending: '待支付', canceled: '已取消', cancelled: '已取消', closed: '已关闭', refunded: '已退款' }
       const label = labels[result.order.status] || result.order.status

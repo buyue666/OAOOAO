@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Ban, Eye, RefreshCw, RotateCcw, ShieldAlert, Undo2 } from 'lucide-react'
-import { cancelGenerationTask, listGenerationOperations, recoverGenerationTask, retryAgentSubTask, reviewGenerationTask, type ReviewAction } from '@/lib/studio/admin-api'
+import { Ban, Eye, RefreshCw, RotateCcw, Undo2 } from 'lucide-react'
+import { cancelGenerationTask, listGenerationOperations, recoverGenerationTask, retryAgentSubTask } from '@/lib/studio/admin-api'
 import type { AdminGenerationOperations, AdminGenerationTask } from '@/lib/studio/admin-types'
 import { ControlButton, StatusBadge } from './ui'
 import {
@@ -19,7 +19,6 @@ import {
   AdminSelect,
   AdminStat,
   AdminTable,
-  AdminTextarea,
   TableMessageRow,
   executionPhaseLabels,
   formatAdminDate,
@@ -49,7 +48,6 @@ export function AdminGenerationPanel() {
   const [message, setMessage] = useState('')
   const [acting, setActing] = useState<string | null>(null)
   const [detail, setDetail] = useState<AdminGenerationTask | null>(null)
-  const [reviewing, setReviewing] = useState<AdminGenerationTask | null>(null)
 
   const [page, setPage] = useState(1)
   const [type, setType] = useState('')
@@ -117,7 +115,6 @@ export function AdminGenerationPanel() {
   }, [confirm, runAction])
 
   const summary = data?.summary
-  const upstreamSucceededDownstreamFailed = items.filter((task) => task.status === 'error' && task.leaseExpired && task.upstreamTaskId).length
 
   return (
     <div className="flex flex-col gap-5">
@@ -166,10 +163,6 @@ export function AdminGenerationPanel() {
 
       {error && <AdminError message={error} retry={load} />}
       {message && <AdminNotice tone="success">{message}</AdminNotice>}
-      {upstreamSucceededDownstreamFailed > 0 && (
-        <AdminNotice tone="warning">检测到 {upstreamSucceededDownstreamFailed} 条任务上游已返回任务 ID 但本地执行失败或超时，请展开详情执行“重新检查上游”或“人工确认”。</AdminNotice>
-      )}
-
       <AdminTable columns={['请求', '用户', '模型 / 渠道', '状态', '执行阶段', '耗时', '积分', '时间', '操作']} minWidth={1180} caption="生成任务列表">
         {items.map((task) => (
           <AdminRow key={task.id}>
@@ -200,14 +193,11 @@ export function AdminGenerationPanel() {
                 {canManage && task.canCancel && (
                   <ControlButton variant="danger" size="sm" disabled={acting === `${task.id}:cancel`} onClick={() => requestCancel(task)}><Ban className="size-3.5" />取消</ControlButton>
                 )}
-                {canManage && (task.status === 'error' || task.leaseExpired) && ['text', 'image', 'video', 'audio'].includes(task.type) && (
+                {canManage && task.status === 'running' && task.leaseExpired && Boolean(task.upstreamTaskId) && ['text', 'image', 'video', 'audio'].includes(task.type) && (
                   <ControlButton variant="secondary" size="sm" disabled={acting === `${task.id}:recover`} onClick={() => void runAction(task, 'recover')}><Undo2 className="size-3.5" />重新检查</ControlButton>
                 )}
                 {canManage && task.type === 'agent' && task.retryTaskId && (
                   <ControlButton variant="secondary" size="sm" disabled={acting === `${task.id}:retry`} onClick={() => void runAction(task, 'retry')}><RotateCcw className="size-3.5" />重试子任务</ControlButton>
-                )}
-                {canManage && task.canReview && (
-                  <ControlButton variant="primary" size="sm" onClick={() => setReviewing(task)}><ShieldAlert className="size-3.5" />人工确认</ControlButton>
                 )}
               </div>
             </AdminCell>
@@ -218,20 +208,18 @@ export function AdminGenerationPanel() {
 
       <AdminPagination page={page} pageSize={20} total={data?.total ?? 0} loading={loading} onChange={setPage} />
 
-      {detail && <TaskDetailDrawer task={detail} onClose={() => setDetail(null)} onReview={canManage && detail.canReview ? () => { setReviewing(detail); setDetail(null) } : undefined} />}
-      {reviewing && <ReviewDialog task={reviewing} onClose={() => setReviewing(null)} onDone={(text) => { setMessage(text); setReviewing(null); load() }} />}
+      {detail && <TaskDetailDrawer task={detail} onClose={() => setDetail(null)} />}
     </div>
   )
 }
 
-function TaskDetailDrawer({ task, onClose, onReview }: { task: AdminGenerationTask; onClose: () => void; onReview?: () => void }) {
+function TaskDetailDrawer({ task, onClose }: { task: AdminGenerationTask; onClose: () => void }) {
   return (
     <AdminDrawer
       open
       onClose={onClose}
       title="任务详情"
       description={`${task.id}`}
-      footer={onReview ? <ControlButton variant="primary" onClick={onReview}><ShieldAlert className="size-3.5" />人工确认</ControlButton> : undefined}
     >
       <div className="flex flex-col gap-4">
         <AdminSectionCard title="任务状态" className="p-4">
@@ -297,62 +285,6 @@ function TaskDetailDrawer({ task, onClose, onReview }: { task: AdminGenerationTa
           <AdminDefinition label="任务结果" value={task.status === 'error' ? '失败，后台将按计费规则处理退款' : task.status === 'cancelled' ? '已取消，未消耗不予扣费' : '成功，已正常结算'} />
           <AdminDefinition label="上游任务 ID" value={task.upstreamTaskId ? '已保存，可用于追回结果' : '未保存'} />
         </AdminSectionCard>
-      </div>
-    </AdminDrawer>
-  )
-}
-
-function ReviewDialog({ task, onClose, onDone }: { task: AdminGenerationTask; onClose: () => void; onDone: (message: string) => void }) {
-  const [action, setAction] = useState<ReviewAction['action']>('resume_upstream')
-  const [value, setValue] = useState(task.upstreamTaskId || '')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  async function submit() {
-    setBusy(true); setError('')
-    try {
-      const payload: ReviewAction = action === 'resume_upstream'
-        ? { action, upstreamTaskId: value.trim() }
-        : action === 'provide_result'
-          ? { action, result: value.trim() }
-          : { action, reason: value.trim() || undefined }
-      if (action !== 'confirm_failed' && !value.trim()) throw new Error(action === 'resume_upstream' ? '请填写上游任务 ID' : '请填写结果地址或文本')
-      await reviewGenerationTask(task, payload)
-      onDone(action === 'confirm_failed' ? '任务已确认失败并结束。' : '已交给后台继续处理。')
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '接管失败')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <AdminDrawer
-      open
-      onClose={onClose}
-      width="sm:max-w-lg"
-      title="人工确认待处理任务"
-      description="创建请求的结果无法自动确认时，系统会停止重复创建，由管理员决定后续动作。"
-      footer={<>
-        <ControlButton variant="secondary" onClick={onClose} disabled={busy}>取消</ControlButton>
-        <ControlButton variant={action === 'confirm_failed' ? 'danger' : 'primary'} onClick={() => void submit()} disabled={busy}>{busy ? '处理中' : action === 'confirm_failed' ? '确认结束任务' : '确认并继续'}</ControlButton>
-      </>}
-    >
-      <div className="flex flex-col gap-4">
-        <AdminNotice tone="warning">接管操作只会继续查询、补录已有结果或明确结束任务，不会重复创建新的上游任务。</AdminNotice>
-        <AdminField label="处理方式">
-          <AdminSelect value={action} onChange={(event) => { const next = event.target.value as ReviewAction['action']; setAction(next); setValue(next === 'resume_upstream' ? (task.upstreamTaskId || '') : '') }}>
-            <option value="resume_upstream">继续查询上游任务</option>
-            <option value="provide_result">补录已有结果</option>
-            <option value="confirm_failed">确认上游未创建，结束任务</option>
-          </AdminSelect>
-        </AdminField>
-        {action === 'confirm_failed'
-          ? <AdminField label="结束原因" hint="可选，将写入任务错误信息与审计日志。"><AdminTextarea rows={3} value={value} onChange={(event) => setValue(event.target.value)} placeholder="例如：上游确认未创建任务" /></AdminField>
-          : <AdminField label={action === 'resume_upstream' ? '上游任务 ID' : '结果地址或文本'} hint={action === 'provide_result' ? '文本任务填文本内容，媒体任务填 https(s)、data: 或站内媒体路径。' : '用于继续轮询的上游任务标识。'}>
-            <AdminInput value={value} onChange={(event) => setValue(event.target.value)} />
-          </AdminField>}
-        {error && <AdminNotice tone="danger">{error}</AdminNotice>}
       </div>
     </AdminDrawer>
   )

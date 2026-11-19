@@ -50,3 +50,22 @@ test('selected and dropdown models show only their own notes with no nested butt
     for(const row of menu.matchAll(/<button[^>]*role="option"[^>]*>([\s\S]*?)<\/button>/g))assert.doesNotMatch(row[1],/<button/)
   }finally{globalThis.document=oldDocument}
 })
+
+test('locked model options visibly explain subscription access and cannot change selection',()=>{
+ let changed=0
+ const options=[{value:'open',label:'Open'},{value:'locked',label:'Premium',requiresSubscription:true,disabled:true,disabledReason:'需要订阅套餐才可使用',description:'A premium model'}]
+ const selected=html(ui.SelectField,{label:'视频模型',value:'locked',options,onChange(){changed++}})
+ assert.match(selected,/role="status"/);assert.ok(selected.includes('A subscription is required to use this model.'))
+ const oldDocument=globalThis.document;globalThis.document={body:{}}
+ try{
+  const openUi=load('components/studio/ui.tsx',{...imports,react:{...React,useState:initial=>[initial===false?true:initial===null?{top:0,left:0,width:360,maxHeight:280}:initial,()=>{}]}})
+  const menu=html(openUi.SelectField,{value:'open',options,onChange(){changed++}})
+  assert.match(menu,/aria-disabled="true"/);assert.match(menu,/data-model-disabled-reason/)
+  assert.ok(menu.includes('A subscription is required to use this model.'));assert.doesNotMatch(menu,/opacity-45/)
+  const directUi=load('components/studio/ui.tsx',{...imports,react:{useRef:()=>({current:null}),useState:initial=>[initial===false?true:initial===null?{top:0,left:0,width:360,maxHeight:280}:initial,()=>{}],useLayoutEffect(){},useEffect(){}}})
+  const tree=directUi.SelectField({value:'open',options,onChange(){changed++}})
+  function nodes(n){if(!n||typeof n!=='object')return [];return[n,...[n.props?.children].flat(Infinity).flatMap(nodes)]}
+  nodes(tree).find(n=>n.props?.role==='option'&&n.props?.['aria-disabled']).props.onClick()
+  assert.equal(changed,0)
+ }finally{globalThis.document=oldDocument}
+})

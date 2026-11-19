@@ -34,7 +34,7 @@ test('assembled backend registers every reviewed frontend HTTP call contract',as
     '/api/agent/runs/example/approve','/api/agent/runs/example/cancel','/api/agent/runs/example/pause','/api/agent/runs/example/resume','/api/agent/runs/example/retry',
     '/api/agent/runs/example/tasks/example/retry','/api/drama/render',
     '/api/drama/projects/example/versions','/api/drama/projects/example/versions/example','/api/drama/projects/example/export-jianying',
-    '/api/video-generation-tasks','/api/admin/users','/api/admin/generation-operations/image/example/review',
+    '/api/video-generation-tasks','/api/admin/users',
     '/api/admin/mail/test','/api/admin/object-storage','/api/admin/models','/api/admin/billing/products',
     '/api/admin/billing/orders/example/close','/api/admin/billing/orders/example/complete','/api/admin/billing/orders/example/refund',
     '/api/admin/billing/orders/example/refund/prepare','/api/admin/billing/orders/example/refund/cancel',

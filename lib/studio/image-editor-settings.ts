@@ -8,6 +8,7 @@ export function imageEditorModelSettings(model: ModelConfig) {
     id: model.id,
     label: `${model.shortName || model.name}${model.capability === 'image' && model.creditCost > 0 ? ` · ${model.creditCost} 积分/张` : ''}`,
     note: model.note,
+    description:model.description,requiresSubscription:model.requiresSubscription,subscriptionLocked:model.subscriptionLocked,
     capability: model.capability as 'image' | 'video',
     ratios: model.capabilities.ratios,
     resolutions: model.capabilities.resolutions,

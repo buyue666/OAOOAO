@@ -55,7 +55,7 @@ export function orderedPromptReferences(mode: string, groups: {first: PromptRefe
   if (mode === 'first') return groups.first
   if (mode === 'ends') return [...groups.first, ...groups.last]
   if (mode === 'frames' || mode === 'mixed') return [...groups.first, ...groups.last, ...groups.references]
-  if (mode === 'edit') return groups.source
+  if (mode === 'edit' || mode === 'extend') return [...groups.source,...groups.references]
   if (mode === 'references' || (mode === 'text' && acceptTextReferences)) return groups.references
   return []
 }

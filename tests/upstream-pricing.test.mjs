@@ -52,3 +52,10 @@ test('cleared source pricing removes old peer overrides and uses the model fallb
   assert.equal(result.model.bindings[1].capabilityProfile.videoReferenceRules.image.freeCount,undefined)
   assert.equal(upstreamPricingSnapshot(result.model,result.model.bindings[0],result.costs),upstreamPricingSnapshot(result.model,result.model.bindings[1],result.costs))
 })
+
+test('legacy conflicts do not block metadata while changed prices still need consistent peers',()=>{
+ const previous=fixture(),costs={logical:2},next={...structuredClone(previous),requiresSubscription:true}
+ assert.equal(upstreamPricingConflicts(next,channels,costs,{model:previous,costs}).length,0)
+ next.bindings[0].capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate=77
+ assert.equal(upstreamPricingConflicts(next,channels,costs,{model:previous,costs}).length,1)
+})

@@ -62,6 +62,10 @@ test('permanent claims stay permanent after new rule becomes limited; missing ol
   assert.match(checkInDisplay(status({ rulePlanName: '专业套餐' })).rule, /专业套餐/)
   assert.equal(checkInDisplay(status({ validityDays: 0 })).validity, '奖励永久有效')
   assert.match(checkInDisplay(status({ validityDays: 30 })).validity, /30 天/)
+  const member=status({ rewardSource: 'membership', validityDays: 1, rewardExpiresAt: '2026-10-15T16:00:05.000Z' })
+  assert.match(checkInDisplay(member).validity, /与本期会员一起到期：2026\/10\/16 00:00:05/)
+  assert.match(checkInDisplay(member, 'en-US').validity, /Expires with this membership term/)
+  assert.match(checkInDisplay(status({ claimed: true, claimedRewardSource: 'membership', claimedValidityDays: 0, expiresAt: null })).validity, /会员权益有效期间/)
 })
 
 function editor() {

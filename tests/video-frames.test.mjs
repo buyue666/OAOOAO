@@ -6,7 +6,7 @@ import {chineseText} from './helpers/locale.mjs'
 
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8')
 function evaluate(source,bindings={}) {
-  bindings = {tx: chineseText, ...bindings}
+  bindings = {tx: chineseText,seedance:false,sourceOperation:false,imageRule:{},videoRule:{},audioRule:{}, ...bindings}
   const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText
   const module={exports:{}}
   new Function('module','exports',...Object.keys(bindings),code)(module,module.exports,...Object.values(bindings))

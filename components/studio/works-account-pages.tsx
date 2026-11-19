@@ -25,7 +25,9 @@ import type { GenerationAsset, StudioWork } from '@/lib/studio/account-api'
 import { cn } from '@/lib/utils'
 import { addMediaToProject } from '@/lib/studio/project-media'
 import { MediaDownloadButton } from './media-download-button'
+import { publicModelLabel } from '@/lib/studio/model-display'
 import { AccountWechat } from './account-wechat'
+import { AppearanceSettings } from './appearance-settings'
 import { AccountModelDefaults } from './account-model-defaults'
 import { StorageUsageLink } from './storage-usage'
 import { writeReuseParams } from '@/lib/studio/reuse-params'
@@ -77,6 +79,7 @@ function withinDateRange(value: string | undefined, startDate: string, endDate: 
 
 /** 作品页。结果按日期分组，支持搜索、模型和时间筛选。 */
 export function WorksPage() {
+  const { state: studio } = useStudio()
   const { works, total, truncated, state, message, reload } = useServerWorks()
   const [filter, setFilter] = useState('全部')
   const [search, setSearch] = useState('')
@@ -92,7 +95,7 @@ export function WorksPage() {
       if (filter !== '全部' && work.kind !== filter) return false
       if (modelFilter !== 'all' && work.model !== modelFilter) return false
       if (!withinDateRange(work.createdAt, startDate, endDate)) return false
-      if (query && !`${work.title} ${work.prompt} ${work.model ?? ''}`.toLowerCase().includes(query)) return false
+      if (query && !`${work.title} ${work.prompt} ${publicModelLabel(work.model, studio.sessionSettings)}`.toLowerCase().includes(query)) return false
       const key = work.groupId ?? work.id
       if (seen.has(key)) return false
       seen.add(key)
@@ -106,7 +109,7 @@ export function WorksPage() {
       groups.set(key, group)
     })
     return Array.from(groups.values()).sort((a, b) => b.sort - a.sort)
-  }, [endDate, filter, modelFilter, search, startDate, works])
+  }, [endDate, filter, modelFilter, search, startDate, works, studio.sessionSettings])
   const visibleCount = groupedVisible.reduce((count, group) => count + group.items.length, 0)
 
   if (state === 'unauthenticated') {
@@ -118,7 +121,7 @@ export function WorksPage() {
       <PageHeader eyebrow="作品" title="我的作品" description="生成结果按日期归档，可按模型、时间或关键词快速查找。" actions={(<><ControlButton variant="secondary" onClick={() => { setLoading(true); void reload().finally(() => setLoading(false)) }} disabled={loading || state === 'loading'}><RefreshCw className={cn('size-4', (loading || state === 'loading') && 'animate-spin')} />刷新</ControlButton><Link href="/image" className="inline-flex h-9 items-center gap-2 rounded-lg border border-studio-accent bg-studio-accent px-3 text-sm font-medium text-studio-accent-foreground hover:bg-studio-accent/85"><Sparkles className="size-4" />开始新创作</Link></>)} />
       {message && <Notice tone="warning">{message}</Notice>}
       {truncated && <Notice tone="neutral">记录较多，当前只读取了最近一批结果。继续翻页会加载更多。</Notice>}
-      <div className="flex flex-col gap-3 border-b border-border pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} /><span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visibleCount} 件作品`}</span></div><div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_150px] lg:grid-cols-[minmax(0,1fr)_180px_150px_150px]"><SearchField value={search} onChange={setSearch} placeholder="搜索标题、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">开始</span><input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} aria-label="开始日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">结束</span><input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} aria-label="结束日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label></div><p className="text-[11px] text-muted-foreground">按开始日期至结束日期筛选，包含两端当天。</p></div>
+      <div className="flex flex-col gap-3 border-b border-border pb-4"><div className="flex flex-wrap items-center justify-between gap-3"><SegmentedControl value={filter} onChange={setFilter} options={[{ value: '全部', label: '全部' }, { value: 'image', label: '图片', icon: <ImageIcon className="size-3.5" /> }, { value: 'video', label: '视频', icon: <Video className="size-3.5" /> }]} /><span className="text-xs text-muted-foreground">{state === 'loading' ? '正在读取…' : `${visibleCount} 件作品`}</span></div><div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_150px] lg:grid-cols-[minmax(0,1fr)_180px_150px_150px]"><SearchField value={search} onChange={setSearch} placeholder="搜索标题、提示词或模型" /><select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{publicModelLabel(model, studio.sessionSettings)}</option>)}</select><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">开始</span><input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} aria-label="开始日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label><label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">结束</span><input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} aria-label="结束日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label></div><p className="text-[11px] text-muted-foreground">按开始日期至结束日期筛选，包含两端当天。</p></div>
       {state === 'loading' && !works.length ? <div className="studio-surface flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground" role="status"><Loader2 className="size-4 animate-spin" />正在读取生成结果</div> : state === 'error' && !works.length ? <Notice tone="warning"><span className="min-w-0 flex-1">作品暂时无法读取：{message}</span><button type="button" onClick={() => void reload()} className="shrink-0 text-[11px] underline">重试</button></Notice> : !visibleCount ? <div className="studio-empty-state flex flex-col items-center justify-center gap-2 border border-dashed border-border px-5 py-12 text-center"><p className="text-sm font-medium">没有符合条件的作品</p><p className="max-w-sm text-xs leading-5 text-muted-foreground">尝试清空搜索词或调整模型、时间筛选。</p></div> : <div className="flex flex-col gap-7">{groupedVisible.map((group) => <section key={group.label} className="flex flex-col gap-3"><div className="flex items-center gap-3"><h2 className="text-sm font-semibold text-foreground">{group.label}</h2><div className="h-px flex-1 bg-border" /><span className="text-[11px] text-muted-foreground">{group.items.length}</span></div><div className="grid grid-cols-2 gap-3 min-[640px]:grid-cols-3 lg:grid-cols-4">{group.items.map((work) => <WorkCard key={work.groupId ?? work.id} work={work} />)}</div></section>)}</div>}
     </div>
   )
@@ -199,7 +202,7 @@ function WorkCard({ work }: { work: StudioWork }) {
       />}
       <div className="p-3">
         <p className="truncate text-sm font-semibold text-foreground" title={workTitle}>{workTitle}</p>
-        <p className="mt-1 truncate text-xs text-muted-foreground">{work.model || '未记录模型'}{work.createdAt ? ` · ${new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}</p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">{publicModelLabel(work.model, state.sessionSettings)}{work.createdAt ? ` · ${new Date(work.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <ControlButton variant="secondary" size="sm" onClick={openPreview} aria-haspopup="dialog"><ExternalLink className="size-3.5" />预览</ControlButton>
           <MediaDownloadButton media={{ url: resultAssets[0].url, kind: work.kind }} title={workTitle} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
@@ -233,7 +236,7 @@ function WorkCard({ work }: { work: StudioWork }) {
           </div>}
           {work.prompt && <div><p className="text-xs font-medium text-muted-foreground">创作提示词</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">{work.prompt}</p></div>}
           <div className="border-y border-border">
-            <KeyValue label="模型" value={work.model || '未记录'} />
+            <KeyValue label="模型" value={publicModelLabel(work.model, state.sessionSettings)} />
             <KeyValue label="类型" value={work.kind === 'video' ? '视频' : work.kind === 'audio' ? '音频' : '图片'} />
             <KeyValue label="任务 ID" value={<span className="font-mono text-[11px]">{work.taskId ?? work.id}</span>} />
           </div>
@@ -630,11 +633,11 @@ function OrdersPanel() {
     return <Notice tone="neutral"><span className="min-w-0 flex-1">登录后查看订单记录。</span><Link href="/login?next=/account" className="shrink-0 text-[11px] underline">前往登录</Link></Notice>
   }
 
-  /** 继续支付：为待支付订单重新获取支付参数，本地只支持 manual 渠道。 */
+  /** 继续支付使用原订单对应的在线收银台。 */
   async function resume(orderId: string, provider: string, orderNo: string) {
     setBusyId(orderId); setActionError(''); setNotice('')
     try {
-      const result = await resumeCheckout(orderId, provider || 'manual')
+      const result = await resumeCheckout(orderId, provider || 'ciyuan_balance')
       setCheckout({ orderNo, kind: result.kind, instructions: result.instructions, url: result.url, qrContent: result.qrContent })
       setNotice('已重新获取支付参数。支付完成后请点击「刷新状态」。')
     } catch (reason) {
@@ -673,7 +676,7 @@ function OrdersPanel() {
       {pending.length > 0 && (
         <Notice tone="neutral">
           <Clock3 className="mt-0.5 size-3.5 shrink-0" />
-          有 {pending.length} 笔待支付订单，可以继续支付或取消。
+          有 {pending.length} 笔待支付订单，可核对支付状态或取消。
         </Notice>
       )}
       <div className="mt-3 overflow-x-auto">
@@ -692,7 +695,7 @@ function OrdersPanel() {
                 <td className="p-3">
                   {order.status === 'pending' ? (
                     <div className="flex flex-wrap gap-1.5">
-                      <ControlButton variant="secondary" size="sm" onClick={() => void resume(order.id, order.provider || 'manual', order.orderNo)} disabled={busyId === order.id}><CreditCard className="size-3.5" />继续支付</ControlButton>
+                      {order.provider === 'manual' ? <span className="self-center text-xs text-muted-foreground">历史人工收款已关闭</span> : <ControlButton variant="secondary" size="sm" onClick={() => void resume(order.id, order.provider || 'ciyuan_balance', order.orderNo)} disabled={busyId === order.id}><CreditCard className="size-3.5" />继续支付</ControlButton>}
                       <ControlButton variant="ghost" size="sm" onClick={() => void cancel(order.id)} disabled={busyId === order.id}>取消订单</ControlButton>
                     </div>
                   ) : <span className="text-xs text-muted-foreground">—</span>}
@@ -706,11 +709,10 @@ function OrdersPanel() {
       <Modal open={Boolean(checkout)} onClose={() => setCheckout(null)} title="继续支付" description={checkout?.orderNo} footer={<ControlButton variant="ghost" onClick={() => setCheckout(null)}>关闭</ControlButton>}>
         {checkout && (
           <div className="flex flex-col gap-3">
-            <KeyValue label="支付方式" value={checkout.kind === 'manual' ? '人工确认' : checkout.kind} />
-            {checkout.kind === 'manual' && <p className="whitespace-pre-wrap break-words text-sm">{checkout.instructions?.trim() || '请联系管理员获取本订单的付款说明。'}</p>}
+            <KeyValue label="支付方式" value={checkout.kind === 'redirect' ? '在线支付' : checkout.kind === 'form' ? '在线支付' : checkout.kind === 'qr' ? '扫码支付' : '历史支付方式'} />
             {checkout.url && <a href={checkout.url} target="_blank" rel="noopener noreferrer" className="text-xs text-studio-accent underline">打开支付页面</a>}
             {checkout.qrContent && <p className="break-all rounded-md border border-border bg-muted/40 p-2 font-mono text-[11px]">{checkout.qrContent}</p>}
-            <Notice tone="neutral">当前订单需要人工确认支付，请按页面提示完成后等待处理。</Notice>
+            <Notice tone="neutral">请在收银台登录并确认付款。支付完成后点击“刷新状态”，服务器核验回执后自动更新订单。</Notice>
           </div>
         )}
       </Modal>
@@ -806,7 +808,7 @@ function InvitePanel({ onNotice }: { onNotice: (value: string) => void }) {
 /* -------------------------------- 设置页 -------------------------------- */
 
 export function SettingsPage() {
-  const { state, toggleTheme, refreshSession } = useStudio()
+  const { state, refreshSession } = useStudio()
   const connected = state.backendStatus === 'connected'
   const [notice, setNotice] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -845,17 +847,11 @@ export function SettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-5 px-5 py-6 md:px-8 xl:px-10">
       <PageHeader eyebrow="偏好设置" title="设置" description="选择默认模型，管理存储空间与账户偏好。" />
+      <AppearanceSettings />
       <AccountModelDefaults key={state.user.id} />
       <StorageUsageLink detail />
       <AccountWechat key={state.user.id} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="studio-surface p-5">
-          <SectionHeading title="外观" description="浅色与深色主题共用同一套层级、间距与强调色，切换主题不会改变布局。" />
-          <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-            <div><p className="text-sm font-medium text-foreground">当前主题</p><p className="mt-1 text-xs text-muted-foreground">{state.theme === 'dark' ? '深色' : '浅色'}</p></div>
-            <ControlButton variant="secondary" size="sm" onClick={toggleTheme}>{state.theme === 'dark' ? '切换浅色' : '切换深色'}</ControlButton>
-          </div>
-        </div>
+      <div className="grid gap-4">
         <div className="studio-surface p-5">
           <SectionHeading title="账户与数据" description={connected ? '账户数据与界面偏好。' : '登录后即可查看账户数据。'} />
           <div className="mt-4 border-t border-border pt-2">
@@ -865,14 +861,6 @@ export function SettingsPage() {
             <KeyValue label="重新同步" value={<ControlButton variant="ghost" size="sm" onClick={sync} disabled={refreshing}><RefreshCw className={cn('size-3.5', refreshing && 'animate-spin motion-reduce:animate-none')} />{refreshing ? '同步中…' : '立即同步'}</ControlButton>} />
           </div>
           {!connected && <Notice tone="neutral">{state.backendStatus === 'offline' ? '服务暂时无法连接，恢复连接后可重新同步。' : '登录后可查看完整账户数据。'}</Notice>}
-        </div>
-      </div>
-      <div className="studio-surface p-5">
-        <SectionHeading title="界面质感" description="当前统一使用液态玻璃结构，导航、浮层与创作输入区保持同一套透光层级。" />
-        <div className="mt-4 flex items-center gap-3 border-t border-border pt-4 text-sm">
-          <span className="size-3 rounded-full bg-studio-accent shadow-[0_0_0_5px_color-mix(in_srgb,var(--studio-accent)_14%,transparent)]" aria-hidden="true" />
-          <span className="font-medium text-foreground">液态玻璃</span>
-          <span className="text-xs text-muted-foreground">已固定为当前界面风格</span>
         </div>
       </div>
       {notice && <Notice tone={noticeTone === 'success' ? 'accent' : 'warning'}>{noticeTone === 'success' && <Check className="mt-0.5 size-3.5 shrink-0" />}{notice}</Notice>}

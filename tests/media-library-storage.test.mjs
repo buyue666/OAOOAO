@@ -21,7 +21,7 @@ test('personal defaults select a logical models request alias and save explicit 
   const calls=[],state={user:{id:'synthetic-user'},backendStatus:'connected',liveModels:[{id:'image-route',name:'图片',capability:'image'},{id:'other-route',name:'另一图片',capability:'image'}],sessionSettings:{defaultModels:{imageModel:'logical-image'},logicalModels:[{id:'logical-image',capability:'image',bindings:[{enabled:true,requestAlias:'image-route'}]}]}}
   const api=compile(read('../components/studio/account-model-defaults.tsx'),{
     react:{useState:value=>[value,()=>{}],useRef:value=>({current:value}),useEffect(){}},'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},'lucide-react':{Check:'Check',LoaderCircle:'Loader'},
-    '@/lib/studio/api':{request:async(path,options)=>calls.push([path,JSON.parse(options.body)])},'@/lib/studio/store':{useStudio:()=>({state,refreshSession:async()=>{}})},'./model-icon':{ModelIcon:'ModelIcon'},'./ui':{ModelNote:'ModelNote',Notice:'Notice',SectionHeading:'Heading'},'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},
+    '@/lib/studio/api':{request:async(path,options)=>calls.push([path,JSON.parse(options.body)])},'@/lib/studio/store':{useStudio:()=>({state,refreshSession:async()=>{}})},'./settings-disclosure':{SettingsDisclosure:'SettingsDisclosure'},'./model-icon':{ModelIcon:'ModelIcon'},'./ui':{ModelNote:'ModelNote',Notice:'Notice',SectionHeading:'Heading'},'@/lib/utils':{cn:(...values)=>values.filter(Boolean).join(' ')},
   })
   const all=node=>node&&typeof node==='object'?[node,...[node.props?.children].flat(Infinity).flatMap(all)]:[]
   const tree=all(api.AccountModelDefaults()),radios=tree.filter(node=>node.type==='input'&&node.props.type==='radio')

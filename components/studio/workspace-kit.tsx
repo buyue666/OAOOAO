@@ -234,6 +234,7 @@ export interface UploadItem {
   status: 'uploading' | 'done' | 'failed' | 'cancelled'
   kind?: 'image' | 'video' | 'audio'
   dataUrl?: string
+  file?: File
   error?: string
 }
 
@@ -274,6 +275,8 @@ export function ReferenceUploader({
   selectLabel = '选择文件',
   hint,
   maxFileBytes,
+  allowedMimeTypes,
+  binaryUpload = false,
   onPickFromLibrary,
   libraryItems = [],
   onRemoveLibraryItem,
@@ -283,6 +286,8 @@ export function ReferenceUploader({
   maxFiles?: number
   kind?: UploadKind
   maxFileBytes?: number
+  allowedMimeTypes?: string[]
+  binaryUpload?: boolean
   label?: string
   emptyText?: string
   selectLabel?: string
@@ -293,7 +298,7 @@ export function ReferenceUploader({
 }) {
   const tx = useUiText()
   const [dragging, setDragging] = useState(false)
-  const acceptedTypes = kind === 'audio' ? ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/ogg', 'audio/flac', 'audio/aac'] : kind === 'video' ? VIDEO_ACCEPTED_TYPES : IMAGE_ACCEPTED_TYPES
+  const acceptedTypes = allowedMimeTypes ?? (kind === 'audio' ? ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/ogg', 'audio/flac', 'audio/aac'] : kind === 'video' ? VIDEO_ACCEPTED_TYPES : IMAGE_ACCEPTED_TYPES)
   const maxFileSize = maxFileBytes ?? (kind === 'audio' ? 24 * 1024 * 1024 : kind === 'video' ? VIDEO_MAX_FILE_SIZE : IMAGE_MAX_FILE_SIZE)
   const uploadHint = hint ?? (kind === 'audio' ? 'MP3 / WAV / M4A / OGG / FLAC / AAC，单个不超过 24 MB' : kind === 'video' ? 'MP4 / MOV / WEBM，单个不超过 200 MB' : 'PNG / JPG / WEBP，单个不超过 12 MB')
   const uploadLabel = label ?? (kind === 'audio' ? '参考音频' : kind === 'video' ? '参考视频' : '参考图片')
@@ -321,6 +326,7 @@ export function ReferenceUploader({
 
   async function readItem(id: string, file: File) {
     try {
+      if(binaryUpload){changeItems(itemsRef.current.map(current=>current.id===id&&current.status==='uploading'?{...current,file,progress:100,status:'done'}:current));return}
       const dataUrl = await readFileAsDataUrl(file, (progress) => changeItems(itemsRef.current.map((current) => current.id === id && current.status === 'uploading' ? { ...current, progress } : current)))
       changeItems(itemsRef.current.map((current) => current.id === id && current.status === 'uploading' ? { ...current, dataUrl, progress: 100, status: 'done' } : current))
     } catch (error) {
@@ -342,7 +348,7 @@ export function ReferenceUploader({
         duplicates += 1
         continue
       }
-      if (!acceptedTypes.includes(file.type)) {
+      if (!acceptedTypes.includes(file.type === 'audio/x-wav' ? 'audio/wav' : file.type)) {
         problems.push(`${file.name} 格式不支持`)
         continue
       }

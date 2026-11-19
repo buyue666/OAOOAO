@@ -13,7 +13,8 @@ function evaluate(text, bindings = {}) {
 }
 const names = ['signedOutUser', 'emptyAccountState', 'readStudioPreferences', 'getInitialState', 'projectFromCanvasSummary', 'reducer']
 const definitions = parsed.statements.filter((node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text)).map((node) => `export ${node.getText(parsed).replace(/^export\s+/, '')}`).join('\n')
-const helpers = evaluate(definitions, { fallbackAvatar: '/icon.svg' })
+const appearanceModule = evaluate(readFileSync(new URL('../lib/studio/appearance.ts', import.meta.url), 'utf8'))
+const helpers = evaluate(definitions, { fallbackAvatar: '/icon.svg', ...appearanceModule })
 const provider = parsed.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === 'StudioProvider')
 function callback(name, bindings) {
   const statement = provider.body.statements.find((node) => ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) => declaration.name.getText(parsed) === name))
@@ -66,9 +67,25 @@ test('production starts with no synthetic account, models, business records, bal
 
 test('legacy browser storage can only restore theme and sidebar preferences', () => {
   const poisoned = { theme: 'dark', sidebarCollapsed: true, skin: 'gradient', backendStatus: 'connected', user: { id: 'other-account', role: 'admin' }, credits: 999999, projects: [{ id: 'private' }], models: [{ id: 'invented' }], tasks: [{ status: 'completed' }], canvasBoards: { private: {} } }
-  assert.deepEqual(helpers.readStudioPreferences(JSON.stringify(poisoned)), { theme: 'dark', sidebarCollapsed: true, skin: 'minimal' })
-  for (const raw of [null, '{broken', 'null', '[]', '"string"']) assert.deepEqual(helpers.readStudioPreferences(raw), { theme: 'dark', sidebarCollapsed: false, skin: 'minimal' })
-  assert.deepEqual(helpers.readStudioPreferences('{"theme":"light"}'), { theme: 'light', sidebarCollapsed: false, skin: 'minimal' })
+  assert.deepEqual(helpers.readStudioPreferences(JSON.stringify(poisoned)), { theme: 'dark', sidebarCollapsed: true, skin: 'glass', appearance: appearanceModule.defaultAppearance })
+  for (const raw of [null, '{broken', 'null', '[]', '"string"']) assert.deepEqual(helpers.readStudioPreferences(raw), { theme: 'dark', sidebarCollapsed: false, skin: 'glass', appearance: appearanceModule.defaultAppearance })
+  assert.deepEqual(helpers.readStudioPreferences('{"theme":"light"}'), { theme: 'light', sidebarCollapsed: false, skin: 'glass', appearance: appearanceModule.defaultAppearance })
+})
+
+test('appearance preferences restore only supported UI values and preserve the chosen material', () => {
+  const appearance = { preset: 'violet', font: 'serif', radius: 'large', density: 'compact' }
+  const saved = helpers.readStudioPreferences(JSON.stringify({ version: 2, theme: 'light', skin: 'soft', appearance, credits: 9999, user: { role: 'admin' } }))
+  assert.deepEqual(saved, { theme: 'light', skin: 'soft', appearance, sidebarCollapsed: false })
+  assert.equal(helpers.readStudioPreferences('{"version":2,"skin":"minimal"}').skin, 'minimal')
+  assert.equal(helpers.readStudioPreferences('{"version":2,"skin":"invalid"}').skin, 'glass')
+  assert.deepEqual(appearanceModule.normalizeAppearance({ preset: 'url(secret)', font: 'javascript', radius: 1000, density: 'invalid', user: { role: 'admin' } }), appearanceModule.defaultAppearance)
+  const state = helpers.getInitialState()
+  const changed = helpers.reducer(state, { type: 'SET_APPEARANCE', appearance })
+  assert.deepEqual(changed.appearance, appearance)
+  assert.equal(changed.user, state.user)
+  assert.equal(changed.credits, state.credits)
+  assert.equal(helpers.reducer(state, { type: 'SET_SKIN', skin: 'glass' }).skin, 'glass')
+  assert.equal(helpers.reducer(state, { type: 'SET_SKIN', skin: 'minimal' }).skin, 'minimal')
 })
 
 test('account changes purge every old account collection, including admin rows and canvas drafts', () => {

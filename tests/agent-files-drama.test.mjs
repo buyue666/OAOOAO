@@ -63,8 +63,8 @@ test('acknowledging a save never drops edits typed or switched to during the req
 
 test('creation and related navigation remain in the current team and project', () => {
   const team = '11111111-1111-4111-8111-111111111111', project = '22222222-2222-4222-8222-222222222222'
-  assert.equal(navigation.workspaceHref(`/teams/${team}`, '/studio'), `/teams/${team}?tab=projects&intent=create`)
-  assert.equal(navigation.workspaceHref(`/teams/${team}/projects/${project}`, '/studio'), `/teams/${team}/projects/${project}/canvas`)
+  assert.equal(navigation.workspaceHref(`/teams/${team}`, '/studio'), `/teams/${team}/studio`)
+  assert.equal(navigation.workspaceHref(`/teams/${team}/projects/${project}`, '/studio'), `/teams/${team}/projects/${project}/studio`)
   assert.equal(navigation.workspaceHref(`/teams/${team}/projects/${project}/canvas`, '/works'), `/teams/${team}/projects/${project}?tab=generation`)
   assert.equal(navigation.workspaceHref(`/teams/${team}/projects/${project}`, '/assets'), `/teams/${team}/projects/${project}?tab=assets`)
   assert.equal(navigation.workspaceHref(`/teams/${team}`, '/projects'), `/teams/${team}?tab=projects`)
@@ -75,12 +75,13 @@ test('creation and related navigation remain in the current team and project', (
 test('team identity persists across unscoped navigation and validates saved workspace keys', () => {
   const identity = { teamId: '11111111-1111-4111-8111-111111111111', projectId: '22222222-2222-4222-8222-222222222222' }
   assert.deepEqual(navigation.parseWorkspaceIdentity(JSON.stringify(identity)), identity)
-  for (const path of ['/studio', '/image', '/video', '/agent', '/canvas', '/drama']) assert.equal(navigation.workspaceDestination(path, identity), `/teams/${identity.teamId}/projects/${identity.projectId}/canvas`)
+  const root=`/teams/${identity.teamId}/projects/${identity.projectId}`
+  for(const [path,destination] of [['/studio','/studio'],['/image','/studio/image'],['/video','/studio/video'],['/agent','/studio/features'],['/canvas','/canvas'],['/drama','/studio/features']]) assert.equal(navigation.workspaceDestination(path,identity),root+destination)
   assert.equal(navigation.workspaceDestination('/assets', identity), `/teams/${identity.teamId}/projects/${identity.projectId}?tab=assets`)
   assert.equal(navigation.workspaceDestination('/works', identity), `/teams/${identity.teamId}/projects/${identity.projectId}?tab=generation`)
   assert.equal(navigation.workspaceDestination('/settings', identity), `/teams/${identity.teamId}?tab=settings`)
   for (const path of ['/account', '/credits']) assert.equal(navigation.workspaceDestination(path, identity), `/teams/${identity.teamId}?tab=usage`)
-  for (const path of ['/tools/remix', '/tools/tryon', '/skills']) assert.equal(navigation.workspaceDestination(path, identity), `/teams/${identity.teamId}/projects/${identity.projectId}/canvas`)
+  for (const path of ['/tools/remix', '/tools/tryon', '/skills']) assert.equal(navigation.workspaceDestination(path, identity), `/teams/${identity.teamId}/projects/${identity.projectId}/studio/features`)
   assert.equal(navigation.workspaceDestination('/studio', null), '/studio')
   for (const raw of ['broken', '{}', '{"teamId":"not-a-team"}', '{"teamId":"11111111-1111-4111-8111-111111111111","projectId":"bad"}']) assert.equal(navigation.parseWorkspaceIdentity(raw), null)
 })
@@ -109,7 +110,7 @@ test('working identity survives navigation and reload but never leaks between lo
     pathname = `/teams/${teamId}/projects/${projectId}/canvas`; render()
     assert.deepEqual(render().identity, { teamId, projectId })
     pathname = '/studio'; render(); assert.deepEqual(render().identity, { teamId, projectId })
-    assert.equal(render().href('/studio'), `/teams/${teamId}/projects/${projectId}/canvas`)
+    assert.equal(render().href('/studio'), `/teams/${teamId}/projects/${projectId}/studio`)
     render = harness(); render(); assert.deepEqual(render().identity, { teamId, projectId })
     account = 'bob'; assert.equal(render().ready, false); assert.equal(render().identity, null)
     account = 'alice'; render(); assert.deepEqual(render().identity, { teamId, projectId })

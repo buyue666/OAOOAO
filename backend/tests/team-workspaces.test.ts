@@ -66,6 +66,7 @@ test('team canvas shares project ACLs and versions, preserving settings and reje
   for (const actor of ['outsider', 'admin']) assert.equal((await f.req(actor, 'GET', path)).statusCode, 404);
   const initial = (await f.req('creator', 'GET', path)).json().data;
   assert.equal(initial.workspace.readOnly, false); assert.equal(initial.workspace.teamId, f.team.id);
+  assert.equal(initial.workspace.subscriptionExpiresAt,null);
   assert.equal((await f.req('reviewer', 'GET', path)).json().data.workspace.readOnly, true);
   const project = { ...initial.project, nodes: [{ id: 'draft', type: 'text', position: { x: 20, y: 60 }, data: { kind: 'text', prompt: 'Synthetic project draft' } }], connections: [] };
   const body = { expectedUpdatedAt: initial.project.updatedAt, expectedVersion: initial.project.version, project };
@@ -78,6 +79,29 @@ test('team canvas shares project ACLs and versions, preserving settings and reje
   assert.equal(metadata.visibility, 'restricted'); assert.deepEqual(new Set(metadata.memberIds), new Set(f.project.memberIds)); assert.equal(metadata.version, 2);
   assert.equal((await f.req('creator', 'PATCH', f.root, { version: 1, title: 'Stale settings' })).statusCode, 409);
   assert.equal((await f.req('creator', 'PATCH', path, { project })).statusCode, 428);
+});
+
+test('team subscription models reject unpaid or expired teams regardless of personal membership and expose the team term to canvas',async t=>{
+ const f=await fixture(t),stored=(await f.db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0].value;
+ const image=stored.logicalModels.find((model:any)=>model.id==='image');image.requiresSubscription=true;image.bindings[0].requestAlias='premium-image';
+ await f.db.query("UPDATE oaooao_settings SET value=$1 WHERE id='global'",[stored]);
+ await f.db.query("INSERT INTO oaooao_plan_grants(id,user_id,plan_id,order_id,daily_points,starts_at,expires_at) VALUES($1,$2,'synthetic-personal-paid',null,0,now()-interval '1 minute',now()+interval '1 day')",[randomUUID(),f.actors.owner.id]);
+ assert.equal((await f.req('owner','GET','/api/auth/session')).json().settings.subscriptionAccess,true);
+ for(const model of ['image','premium-image']){
+  const input={...f.raw(),config:{model}};
+  assert.equal((await f.req('owner','POST',f.root+'/generations/quote',input)).statusCode,402);
+  assert.equal((await f.req('owner','POST',f.root+'/generations',input,{'idempotency-key':'synthetic-unpaid-'+model})).statusCode,402);
+ }
+ assert.equal((await f.publish()).statusCode,200);assert.equal((await f.subscribe()).statusCode,200);
+ await f.db.query('UPDATE oaooao_plan_grants SET revoked_at=now() WHERE user_id=$1',[f.actors.owner.id]);
+ assert.equal((await f.req('owner','GET','/api/auth/session')).json().settings.subscriptionAccess,false);
+ const canvas=(await f.req('owner','GET',f.root+'/canvas')).json().data;
+ assert.ok(Date.parse(canvas.workspace.subscriptionExpiresAt)>Date.now());
+ const quote=await f.req('owner','POST',f.root+'/generations/quote',{...f.raw(),config:{model:'premium-image'}});assert.equal(quote.statusCode,200,quote.body);
+ await f.db.query("UPDATE oaooao_teams SET subscription_expires_at=now()-interval '1 minute' WHERE id=$1",[f.team.id]);
+ assert.ok(Date.parse((await f.req('owner','GET',f.root+'/canvas')).json().data.workspace.subscriptionExpiresAt)<Date.now());
+ assert.equal((await f.req('owner','POST',f.root+'/generations/quote',f.raw())).statusCode,402);
+ assert.equal((await f.db.query('SELECT count(*)::int total FROM oaooao_generation_jobs')).rows[0].total,0);
 });
 
 test('team canvas pins project media and rejects foreign assets, personal URLs and foreign task IDs', async t => {

@@ -255,16 +255,11 @@ check('余额变化与倍率扣费一致', beforeHigh.total - afterHigh.total ==
   `余额差=${beforeHigh.total - afterHigh.total} 扣费=${highCost}`)
 
 /* ======================================================================
- * 3. 上游失败：费用必须如实处理（退款或待人工确认，不得静默吞掉）
+ * 3. 上游失败：后台自动结束并退款，不得静默吞掉
  * ==================================================================== */
 
 /**
- * 上游失败有两种正确结局，脚本必须**同时接受**并区分：
- *  - `error`：明确失败 → 自动退款；
- *  - `running` + `executionPhase = needs_review`：上游响应含义不明
- *    （本地模拟上游对 `FAIL` 提示词返回 500，属于这一类）→
- *    系统按设计**保留扣费并转人工确认**，避免「已经生成却给用户退款」。
- * 两种都不是「任务卡死」；真正要防的是第三种情况：既无终态、也无待确认标记。
+ * 提交阶段结果不明时不会重发上游请求；没有可查询任务 ID 时自动结束并退款。
  */
 const beforeFail = await wallet()
 const refundProbe = await page.evaluate(async () => {
@@ -281,30 +276,19 @@ if (refundProbe.id) {
     await page.waitForTimeout(2500)
     settledState = await taskBilling(refundProbe.id)
     if (settledState && ['success', 'error', 'cancelled'].includes(settledState.status)) break
-    if (settledState?.executionPhase === 'needs_review') break
   }
-  const needsReview = settledState?.executionPhase === 'needs_review'
-  check('上游失败任务有明确去向（失败退款 或 待人工确认），不会静默卡住',
-    settledState?.status === 'error' || needsReview,
+  check('上游失败任务自动结束并退款，不会静默卡住',
+    settledState?.status === 'error',
     `status=${settledState?.status} phase=${settledState?.executionPhase} err=${String(settledState?.error).slice(0, 50)}`)
 
   const afterFail = await wallet()
-  if (settledState?.status === 'error') {
-    check('明确失败的任务积分已退回（余额恢复）', beforeFail.total - afterFail.total === 0,
-      `失败前=${beforeFail.total} 失败后=${afterFail.total} 差=${beforeFail.total - afterFail.total}`)
-    const refundRecords = (await ledger(20)).filter((item) => item.type === 'refund')
-    check('失败退款在积分流水中留痕', refundRecords.length > 0,
-      `refund 流水=${JSON.stringify(refundRecords.slice(0, 2))}`)
-  } else {
-    // 待人工确认：费用必须**保留**（不能既没结果又退钱），并如实暴露状态。
-    check('待人工确认的任务保留扣费（不做无依据退款）',
-      afterFail.total <= beforeFail.total,
-      `确认前=${beforeFail.total} 确认后=${afterFail.total}`)
-    check('待人工确认状态通过 executionPhase 暴露给前端', needsReview === true,
-      `executionPhase=${settledState?.executionPhase}`)
-  }
+  check('失败任务积分已退回（余额恢复）', beforeFail.total - afterFail.total === 0,
+    `失败前=${beforeFail.total} 失败后=${afterFail.total} 差=${beforeFail.total - afterFail.total}`)
+  const refundRecords = (await ledger(20)).filter((item) => item.type === 'refund')
+  check('失败退款在积分流水中留痕', refundRecords.length > 0,
+    `refund 流水=${JSON.stringify(refundRecords.slice(0, 2))}`)
 } else {
-  check('上游失败任务有明确去向（失败退款 或 待人工确认），不会静默卡住', false, `无法创建失败任务：${JSON.stringify(refundProbe)}`)
+  check('上游失败任务自动结束并退款，不会静默卡住', false, `无法创建失败任务：${JSON.stringify(refundProbe)}`)
   check('明确失败的任务积分已退回（余额恢复）', false, '依赖上一个用例')
   check('失败退款在积分流水中留痕', false, '依赖上一个用例')
 }

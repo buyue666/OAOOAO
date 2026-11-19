@@ -69,7 +69,8 @@ const kindByCapability: Record<SessionLogicalModel['capability'], StudioMode> = 
 export function modelsFromSession(settings: SessionGenerationSettings | undefined): ModelConfig[] {
   const logicalModels = settings?.logicalModels ?? []
   const candidates = logicalModels
-    .filter((model) => settings?.personalModelIds === undefined || settings.personalModelIds.includes(model.id))
+    .filter((model) => model.requiresSubscription && settings?.subscriptionAccess!==true || settings?.personalModelIds === undefined || settings.personalModelIds.includes(model.id))
+    .filter((model) => !settings?.adultContent?.enabled || model.allowAdultContent === true)
     .filter((model) => model.enabled && model.bindings.some((binding) => binding.enabled))
     .flatMap((model) => {
       const bindings = model.bindings.filter((binding) => binding.enabled)
@@ -160,7 +161,9 @@ function toModelConfig(model: SessionLogicalModel, settings?: SessionGenerationS
     provider: capabilityLabel,
     kind,
     capability: model.capability,
-    description: selectedBinding?.requestAlias ? `绑定 ${selectedBinding.channelId} · 上游 ${selectedBinding.upstreamModel}` : `后台配置的${capabilityLabel}模型 · ${model.bindings.filter((item) => item.enabled).length} 条可用渠道`,
+    description: model.description?.trim() || (model.capability==='video' ? [profile?.durationSeconds?.length ? `最长 ${Math.max(...profile.durationSeconds)} 秒` : '',profile?.supportsFirstFrame ? '首尾帧' : '',profile?.supportsVideoReference ? '多模态参考' : profile?.supportsReferenceImage ? '图片参考' : '',profile?.supportsVideoEditing ? '视频编辑' : '',profile?.supportsVideoExtension ? '视频延长' : ''].filter(Boolean).join(' · ') || `${capabilityLabel}模型` : `${capabilityLabel}模型`),
+    requiresSubscription:model.requiresSubscription===true,
+    subscriptionLocked:model.requiresSubscription===true&&settings?.subscriptionAccess!==true,
     creditCost: Number(cost) || 0,
     capabilities: capability,
     status: '可用',
@@ -315,8 +318,8 @@ export function filterModelsByCapability(models: ModelConfig[], capability: Sess
 export function defaultModelFor(capability: SessionLogicalModel['capability'], settings?: SessionGenerationSettings, models: ModelConfig[] = []) {
   const defaults = settings?.defaultModels
   const preferred = capability === 'image' ? defaults?.imageModel : capability === 'video' ? defaults?.videoModel : capability === 'audio' ? defaults?.audioModel : defaults?.textModel
-  if (preferred && models.some((model) => model.id === preferred)) return preferred
-  return models[0]?.id ?? ''
+  if (preferred && models.some((model) => model.id === preferred && !model.subscriptionLocked)) return preferred
+  return models.find(model=>!model.subscriptionLocked)?.id ?? ''
 }
 export function defaultGenerationDefaults(settings?: SessionGenerationSettings): SessionGenerationDefaults {
   return settings?.generationDefaults ?? {

@@ -102,7 +102,7 @@ test('actual entitlement checkboxes default legacy plans to all kinds and preser
   const h = hooks(), writes = []
   const source = ts.createSourceFile('settings.tsx', read('../components/studio/admin-settings.tsx'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const declaration = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'PointsSection').getText(source)
-  const imports = `import {useState} from 'react'; const PlanModelControl='PlanModelControl'; import {allowedGenerationKinds,ENTITLEMENT_GENERATION_KINDS} from './features'; import {${Object.keys(ui).join(',')}} from './ui';`
+  const imports = `import {useState} from 'react'; const CONCURRENCY_FIELDS=['agent','image','video','audio','text','render'].map(key=>[key,key]); const PlanModelControl='PlanModelControl'; const Trash2='Trash2'; const Pencil='Pencil'; const useConfirm=()=>()=>Promise.resolve(true); const PlanConcurrencyFields='PlanConcurrencyFields'; import {allowedGenerationKinds,ENTITLEMENT_GENERATION_KINDS} from './features'; import {${Object.keys(ui).join(',')}} from './ui';`
   const { PointsSection } = compile(`${imports} export ${declaration}`, { react: h.react, './features': features, './ui': ui, 'react/jsx-runtime': jsx })
   const settings = { entitlements: { enabled: true, defaultPlanId: 'legacy', plans: [{ id: 'legacy', name: '旧方案', enabled: true, dailyPoints: 0, limits: {}, features: ['keep-legacy-feature'] }] }, generationCostControl: {}, generationPointMultipliers: {}, modelPointCosts: {} }
   const render = () => h.render(() => PointsSection({ settings, canUpstream: false, saving: false, onSave: patch => writes.push(patch) }))
@@ -111,7 +111,7 @@ test('actual entitlement checkboxes default legacy plans to all kinds and preser
   for (const field of all(render()).filter(node=>node.type==='AdminField'&&node.props.label?.includes('容量'))){const input=all(field).find(node=>node.type==='AdminInput');assert.equal(input.props.value,10)}
   for (const field of all(render()).filter(node=>node.type==='AdminField'&&/每日/.test(node.props.label))){const input=all(field).find(node=>node.type==='AdminInput');assert.equal(input.props.value,0)}
   for (const box of boxes()) { const input = all(box).find(node => node.type === 'input'); assert.equal(input.props.checked, true); input.props.onChange({ target: { checked: false } }) }
-  render().props.onSubmit({ preventDefault() {} })
+  all(render()).find(node=>typeof node.props?.onSubmit==='function').props.onSubmit({ preventDefault() {} })
   assert.deepEqual(writes[0].entitlements.plans[0].allowedGenerationKinds, [])
   assert.deepEqual(writes[0].entitlements.plans[0].features, ['keep-legacy-feature'])
   assert.deepEqual(features.allowedGenerationKinds({ allowedGenerationKinds: [] }), [])

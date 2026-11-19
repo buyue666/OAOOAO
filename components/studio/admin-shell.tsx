@@ -57,7 +57,7 @@ export const adminSectionMeta: Record<AdminSection, { title: string; description
   generation: { title: '生成运维', description: '按用户、模型、渠道、类型和状态排查任务，处理失败与卡死请求。' },
   channels: { title: '模型与渠道', description: '维护上游渠道、模型列表、能力与计费倍率，并测试连通性。' },
   products: { title: '商品与套餐', description: '管理积分包、订阅套餐及其在订阅页展示的权益。' },
-  'team-plans': { title: '团队套餐与权益', description: '配置团队套餐、人工开通团队权益并发放团队积分。' },
+  'team-plans': { title: '团队套餐与权益', description: '配置团队套餐和在线购买，按需手动补发团队权益与积分。' },
   orders: { title: '订单与财务', description: '查询订单与支付状态，处理退款、优惠券、促销与邀请返利。' },
   content: { title: '内容与公告', description: '发布公告并处理作品审核、下架与举报治理。' },
   settings: { title: '系统设置', description: '管理品牌外观、注册与积分、支付、邮件、存储和生成参数。' },

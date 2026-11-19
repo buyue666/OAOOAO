@@ -11,6 +11,7 @@ import { SitePopups } from '@/components/site-popups'
 import { WorkspaceProvider } from '@/lib/studio/workspace-context'
 import { PluginProvider } from '@/lib/studio/plugin-context'
 import './globals.css'
+import './appearance.css'
 
 export const metadata: Metadata = {
   title: 'OAO · AI 创作工作台',

@@ -4,6 +4,7 @@
  */
 import { request, StudioApiError } from './api'
 import { publishSiteBrandSettings } from './site-brand-sync'
+import { publishAccountSettingsVisibility } from './account-settings-visibility'
 import type {
   AdminGenerationOperations,
   AdminGenerationOverview,
@@ -175,14 +176,6 @@ export async function retryAgentSubTask(task: Pick<AdminGenerationTask, 'id' | '
   assertOk(payload)
 }
 
-export type ReviewAction = { action: 'resume_upstream'; upstreamTaskId: string } | { action: 'provide_result'; result: string } | { action: 'confirm_failed'; reason?: string }
-
-/** 人工接管“上游结果不确定”的任务：继续查询、补录结果或确认失败。 */
-export async function reviewGenerationTask(task: Pick<AdminGenerationTask, 'id' | 'type'>, input: ReviewAction) {
-  const payload = await request<unknown>(`/api/admin/generation-operations/${encodeURIComponent(task.type)}/${encodeURIComponent(task.id)}/review`, { method: 'POST', body: JSON.stringify(input) })
-  assertOk(payload)
-}
-
 /* -------------------------------- 系统设置 -------------------------------- */
 
 export async function getAdminSettings(): Promise<AdminSettings> {
@@ -191,13 +184,14 @@ export async function getAdminSettings(): Promise<AdminSettings> {
 }
 
 /** 后端按字段合并补丁；这里允许提交部分设置。 */
-export type AdminSettingsPatch = Partial<Omit<AdminSettings, 'defaultModels' | 'wechatOfficial'>> & { defaultModels?: Partial<SystemDefaultModels>; wechatOfficial?: WechatOfficialInput }
+export type AdminSettingsPatch = Partial<Omit<AdminSettings, 'defaultModels' | 'wechatOfficial'>> & { defaultModels?: Partial<SystemDefaultModels>; wechatOfficial?: WechatOfficialInput; entitlementPlanRenames?: { from: string; to: string }[]; entitlementPlanRemovals?: string[] }
 
 export async function updateAdminSettings(patch: AdminSettingsPatch) {
   const payload = await request<{ settings: AdminSettings }>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(patch) })
   assertOk(payload)
   if (!payload?.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) throw new StudioApiError('设置保存后未返回有效配置，请重新读取确认', 502)
   if (patch.site && payload.settings.site) publishSiteBrandSettings(payload.settings.site)
+  if (patch.watermarkPolicy || patch.accountMenu) publishAccountSettingsVisibility(payload.settings)
   return payload
 }
 

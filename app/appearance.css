@@ -1,0 +1,108 @@
+/* User appearance is applied to the shared root so portalled controls inherit it. */
+html[data-oao-skin] {
+  --oao-radius: 10px;
+  --oao-panel-radius: 16px;
+  --oao-panel: color-mix(in srgb, var(--card) 82%, transparent);
+  --oao-panel-edge: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --oao-glow: color-mix(in srgb, var(--studio-accent) 12%, transparent);
+  --oao-shadow: 0 8px 28px rgb(15 23 42 / 6%), inset 0 1px 0 rgb(255 255 255 / 60%);
+}
+html.dark[data-oao-skin] {
+  --oao-panel: color-mix(in srgb, var(--card) 78%, transparent);
+  --oao-panel-edge: color-mix(in srgb, var(--foreground) 17%, transparent);
+  --oao-shadow: 0 12px 36px rgb(0 0 0 / 16%), inset 0 1px 0 rgb(255 255 255 / 10%);
+}
+html[data-oao-radius='square'] { --oao-radius: 2px; --oao-panel-radius: 3px; }
+html[data-oao-radius='small'] { --oao-radius: 5px; --oao-panel-radius: 8px; }
+html[data-oao-radius='large'] { --oao-radius: 16px; --oao-panel-radius: 23px; }
+html[data-oao-density='compact'] .studio-app-shell { --spacing: .225rem; }
+html[data-oao-density='comfortable'] .studio-app-shell { --spacing: .275rem; }
+html[data-oao-font='auto'] body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif; }
+html[data-oao-font='sans'] body { font-family: 'Noto Sans SC', 'Microsoft YaHei', Arial, sans-serif; }
+html[data-oao-font='serif'] body { font-family: 'Noto Serif SC', 'Songti SC', SimSun, Georgia, serif; }
+html[data-oao-font] :is(button,input,textarea,select) { font-family: inherit; }
+html[data-oao-font] :is(code,pre,.font-mono) { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+html[data-oao-skin] .studio-app-shell :where(.rounded-lg,.rounded-xl,.studio-control,.studio-field,.appearance-choice) { border-radius: var(--oao-radius); }
+html[data-oao-skin] .studio-app-shell :where(.rounded-2xl,.studio-surface) { border-radius: var(--oao-panel-radius); }
+
+/* Environmental light stays behind content; the shell never creates a fixed-position containing block. */
+html[data-oao-skin='glass'] .studio-app-shell,
+html[data-oao-skin='soft'] .studio-app-shell {
+  background-image: radial-gradient(ellipse at 9% 0%, var(--oao-glow), transparent 48%), radial-gradient(ellipse at 94% 38%, color-mix(in srgb,var(--oao-accent-companion) 9%,transparent), transparent 54%);
+  background-attachment: fixed;
+}
+html[data-oao-skin='glass'] :is(.studio-topbar,.studio-sidebar,.studio-mobile-nav aside) {
+  background: color-mix(in srgb,var(--card) 78%,transparent);
+  border-color: var(--oao-panel-edge);
+  box-shadow: var(--oao-shadow);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  backdrop-filter: blur(26px) saturate(150%);
+}
+html[data-oao-skin='glass'] .studio-app-shell :is(.studio-surface,.workspace-params-glass,.studio-home-prompt,[data-testid='ai-tryon-tool'] > div > aside > section,[aria-label$='素材选择']) {
+  background: linear-gradient(145deg,color-mix(in srgb,var(--card) 92%,transparent),var(--oao-panel));
+  border-color: var(--oao-panel-edge);
+  box-shadow: var(--oao-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+html[data-oao-skin='glass'] :is(.lg-glass-overlay,[data-slot='dialog-content'],.studio-sidepanel,.workspace-submit-bar,[data-testid='ai-tryon-footer']) {
+  background: color-mix(in srgb,var(--card) 91%,transparent);
+  border-color: var(--oao-panel-edge);
+  box-shadow: var(--oao-shadow);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+}
+html[data-oao-skin='glass'] .studio-nav-item[data-active='true'] {
+  background: linear-gradient(120deg,color-mix(in srgb,var(--studio-accent) 23%,transparent),color-mix(in srgb,var(--oao-accent-companion) 11%,transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--studio-accent) 35%,transparent), inset 0 1px 0 rgb(255 255 255 / 18%);
+}
+html[data-oao-skin='soft'] .studio-app-shell :is(.studio-surface,.studio-topbar,.studio-sidebar,.workspace-params-glass,[aria-label$='素材选择']) {
+  background: color-mix(in srgb,var(--card) 96%,var(--studio-accent));
+  border-color: color-mix(in srgb,var(--border) 85%,var(--studio-accent));
+  box-shadow: 0 8px 22px rgb(0 0 0 / 7%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-oao-skin='minimal'] .studio-app-shell :is(.studio-surface,.studio-topbar,.studio-sidebar,.workspace-params-glass,[aria-label$='素材选择']) {
+  background: var(--card);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.appearance-choice { background: color-mix(in srgb,var(--card) 90%,transparent); color: var(--foreground); transition: background-color 160ms ease,border-color 160ms ease; }
+.appearance-choice:hover { border-color: color-mix(in srgb,var(--studio-accent) 60%,var(--border)); }
+.appearance-choice[aria-pressed='true'] { border-color: var(--studio-accent); background: color-mix(in srgb,var(--studio-accent) 12%,var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--studio-accent) 65%,transparent); }
+.appearance-material-preview { position: relative; display: block; height: 76px; overflow: hidden; border-radius: 10px; background: linear-gradient(135deg,color-mix(in srgb,var(--studio-accent) 60%,var(--card)),color-mix(in srgb,var(--oao-accent-companion) 45%,var(--card))); }
+.appearance-material-preview > span { position: absolute; inset: 14px 18px 14px 42px; border: 1px solid rgb(255 255 255 / 40%); border-radius: 8px; background: color-mix(in srgb,var(--card) 45%,transparent); box-shadow: inset 0 1px 0 rgb(255 255 255 / 50%),0 7px 14px rgb(0 0 0 / 10%); }
+.appearance-material-preview > span + span { inset: 27px 39px 25px 55px; border-width: 0 0 2px; border-radius: 0; background: transparent; box-shadow: 0 10px 0 -1px rgb(255 255 255 / 40%); }
+.appearance-material-soft > span { background: color-mix(in srgb,var(--card) 87%,transparent); border-color: transparent; box-shadow: 0 6px 12px rgb(0 0 0 / 10%); }
+.appearance-material-minimal { background: var(--muted); }
+.appearance-material-minimal > span { background: var(--card); border-color: var(--border); box-shadow: none; }
+
+/* Strong selected-state cues survive every color and material preset. */
+.skill-repository-switch { border-color: var(--border); background: color-mix(in srgb,var(--muted) 65%,transparent); }
+.skill-repository-tab { position: relative; border-color: transparent; background: transparent; color: var(--muted-foreground); transition: background-color 160ms ease,border-color 160ms ease,box-shadow 160ms ease; }
+.skill-repository-tab:hover { background: color-mix(in srgb,var(--studio-accent) 7%,var(--card)); color: var(--foreground); }
+.skill-repository-tab[aria-pressed='true'] { border-color: var(--studio-accent); background: linear-gradient(115deg,color-mix(in srgb,var(--studio-accent) 17%,var(--card)),color-mix(in srgb,var(--studio-accent) 6%,var(--card))); color: var(--foreground); box-shadow: inset 3px 0 0 var(--studio-accent),0 2px 10px color-mix(in srgb,var(--studio-accent) 10%,transparent); }
+.skill-repository-tab[aria-pressed='true'] > svg { color: var(--studio-accent); }
+.skill-repository-tab[aria-pressed='true'] .skill-tab-indicator { background: var(--studio-accent); color: var(--studio-accent-foreground); }
+.skill-tab-current { background: color-mix(in srgb,var(--studio-accent) 18%,var(--card)); color: var(--studio-accent); }
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-oao-skin='glass'] :is(.studio-topbar,.studio-sidebar,.studio-mobile-nav aside,.studio-surface,.workspace-params-glass,.studio-home-prompt,.lg-glass-overlay,[data-slot='dialog-content'],.studio-sidepanel,.workspace-submit-bar,[aria-label$='素材选择']) { background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-reduced-motion: reduce) { .appearance-choice,.skill-repository-tab { transition: none; } }
+@media (forced-colors: active) { :is(.appearance-choice,.skill-repository-tab)[aria-pressed='true'] { border: 2px solid Highlight; outline: 1px solid Highlight; } }
+@media (pointer: coarse) { html[data-oao-density] .studio-app-shell :is(button,select,input:not([type='checkbox']):not([type='radio'])) { min-height: 44px; } }
+
+html[data-oao-skin] .studio-choice[aria-pressed='true'],html[data-oao-skin] .studio-choice[aria-pressed='true']:hover { background: var(--studio-accent); border-color: var(--studio-accent); color: var(--studio-accent-foreground); }
+
+html[data-oao-skin='glass'] :is(.tryon-combination,.tryon-scene-settings,.tryon-generation-settings) {
+  background: linear-gradient(145deg,color-mix(in srgb,var(--card) 92%,transparent),var(--oao-panel));
+  border-color: var(--oao-panel-edge); box-shadow: var(--oao-shadow);
+  -webkit-backdrop-filter: blur(18px) saturate(135%); backdrop-filter: blur(18px) saturate(135%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-oao-skin='glass'] :is(.tryon-combination,.tryon-scene-settings,.tryon-generation-settings) { background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

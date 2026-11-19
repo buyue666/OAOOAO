@@ -57,6 +57,7 @@ export type ProductDraftDisplay = {
   tierLabel: string
   badge: string
   generationSummary: string
+  generationSummaryNote: string
   benefits: string
   promotions: string
   exclusiveBenefits: string
@@ -65,6 +66,10 @@ export type ProductDraftDisplay = {
 
 export function linesToList(value: string): string[] {
   return value.split('\n').map((item) => item.trim()).filter(Boolean)
+}
+
+export function renameProductDraft(draft: ProductDraft, name: string): ProductDraft {
+  return { ...draft, name, display: { ...draft.display, name: !draft.display.name || draft.display.name === draft.name ? name : draft.display.name } }
 }
 
 /** 从后端商品构造草稿。 */
@@ -111,6 +116,7 @@ export function productToDraft(product: {
       tierLabel: text(display.tierLabel),
       badge: text(display.badge),
       generationSummary: text(display.generationSummary),
+      generationSummaryNote: text(display.generationSummaryNote),
       benefits: list(display.benefits).length ? list(display.benefits).join('\n') : list(metadata.benefits).join('\n'),
       promotions: list(display.promotions).join('\n'),
       exclusiveBenefits: list(display.exclusiveBenefits).join('\n'),
@@ -134,7 +140,7 @@ export function emptyDraft(sortOrder: number): ProductDraft {
     periodDays: 0,
     sortOrder,
     enabled: false,
-    display: { name: '', audience: 'creator', groupId: '', tone: '', tierId: 'default', tierLabel: '', badge: '', generationSummary: '', benefits: '', promotions: '', exclusiveBenefits: '', extraBenefits: '' },
+    display: { name: '', audience: 'creator', groupId: '', tone: '', tierId: 'default', tierLabel: '', badge: '', generationSummary: '', generationSummaryNote: '', benefits: '', promotions: '', exclusiveBenefits: '', extraBenefits: '' },
     baseMetadata: {},
   }
 }
@@ -150,6 +156,7 @@ export function draftToPayload(draft: ProductDraft) {
     audience: draft.display.audience,
     badge: draft.display.badge.trim(),
     generationSummary: draft.display.generationSummary.trim(),
+    generationSummaryNote: draft.display.generationSummaryNote.trim(),
     benefits: linesToList(draft.display.benefits),
     promotions: linesToList(draft.display.promotions),
     exclusiveBenefits: linesToList(draft.display.exclusiveBenefits),

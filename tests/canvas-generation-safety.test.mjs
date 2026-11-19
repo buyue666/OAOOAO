@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
 import { canvasPolicyModules, canvasTestModel } from './canvas-test-modules.mjs'
@@ -9,7 +9,14 @@ const require = createRequire(import.meta.url)
 function sourceModule(path, mocks = {}) {
   const code = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
   const module = { exports: {} }
-  new Function('require', 'module', 'exports', code)(name => Object.hasOwn(mocks, name) ? mocks[name] : require(name), module, module.exports)
+  new Function('require', 'module', 'exports', code)(name => {
+    if (Object.hasOwn(mocks, name)) return mocks[name]
+    if (name.startsWith('.')) {
+      const dependency = new URL(`${name}.ts`, new URL(path, import.meta.url))
+      if (existsSync(dependency)) return sourceModule(dependency.href)
+    }
+    return require(name)
+  }, module, module.exports)
   return module.exports
 }
 const types = sourceModule('../components/free-canvas/types.ts')

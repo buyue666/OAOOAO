@@ -18,7 +18,8 @@ export const drafts = compile('lib/studio/product-draft.ts')
 const policy = compile('lib/studio/commerce-policy.ts')
 const benefits = compile('components/membership/benefits.ts')
 const helpers = compile('components/membership/purchase-helpers.ts', { '@/lib/studio/membership': membership })
-export const card = compile('components/membership/plan-card.tsx', { ...common, '@/lib/studio/membership': membership, './benefits': benefits, './purchase-helpers': helpers }).PlanCard
+const cardImports = { ...common, react: { useEffect() {}, useId: () => 'info', useRef: initial => ({ current: initial }), useState: initial => [initial, () => {}] }, 'lucide-react': { CalendarCheck: 'CalendarCheck', CircleAlert: 'CircleAlert', Coins: 'Coins', Sparkles: 'Sparkles' }, 'radix-ui': { Popover: Object.fromEntries(['Root', 'Anchor', 'Portal', 'Content'].map(name => [name, `Popover${name}`])) }, '@/backend/src/membership-policy': compile('backend/src/membership-policy.ts'), '@/lib/studio/membership': membership, './benefits': benefits, './purchase-helpers': helpers }
+export const card = compile('components/membership/plan-card.tsx', cardImports).PlanCard
 const review = compile('components/membership/purchase-confirmation.tsx', {
   ...common, '@/lib/studio/membership': membership, '@/lib/studio/commerce-policy': policy, './purchase-helpers': helpers,
   '@/components/ui/dialog': Object.fromEntries(['Dialog', 'DialogContent', 'DialogDescription', 'DialogHeader', 'DialogTitle'].map(name => [name, name])),
@@ -33,7 +34,7 @@ export function viewHarness(props) {
     useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial; return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value }] },
     useRef(initial) { const index = cursor++; if (!(index in slots)) slots[index] = { current: initial }; return slots[index] },
   }
-  const view = compile('components/membership/membership-purchase-view.tsx', { ...common, react, './benefits': benefits, './purchase-helpers': helpers, './purchase-confirmation': review, './plan-card': { PlanCard: card } }).MembershipPurchaseView
+  const view = compile('components/membership/membership-purchase-view.tsx', { ...common, react, './benefits': benefits, './purchase-helpers': helpers, './purchase-confirmation': review, './plan-card': { PlanCard: card }, './credit-package-picker': { CreditPackagePicker: 'CreditPackagePicker' } }).MembershipPurchaseView
   const input = { generationColumns: [], generationRows: [], faqItems: [], products: [], billingOptions: membership.billingOptions, onSelectPlan() {}, onClose() {}, ...props }
   return { input, render() { cursor = 0; return view(input) } }
 }

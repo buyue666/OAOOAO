@@ -68,9 +68,16 @@ export function synchronizeUpstreamPricing(model: LogicalModel, sourceId: string
   return {model: {...model, bindings}, costs: nextCosts}
 }
 
-export function upstreamPricingConflicts(model: LogicalModel, channels: SystemChannel[], costs: Record<string, number>) {
+export function upstreamPricingConflicts(model: LogicalModel, channels: SystemChannel[], costs: Record<string, number>, previous?: {model?: LogicalModel; costs: Record<string, number>}) {
   return model.bindings.filter((binding, index) => {
     const peers = upstreamPricePeers(model, binding, channels)
+    if (previous?.model) {
+      const key = upstreamPriceKey(binding, channels)
+      const before = previous.model.bindings.filter(item => upstreamPriceKey(item, channels) === key)
+        .map(item => upstreamPricingSnapshot(previous.model!, item, previous.costs)).sort()
+      const after = peers.map(item => upstreamPricingSnapshot(model, item, costs)).sort()
+      if (JSON.stringify(before) === JSON.stringify(after)) return false
+    }
     return peers.length > 1 && model.bindings.indexOf(peers[0]) === index && peers.some(peer => upstreamPricingSnapshot(model, peer, costs) !== upstreamPricingSnapshot(model, binding, costs))
   })
 }

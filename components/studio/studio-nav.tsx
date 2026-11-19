@@ -19,11 +19,12 @@ import {
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Tooltip } from './ui'
-import { workspaceHref } from '@/lib/studio/workspace-navigation'
+import { workspaceHref, workspaceIdentity, workspaceSection } from '@/lib/studio/workspace-navigation'
 import { useWorkspace } from '@/lib/studio/workspace-context'
 import { usePlugins } from '@/lib/studio/plugin-context'
 import { creativePlugins, type CreativePluginId } from '@/lib/studio/creative-plugins'
 import { pluginIcons } from './plugins/plugin-icon'
+import { workspaceFeature } from '@/lib/studio/workspace-features'
 
 export interface StudioNavItem {
   label: string
@@ -77,7 +78,7 @@ const rootTitles: Record<string, string> = {
   account: '账户',
   settings: '设置',
   plans: '套餐',
-  tools: '插件中心',
+  tools: '功能中心',
   teams: '团队空间',
 }
 
@@ -95,6 +96,12 @@ const sectionTitles: Record<string, string> = {
 
 /** 页面标题只显示当前页面名称；项目详情页附带项目名称。 */
 export function studioPageTitle(pathname: string, projectTitle?: string) {
+  const scope = workspaceSection(pathname)
+  if (scope === '/studio/image') return '图片生成'
+  if (scope === '/studio/video') return '视频生成'
+  if (scope === '/studio/features') return '功能中心'
+  if (scope === '/studio/canvas') return '自由画布'
+  pathname = scope
   const [root, id, section] = pathname.split('/').filter(Boolean)
   if (!root) return '开始创作'
   if (id && (root === 'projects' || root === 'drama')) {
@@ -102,7 +109,7 @@ export function studioPageTitle(pathname: string, projectTitle?: string) {
     if (!section) return name
     return `${name} · ${sectionTitles[section] ?? section}`
   }
-  if (root === 'tools' && id) return id === 'tryon' ? 'AI 换装' : '图片复刻'
+  if (root === 'tools' && id) return creativePlugins.find(plugin => plugin.href === `/tools/${id}`)?.name ?? '功能中心'
   return rootTitles[root] ?? 'OAO'
 }
 
@@ -132,7 +139,10 @@ export function StudioNavLink({
   const Icon = item.icon
   const label = tx(item.label)
   const href = workspace.identity ? workspace.href(item.href) : workspaceHref(pathname, item.href)
-  const active = href !== item.href ? item.href === '/studio' ? pathname.endsWith('/canvas') : item.href === '/projects' ? !pathname.endsWith('/canvas') : false : isNavItemActive(pathname, item)
+  const team = workspace.identity || workspaceIdentity(pathname)
+  const section = workspaceSection(pathname)
+  if (team && item.href === '/skills') return null
+  const active = team ? item.href === '/studio' ? ['/studio', '/studio/image', '/studio/video'].includes(section) : item.href === '/projects' ? section === '/teams' : false : isNavItemActive(pathname, item)
   const link = (
     <Link
       href={href}
@@ -141,6 +151,7 @@ export function StudioNavLink({
       aria-current={active ? 'page' : undefined}
       aria-label={collapsed ? label : undefined}
       data-active={active ? 'true' : 'false'}
+      data-tour={item.href === '/assets' ? 'assets' : undefined}
       className={cn(
         'studio-nav-item flex h-10 items-center rounded-lg text-sm font-medium',
         collapsed ? 'mx-auto w-10 justify-center' : 'gap-3 px-3',
@@ -170,8 +181,13 @@ export function StudioToolsNav({
   const router = useRouter()
   const plugins = usePlugins()
   const workspace = useWorkspace()
-  const installedTools = studioToolItems.filter(item => plugins.isInstalled(item.key) && (!workspace.identity || item.key === 'canvas' || item.key === 'director'))
-  const active = isNavItemActive(pathname, studioToolsNav)
+  const identity = workspace.identity || workspaceIdentity(pathname)
+  const center = workspaceHref(pathname, '/tools')
+  const installedTools = studioToolItems.flatMap(item => {
+    const feature = workspaceFeature(item.key, identity, plugins.isInstalled(item.key))
+    return feature.available && feature.href ? [{ ...item, href: feature.href }] : []
+  })
+  const active = isNavItemActive(pathname, studioToolsNav) || ['/studio/features', '/studio/canvas'].includes(workspaceSection(pathname))
   const [open, setOpen] = useState(active)
   const submenuId = `studio-tools-subnav-${idSuffix}`
 
@@ -187,9 +203,10 @@ export function StudioToolsNav({
       aria-controls={collapsed ? undefined : submenuId}
       aria-label={collapsed ? tx(studioToolsNav.label) : undefined}
       data-active={active ? 'true' : 'false'}
+      data-tour="tools"
       onClick={() => {
         if (collapsed) {
-          router.push('/tools'); onNavigate?.()
+          router.push(center); onNavigate?.()
           return
         }
         setOpen((value) => !value)
@@ -210,14 +227,14 @@ export function StudioToolsNav({
       {collapsed ? <Tooltip label={tx(studioToolsNav.label)} side="right" className="flex w-full justify-center">{parent}</Tooltip> : parent}
       {!collapsed && open && (
         <div id={submenuId} className="ml-3 flex flex-col gap-1 border-l border-sidebar-border pl-3" aria-label={tx("创作工具子菜单")}>
-          <Link href="/tools" prefetch={false} onClick={onNavigate} aria-current={pathname === '/tools' ? 'page' : undefined} className={cn('flex min-h-10 items-center gap-2 rounded-md px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', pathname === '/tools' ? 'bg-studio-accent/10 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Puzzle className="size-3.5 shrink-0" aria-hidden="true" />{tx('插件中心')}</Link>
+          <Link href={center} prefetch={false} onClick={onNavigate} aria-current={pathname === center ? 'page' : undefined} className={cn('flex min-h-10 items-center gap-2 rounded-md px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', pathname === center ? 'bg-studio-accent/10 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Puzzle className="size-3.5 shrink-0" aria-hidden="true" />{tx('功能中心')}</Link>
           {installedTools.map((item) => {
             const ItemIcon = item.icon
-            const itemActive = isNavItemActive(pathname, item)
+            const itemActive = identity ? pathname === item.href && item.key !== 'director' : isNavItemActive(pathname, item)
             return (
               <Link
                 key={item.key}
-                href={workspace.identity ? workspace.href('/studio') : item.href}
+                href={item.href}
                 prefetch={false}
                 onClick={onNavigate}
                 aria-current={itemActive ? 'page' : undefined}

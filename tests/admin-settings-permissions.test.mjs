@@ -26,7 +26,7 @@ const ui = Object.fromEntries(['AdminError', 'AdminLoading', 'AdminNotice', 'Adm
 const imports = `import { useState, useRef, useEffect, useCallback } from 'react'; import { useAdminSession, useAdminReload, useAdminNavigation, useConfirm } from './context'; import { getAdminSettings, getObjectStorage, getPaymentConfig, updateAdminSettings } from './api'; import { canConfigureManualPayment } from './helpers'; import { canConfigureOnlinePayment, paymentProviderName } from './online'; import { checkInRuleChanges, readCheckInForm } from './check-in-rules'; import { ${Object.keys(ui).join(',')} } from './ui';`
 function all(node) { return node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(all)] : [] }
 const fixtureSettings = { operationMode: 'self_use', registrationEnabled: false, freeDailyPointsEnabled: false, freeDailyPoints: 0, entitlements: { plans: [] }, commercePolicy: { status: 'draft' }, site: {} }
-const paymentConfig = { providers: [{ id: 'manual', checkoutKind: 'manual', ready: false, enabled: false, fields: [{ key: 'instructions', kind: 'textarea', value: '', configured: false }] }] }
+const paymentConfig = { providers: [{ id: 'ciyuan_balance', checkoutKind: 'redirect', ready: false, enabled: false, fields: ['gatewayUrl', 'merchantId', 'secret'].map(key => ({ key, kind: key === 'secret' ? 'secret' : 'text', value: '', configured: false })) }] }
 
 async function fixture(initialPermissions) {
   let permissions = initialPermissions
@@ -76,7 +76,7 @@ test('commerce-only settings show policy and commerce controls without fetching 
   assert.deepEqual(f.sections(), ['account', 'billing', 'points'])
   const nodes = f.billing()
   assert.equal(nodes.some(node => node.type === 'CommercePolicyEditor'), true)
-  assert.equal(nodes.some(node => node.type === 'PaymentProviderEditor' || node.type === 'form'), false)
+  assert.equal(nodes.some(node => node.type === 'OnlinePaymentProviderEditor' || node.type === 'form'), false)
   nodes.find(node => node.type === 'CommercePolicyEditor').props.onSave({ commercePolicy: { status: 'draft' } }, ['政策草稿'])
   assert.equal(f.confirmations[0].title, '保存购买政策？')
   await f.confirmations[0].onConfirm()
@@ -88,7 +88,7 @@ test('billing-only settings fetch payment configuration and hide policy, mode an
   assert.deepEqual(f.reads, { settings: 1, payment: 1, storage: 0 })
   assert.deepEqual(f.sections(), ['billing'])
   const nodes = f.billing()
-  assert.equal(nodes.some(node => node.type === 'PaymentProviderEditor'), true)
+  assert.equal(nodes.some(node => node.type === 'OnlinePaymentProviderEditor'), true)
   assert.equal(nodes.some(node => node.type === 'CommercePolicyEditor' || node.type === 'form'), false)
 })
 
@@ -97,7 +97,7 @@ test('system-only settings can save operation mode and do not load payment confi
   assert.deepEqual(f.reads, { settings: 1, payment: 0, storage: 1 })
   assert.equal(f.sections().includes('billing'), true)
   const nodes = f.billing()
-  assert.equal(nodes.some(node => node.type === 'PaymentProviderEditor' || node.type === 'CommercePolicyEditor'), false)
+  assert.equal(nodes.some(node => node.type === 'OnlinePaymentProviderEditor' || node.type === 'CommercePolicyEditor'), false)
   const mode = nodes.find(node => node.type === 'form')
   mode.props.onSubmit({ preventDefault() {}, currentTarget: { operationMode: 'commercial', commercePolicy: 'injected' } })
   assert.equal(f.confirmations[0].title, '保存运营模式设置？')
@@ -109,14 +109,14 @@ test('losing billing permission hides previously fetched payment data and does n
   const f = await fixture(['billing.manage'])
   await f.permissions(['commerce.manage'])
   assert.deepEqual(f.reads, { settings: 2, payment: 1, storage: 0 })
-  assert.equal(f.billing().some(node => node.type === 'PaymentProviderEditor'), false)
+  assert.equal(f.billing().some(node => node.type === 'OnlinePaymentProviderEditor'), false)
   assert.equal(f.billing().some(node => node.type === 'CommercePolicyEditor'), true)
 })
 
 test('registration, manual check-in and daily allowance submit only the fields owned by the current role', async () => {
   for (const [permissions, expected, titles] of [
     [['commerce.manage'], { freeDailyPointsEnabled: true, freeDailyPoints: 7, checkIn: { enabled: true, rewardPoints: 12, validityDays: 0, planRewards: [] } }, ['每日签到', '每日自动额度']],
-    [['system.manage'], { registrationEnabled: true }, ['注册开关']],
+    [['system.manage'], { registrationEnabled: true, registrationRateLimit: { enabled: false, maxAttempts: 5, windowSeconds: 3600 } }, ['注册开关', '注册频率限制']],
   ]) {
     const f = await fixture(permissions)
     await f.select('account')

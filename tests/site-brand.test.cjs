@@ -23,7 +23,7 @@ function modules({ site, fetch = () => { throw new Error('Unexpected network req
     const module = { exports: {} }; cache.set(absolute, module)
     const source = ts.transpileModule(fs.readFileSync(absolute, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
     vm.runInNewContext(source, {
-      module, exports: module.exports, URL, URLSearchParams, Headers, Response, Error, fetch, window: browser, document, CustomEvent: BrandEvent,
+      module, exports: module.exports, URL, URLSearchParams, Headers, Response, FormData, Blob, Error, fetch, window: browser, document, CustomEvent: BrandEvent,
       require: (name) => {
         if (name === '@/lib/studio/store') return { useStudio: () => ({ state: { sessionSettings: { site } } }) }
         if (name === 'next/navigation') return { usePathname: () => '/studio' }

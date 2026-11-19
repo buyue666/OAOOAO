@@ -3,9 +3,12 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PoolClient } from 'pg';
 import type { Context } from './core.js';
 import { httpError, object, pagination, string } from './core.js';
-import { adjustWallet, creditDecimal, creditUnits, getWallet, syncDailyEntitlement, walletTransaction } from './wallet.js';
+import { adjustWallet, creditDecimal, creditUnits, getWallet, revokeMembershipCheckIn, syncDailyEntitlement, walletTransaction } from './wallet.js';
 import { resolveCommercePolicy } from './commerce-policy.js';
+import { requireTeam } from './team-access.js';
+import { prepareTeamPurchase, settleTeamPurchase, reserveTeamPurchaseRefund, releaseTeamPurchaseRefund } from './team-purchase.js';
 import { EPAY_FIELDS, EPAY_NOTIFY_PATH, EPAY_RETURN_PATH, epayConfig, epayCheckout, epayMoneyCents, epayVerify, parseEpayNotification, validateEpayValues, type EpayConfig } from './payment-epay.js';
+import { BALANCE_FIELDS, BALANCE_NOTIFY_PATH, BALANCE_RETURN_PATH, balanceConfig, balanceCheckout, balanceAction, balanceSign, balanceCallbackFields, verifyBalanceCallback, type BalanceConfig } from './payment-balance.js';
 export { resolveCommercePolicy } from './commerce-policy.js';
 
 type Row = Record<string, any>;
@@ -57,7 +60,7 @@ export function purchaseReadiness(site: Row, policy: Row): { ready: boolean; mis
 }
 const providerDefinitions = [
   { id:'epay',name:'易支付',description:'支持 V2 RSA 与 V1 MD5 的签名表单支付和服务器通知验签。配置完整仅表示可以发起支付，真实收款仍需商户联调。退款先在本站准备并冻结对应积分，再到易支付平台退款并核实，最后回本站确认；本站不自动转账。密钥留空保留；切换协议不会删除另一协议密钥。',fields:EPAY_FIELDS },
-  { id: 'manual', name: '人工支付', description: '用户根据付款说明付款，由有权限的管理员核实收款后确认到账。退款前先准备并冻结对应积分，再到支付渠道退款核实，最后确认记录；取消准备必须确认尚未转账。本站不自动转账。', fields: [{ key: 'instructions', label: '付款说明', kind: 'textarea', required: true, secret: false }] },
+  { id:'ciyuan_balance',name:'New API 余额支付',description:'跳转到 LunAPI 收银台，由用户登录并确认使用余额付款。服务器核验回执后发放积分或套餐权益。退款先预留对应积分，再按原交易退回余额。',fields:BALANCE_FIELDS },
   { id: 'alipay', name: '支付宝直连', description: '此直连通道尚未接入。可保留加密配置，但不能发起支付或接收有效支付回调。', fields: [{ key: 'appId', label: '应用 ID', kind: 'text', secret: false }, { key: 'privateKey', label: '商户私钥', kind: 'secret', secret: true }, { key: 'alipayPublicKey', label: '支付宝公钥', kind: 'secret', secret: true }] },
   { id: 'wechat', name: '微信支付直连', description: '此直连通道尚未接入。可保留加密配置，但不能发起支付或接收有效支付回调。', fields: [{ key: 'appId', label: '应用 ID', kind: 'text', secret: false }, { key: 'mchId', label: '商户号', kind: 'text', secret: false }, { key: 'apiV3Key', label: 'API v3 密钥', kind: 'secret', secret: true }, { key: 'privateKey', label: '商户私钥', kind: 'secret', secret: true }] },
   { id: 'stripe', name: 'Stripe', description: '此直连通道尚未接入。可保留加密配置，但不能发起支付或接收有效支付回调。', fields: [{ key: 'secretKey', label: '密钥', kind: 'secret', secret: true }, { key: 'webhookSecret', label: '回调验签密钥', kind: 'secret', secret: true }] },
@@ -68,17 +71,21 @@ async function paymentConfig(ctx: Context, db: PoolClient | Context['db'] = ctx.
     const config = saved.find(row => row.provider_id === def.id);
     const publicValues = config?.public_values ?? {};
     const secrets = config?.encrypted_secrets ? JSON.parse(ctx.decrypt(config.encrypted_secrets)) : {};
-    let complete=false;if(def.id==='epay'){try{epayConfig(publicValues,secrets);complete=true;}catch{/* Invalid/incomplete saved configuration is unavailable. */}}
-    const ready = config?.enabled === true && (def.id==='epay'?complete:def.id==='manual'&&Boolean(String(publicValues.instructions ?? '').trim()));
-    return { id: def.id, name: def.name, description: def.description, checkoutKind: def.id === 'manual' ? 'manual' : def.id==='epay'?'form':'unavailable', enabled: config?.enabled === true, ready, checkoutReady: ready, webhookReady: def.id==='epay'&&complete, webhookOptional: def.id === 'manual', ...(def.id==='epay'?{webhookUrl:new URL(EPAY_NOTIFY_PATH,ctx.config.origin).href}:{}), fields: def.fields.map(field => ({ ...field, configured: Boolean((field.secret ? secrets : publicValues)[field.key]), ...(!field.secret ? { value: String(publicValues[field.key] ?? (def.id==='epay'&&field.key==='protocol'?'v2_rsa':def.id==='epay'&&field.key==='paymentType'?'cashier':'')) } : {}) })), checkoutRequirements: [{ label: def.id === 'manual' ? '付款说明及管理员核实收款' : def.id==='epay'?'完整网关、商户及所选协议密钥（仍需真实商户联调）':'完成支付协议接入并验证', configured: ready }], webhookRequirements: def.id === 'manual' ? [] : [{ label: def.id==='epay'?'服务器已实现签名与订单金额校验；请确保回调公网可达':'已实现的支付通知验签', configured: def.id==='epay'&&complete }] };
+    let complete=false;
+    try { if(def.id==='epay'){epayConfig(publicValues,secrets);complete=true;}else if(def.id==='ciyuan_balance'){balanceConfig(publicValues,secrets);complete=true;} } catch { /* Incomplete configuration cannot accept payments. */ }
+    const supported=def.id==='epay'||def.id==='ciyuan_balance',ready=config?.enabled===true&&complete;
+    return {id:def.id,name:def.name,description:def.description,checkoutKind:def.id==='epay'?'form':def.id==='ciyuan_balance'?'redirect':'unavailable',enabled:config?.enabled===true,ready,checkoutReady:ready,webhookReady:complete,webhookOptional:false,
+      ...(supported?{webhookUrl:new URL(def.id==='epay'?EPAY_NOTIFY_PATH:BALANCE_NOTIFY_PATH,ctx.config.origin).href}:{}),
+      fields:def.fields.map(field=>({...field,configured:Boolean((field.secret?secrets:publicValues)[field.key]),...(!field.secret?{value:String(publicValues[field.key]??(def.id==='epay'&&field.key==='protocol'?'v2_rsa':def.id==='epay'&&field.key==='paymentType'?'cashier':''))}:{})})),
+      checkoutRequirements:[{label:supported?'完整的网关地址、商户标识和签名凭据':'完成支付协议接入并验证',configured:ready}],
+      webhookRequirements:[{label:supported?'服务端核验签名、金额、币种与订单；通知地址须公网可达':'已实现的支付通知验签',configured:complete}]};
   });
   return { origin: ctx.config.origin, readyProviders: providers.filter(provider => provider.ready).length, providers, generatedAt: new Date().toISOString() };
 }
-async function assertManualReady(ctx: Context, db: PoolClient, provider: string) {
-  if (provider !== 'manual') throw httpError(503, '此支付通道尚未接入，未发起扣款');
-  const config = (await db.query("SELECT * FROM oaooao_payment_configs WHERE provider_id='manual'")).rows[0];
-  if (!config?.enabled || !String(config.public_values.instructions ?? '').trim()) throw httpError(503, '尚未配置人工支付的付款说明');
-  return config.public_values.instructions as string;
+async function loadBalanceConfig(ctx:Context,db:PoolClient):Promise<BalanceConfig> {
+  const row=(await db.query("SELECT * FROM oaooao_payment_configs WHERE provider_id='ciyuan_balance' FOR SHARE")).rows[0];
+  if(!row?.enabled)throw httpError(503,'New API 余额支付尚未启用');
+  try{return balanceConfig(row.public_values,row.encrypted_secrets?JSON.parse(ctx.decrypt(row.encrypted_secrets)):{});}catch{throw httpError(503,'New API 余额支付配置不完整');}
 }
 async function loadEpayConfig(ctx:Context,db:PoolClient):Promise<EpayConfig> {
   const row=(await db.query("SELECT * FROM oaooao_payment_configs WHERE provider_id='epay' FOR SHARE")).rows[0];
@@ -86,8 +93,9 @@ async function loadEpayConfig(ctx:Context,db:PoolClient):Promise<EpayConfig> {
   try{return epayConfig(row.public_values,row.encrypted_secrets?JSON.parse(ctx.decrypt(row.encrypted_secrets)):{});}catch{throw httpError(503,'易支付配置不完整，请联系管理员检查');}
 }
 async function assertProviderReady(ctx:Context,db:PoolClient,provider:string) {
-  if(provider==='epay')await loadEpayConfig(ctx,db);else await assertManualReady(ctx,db,provider);
+  if(provider==='epay')await loadEpayConfig(ctx,db);else if(provider==='ciyuan_balance')await loadBalanceConfig(ctx,db);else throw httpError(503,'此支付通道已关闭或尚未接入，未发起扣款');
 }
+export async function teamPurchaseReadiness(ctx:Context) { const config=await settings(ctx),policy=resolveCommercePolicy(config),readiness=purchaseReadiness(config.site??{},policy??{}),payments=await paymentConfig(ctx);const paymentProviders=payments.providers.filter(item=>item.ready).map(item=>item.id);return {purchaseEnabled:config.operationMode==='commercial'&&readiness.ready&&paymentProviders.length>0,paymentProviders,commercePolicy:policy}; }
 function productInput(input: Row, previous?: Row): Row {
   const value = { ...(previous ? view(previous) : {}), ...input };
   const kind = value.productKind ?? 'points';
@@ -100,9 +108,21 @@ function productInput(input: Row, previous?: Row): Row {
   return result;
 }
 function assertPlanAvailable(config:Row,product:Row):void {
-  if(product.product_kind!=='plan')return;
-  if(config.entitlements?.enabled!==true)throw httpError(503,'套餐权益设置尚未启用，暂时无法购买套餐');
-  if(!Array.isArray(config.entitlements.plans)||!config.entitlements.plans.some((plan:Row)=>plan.id===product.plan_id&&plan.enabled===true))throw httpError(503,'此商品关联的套餐权益尚未配置或未启用，暂时无法购买');
+  const reason=planUnavailableReason(config,product);
+  if(reason)throw httpError(503,reason);
+}
+function planSaleBlockers(config:Row,product:Row):string[] {
+  if(product.product_kind!=='plan')return [];
+  const plans=config.entitlements?.plans;
+  const plan=Array.isArray(plans)?plans.find((entry:Row)=>entry.id===product.plan_id):undefined;
+  return [
+    ...(config.entitlements?.enabled===true?[]:['套餐权益总开关未开启']),
+    ...(!plan?[`关联权益方案「${product.plan_id ?? '未设置'}」不存在`]:plan.enabled!==true?[`关联权益方案「${product.plan_id}」未启用`]:[]),
+  ];
+}
+function planUnavailableReason(config:Row,product:Row):string|undefined {
+  const blockers=planSaleBlockers(config,product);
+  return blockers.length?`${blockers.join('；')}，暂时无法购买` : undefined;
 }
 async function insertRecord(db: PoolClient, table: string, values: Row) {
   const entries = Object.entries(values);
@@ -151,13 +171,14 @@ function couponDiscount(template: Row, amount: number): number {
   return Number(result < cap ? (result < BigInt(amount) ? result : BigInt(amount)) : (cap < BigInt(amount) ? cap : BigInt(amount)));
 }
 async function createOrder(ctx: Context, userId: string, input: Row, headerKey?: string) {
-  const productId = string(input.productId,'productId',200);
+  const teamRequested = input.teamPlanId !== undefined;
+  const productId = teamRequested ? `team:${string(input.teamPlanId,'团队套餐',100)}` : string(input.productId,'productId',200);
   const quantity = integer(input.quantity ?? 1,'quantity',1,100);
-  const provider = string(input.provider ?? 'manual','provider',40);
+  const provider = string(input.provider ?? 'ciyuan_balance','provider',40);
   const couponId = input.couponId ? string(input.couponId,'couponId',200) : null;
   const key = headerKey || (input.idempotencyKey ? string(input.idempotencyKey,'idempotencyKey',160) : null);
   if (key && key.length > 160) throw httpError(400, 'Idempotency key is too long');
-  const fingerprint = createHash('sha256').update(JSON.stringify({ productId, quantity, provider, couponId })).digest('hex');
+  const fingerprint = createHash('sha256').update(JSON.stringify({ productId, quantity, provider, couponId, ...(teamRequested ? {teamId:input.teamId,teamName:input.teamName,seats:input.seats,expectedAmountCents:input.expectedAmountCents} : {}) })).digest('hex');
   return walletTransaction(ctx, undefined, async db => {
     if (key) {
       await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`order:${userId}:${key}`]);
@@ -167,11 +188,13 @@ async function createOrder(ctx: Context, userId: string, input: Row, headerKey?:
     const config = await settings(ctx, db); const policy=resolveCommercePolicy(config);const readiness = purchaseReadiness(config.site ?? {}, policy ?? {});
     if (config.operationMode !== 'commercial' || !readiness.ready) throw httpError(409,'购买功能尚未开放，或已发布的购买政策不完整');
     await assertProviderReady(ctx, db, provider);
-    const product = (await db.query('SELECT * FROM oaooao_products WHERE id=$1 AND enabled FOR SHARE',[productId])).rows[0];
+    if (teamRequested && (quantity !== 1 || couponId)) throw httpError(400,'团队套餐暂不支持优惠券或多份同时购买');
+    const product = teamRequested ? await prepareTeamPurchase(db,userId,input) : (await db.query('SELECT * FROM oaooao_products WHERE id=$1 AND enabled FOR SHARE',[productId])).rows[0];
+    if (teamRequested && input.expectedAmountCents !== product.amount_cents) throw httpError(409,'团队套餐价格已变化，请刷新并重新确认金额');
     if (!product) throw httpError(404,'Product not found');
     assertPlanAvailable(config,product);
     if (product.product_kind === 'plan' && quantity !== 1) throw httpError(400,'套餐每次只能购买一份');
-    const pricing = await priceProduct(db, product);
+    const pricing = teamRequested ? {listUnitAmountCents:product.amount_cents,saleUnitAmountCents:product.amount_cents,discountCents:0} : await priceProduct(db, product);
     const list = integer(pricing.listUnitAmountCents * quantity,'order amount',0,100_000_000_000);
     const promotional = pricing.saleUnitAmountCents * quantity;
     let coupon: Row | undefined; let discount = 0;
@@ -180,9 +203,9 @@ async function createOrder(ctx: Context, userId: string, input: Row, headerKey?:
       if (!coupon || (coupon.product_ids.length && !coupon.product_ids.includes(productId))) throw httpError(409,'Coupon is unavailable for this purchase');
       discount = couponDiscount(coupon,promotional);
     }
-    if(provider==='epay'&&(product.currency!=='CNY'||promotional-discount<=0))throw httpError(400,'易支付只支持金额大于零的人民币订单');
+    if(['epay','ciyuan_balance'].includes(provider)&&(product.currency!=='CNY'||promotional-discount<=0))throw httpError(400,'易支付只支持金额大于零的人民币订单');
     const id = randomUUID();
-    const order = await insertRecord(db,'oaooao_orders',{ id, order_no: `OA${Date.now()}${randomBytes(5).toString('hex').toUpperCase()}`, user_id:userId, product_id:product.id, product_kind:product.product_kind,plan_id:product.plan_id,subject:product.name,quantity,list_amount_cents:list,promotion_discount_cents:list-promotional,coupon_discount_cents:discount,amount_cents:promotional-discount,currency:product.currency,points_amount:creditDecimal(creditUnits(product.points_amount)*BigInt(quantity)),daily_points:product.daily_points,period_days:product.period_days,provider,request_key:key,request_fingerprint:fingerprint,expires_at:new Date(Date.now()+30*60*1000),pricing_snapshot:{...pricing,coupon:coupon?{id:coupon.id,templateId:coupon.template_id,label:coupon.name}:undefined,policyVersion:policy?.version},metadata:{} });
+    const order = await insertRecord(db,'oaooao_orders',{ id, order_no: `OA${Date.now()}${randomBytes(5).toString('hex').toUpperCase()}`, user_id:userId, product_id:product.id, product_kind:product.product_kind,plan_id:product.plan_id,subject:product.name,quantity,list_amount_cents:list,promotion_discount_cents:list-promotional,coupon_discount_cents:discount,amount_cents:promotional-discount,currency:product.currency,points_amount:creditDecimal(creditUnits(product.points_amount)*BigInt(quantity)),daily_points:product.daily_points,period_days:product.period_days,provider,request_key:key,request_fingerprint:fingerprint,expires_at:new Date(Date.now()+30*60*1000),pricing_snapshot:{...pricing,coupon:coupon?{id:coupon.id,templateId:coupon.template_id,label:coupon.name}:undefined,policyVersion:policy?.version},metadata:teamRequested?{teamPurchase:product.teamPurchase}:{} });
     if (coupon) await db.query('UPDATE oaooao_coupons SET reserved_order_id=$2 WHERE id=$1',[coupon.id,id]);
     return view(order);
   });
@@ -193,6 +216,7 @@ async function closeOrder(ctx: Context, orderId: string, actorId: string, status
     if (ownerId && order.user_id !== ownerId) throw httpError(404,'Order not found');
     if (order.status === status) return view(order);
     if (order.status !== 'pending') throw httpError(409,'只能关闭待付款订单');
+    if(order.provider==='ciyuan_balance'&&(await db.query('SELECT 1 FROM oaooao_payment_attempts WHERE order_id=$1',[order.id])).rowCount)throw httpError(409,'余额收银台已打开，请先查询支付结果；付款结果未确认前不能关闭此订单');
     const result = await updateRecord(db,'oaooao_orders',orderId,{status,closed_at:new Date(),metadata:{...order.metadata,closeReason:reason}});
     await db.query('UPDATE oaooao_coupons SET reserved_order_id=NULL WHERE reserved_order_id=$1 AND redeemed_at IS NULL',[orderId]);
     await ctx.audit({actorId,action:`billing.order.${status}`,targetType:'order',targetId:orderId,metadata:{reason}},db);
@@ -213,18 +237,18 @@ export async function completeManualOrder(ctx: Context, orderId: string, actorId
 }
 /** Called only after an administrator attestation or a fully verified provider notification. */
 async function settleVerifiedOrder(ctx:Context,db:PoolClient,order:Row,providerPaymentId:string,confirmation:Row) {
-    await adjustWallet(ctx,order.user_id,`order:${order.id}:settle`,order.points_amount,{kind:'order_purchase',orderId:order.id,provider:order.provider,actorId:confirmation.actorId,reason:confirmation.reason},db);
+    if(order.product_kind==='team_plan')await settleTeamPurchase(ctx,db,order);
+    else await adjustWallet(ctx,order.user_id,`order:${order.id}:settle`,order.points_amount,{kind:'order_purchase',orderId:order.id,provider:order.provider,actorId:confirmation.actorId,reason:confirmation.reason},db);
     if (order.product_kind === 'plan') {
       // Wallet lock acquired above also serializes simultaneous plan purchases.
       const tail = (await db.query('SELECT greatest(now(),coalesce(max(expires_at),now())) AS starts FROM oaooao_plan_grants WHERE user_id=$1 AND plan_id=$2 AND revoked_at IS NULL',[order.user_id,order.plan_id])).rows[0]!.starts;
       await db.query(`INSERT INTO oaooao_plan_grants(id,user_id,order_id,plan_id,daily_points,starts_at,expires_at) VALUES($1,$2,$3,$4,$5,$6,$6::timestamptz+make_interval(days=>$7))`,[randomUUID(),order.user_id,order.id,order.plan_id,order.daily_points,tail,order.period_days]);
       await db.query('UPDATE oaooao_users SET plan_id=$2,updated_at=now() WHERE id=$1',[order.user_id,order.plan_id]);
-      await syncDailyEntitlement(ctx,order.user_id,`order:${order.id}:daily-start`,db);
     }
     await insertRecord(db,'oaooao_payments',{id:randomUUID(),order_id:order.id,provider:order.provider,provider_payment_id:providerPaymentId,amount_cents:order.amount_cents,currency:order.currency,status:'succeeded',confirmation});
     const result = await updateRecord(db,'oaooao_orders',order.id,{status:'paid',paid_at:new Date(),provider_order_id:providerPaymentId});
     await db.query('UPDATE oaooao_coupons SET redeemed_at=now() WHERE reserved_order_id=$1',[order.id]);
-    await qualifyReferral(ctx,db,result);
+    if(order.product_kind!=='team_plan')await qualifyReferral(ctx,db,result);
     await ctx.audit({actorId:confirmation.actorId,action:order.provider==='manual'?'billing.order.confirm_external_payment':'billing.order.provider_settled',targetType:'order',targetId:order.id,metadata:{provider:order.provider,amountCents:Number(order.amount_cents),currency:order.currency,reason:confirmation.reason}},db);
     return view(result);
 }
@@ -250,18 +274,49 @@ async function settleEpayNotification(ctx:Context,fields:Record<string,string>) 
     await settleVerifiedOrder(ctx,db,order,fields.trade_no,{kind:'verified_epay_notification',protocol:config.protocol,pid:config.pid,paymentType:fields.type,signatureDigest:createHash('sha256').update(fields.sign).digest('hex')});
   });
 }
+/** Accept only the immutable checkout's signed receipt, serialized with cancellation and retries. */
+export async function settleBalanceNotification(ctx:Context,input:unknown,signature:unknown) {
+  const body=object(input);
+  if(typeof body.order_id!=='string'||body.order_id.length>80)throw httpError(400,'余额支付通知订单无效');
+  return walletTransaction(ctx,undefined,async db=>{
+    const order=await lockRecord(db,'oaooao_orders',body.order_id);
+    const attempt=(await db.query("SELECT encrypted_config FROM oaooao_payment_attempts WHERE order_id=$1 AND provider='ciyuan_balance'",[order.id])).rows[0];
+    if(!attempt||order.provider!=='ciyuan_balance')throw httpError(400,'余额支付订单与通道不匹配');
+    const receipt=verifyBalanceCallback(JSON.parse(ctx.decrypt(attempt.encrypted_config)),body,signature);
+    if(receipt.order_no!==order.order_no||receipt.amount_cents!==Number(order.amount_cents)||receipt.currency!==order.currency||Date.parse(receipt.paid_at)>order.expires_at.getTime()||Date.parse(receipt.paid_at)>Date.now()+300000)throw httpError(409,'余额付款回执与订单金额、币种或有效期不一致');
+    if(['paid','refunding','refunded'].includes(order.status)){
+      const payment=(await db.query('SELECT * FROM oaooao_payments WHERE order_id=$1',[order.id])).rows[0];
+      if(!payment||payment.provider!=='ciyuan_balance'||payment.provider_payment_id!==receipt.transaction_id||Number(payment.amount_cents)!==receipt.amount_cents||payment.currency!==receipt.currency)throw httpError(409,'重复通知与原交易不一致，请对账');
+      return view(order);
+    }
+    if(order.status!=='pending')throw httpError(409,'此订单已关闭，付款回执需要人工对账');
+    return settleVerifiedOrder(ctx,db,order,receipt.transaction_id,{kind:'verified_balance_receipt',eventId:receipt.event_id,paidAt:receipt.paid_at});
+  });
+}
+export async function reconcileBalanceOrder(ctx:Context,order:Row) {
+  if(order.provider!=='ciyuan_balance'||order.status!=='pending')return;
+  const attempt=(await ctx.db.query("SELECT encrypted_config FROM oaooao_payment_attempts WHERE order_id=$1 AND provider='ciyuan_balance'",[order.id])).rows[0];
+  if(!attempt)return;
+  const config=JSON.parse(ctx.decrypt(attempt.encrypted_config)) as BalanceConfig;
+  const receipt=await balanceAction(config,'query',order);
+  if(!receipt)return;
+  if(receipt.status!=='paid')throw httpError(409,'上游付款已退款，本订单需对账处理');
+  const notification={event_id:`ciyuan_balance:${receipt.transaction_id}:paid`,event_type:'payment.succeeded',merchant_id:receipt.merchant_id,order_id:order.id,order_no:order.order_no,transaction_id:receipt.transaction_id,amount_cents:receipt.amount_cents,currency:receipt.currency,status:'succeeded',paid_at:receipt.paid_at};
+  await settleBalanceNotification(ctx,notification,balanceSign(config.secret,balanceCallbackFields(notification)));
+}
+
 type RefundHold = {userId:string;operationId:string;points:string;rewardId?:string};
 function reservationView(row:Row) {return {id:row.id,status:row.status,amountCents:Number(row.amount_cents),currency:row.currency,preparedAt:timestamp(row.prepared_at),reason:row.reason};}
 async function confirmedPayment(db:PoolClient,order:Row) {
   const payment=(await db.query('SELECT * FROM oaooao_payments WHERE order_id=$1 FOR UPDATE',[order.id])).rows[0];
-  if(!payment||payment.status!=='succeeded'||!['manual','epay'].includes(order.provider)||payment.provider!==order.provider||String(payment.amount_cents)!==String(order.amount_cents)||payment.currency!==order.currency)throw httpError(409,'缺少与订单渠道、金额和币种一致的已确认付款记录，请先对账，暂勿向外退款');
+  if(!payment||payment.status!=='succeeded'||!['manual','epay','ciyuan_balance'].includes(order.provider)||payment.provider!==order.provider||String(payment.amount_cents)!==String(order.amount_cents)||payment.currency!==order.currency)throw httpError(409,'缺少与订单渠道、金额和币种一致的已确认付款记录，请先对账，暂勿向外退款');
   return payment;
 }
 /** Reserve recoverable credits BEFORE an administrator sends any money externally. */
 export async function prepareManualRefund(ctx:Context,orderId:string,actorId:string,reason:string) {
   return walletTransaction(ctx,undefined,async db=>{
     const order=await lockRecord(db,'oaooao_orders',orderId);
-    if(!['manual','epay'].includes(order.provider))throw httpError(503,'此支付渠道暂不支持退款登记，系统未发起退款');
+    if(!['manual','epay','ciyuan_balance'].includes(order.provider))throw httpError(503,'此支付渠道暂不支持退款登记，系统未发起退款');
     if(order.status==='refunding'){
       const existing=(await db.query("SELECT * FROM oaooao_refund_reservations WHERE order_id=$1 AND status='prepared'",[orderId])).rows[0];
       if(!existing)throw httpError(409,'退款预留记录缺失，请先核对账务记录');
@@ -273,6 +328,7 @@ export async function prepareManualRefund(ctx:Context,orderId:string,actorId:str
     const rewards=relation?(await db.query("SELECT * FROM oaooao_referral_rewards WHERE relationship_id=$1 AND status='settled' ORDER BY user_id,id FOR UPDATE",[relation.id])).rows:[];
     await db.query('SELECT id FROM oaooao_users WHERE id=ANY($1::text[]) ORDER BY id FOR NO KEY UPDATE',[[order.user_id,...rewards.map(row=>row.user_id)]]);
     const id=randomUUID(),holds:RefundHold[]=[];
+    await reserveTeamPurchaseRefund(db,order,id);
     if(creditUnits(order.points_amount)>0n)holds.push({userId:order.user_id,operationId:`refund:${id}:purchase`,points:creditDecimal(creditUnits(order.points_amount))});
     for(const reward of rewards)if(creditUnits(reward.points)>0n)holds.push({userId:reward.user_id,operationId:`refund:${id}:reward:${reward.id}`,points:creditDecimal(creditUnits(reward.points)),rewardId:reward.id});
     for(const hold of holds)await adjustWallet(ctx,hold.userId,hold.operationId,creditDecimal(-creditUnits(hold.points)),{kind:'order_refund_reserve',bucket:'permanent',orderId,reservationId:id,actorId,reason,description:'Credits reserved pending verified external refund'},db);
@@ -290,7 +346,9 @@ export async function cancelManualRefund(ctx:Context,orderId:string,actorId:stri
     if(!reservation)throw httpError(409,'退款预留记录与此订单不匹配');
     if(reservation.status==='canceled')return {order:view(order),reservation:reservationView(reservation)};
     if(reservation.status!=='prepared'||order.status!=='refunding')throw httpError(409,'只能取消已准备、尚未确认完成的退款');
+    if(order.provider==='ciyuan_balance'&&order.metadata?.balanceRefundStarted)throw httpError(409,'余额退款已发起，不能释放预留积分；请重试退款以核对结果');
     const holds=reservation.holds as RefundHold[];
+    await releaseTeamPurchaseRefund(db,order,reservationId,false);
     await db.query('SELECT id FROM oaooao_users WHERE id=ANY($1::text[]) ORDER BY id FOR NO KEY UPDATE',[[order.user_id,...holds.map(hold=>hold.userId)]]);
     for(const hold of holds)await adjustWallet(ctx,hold.userId,`${hold.operationId}:release`,hold.points,{kind:'order_refund_release',refundOf:hold.operationId,orderId,reservationId,actorId,reason,description:'Refund canceled without external transfer; reserved credits restored'},db);
     const released=(await db.query("UPDATE oaooao_refund_reservations SET status='canceled',resolved_by=$2,resolved_at=now(),resolution_reason=$3 WHERE id=$1 RETURNING *",[reservationId,actorId,reason])).rows[0];
@@ -304,20 +362,29 @@ export async function refundManualOrder(ctx: Context, orderId: string, actorId: 
   if(!reservationId)throw httpError(409,'确认退款前必须提供有效的退款预留记录编号');
   return walletTransaction(ctx,undefined,async db => {
     const order = await lockRecord(db,'oaooao_orders',orderId);
-    if (!['manual','epay'].includes(order.provider)) throw httpError(503,'此支付渠道暂不支持退款登记，系统未发起退款');
+    if (!['manual','epay','ciyuan_balance'].includes(order.provider)) throw httpError(503,'此支付渠道暂不支持退款登记，系统未发起退款');
     const reservation=(await db.query('SELECT * FROM oaooao_refund_reservations WHERE id=$1 AND order_id=$2 FOR UPDATE',[reservationId,orderId])).rows[0];
     if(!reservation)throw httpError(409,'退款预留记录与此订单不匹配');
     if(order.status==='refunded'&&reservation.status==='confirmed')return view(order);
     if(order.status!=='refunding'||reservation.status!=='prepared')throw httpError(409,'退款必须有尚未取消或确认的有效预留记录');
-    await confirmedPayment(db,order);
+    const verifiedPayment=await confirmedPayment(db,order);
+    if(order.provider==='ciyuan_balance'){
+      const attempt=(await db.query("SELECT encrypted_config FROM oaooao_payment_attempts WHERE order_id=$1 AND provider='ciyuan_balance'",[order.id])).rows[0];
+      if(!attempt||order.metadata?.balanceRefundStarted!==true)throw httpError(409,'余额退款尚未记录发起状态');
+      await balanceAction(JSON.parse(ctx.decrypt(attempt.encrypted_config)),'refund',order,verifiedPayment.provider_payment_id);
+    }
     const holds=reservation.holds as RefundHold[];
+    await releaseTeamPurchaseRefund(db,order,reservationId,true);
     await db.query('SELECT id FROM oaooao_users WHERE id=ANY($1::text[]) ORDER BY id FOR NO KEY UPDATE',[[order.user_id,...holds.map(hold=>hold.userId)]]);
     await db.query('UPDATE oaooao_plan_grants SET revoked_at=now() WHERE order_id=$1',[order.id]);
-    if (order.product_kind === 'plan') await syncDailyEntitlement(ctx,order.user_id,`order:${order.id}:daily-revoke`,db);
+    if (order.product_kind === 'plan') {
+      await syncDailyEntitlement(ctx,order.user_id,`order:${order.id}:daily-revoke`,db);
+      await revokeMembershipCheckIn(ctx,order.user_id,order.id,db);
+    }
     const currentPlan = (await db.query('SELECT plan_id FROM oaooao_plan_grants WHERE user_id=$1 AND revoked_at IS NULL AND starts_at<=now() AND expires_at>now() ORDER BY starts_at DESC LIMIT 1',[order.user_id])).rows[0]?.plan_id;
     if (order.product_kind === 'plan') await db.query('UPDATE oaooao_users SET plan_id=$2,updated_at=now() WHERE id=$1',[order.user_id,currentPlan ?? null]);
     await revokeReferral(ctx,db,order.id,holds);
-    const payment = await db.query("UPDATE oaooao_payments SET status='refunded',refunded_at=now(),confirmation=confirmation || $2::jsonb WHERE order_id=$1 AND status='succeeded' RETURNING id",[order.id,JSON.stringify({refund:{kind:'administrator_confirmed_external_refund',actorId,reason}})]);
+    const payment = await db.query("UPDATE oaooao_payments SET status='refunded',refunded_at=now(),confirmation=confirmation || $2::jsonb WHERE order_id=$1 AND status='succeeded' RETURNING id",[order.id,JSON.stringify({refund:{kind:order.provider==='ciyuan_balance'?'verified_balance_refund':'administrator_confirmed_external_refund',actorId,reason}})]);
     if (!payment.rowCount) throw httpError(409,'原付款确认记录缺失，请先核对账务记录');
     const confirmed=(await db.query("UPDATE oaooao_refund_reservations SET status='confirmed',resolved_by=$2,resolved_at=now(),resolution_reason=$3 WHERE id=$1 RETURNING *",[reservationId,actorId,reason])).rows[0];
     const result = await updateRecord(db,'oaooao_orders',order.id,{status:'refunded',refunded_at:new Date(),metadata:{...order.metadata,refundReason:reason,refundReservation:reservationView(confirmed)}});
@@ -455,16 +522,19 @@ export async function registerCommerce(app: FastifyInstance, ctx: Context): Prom
     await getWallet(ctx,user.id); // Settle due batches before exposing the corresponding expiry ledger.
     const filter=`user_id=$1 AND metadata->>'kind' IS DISTINCT FROM 'normalized_transfer' AND metadata->>'kind' IS DISTINCT FROM 'admin_plan_assignment'${query.direction==='credit'?' AND permanent_delta+daily_delta+timed_delta>=0':query.direction==='debit'?' AND permanent_delta+daily_delta+timed_delta<0':''}`;
     const total=Number((await ctx.db.query(`SELECT count(*) FROM oaooao_wallet_operations WHERE ${filter}`,[user.id])).rows[0]!.count);
-    const records=(await ctx.db.query(`SELECT * FROM oaooao_wallet_operations WHERE ${filter} ORDER BY created_at DESC,operation_id LIMIT $2 OFFSET $3`,[user.id,page.pageSize,page.offset])).rows.map(row=>{
+    const records=(await ctx.db.query(`SELECT w.*, CASE WHEN b.membership_assignment_at IS NOT NULL THEN b.expired_at ELSE least(b.expires_at,b.expired_at) END AS effective_batch_expiry, b.id AS ledger_batch_id
+      FROM (SELECT * FROM oaooao_wallet_operations WHERE ${filter} ORDER BY created_at DESC,operation_id LIMIT $2 OFFSET $3) w
+      LEFT JOIN oaooao_credit_batches b ON b.grant_operation_id=w.operation_id ORDER BY w.created_at DESC,w.operation_id`,[user.id,page.pageSize,page.offset])).rows.map(row=>{
       const meta=row.metadata ?? {};const amount=Number(creditDecimal(creditUnits(row.permanent_delta)+creditUnits(row.daily_delta)+creditUnits(row.timed_delta)));
       const kind=meta.kind;const type=meta.type || (row.refund_of?'refund':kind==='generation'?'consume':kind==='order_purchase'?'recharge':kind==='order_refund'?'refund':['daily_expiration','timed_expiration'].includes(kind)?'expire':['daily_grant','referral_reward','check_in'].includes(kind)?'grant':'adjust');
-      return {id:row.operation_id,type,kind,direction:amount<0?'debit':'credit',amount,permanentAmount:Number(row.permanent_delta),dailyAmount:Number(row.daily_delta),timedAmount:Number(row.timed_delta),balanceAfter:Number(creditDecimal(creditUnits(row.permanent_after)+creditUnits(row.daily_after)+creditUnits(row.timed_after))),permanentBalanceAfter:Number(row.permanent_after),dailyBalanceAfter:Number(row.daily_after),timedBalanceAfter:Number(row.timed_after),expiresAt:typeof meta.expiresAt==='string'?meta.expiresAt:null,expiredRefundPoints:meta.expiredRefundPoints===undefined?undefined:Number(meta.expiredRefundPoints),description:meta.description || meta.reason || kind || '',model:meta.model,idempotencyKey:meta.idempotencyKey || row.operation_id,sourceRecordId:meta.sourceRecordId || row.refund_of || undefined,sourceDate:meta.sourceDate,createdAt:timestamp(row.created_at)};
+      const expiresAt=row.ledger_batch_id ? (row.effective_batch_expiry ? timestamp(row.effective_batch_expiry) : null) : typeof meta.expiresAt==='string'?meta.expiresAt:null;
+      return {id:row.operation_id,type,kind,direction:amount<0?'debit':'credit',amount,permanentAmount:Number(row.permanent_delta),dailyAmount:Number(row.daily_delta),timedAmount:Number(row.timed_delta),balanceAfter:Number(creditDecimal(creditUnits(row.permanent_after)+creditUnits(row.daily_after)+creditUnits(row.timed_after))),permanentBalanceAfter:Number(row.permanent_after),dailyBalanceAfter:Number(row.daily_after),timedBalanceAfter:Number(row.timed_after),expiresAt,expiredRefundPoints:meta.expiredRefundPoints===undefined?undefined:Number(meta.expiredRefundPoints),description:meta.description || meta.reason || kind || '',model:meta.model,idempotencyKey:meta.idempotencyKey || row.operation_id,sourceRecordId:meta.sourceRecordId || row.refund_of || undefined,sourceDate:meta.sourceDate,createdAt:timestamp(row.created_at)};
     });return {records,total,page:page.page,pageSize:page.pageSize};
   });
   app.get('/api/billing/products',async () => {
     const config = await settings(ctx); const payments = await paymentConfig(ctx);
     const policy=resolveCommercePolicy(config);const readiness = purchaseReadiness(config.site ?? {},policy ?? {});
-    const products = await Promise.all((await ctx.db.query('SELECT * FROM oaooao_products WHERE enabled ORDER BY sort_order,id')).rows.map(async row=>({...view(row),pricing:await priceProduct(ctx.db,row)})));
+    const products = await Promise.all((await ctx.db.query('SELECT * FROM oaooao_products WHERE enabled ORDER BY sort_order,id')).rows.filter(row=>!planUnavailableReason(config,row)).map(async row=>({...view(row),pricing:await priceProduct(ctx.db,row)})));
     const available = payments.providers.filter(provider=>provider.ready).map(provider=>provider.id);
     return {products,paymentProviders:available,billing:{mode:config.operationMode==='commercial'?'commercial':'self_use',rechargeEnabled:config.operationMode==='commercial'&&readiness.ready&&available.length>0,purchaseReadiness:readiness},commercePolicy:policy};
   });
@@ -473,7 +543,12 @@ export async function registerCommerce(app: FastifyInstance, ctx: Context): Prom
   app.get('/api/billing/orders/:id',async request => {
     const user = await ctx.requireUser(request);
     const row = (await ctx.db.query('SELECT * FROM oaooao_orders WHERE id=$1 AND user_id=$2',[params(request).id,user.id])).rows[0];
-    if (!row) throw httpError(404,'Order not found'); return {order:view(row)};
+    if (!row) throw httpError(404,'Order not found');
+    if((request.query as Row)?.verify==='1'){
+      try{await reconcileBalanceOrder(ctx,row);}catch{return {order:view(row),verification:'unavailable'};}
+      return {order:view((await ctx.db.query('SELECT * FROM oaooao_orders WHERE id=$1',[row.id])).rows[0])};
+    }
+    return {order:view(row)};
   });
   app.post('/api/billing/orders/:id/cancel',async request => { const user = await ctx.requireUser(request); return {order:await closeOrder(ctx,params(request).id,user.id,'canceled',string(object(request.body ?? {}).reason ?? '','reason',2000,true),user.id)}; });
   app.post('/api/billing/orders/:id/checkout',async request => {
@@ -481,6 +556,7 @@ export async function registerCommerce(app: FastifyInstance, ctx: Context): Prom
     return walletTransaction(ctx,undefined,async db=>{
       const order = await lockRecord(db,'oaooao_orders',params(request).id);
       if (order.user_id !== user.id) throw httpError(404,'Order not found');
+      if(order.product_kind==='team_plan')await requireTeam(db,order.metadata.teamPurchase.teamId,user.id,'manage');
       if (order.status !== 'pending' || order.expires_at.getTime() <= Date.now()) throw httpError(409,'订单已过期或不再处于待付款状态');
       assertPlanAvailable(await settings(ctx,db),order);
       if (input.provider && input.provider !== order.provider) throw httpError(409,'支付通道必须与订单一致');
@@ -492,8 +568,11 @@ export async function registerCommerce(app: FastifyInstance, ctx: Context): Prom
         const checkout=epayCheckout(JSON.parse(ctx.decrypt(attempt.encrypted_config)),ctx.config.origin,order);
         return {code:0,data:{checkout},checkout};
       }
-      const instructions = await assertManualReady(ctx,db,order.provider);
-      const checkout = {provider:'manual',orderId:order.id,orderNo:order.order_no,kind:'manual',instructions,expiresAt:timestamp(order.expires_at)};
+      if(order.provider!=='ciyuan_balance')throw httpError(410,'此支付方式已关闭，请重新选择支付方式');
+      const current=await loadBalanceConfig(ctx,db);
+      let attempt=(await db.query("SELECT encrypted_config FROM oaooao_payment_attempts WHERE order_id=$1 AND provider='ciyuan_balance'",[order.id])).rows[0];
+      if(!attempt)attempt=(await db.query("INSERT INTO oaooao_payment_attempts(order_id,provider,encrypted_config) VALUES($1,'ciyuan_balance',$2) RETURNING encrypted_config",[order.id,ctx.encrypt(JSON.stringify({...current,nonce:randomBytes(24).toString('hex')}))])).rows[0];
+      const checkout=balanceCheckout(JSON.parse(ctx.decrypt(attempt.encrypted_config)),order);
       return {code:0,data:{checkout},checkout};
     });
   });
@@ -512,13 +591,34 @@ export async function registerCommerce(app: FastifyInstance, ctx: Context): Prom
         const text = string(value,key,16000,true);
         if (field.secret) { if (text) secrets[key]=text; } else publicValues[key]=text;
       }
-      if (enabled && def.id==='manual' && !publicValues.instructions) throw httpError(400,'启用人工支付前请填写付款说明');
+      if(def.id==='ciyuan_balance'&&enabled)balanceConfig(publicValues,secrets);
       if(def.id==='epay')validateEpayValues(publicValues,secrets,enabled);
       await db.query('UPDATE oaooao_payment_configs SET enabled=$2,public_values=$3,encrypted_secrets=$4,updated_at=now() WHERE provider_id=$1',[def.id,enabled,publicValues,Object.keys(secrets).length?ctx.encrypt(JSON.stringify(secrets)):null]);
       await ctx.audit({actorId:actor.id,action:'billing.provider.update',targetType:'payment_provider',targetId:def.id,metadata:{enabled,changedFields:Object.keys(values)}},db);
     });
     return {paymentConfig:await paymentConfig(ctx)};
   });
+  app.post(BALANCE_NOTIFY_PATH,{bodyLimit:16384},async(request,reply)=>{
+    await settleBalanceNotification(ctx,request.body,request.headers['x-ciyuan-signature']);
+    return reply.send({success:true});
+  });
+  app.get(BALANCE_RETURN_PATH,async(request,reply)=>{
+    const user=await ctx.requireUser(request),query=object(request.query),id=string(query.orderId,'orderId',80);
+    const order=(await ctx.db.query('SELECT * FROM oaooao_orders WHERE id=$1 AND user_id=$2',[id,user.id])).rows[0];
+    if(!order)throw httpError(404,'Order not found');
+    try{await reconcileBalanceOrder(ctx,order);}catch{/* The account page still shows the unconfirmed order for a later query. */}
+    return reply.redirect(new URL('/account',ctx.config.origin).href,303);
+  });
+  if(ctx.config.workerEnabled){
+    let running=false;
+    const timer=setInterval(async()=>{
+      if(running)return;running=true;
+      try{
+        const orders=(await ctx.db.query("SELECT o.* FROM oaooao_orders o JOIN oaooao_payment_attempts a ON a.order_id=o.id WHERE o.provider='ciyuan_balance' AND o.status='pending' AND a.created_at>now()-interval '7 days' ORDER BY o.created_at DESC LIMIT 20")).rows;
+        for(const order of orders)try{await reconcileBalanceOrder(ctx,order);}catch{/* Retry receipts without guessing a successful payment. */}
+      }catch{/* Readiness/temporary connectivity failure; leave orders unchanged. */}finally{running=false;}
+    },30000);timer.unref();app.addHook('onClose',async()=>clearInterval(timer));
+  }
   // Encapsulated parser: no global relaxation of cookie-authenticated JSON APIs.
   await app.register(async webhook=>{
     webhook.addContentTypeParser('application/x-www-form-urlencoded',{parseAs:'string',bodyLimit:16384},(_request,body,done)=>done(null,body));
@@ -530,13 +630,18 @@ export async function registerCommerce(app: FastifyInstance, ctx: Context): Prom
     }});
     webhook.get(EPAY_RETURN_PATH,async(_request,reply)=>reply.redirect(new URL('/account',ctx.config.origin).href,303));
   });
-  app.get('/api/admin/billing/products',async request=>{await ctx.requireUser(request,'commerce.manage');const enabled=(request.query as Row)?.enabled==='1';return {products:(await ctx.db.query(`SELECT * FROM oaooao_products${enabled?' WHERE enabled':''} ORDER BY sort_order,id`)).rows.map(view)};});
+  app.get('/api/admin/billing/products',async request=>{
+    await ctx.requireUser(request,'commerce.manage');
+    const enabled=(request.query as Row)?.enabled==='1';
+    const config=await settings(ctx);
+    return {products:(await ctx.db.query(`SELECT * FROM oaooao_products WHERE metadata->>'internalTeamPlan' IS DISTINCT FROM 'true'${enabled?' AND enabled':''} ORDER BY sort_order,id`)).rows.map(product=>({...view(product),saleBlockers:planSaleBlockers(config,product)}))};
+  });
   for (const method of ['POST','PATCH'] as const) app.route({method,url:method==='POST'?'/api/admin/billing/products':'/api/admin/billing/products/:id',handler:async request=>{
     const actor=await ctx.requireUser(request,'commerce.manage');const input=object(request.body);
     return walletTransaction(ctx,undefined,async db=>{
       const previous=method==='PATCH'?await lockRecord(db,'oaooao_products',params(request).id,input.expectedUpdatedAt):undefined;
       const value=productInput(input,previous);
-      if(value.enabled)assertPlanAvailable(await settings(ctx,db),value);
+      // Configuration can be saved before entitlements are enabled. Purchase checks remain authoritative.
       const product=previous?await updateRecord(db,'oaooao_products',previous.id,value):await insertRecord(db,'oaooao_products',{id:randomUUID(),...value});
       await ctx.audit({actorId:actor.id,action:`billing.product.${method==='POST'?'create':'update'}`,targetType:'product',targetId:product.id},db);
       return {product:view(product)};
@@ -548,7 +653,18 @@ export async function registerCommerce(app: FastifyInstance, ctx: Context): Prom
   app.post('/api/admin/billing/orders/:id/complete',async request=>{const actor=await ctx.requireUser(request,'billing.manage');return {order:await completeManualOrder(ctx,params(request).id,actor.id,string(object(request.body ?? {}).reason ?? 'Administrator confirmed external receipt','reason',2000))};});
   app.post('/api/admin/billing/orders/:id/refund/prepare',async request=>{const actor=await ctx.requireUser(request,'billing.manage');const input=object(request.body);return prepareManualRefund(ctx,params(request).id,actor.id,string(input.reason,'reason',2000));});
   app.post('/api/admin/billing/orders/:id/refund/cancel',async request=>{const actor=await ctx.requireUser(request,'billing.manage');const input=object(request.body);return cancelManualRefund(ctx,params(request).id,actor.id,string(input.reason,'reason',2000),string(input.reservationId,'reservationId',200),input.confirmExternalRefundNotSent===true);});
-  app.post('/api/admin/billing/orders/:id/refund',async request=>{const actor=await ctx.requireUser(request,'billing.manage');const input=object(request.body);return {order:await refundManualOrder(ctx,params(request).id,actor.id,string(input.reason,'reason',2000),input.confirmExternalRefund===true,input.reservationId===undefined?undefined:string(input.reservationId,'reservationId',200))};});
+  app.post('/api/admin/billing/orders/:id/refund',async request=>{
+    const actor=await ctx.requireUser(request,'billing.manage'),input=object(request.body),id=params(request).id;
+    const reservationId=input.reservationId===undefined?undefined:string(input.reservationId,'reservationId',200);
+    if(input.confirmExternalRefund===true&&reservationId)await walletTransaction(ctx,undefined,async db=>{
+      const order=await lockRecord(db,'oaooao_orders',id);
+      if(order.provider!=='ciyuan_balance'||order.status==='refunded')return;
+      const reservation=(await db.query("SELECT id FROM oaooao_refund_reservations WHERE id=$1 AND order_id=$2 AND status='prepared'",[reservationId,id])).rows[0];
+      if(order.status!=='refunding'||!reservation)throw httpError(409,'请先预留退款积分');
+      await updateRecord(db,'oaooao_orders',id,{metadata:{...order.metadata,balanceRefundStarted:true}});
+    });
+    return {order:await refundManualOrder(ctx,id,actor.id,string(input.reason,'reason',2000),input.confirmExternalRefund===true,reservationId)};
+  });
   app.get('/api/admin/billing/promotions',async request=>{await ctx.requireUser(request,'commerce.manage');return {code:0,data:{campaigns:(await ctx.db.query('SELECT * FROM oaooao_promotions ORDER BY created_at DESC,id')).rows.map(view)}};});
   for (const method of ['POST','PATCH'] as const) app.route({method,url:method==='POST'?'/api/admin/billing/promotions':'/api/admin/billing/promotions/:id',handler:async request=>{
     const actor=await ctx.requireUser(request,'commerce.manage');const input=object(request.body);

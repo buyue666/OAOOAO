@@ -1,6 +1,7 @@
 'use client'
 
 import { MediaDownloadButton } from './media-download-button'
+import { publicModelLabel } from '@/lib/studio/model-display'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -93,7 +94,7 @@ function libraryAssetToAsset(record: LibraryAssetView): Asset {
  * 生成结果本身就是可复用的素材（参考图、首尾帧、编辑源图都从素材库选），
  * 因此素材页必须包含真实结果，否则工作台的参考素材选择器在真实账户下是空的。
  */
-function workToAsset(work: StudioWork): Asset {
+function workToAsset(work: StudioWork, modelLabel: string): Asset {
   return {
     id: `generated-${work.id}`,
     kind: work.kind === 'video' ? 'video' : work.kind === 'audio' ? 'audio' : 'image',
@@ -102,7 +103,7 @@ function workToAsset(work: StudioWork): Asset {
     src: work.src,
     poster: work.poster,
     fallback: work.fallback,
-    tags: ['生成结果', work.model ? String(work.model) : '未记录模型'],
+    tags: ['生成结果', modelLabel],
     size: '',
     status: '可用',
     projectIds: [],
@@ -148,7 +149,7 @@ export function AssetsPage() {
   const serverLibrary = useMediaLibrary()
   const storedMedia = useStoredMedia()
   const storedAssets = useMemo<Asset[]>(()=>storedMedia.media.map(item=>({id:`stored-${item.id}`,kind:item.mimeType.split('/')[0] as 'image'|'video'|'audio',category:'general',title:`${item.mimeType.startsWith('image/')?'图片':item.mimeType.startsWith('video/')?'视频':'音频'} ${item.id.slice(0,8)}`,src:item.url,fallback:'素材',tags:[item.persistent?'存储文件':'临时素材'],size:formatStorageBytes(item.bytes),status:'可用',projectIds:[],referencedBy:[],createdAt:item.createdAt})),[storedMedia.media])
-  const serverAssets = useMemo(() => serverWorks.works.map(workToAsset), [serverWorks.works])
+  const serverAssets = useMemo(() => serverWorks.works.map(work => workToAsset(work, publicModelLabel(work.model, state.sessionSettings))), [serverWorks.works, state.sessionSettings])
   const libraryAssets = useMemo(() => serverLibrary.assets.map(libraryAssetToAsset), [serverLibrary.assets])
   // 服务端结果优先：后端已经有的结果不再显示重复的本地副本。
   const mergedAssets = useMemo(() => {
@@ -541,7 +542,7 @@ export function TasksPage() {
     const matches = (title: string, prompt: string, model: string | undefined, createdAt: number | string | undefined) => {
       if (modelFilter !== 'all' && model !== modelFilter) return false
       if (!taskWithinTimeRange(createdAt, dateFrom, dateTo)) return false
-      return !query || `${title} ${prompt} ${model ?? ''}`.toLowerCase().includes(query)
+      return !query || `${title} ${prompt} ${publicModelLabel(model, state.sessionSettings)}`.toLowerCase().includes(query)
     }
     const filtered = generation.tasks.filter((task) => {
       if (liveFilter === 'active' && !['pending', 'running', 'paused'].includes(task.status)) return false
@@ -591,7 +592,7 @@ export function TasksPage() {
           />
           <div className="grid w-full gap-2 md:max-w-4xl md:grid-cols-[minmax(0,1fr)_170px_150px_150px]">
             <SearchField value={search} onChange={setSearch} placeholder="搜索任务、提示词或模型" />
-            <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{model}</option>)}</select>
+            <select value={modelFilter} onChange={(event) => setModelFilter(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs text-foreground"><option value="all">全部模型</option>{models.map((model) => <option key={model} value={model}>{publicModelLabel(model, state.sessionSettings)}</option>)}</select>
             <label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">开始</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} aria-label="开始日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label>
             <label className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] text-muted-foreground"><span className="shrink-0">结束</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} aria-label="结束日期" className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none" /></label>
           </div>
@@ -665,7 +666,7 @@ function HistoryTaskCard({ item, compact = false }: { item: GenerationHistoryIte
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-            {kindLabel} · {item.model || '未记录模型'}{item.createdAt ? ` · ${new Date(item.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}{item.durationMs ? ` · 耗时 ${Math.round(item.durationMs / 1000)} 秒` : ''}
+            {kindLabel} · {publicModelLabel(item.model, state.sessionSettings)}{item.createdAt ? ` · ${new Date(item.createdAt).toLocaleString('zh-CN', { hour12: false })}` : ''}{item.durationMs ? ` · 耗时 ${Math.round(item.durationMs / 1000)} 秒` : ''}
           </p>
         </div>
         <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
@@ -754,7 +755,7 @@ function LocalTasksPage() {
                   <p className="mt-1 truncate text-xs text-muted-foreground">{task.stage} · {formatTaskDate(task.createdAt)}</p>
                   {task.status === 'failed' && task.error && <p className="mt-1 truncate text-[11px] text-studio-warn" title={task.error}>{task.error}</p>}
                 </div>
-                <div className="hidden min-w-0 sm:block"><p className="truncate text-xs font-medium text-foreground">{task.settings.modelId}</p><p className="mt-1 text-[10px] text-muted-foreground">生成模型</p></div>
+                <div className="hidden min-w-0 sm:block"><p className="truncate text-xs font-medium text-foreground">{publicModelLabel(task.settings.modelId, state.sessionSettings)}</p><p className="mt-1 text-[10px] text-muted-foreground">生成模型</p></div>
                 <div className="hidden min-w-0 sm:block"><p className="truncate text-xs font-medium text-foreground">{task.settings.ratio}{task.settings.duration ? ` · ${task.settings.duration}` : ''}</p><p className="mt-1 text-[10px] text-muted-foreground">输出参数</p></div>
                 <div className="hidden text-xs sm:block"><p className="font-medium text-foreground">{task.actualCredits ?? task.expectedCredits}</p><p className="mt-1 text-[10px] text-muted-foreground">{task.actualCredits == null ? '预计积分' : '实际积分'}</p></div>
                 <div className="col-span-1 flex flex-wrap items-center justify-end gap-1.5 sm:col-span-1">
@@ -788,7 +789,7 @@ function LocalTasksPage() {
             </div>
             <div className="flex items-center justify-between gap-3"><StatusBadge tone={getTaskTone(selectedTask.status)}>{getTaskLabel(selectedTask.status)}</StatusBadge><span className="flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="size-3.5" />{formatTaskDate(selectedTask.createdAt)}</span></div>
             <div className="border-y border-border">
-              <KeyValue label="模型" value={selectedTask.settings.modelId} />
+              <KeyValue label="模型" value={publicModelLabel(selectedTask.settings.modelId, state.sessionSettings)} />
               <KeyValue label="比例 / 清晰度" value={`${selectedTask.settings.ratio} · ${selectedTask.settings.quality}`} />
               {selectedTask.settings.duration && <KeyValue label="时长" value={selectedTask.settings.duration} />}
               {selectedTask.settings.count && <KeyValue label="生成数量" value={`${selectedTask.settings.count} 张`} />}

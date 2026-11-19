@@ -14,8 +14,21 @@ function load(file, imports = {}) {
   })
   return exports
 }
-const catalog = load('lib/studio/creative-plugins.ts')
+const releases = JSON.parse(read('lib/studio/creative-plugin-releases.json'))
+const versionApi = load('lib/studio/creative-plugin-versions.ts', { './creative-plugin-releases.json': { default: releases } })
+const catalog = load('lib/studio/creative-plugins.ts', { './creative-plugin-releases.json': { default: releases } })
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
+test('catalog uses independent release metadata for upgraded plugins', () => {
+  for (const id of ['canvas','drama']) {
+    const plugin=catalog.creativePlugin(id)
+    assert.equal(plugin.version,releases[id].version)
+    assert.notEqual(plugin.version,'0.1.0')
+    assert.deepEqual(plugin.notes,releases[id].notes)
+    assert.equal(plugin.releasedAt,releases[id].releasedAt)
+  }
+  assert.equal(catalog.creativePlugin('director').version,'0.1.0')
+  assert.equal(catalog.creativePlugin('tryon').version,'0.1.0')
+})
 
 test('catalog filters tools by category, installation and user search', () => {
   const { creativePlugins, matchesPlugin, normalizeInstalledPlugins } = catalog
@@ -38,7 +51,7 @@ function providerHarness() {
   }
   const { PluginProvider } = load('lib/studio/plugin-context.tsx', {
     react, 'react/jsx-runtime': jsxRuntime, 'next/navigation': { useRouter: () => ({ refresh: () => refreshes.push('route') }) },
-    './store': { useStudio: () => ({ state, refreshSession: async () => refreshes.push('session') }) }, './creative-plugins': catalog,
+    './store': { useStudio: () => ({ state, refreshSession: async () => refreshes.push('session') }) }, './creative-plugins': catalog, './creative-plugin-versions': versionApi,
     './api': { request: (url, options) => { const pending = deferred(); requests.push({ url, options, ...pending }); return pending.promise } },
   })
   const render = () => { cursor = 0; return PluginProvider({ children: null }).props.value }
@@ -76,10 +89,34 @@ test('switching accounts never exposes old installations or accepts delayed writ
   assert.deepEqual(h.render().installed, [])
 })
 
+test('public director only accepts the bundled 0.1 version and confirms saves on the server', async () => {
+  const h=providerHarness()
+  assert.equal(h.render().directorVersion,'0.1.0')
+  assert.equal(versionApi.directorVersions.length,1)
+  const changed=h.render().setDirectorVersion('0.1.0',true)
+  assert.equal(h.render().directorVersion,'0.1.0')
+  h.requests[0].resolve({installedPlugins:['canvas','director'],pluginPreferences:{director:{version:'0.1.0',autoUpdate:true}}})
+  assert.equal(await changed,true)
+  assert.equal(h.render().preferences.director.autoUpdate,true)
+})
+
+test('delayed rollback from another account cannot replace the active account version', async () => {
+  const h=providerHarness(),change=h.render().setDirectorVersion('0.1.0')
+  h.account('account-b',['canvas','director'])
+  assert.equal(h.render().directorVersion,'0.1.0')
+  h.requests[0].resolve({installedPlugins:['canvas','director'],pluginPreferences:{director:{version:'0.1.0',autoUpdate:false}}})
+  assert.equal(await change,false)
+  assert.equal(h.render().directorVersion,'0.1.0')
+  assert.deepEqual(h.refreshes,[])
+})
+
 test('uninstalled tool gate does not render its tool subtree', () => {
+  let identity = null
   const imports = { 'react/jsx-runtime': jsxRuntime, 'next/link': 'Link', 'lucide-react': {},
     '@/lib/studio/plugin-context': { usePlugins: () => ({ installed: [], isInstalled: () => false, ready: true }) },
     '@/lib/studio/creative-plugins': catalog, '@/lib/studio/i18n': { useUiText: () => text => text }, './plugin-icon': { PluginIcon: 'PluginIcon' },
+    '@/lib/studio/workspace-context': { useWorkspace: () => ({ identity, href: target => target }) },
+    '@/lib/studio/workspace-features': load('lib/studio/workspace-features.ts', { './creative-plugins': catalog, './workspace-navigation': load('lib/studio/workspace-navigation.ts') }),
   }
   const { PluginGate } = load('components/studio/plugins/plugin-gate.tsx', imports)
   const child = jsxRuntime.jsx('ExpensiveTool', {})
@@ -88,4 +125,6 @@ test('uninstalled tool gate does not render its tool subtree', () => {
   assert.equal(blocked.props['data-plugin-gate'], 'canvas')
   imports['@/lib/studio/plugin-context'].usePlugins = () => ({ isInstalled: () => true })
   assert.equal(PluginGate({ id: 'canvas', children: child }), child)
+  identity = { teamId:'11111111-1111-4111-8111-111111111111' }
+  assert.notEqual(PluginGate({ id: 'agent', children: child }), child)
 })

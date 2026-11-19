@@ -86,7 +86,7 @@ test('independent creative security review: storage, price controls, references 
       await ctx.db.query("UPDATE oaooao_settings SET value=value || $1::jsonb WHERE id='global'",[JSON.stringify({generationCostControl:{dailyTotalPointSpend:0},generationConcurrency:{agent:1,text:10},defaultModels:{textModel:'security-text'}})]);
       const requests=await Promise.all([0,1].map(index=>app.inject({method:'POST',url:'/api/agent/runs',headers:users[0].headers,payload:{clientRequestId:`concurrent-agent-${index}`,surface:'canvas',prompt:'Synthetic bounded workflow',modelIds:['security-text']}})));
       assert.deepEqual(requests.map(reply=>reply.statusCode).sort(),[202,429]);
-      assert.match(requests.find(reply=>reply.statusCode===429)!.json().msg,/Agent concurrency/);
+      assert.match(requests.find(reply=>reply.statusCode===429)!.json().msg,/Agent concurrency|并发已满/);
       assert.equal(Number((await ctx.db.query('SELECT count(*) FROM oaooao_agent_runs WHERE user_id=$1',[users[0].id])).rows[0].count),1);
       const agentDebitCount=(await ctx.db.query("SELECT count(*) FROM oaooao_generation_jobs WHERE input->'context'->>'agentRole'='planner' AND user_id=$1",[users[0].id])).rows[0].count;assert.equal(Number(agentDebitCount),1);
     });

@@ -15,6 +15,7 @@ export type TeamSummary = {
   reviewers: number
   reservedReviewers: number
   canDownload: boolean
+  planId?: string | null
   planName: string | null
   modelIds: string[]
   subscriptionExpiresAt: string | null

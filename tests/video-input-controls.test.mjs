@@ -118,7 +118,7 @@ test('picker numbering follows submitted files for every input mode', () => {
     assert.deepEqual(mentions.orderedPromptReferences(mode, active).map(item => item.id), expected, mode)
   }
   assert.deepEqual(mentions.orderedPromptReferences('text', groups, false), [])
-  assert.deepEqual(mentions.orderedPromptReferences('extend', groups), [])
+  assert.deepEqual(mentions.orderedPromptReferences('extend', groups).map(item=>item.id),['source','library','upload','video','audio'])
 })
 
 test('typed material labels map to the submitted reference order and preserve legacy mentions',()=>{
@@ -154,7 +154,7 @@ test('image and video submit handlers serialize labels only after resolving the 
     const submit=workspace.body.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='submit')
     const references=name==='ImageWorkspace'?[{type:'image',url:'https://example.invalid/one'},{type:'image',url:'https://example.invalid/two'}]:[{type:'image',url:'https://example.invalid/one'},{type:'video',url:'https://example.invalid/video'},{type:'image',url:'https://example.invalid/two'}]
     const payloads=[],notices=[]
-    const bindings={submitBlock:'',prompt:name==='ImageWorkspace'?'画 @图2 与 @图1':'让 @图2 使用 @视频1 的动作',liveReady:true,submitting:false,setSubmitting(){},resolveImageReferences:async()=>references,resolveVideoReferences:async()=>references,count:'1',maxBatch:1,generation:{createImage:async payload=>payloads.push(payload),createVideo:async payload=>payloads.push(payload)},model:{id:'synthetic'},ratio:'16:9',resolution:'1K',quality:'480p',duration:'15 秒',advancedValues:{},resolveGenerationKind:()=> 'edit',state:{selectedProjectId:null},setNotice:value=>notices.push(value),serializePromptReferences:mentions.serializePromptReferences,privateVideo:undefined,privateOptions:{}}
+    const bindings={teamMedia:null,teamQuote:{},credits:0,mode:'references',seedance:false,seedanceConfig:{},effectiveSeconds:15,effectiveRatio:'16:9',submitBlock:'',prompt:name==='ImageWorkspace'?'画 @图2 与 @图1':'让 @图2 使用 @视频1 的动作',liveReady:true,submitting:false,setSubmitting(){},resolveImageReferences:async()=>references,resolveVideoReferences:async()=>references,count:'1',maxBatch:1,generation:{createImage:async payload=>payloads.push(payload),createVideo:async payload=>payloads.push(payload)},model:{id:'synthetic'},ratio:'16:9',resolution:'1K',quality:'480p',duration:'15 秒',advancedValues:{},resolveGenerationKind:()=> 'edit',state:{selectedProjectId:null},setNotice:value=>notices.push(value),serializePromptReferences:mentions.serializePromptReferences,privateVideo:undefined,privateOptions:{}}
     const code=ts.transpileModule(`export ${submit.getText(parsed)}`,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
     const module={exports:{}}
     new Function('module','exports',...Object.keys(bindings),code)(module,module.exports,...Object.values(bindings))

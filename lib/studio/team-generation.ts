@@ -2,8 +2,16 @@ import type { SessionSettings } from './api'
 import type { ModelConfig } from './types'
 import { modelsFromSession } from './studio-models'
 
-export function availableTeamModels(models: ModelConfig[], allowedIds: string[], settings?: SessionSettings) {
-  const catalog = settings?.personalModelIds === undefined ? models : modelsFromSession({ ...settings, personalModelIds: undefined })
+export function activeTeamSubscription(expiresAt?: string | null, now = Date.now()) {
+  return typeof expiresAt === 'string' && Number.isFinite(Date.parse(expiresAt)) && Date.parse(expiresAt) > now
+}
+
+/** Team access belongs to the current team, independently of the member's personal plan. */
+export function availableTeamModels(models: ModelConfig[], allowedIds: string[], settings?: SessionSettings, subscriptionExpiresAt?: string | null) {
+  const subscriptionAccess = activeTeamSubscription(subscriptionExpiresAt)
+  const catalog = settings?.personalModelIds === undefined
+    ? models.map(model=>({...model,subscriptionLocked:model.requiresSubscription===true&&!subscriptionAccess}))
+    : modelsFromSession({...settings,personalModelIds:undefined,subscriptionAccess})
   return catalog.filter(model => model.status === '可用' && (!allowedIds.length || allowedIds.some(id => {
     const logical = settings?.logicalModels?.find(item => item.id === id)
     return model.id === id || logical?.bindings.some(binding => binding.enabled && binding.requestAlias === model.id)
@@ -14,6 +22,7 @@ export function teamSubmissionUncertain(reason: unknown) {
   const status = reason && typeof reason === 'object' && 'status' in reason ? Number(reason.status) : 0
   return !status || status >= 500 || status === 408
 }
+
 
 export type PendingTeamGeneration = { requestId: string; points: number; payload: { kind: string; prompt: string; config: Record<string, unknown>; references: unknown[] } }
 

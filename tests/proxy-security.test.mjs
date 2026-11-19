@@ -52,3 +52,37 @@ test('proxy validates configuration and origins, and only trusts one explicitly 
     await new Promise(resolve => server.close(resolve))
   }
 })
+
+test('real Node fetch preserves media navigation redirects and never turns canvas reads into redirects', async () => {
+  const old = process.env.OAOAO_BACKEND_URL
+  const records = []
+  const server = createServer((req, res) => {
+    records.push(req.headers)
+    if (req.headers['x-oao-media-delivery'] === 'direct') {
+      res.writeHead(302, { Location: 'https://synthetic.r2.cloudflarestorage.com/bucket/video?signature=synthetic' }); res.end()
+    } else { res.setHeader('Content-Type', 'video/mp4'); res.end('synthetic-video') }
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  process.env.OAOAO_BACKEND_URL = `http://127.0.0.1:${server.address().port}`
+  const request = (headers, path = '/api/reference-assets/12345678-1234-1234-1234-123456789abc') => {
+    const url = new URL('https://frontend.test' + path)
+    return Object.assign(new Request(url, { headers }), { nextUrl: url })
+  }
+  try {
+    for (const headers of [{ 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate' }, { 'sec-fetch-dest': 'video', 'sec-fetch-mode': 'no-cors' }]) {
+      const response = await route.GET(request(headers))
+      assert.equal(response.status, 302)
+      assert.match(response.headers.get('location'), /^https:\/\/synthetic\.r2\.cloudflarestorage\.com/)
+      assert.equal(records.at(-1)['sec-fetch-mode'], 'cors', 'Node fetch really overwrites this header')
+      assert.equal(records.at(-1)['x-oao-media-delivery'], 'direct')
+    }
+    const read = await route.GET(request({ 'sec-fetch-dest': 'empty', 'sec-fetch-mode': 'cors', 'x-oao-media-delivery': 'direct' }))
+    assert.equal(read.status, 200); assert.equal(await read.text(), 'synthetic-video')
+    assert.equal(records.at(-1)['x-oao-media-delivery'], 'proxy', 'A browser cannot forge a different intent')
+    await route.GET(request({ 'x-oao-media-delivery': 'direct' }, '/api/other'))
+    assert.equal(records.at(-1)['x-oao-media-delivery'], undefined)
+  } finally {
+    if (old === undefined) delete process.env.OAOAO_BACKEND_URL; else process.env.OAOAO_BACKEND_URL = old
+    await new Promise(resolve => server.close(resolve))
+  }
+})

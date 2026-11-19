@@ -107,7 +107,7 @@ export function CanvasEditor({ projectId, project, loadError, workspace }: { pro
 function CanvasWorkspace() {
   const { state, estimateCredits } = useStudio()
   const workspace = useCanvasStore(store => store.workspace)
-  const models = useMemo(() => workspace ? availableTeamModels(state.models, workspace.modelIds, state.sessionSettings) : state.models, [workspace, state.models, state.sessionSettings])
+  const models = useMemo(() => workspace ? availableTeamModels(state.models, workspace.modelIds, state.sessionSettings, workspace.subscriptionExpiresAt) : state.models, [workspace, state.models, state.sessionSettings])
   const defaults = useMemo(() => defaultGenerationDefaults(state.sessionSettings), [state.sessionSettings])
   const generation = useGenerationActions()
   const agent = useAgentActions()

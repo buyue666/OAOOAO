@@ -2,10 +2,10 @@
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {httpError,type Context} from './core.js';
-import {ownedMedia,ownedMediaInfo,readReference,sniffMedia,MAX_MEDIA_BYTES} from './media.js';
+import {ownedMedia,ownedMediaInfo,readReference,sniffMedia,mediaByteLimit} from './media.js';
 
 type Probe=(bytes:Buffer)=>Promise<{duration:number;streams:Array<{codec_type?:string}>}>;
-export type ReferenceInspection={type:string;duration:number;bytes:number};
+export type ReferenceInspection={type:string;duration:number;bytes:number;mimeType?:string};
 type Entry={expires:number;value:Promise<ReferenceInspection>};
 type Cache={entries:Map<string,Entry>;running:number;waiting:Array<()=>void>};
 const caches=new WeakMap<Context,Cache>();
@@ -37,7 +37,7 @@ export async function inspectReference(ctx:Context,userId:string,reference:Recor
       duration=info.duration;
       if(!Number.isFinite(duration)||duration<=0)throw httpError(422,'无法确定参考视频或音频时长');
     }
-    return {type,duration,bytes:bytes.length};
+    return {type,duration,bytes:bytes.length,mimeType};
   };
   let url:URL|undefined;
   if(typeof reference.dataUrl!=='string')try{url=new URL(String(reference.url||''),ctx.config.origin);}catch{}
@@ -45,13 +45,13 @@ export async function inspectReference(ctx:Context,userId:string,reference:Recor
   if(id){
     // Ownership, expiry and file identity are checked even on a cache hit.
     const media=await ownedMediaInfo(ctx,userId,id);
-    if(media.bytes>MAX_MEDIA_BYTES)throw httpError(400,'单个参考素材不得超过 24 MiB');
+    if(media.bytes>mediaByteLimit(media.mimeType))throw httpError(400,'参考素材超过平台存储大小上限');
     const key=JSON.stringify([userId,id,media.sha256,media.mimeType,media.fingerprint]);
     return remember(cache,key,async()=>{
       const bytes=media.file?await readFile(media.file):(await ownedMedia(ctx,userId,id)).bytes;
       if(bytes.length!==media.bytes||createHash('sha256').update(bytes).digest('hex')!==media.sha256)throw httpError(422,'参考素材已变化，请重新上传');
       const mimeType=sniffMedia(bytes);
-      if(mimeType!==media.mimeType)throw httpError(400,'参考素材类型与实际文件不一致');
+      if(mimeType!==media.mimeType&&!(mimeType==='video/quicktime'&&media.mimeType==='video/mp4'))throw httpError(400,'参考素材类型与实际文件不一致');
       return inspect(bytes,mimeType);
     });
   }

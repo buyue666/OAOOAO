@@ -60,3 +60,51 @@ test('close target excludes either storefront and keeps safe workbench query/has
   for (const value of ['/credits', '/credits?returnTo=/plans', '/plans', '//evil.test', '/\\evil.test']) assert.equal(safeReturnPath(value), '/studio')
   assert.equal(safeReturnPath('/projects/one?section=shots#last'), '/projects/one?section=shots#last')
 })
+
+test('renaming the product updates inherited titles and preserves an explicit storefront title', () => {
+  const original = drafts.productToDraft(product('pack', { name: '旧商品' }))
+  assert.equal(drafts.renameProductDraft(original, '新商品').display.name, '新商品')
+  original.display.name = '自定义标题'
+  assert.equal(drafts.renameProductDraft(original, '新商品').display.name, '自定义标题')
+})
+
+test('generation notes roundtrip as plain text, stay within their own cycle and are hidden when empty', () => {
+  const draft = drafts.productToDraft(product('month', { productKind: 'plan', periodDays: 30, metadata: { membership: { groupId: 'notes', tierId: 'same', generationSummary: '可生成约100张', generationSummaryNote: '  实际消耗取决于模型 <b>文本</b>  ' } } }))
+  const month = { ...product('month'), ...drafts.draftToPayload(draft) }
+  const year = product('year', { productKind: 'plan', periodDays: 365, metadata: { membership: { groupId: 'notes', tierId: 'same', generationSummary: '年度说明' } } })
+  const plan = membership.toMembershipPlans([month, year])[0]
+  const render = cycle => card({ plan, tier: plan.tiers[0], billingCycle: cycle, billingOption: membership.billingOptions.find(o => o.value === cycle), showMore: true, isCurrent: false })
+  const info = all(render('monthly')).find(node => node.props?.label === '生成量说明备注')
+  const nodes = all(info.type(info.props))
+  assert.equal(nodes.find(node => node.props?.role === 'tooltip').props.children, '实际消耗取决于模型 <b>文本</b>')
+  assert.equal(nodes.filter(node => node.props?.['aria-label'] === '生成量说明备注').length, 1)
+  assert.equal(all(render('annual')).filter(node => node.props?.label === '生成量说明备注').length, 0)
+})
+
+test('subscription terms separate the check-in expiry from the order duration and generation estimate', () => {
+  const [plan] = membership.toMembershipPlans([product('month', { productKind: 'plan', periodDays: 31, dailyPoints: 10, pointsAmount: 1000, metadata: { membership: { generationSummaryNote: '图片：模型 A\n视频：模型 B' } } })])
+  const nodes = all(card({ plan, tier: plan.tiers[0], billingCycle: 'monthly', billingOption: membership.billingOptions.find(o => o.value === 'monthly'), showMore: true, isCurrent: false }))
+  assert.match(nodes.find(node => node.props?.label === '会员签到积分说明').props.note, /当期会员有效期内可用/)
+  assert.equal(nodes.find(node => node.props?.label === '生成量说明备注').props.note, '图片：模型 A\n视频：模型 B')
+  assert.ok(nodes.some(node => node.props?.children === '每日 10 积分 · 全期最多 310'))
+})
+
+test('the shared billing route retains only a safe return destination across catalog views', () => {
+  const returns = compile('lib/studio/return-path.ts')
+  const { billingStoreHref } = compile('lib/studio/billing-store-route.ts', { './return-path': returns })
+  assert.equal(billingStoreHref('credits', '/image?mode=edit#prompt'), '/plans?view=credits&returnTo=%2Fimage%3Fmode%3Dedit%23prompt')
+  assert.equal(billingStoreHref('team', '//example.invalid'), '/plans?edition=team')
+  assert.equal(billingStoreHref('personal', '/plans?view=credits'), '/plans')
+})
+
+test('benefit sections keep their headings and global fold limit without empty groups', () => {
+  const plan = membership.toMembershipPlans([product('grouped', { metadata: { membership: { promotions: ['活动一', '活动二'], benefits: ['基础一', '基础二', '基础三'], exclusiveBenefits: ['独家一', '独家二'], extraBenefits: ['其他一'] } } })])[0]
+  const props = { plan, tier: plan.tiers[0], billingCycle: 'once', billingOption: membership.billingOptions.find(o => o.value === 'once'), isCurrent: false }
+  const folded = card({ ...props, showMore: false })
+  assert.deepEqual(all(folded).filter(node => node.type === 'section').map(node => node.props['aria-label']), ['积分与预计生成量', '限时活动', '基础权益'])
+  assert.equal(all(folded).filter(node => node.type === 'li').length, 3)
+  assert.match(text(folded), /还有 5 项权益/)
+  const expanded = card({ ...props, showMore: true })
+  assert.deepEqual(all(expanded).filter(node => node.type === 'section').map(node => node.props['aria-label']), ['积分与预计生成量', '限时活动', '基础权益', '独家功能', '更多权益'])
+  assert.equal(all(expanded).filter(node => node.type === 'li').length, 8)
+})

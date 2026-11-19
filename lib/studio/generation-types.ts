@@ -6,7 +6,7 @@
 
 export type GenerationKind = 'image' | 'video' | 'audio' | 'text' | 'agent'
 export type GenerationStatus = 'pending' | 'running' | 'success' | 'error' | 'paused' | 'cancelled'
-export type GenerationExecutionPhase = 'created' | 'submitted' | 'polling' | 'result_ready' | 'persisting' | 'completed' | 'needs_review' | string
+export type GenerationExecutionPhase = 'created' | 'submitted' | 'polling' | 'result_ready' | 'persisting' | 'completed' | string
 
 /** ���ͨ�� x-vozeb-pro-points-* ��Ӧͷ�ش���ʵʱ�� */
 export type PointsSnapshot = {
@@ -30,13 +30,14 @@ export type GenerationTask = {
   kind: GenerationKind
   status: GenerationStatus
   model: string
+  createdAt?: number
+  startedAt?: number
+  updatedAt?: number
   result?: unknown
   error?: string
   /** ��˷��ظ������ʵ�ʿ۷ѣ����ֽӿ��� billing �ֶ��ڣ��� */
   pointsCost?: number
   pointsRefunded?: boolean
-  needsReview?: boolean
-  reviewReason?: string
   executionPhase?: GenerationExecutionPhase
   /** ��Ƶ���񷵻ص����������ʶ��ʱ���� */
   upstreamId?: string
@@ -45,6 +46,9 @@ export type GenerationTask = {
   /** The provider may still be running after a cancellation request. */
   cancelRequested?: boolean
   warning?: string
+  title?: string
+  prompt?: string
+  retryInput?: RetryInput
 }
 
 /** ��һ�����������ͼ��ҳ��ֻʹ����һ�㣬���ٹ��ĸ����ͽӿڵĲ��졣 */
@@ -88,6 +92,8 @@ export type GenerationReference = {
   url?: string
   dataUrl?: string
   role?: 'reference' | 'first_frame' | 'last_frame'
+  /** Frozen display metadata for the reference used in a try-on submission. */
+
 }
 
 /**
@@ -160,6 +166,7 @@ export type AudioGenerationInput = {
 } & SubmissionIdentity & GenerationProjectContext
 
 export type TextGenerationInput = {
+  stream?: boolean
   prompt: string
   model?: string
   messages?: TextGenerationMessage[]
@@ -233,6 +240,9 @@ export type AgentRunEvent = {
 /* ---------------------------- �Ự�е���ʵģ��Ŀ¼ ---------------------------- */
 
 export type SessionLogicalModel = {
+  requiresSubscription?:boolean
+  description?:string
+  allowAdultContent?: boolean
   id: string
   name: string
   capability: 'text' | 'image' | 'video' | 'audio'
@@ -256,17 +266,31 @@ export type SessionLogicalModel = {
       supportsVideoEditing?: boolean
       supportsVideoReference?: boolean
       supportsAudioReference?: boolean
+      supportsFastMode?: boolean
+      fastModeEnabled?: boolean
+      supportsContextIr?: boolean
+      supportsVideoRegeneration?: boolean
+      supportsVideoExtension?: boolean
       maxReferences?: number
       videoReferenceTotalLimit?: number
       frameReferenceTypes?: Array<'image' | 'audio'>
       videoQualities?: string[]
       maxDurationByResolution?: Record<string, number>
+      videoProtocol?: string
       supportsMultiReference?: boolean
       maxReferenceVideos?: number
       maxReferenceAudios?: number
       durationsByMode?: Record<string, number[]>
       videoDurationRules?: Record<string, {mode: string; min?: number; max?: number; step?: number; values?: number[]}>
-      videoReferenceRules?: Record<string, {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number}>
+      nativeReferenceRules?:Record<string,{maxFileBytes?:number;minItemSeconds?:number;maxItemSeconds?:number;maxTotalSeconds?:number;acceptedMimeTypes?:string[]}>
+      supportsDraft?:boolean
+      supportsSmartDuration?:boolean
+      frameAdaptiveRatio?:boolean
+      videoTaskTypes?:string[]
+      videoOutputFormats?:string[]
+      supportsWebSearch?:boolean
+      webSearchEnabled?:boolean
+      videoReferenceRules?: Record<string, {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number; minItemSeconds?: number; maxFileBytes?: number}>
       videoBillingUnit?: string
       supportsReferenceImage?: boolean
       maxReferenceImages?: number
@@ -323,6 +347,8 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionGenerationSettings = {
+  adultContent?: { enabled: boolean; policyVersion: string; acknowledgedAt: string | null }
+  subscriptionAccess?: boolean
   personalModelIds?: string[]
   modelPointCosts?: Record<string, number>
   generationPointMultipliers?: { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }

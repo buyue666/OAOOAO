@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Cloud, Database, Gem, Mail, RefreshCw, Save, Server, Settings2, ShieldCheck, Wallet } from 'lucide-react'
+import { Cloud, Database, Gem, Mail, RefreshCw, Save, Server, Settings2, ShieldCheck, Trash2, Wallet } from 'lucide-react'
 import {
   getAdminSettings,
   getPaymentConfig,
@@ -13,7 +13,7 @@ import {
   updatePaymentProviderConfig,
   type AdminSettingsPatch,
 } from '@/lib/studio/admin-api'
-import type { AdminPaymentConfigSummary, AdminPaymentProviderConfig, AdminSettings, GenerationConcurrencySettings, GenerationDefaultSettings, MailSettings, ObjectStorageSettings } from '@/lib/studio/admin-types'
+import type { AdminPaymentConfigSummary, AdminPaymentProviderConfig, AdminSettings, EntitlementPlan, GenerationConcurrencySettings, GenerationDefaultSettings, MailSettings, ObjectStorageSettings } from '@/lib/studio/admin-types'
 import { ControlButton, StatusBadge } from './ui'
 import {
   AdminDefinition,
@@ -34,17 +34,19 @@ import {
 import { useAdminNavigation, useAdminReload, useAdminSession } from './admin-shell'
 import { CommercePolicyEditor } from './commerce-policy-editor'
 import { PlanModelControl } from './plan-model-control'
+import { CONCURRENCY_FIELDS, PlanConcurrencyFields } from './plan-concurrency-fields'
 import { AdminSiteSettings } from './admin-site-settings'
 import { AdminCheckInSettings } from './admin-check-in-settings'
+import { AdminWatermarkSettings } from './admin-watermark-settings'
+import { AdminAdultContentSettings } from './admin-adult-content-settings'
 import { AdminWechatSettings } from './admin-wechat-settings'
 import { OnlinePaymentProviderEditor } from './admin-payment-provider'
 import { canConfigureOnlinePayment, paymentProviderName } from '@/lib/studio/payment-provider-config'
 import { checkInRuleChanges, readCheckInForm } from '@/lib/studio/check-in-rules'
 import { allowedGenerationKinds, ENTITLEMENT_GENERATION_KINDS } from '@/lib/studio/entitlement-features'
 import { assertStorageSaved, CREATIVE_STORAGE_NOTICE, storageTestMessage, storageUpdateInput } from '@/lib/studio/object-storage-status'
-import { assertManualPaymentSaved, canConfigureManualPayment, MANUAL_INSTRUCTIONS_LIMIT, manualPaymentInput, manualPaymentInstructions } from '@/lib/studio/manual-payment-config'
 
-type SectionId = 'site' | 'account' | 'wechat' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
+type SectionId = 'site' | 'account' | 'watermark' | 'adult-content' | 'wechat' | 'billing' | 'points' | 'generation' | 'mail' | 'storage' | 'lifecycle'
 
 export function AdminSettingsPanel() {
   const session = useAdminSession()
@@ -100,7 +102,7 @@ export function AdminSettingsPanel() {
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('section')
-    if (requested && ['site', 'account', 'wechat', 'billing', 'points', 'generation', 'mail', 'storage', 'lifecycle'].includes(requested)) setSection(requested as SectionId)
+    if (requested && ['site', 'account', 'watermark', 'adult-content', 'wechat', 'billing', 'points', 'generation', 'mail', 'storage', 'lifecycle'].includes(requested)) setSection(requested as SectionId)
   }, [])
 
   function changeSection(next: SectionId) {
@@ -143,6 +145,8 @@ export function AdminSettingsPanel() {
   const sections: Array<{ id: SectionId; label: string; visible: boolean }> = [
     { id: 'site', label: '站点与品牌', visible: canSystem },
     { id: 'account', label: '注册与积分', visible: canSystem || canCommerce },
+    { id: 'watermark', label: 'AI 生成水印', visible: canSystem },
+    { id: 'adult-content', label: '成人内容', visible: canSystem },
     { id: 'wechat', label: '微信登录', visible: canSystem },
     { id: 'billing', label: '运营与支付', visible: canSystem || canCommerce || canBilling },
     { id: 'points', label: '计费与权益', visible: canCommerce },
@@ -177,6 +181,8 @@ export function AdminSettingsPanel() {
         <div key={active === 'site' ? 'site' : `${active}:${formRevision}`} role="tabpanel" aria-label={visibleSections.find((item) => item.id === active)?.label} className="flex min-w-0 flex-col gap-5">
           {active === 'site' && <AdminSiteSettings site={settings.site || {}} onSave={(patch, summary) => save('站点设置', patch, summary)} saving={saving} onDirtyChange={setSiteDirty} />}
           {active === 'account' && <AccountSection settings={settings} canSystem={canSystem} canCommerce={canCommerce} onSave={(patch, summary) => save('注册与积分设置', patch, summary)} saving={saving} />}
+          {active === 'watermark' && <AdminWatermarkSettings policy={settings.watermarkPolicy} saving={saving} onSave={(patch, summary) => save('AI 生成水印设置', patch, summary)} />}
+          {active === 'adult-content' && <AdminAdultContentSettings visible={settings.accountMenu?.adultContentSettingsVisible !== false} saving={saving} onSave={(patch, summary) => save('成人内容设置', patch, summary)} />}
           {active === 'wechat' && <AdminWechatSettings settings={settings.wechatOfficial} registrationEnabled={settings.registrationEnabled} saving={saving} onSave={(patch, summary) => save('微信登录设置', patch, summary)} />}
           {active === 'billing' && <BillingSection settings={settings} paymentConfig={paymentConfig} canSystem={canSystem} canCommerce={canCommerce} canBilling={canBilling} saving={saving} onModeSave={(patch, summary) => save('commercePolicy' in patch ? '购买政策' : '运营模式设置', patch, summary)} onPaymentConfigChange={setPaymentConfig} onMessage={setMessage} onError={setError} />}
           {active === 'points' && <PointsSection settings={settings} canUpstream={canUpstream} onSave={(patch, summary) => save('计费与权益设置', patch, summary)} saving={saving} />}
@@ -216,7 +222,6 @@ function BillingSection({
   onError: (value: string) => void
 }) {
   const mode = settings.operationMode === 'commercial' ? 'commercial' : 'self_use'
-  const manual = paymentConfig?.providers.find((provider) => provider.id === 'manual')
 
   function submitMode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -239,7 +244,7 @@ function BillingSection({
             </AdminField>
             {mode === 'self_use'
               ? <AdminNotice tone="warning">当前用户只能使用已有积分，前台不会显示充值入口；管理员仍可手动调整积分。</AdminNotice>
-              : <AdminNotice tone="neutral">商用模式下，购买入口还需要已发布的客户政策和可用收款配置。人工收款由管理员核实到账；在线渠道以服务端验证的支付通知为准。</AdminNotice>}
+              : <AdminNotice tone="neutral">商用模式下，购买入口还需要已发布的客户政策和可用收款配置。New API 余额支付和在线支付均以服务端核验的支付回执为准。</AdminNotice>}
           </div>
           <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-5 text-muted-foreground">保存时会先确认变更。</p>
@@ -250,15 +255,14 @@ function BillingSection({
 
       {canCommerce && <CommercePolicyEditor settings={settings} onSave={onModeSave} saving={saving} />}
 
-      {canBilling && <PaymentProviderEditor provider={manual} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />}
       {canBilling && paymentConfig?.providers.filter(canConfigureOnlinePayment).map(provider => <OnlinePaymentProviderEditor key={provider.id} provider={provider} onSaved={onPaymentConfigChange} onMessage={onMessage} onError={onError} />)}
 
       {canBilling && paymentConfig && <AdminSectionCard title="支付渠道概览" description="状态表示当前配置是否完整。未接入的渠道不提供启用或编辑操作；已保存配置保持不变。">
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {paymentConfig.providers.map((provider) => (
             <div key={provider.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2.5 text-xs">
-              <div className="min-w-0"><p className="truncate font-medium text-foreground">{paymentProviderName(provider)}</p><p className="mt-1 text-[11px] text-muted-foreground">{canConfigureManualPayment(provider) ? '由管理员核实到账后确认订单' : canConfigureOnlinePayment(provider) ? '由服务端验证支付通知后确认订单' : '暂不支持在线收款或自动回调；已有配置保留'}</p></div>
-              <StatusBadge tone={provider.ready ? 'success' : provider.enabled && (canConfigureManualPayment(provider) || canConfigureOnlinePayment(provider)) ? 'warning' : 'neutral'}>{!canConfigureManualPayment(provider) && !canConfigureOnlinePayment(provider) ? '未接入' : provider.ready ? '配置就绪' : provider.enabled ? '待配置' : '已关闭'}</StatusBadge>
+              <div className="min-w-0"><p className="truncate font-medium text-foreground">{paymentProviderName(provider)}</p><p className="mt-1 text-[11px] text-muted-foreground">{canConfigureOnlinePayment(provider) ? '由服务端验证支付通知后确认订单' : '暂不支持在线收款或自动回调；已有配置保留'}</p></div>
+              <StatusBadge tone={provider.ready ? 'success' : provider.enabled && (canConfigureOnlinePayment(provider)) ? 'warning' : 'neutral'}>{!canConfigureOnlinePayment(provider) ? '未接入' : provider.ready ? '配置就绪' : provider.enabled ? '待配置' : '已关闭'}</StatusBadge>
             </div>
           ))}
         </div>
@@ -267,69 +271,12 @@ function BillingSection({
   )
 }
 
-function PaymentProviderEditor({
-  provider,
-  onSaved,
-  onMessage,
-  onError,
-}: {
-  provider?: AdminPaymentProviderConfig
-  onSaved: (value: AdminPaymentConfigSummary) => void
-  onMessage: (value: string) => void
-  onError: (value: string) => void
-}) {
-  const [enabled, setEnabled] = useState(provider?.enabled === true)
-  const [instructions, setInstructions] = useState(() => manualPaymentInstructions(provider))
-  const savedInstructions = manualPaymentInstructions(provider)
-  const [saving, setSaving] = useState(false)
-  const savingRef = useRef(false)
-
-  useEffect(() => {
-    setEnabled(provider?.enabled === true)
-    setInstructions(savedInstructions)
-  }, [provider?.id, provider?.enabled, savedInstructions])
-
-  if (!canConfigureManualPayment(provider)) return <AdminSectionCard title="人工收款" description="当前无法编辑收款配置。"><AdminNotice tone="warning">系统未返回可用的人工收款配置。请检查读取权限并重新读取设置；现有配置不会改变。</AdminNotice></AdminSectionCard>
-  const currentProvider = provider
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (savingRef.current) return
-    savingRef.current = true
-    setSaving(true); onError(''); onMessage('')
-    try {
-      const input = manualPaymentInput(currentProvider, enabled, instructions)
-      const next = await updatePaymentProviderConfig(input.providerId, input.enabled, input.values)
-      assertManualPaymentSaved(next, input)
-      onSaved(next)
-      onMessage(input.enabled ? '人工收款配置已保存。订单到账仍需管理员核实并确认。' : '人工收款配置已保存，收款入口已关闭。')
-    } catch (reason) {
-      onError(reason instanceof Error ? reason.message : '人工收款配置保存失败')
-    } finally { savingRef.current = false; setSaving(false) }
-  }
-
-  return (
-    <form onSubmit={submit} aria-busy={saving}>
-      <AdminSectionCard title="人工收款" description="购买者按说明在站外付款；管理员核实实际到账后，在订单管理中确认收款，系统才发放积分或套餐权益。系统不会自动转账。">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs"><StatusBadge tone={provider.ready ? 'success' : provider.enabled ? 'warning' : 'neutral'}>{provider.ready ? '已保存配置就绪' : provider.enabled ? '已保存配置待完善' : '当前已关闭'}</StatusBadge><StatusBadge tone="neutral">无需自动回调</StatusBadge></div>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} disabled={saving} />启用人工收款</label>
-        </div>
-        <fieldset disabled={saving} className="mt-4">
-          <AdminField label="给购买者的收款说明" hint="说明会显示在结算页面，请填写付款方式、核实要求及联系方法，不要填写密钥或管理员凭据。">
-            <AdminTextarea name="instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)} required={enabled} maxLength={MANUAL_INSTRUCTIONS_LIMIT} placeholder="例如：付款前联系客服确认收款信息，付款时备注订单号。到账经管理员核实后开通权益。" rows={6} />
-          </AdminField>
-        </fieldset>
-        <AdminSaveBar hint="保存仅更新人工收款配置，不会确认任何订单收款。"><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存人工收款配置'}</ControlButton></AdminSaveBar>
-      </AdminSectionCard>
-    </form>
-  )
-}
-
 /* ------------------------------ 注册与积分 ------------------------------ */
 
 function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { settings: AdminSettings; canSystem: boolean; canCommerce: boolean; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean }) {
   const checkIn = settings.checkIn ?? { enabled: false, rewardPoints: 10 }
+  const registrationLimit = settings.registrationRateLimit ?? { enabled: false, maxAttempts: 5, windowSeconds: 3600 }
+  const [limitEnabled, setLimitEnabled] = useState(registrationLimit.enabled)
   const [formError, setFormError] = useState('')
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -342,6 +289,11 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
       const registration = data.has('registrationEnabled')
       patch.registrationEnabled = registration
       if (registration !== settings.registrationEnabled) summary.push('开放注册')
+      const maxAttempts = Number(data.get('registrationMaxAttempts') ?? registrationLimit.maxAttempts)
+      const windowMinutes = Number(data.get('registrationWindowMinutes') ?? registrationLimit.windowSeconds / 60)
+      if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 1000 || !Number.isInteger(windowMinutes) || windowMinutes < 1 || windowMinutes > 1440) { setFormError('请填写有效的注册次数（1–1000）和时间窗口（1–1440 分钟）。'); return }
+      patch.registrationRateLimit = { enabled: limitEnabled, maxAttempts, windowSeconds: windowMinutes * 60 }
+      if (JSON.stringify(patch.registrationRateLimit) !== JSON.stringify(registrationLimit)) summary.push('注册频率限制')
     }
     if (canCommerce) {
       const enabled = data.has('freeDailyPointsEnabled')
@@ -364,6 +316,14 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
           <div className="flex items-center justify-between gap-4 text-sm"><span><span className="font-medium">邮箱验证（注册必需）</span><span className="mt-1 block text-xs text-muted-foreground">普通账号注册必须通过邮箱验证码；开放注册前，请先配置并验证邮件服务。</span></span><span className="shrink-0 rounded-full border border-studio-accent/30 bg-studio-accent/10 px-2.5 py-1 text-xs font-medium text-studio-accent">固定开启</span></div>
         </fieldset>
       </AdminSectionCard>}
+      {canSystem && <AdminSectionCard title="注册频率限制" description="由管理员决定是否限制同一 IP 的注册提交次数。关闭后，已有的注册频率计数也不会拦截用户。">
+        <label className="flex min-h-11 items-center justify-between gap-4 text-sm"><span className="font-medium">启用注册频率限制</span><input type="checkbox" name="registrationLimitEnabled" checked={limitEnabled} onChange={event => setLimitEnabled(event.target.checked)} disabled={saving} /></label>
+        <p className="mt-2 text-xs text-muted-foreground" role="status">{limitEnabled ? '已开启 · 同一 IP 在指定时间内共用次数，提交失败也计入。' : '已关闭 · 用户注册不受 IP 提交次数限制。'}</p>
+        <fieldset disabled={saving || !limitEnabled} className="mt-4 grid gap-4 sm:grid-cols-2 disabled:opacity-60">
+          <AdminField label="允许提交次数"><AdminInput name="registrationMaxAttempts" type="number" min="1" max="1000" step="1" defaultValue={registrationLimit.maxAttempts} /></AdminField>
+          <AdminField label="时间窗口（分钟）"><AdminInput name="registrationWindowMinutes" type="number" min="1" max="1440" step="1" defaultValue={registrationLimit.windowSeconds / 60} /></AdminField>
+        </fieldset>
+      </AdminSectionCard>}
       {canCommerce && <AdminSectionCard title="每日签到" description="用户主动点击后领取积分，不会自动发放。按北京时间（Asia/Shanghai）每天 00:00 换日，同一账号每天只能领取一次。">
         <AdminCheckInSettings settings={checkIn} plans={settings.entitlements.plans} saving={saving} />
         <p className="mt-4 text-xs leading-5 text-muted-foreground">规则仅影响之后的签到，已有奖励的金额和到期时间不变。同一天升级套餐不能再次领取。关闭签到后停止新的领取；已到账奖励仍按领取时的有效期使用。</p>
@@ -383,25 +343,59 @@ function AccountSection({ settings, canSystem, canCommerce, onSave, saving }: { 
 /* ------------------------------ 计费与权益 ------------------------------ */
 
 function PointsSection({ settings, onSave, saving, canUpstream }: { settings: AdminSettings; onSave: (patch: AdminSettingsPatch, summary: string[]) => void; saving: boolean; canUpstream: boolean }) {
-  const [plans, setPlans] = useState(settings.entitlements.plans.map((plan) => ({ ...plan, allowedModelIds: plan.allowedModelIds?.slice(), limits: { ...plan.limits }, features: [...(plan.features ?? [])], allowedGenerationKinds: allowedGenerationKinds(plan) })))
+  const toDraft = (plan: EntitlementPlan) => ({ ...plan, draftKey: `saved:${plan.id}`, originalId: plan.id as string | null, allowedModelIds: plan.allowedModelIds?.slice(), limits: { ...plan.limits }, features: [...(plan.features ?? [])], allowedGenerationKinds: allowedGenerationKinds(plan) })
+  const [plans, setPlans] = useState(() => settings.entitlements.plans.map(toDraft))
+  const [removedDrafts, setRemovedDrafts] = useState<Record<string, ReturnType<typeof toDraft>>>({})
   const [entitlementsEnabled, setEntitlementsEnabled] = useState(settings.entitlements.enabled)
   const [defaultPlanId, setDefaultPlanId] = useState(settings.entitlements.defaultPlanId)
   const [defaultStorageQuotaBytes,setDefaultStorageQuotaBytes] = useState(settings.entitlements.defaultStorageQuotaBytes ?? 10*1024**3)
   const [limits, setLimits] = useState(settings.generationCostControl)
+  const confirm = useConfirm()
+  const removed = settings.entitlements.plans.filter(plan => Object.hasOwn(removedDrafts, plan.id))
+
+  function markForRemoval(plan: ReturnType<typeof toDraft>) {
+    const name = plan.name || plan.id
+    confirm.confirm({
+      title: plan.originalId ? `删除权益方案「${name}」？` : `移除未保存的方案「${name}」？`,
+      description: plan.originalId ? '方案先标记为待删除，保存计费与权益后才生效。' : '该方案还没有保存，移除后不会写入后台。',
+      notice: plan.originalId ? '已关联商品、正在使用或有未完成订单的方案不能删除。保存前可撤销。' : '其他方案的更改会继续保留。',
+      confirmLabel: plan.originalId ? '标记待删除' : '移除方案',
+      tone: 'danger',
+      onConfirm: () => {
+        if (plan.originalId) setRemovedDrafts(current => ({ ...current, [plan.originalId!]: plan }))
+        setPlans(current => current.filter(item => item.draftKey !== plan.draftKey))
+      },
+    })
+  }
+
+  function undoRemoval(planId: string) {
+    const restored = removedDrafts[planId]
+    if (!restored) return
+    setPlans(current => [...current, restored])
+    setRemovedDrafts(current => Object.fromEntries(Object.entries(current).filter(([id]) => id !== planId)))
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const entitlements = { enabled: entitlementsEnabled, defaultPlanId, defaultStorageQuotaBytes, plans }
+    const entitlements = { enabled: entitlementsEnabled, defaultPlanId, defaultStorageQuotaBytes, plans: plans.map(({ draftKey: _draftKey, originalId: _originalId, ...plan }) => plan) }
     const summary: string[] = []
+    const entitlementPlanRenames = plans.flatMap(plan => plan.originalId && plan.originalId !== plan.id ? [{ from: plan.originalId, to: plan.id }] : [])
+    for (const rename of entitlementPlanRenames) summary.push(`方案标识 ${rename.from} → ${rename.to}（同步关联商品及会员权益）`)
+    for (const item of removed) summary.push(`删除权益方案「${item.name || item.id}」`)
+    const concurrencyChanged = plans.filter(plan => CONCURRENCY_FIELDS.some(([kind]) => plan.generationConcurrency?.[kind] !== settings.entitlements.plans.find(item => item.id === plan.originalId)?.generationConcurrency?.[kind]))
+    for (const plan of concurrencyChanged) summary.push(`「${plan.name || plan.id}」生成并发`)
     if (JSON.stringify(entitlements) !== JSON.stringify(settings.entitlements)) summary.push('套餐权益')
     if (canUpstream && JSON.stringify(limits) !== JSON.stringify(settings.generationCostControl)) summary.push('生成成本控制')
     onSave({
       entitlements,
+      ...(entitlementPlanRenames.length ? { entitlementPlanRenames } : {}),
+      ...(removed.length ? { entitlementPlanRemovals: removed.map(plan => plan.id) } : {}),
       ...(canUpstream ? { generationCostControl: limits } : {}),
     }, summary)
   }
 
   return (
+    <>
     <form onSubmit={submit} className="flex flex-col gap-4">
       {canUpstream && <AdminSectionCard title="成本控制上限" description="限制单次任务与每日积分消耗，0 表示不限制。">
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-3">
@@ -411,28 +405,34 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
         </fieldset>
       </AdminSectionCard>}
 
-      <AdminSectionCard title="权益方案" description="用户所属套餐决定每日积分与各类调用上限。未开通或已到期用户使用默认方案；调用上限为 0 表示不限，每日赠送为 0 表示不赠送。">
+      <AdminSectionCard title="权益方案" description="未开通或已到期用户使用默认方案。调用上限为 0 表示不限。">
         <fieldset disabled={saving} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-4">
             <AdminField label="默认存储容量（GB）" hint="未配置会员容量时使用；0 表示不限。"><AdminInput type="number" min="0" step="0.01" value={defaultStorageQuotaBytes/1024**3} onChange={event=>setDefaultStorageQuotaBytes(Math.round(Number(event.target.value)*1024**3))}/></AdminField>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={entitlementsEnabled} onChange={(event) => setEntitlementsEnabled(event.target.checked)} />启用套餐权益限制</label>
             <AdminField label="默认方案" className="w-40">
               <AdminSelect value={defaultPlanId} onChange={(event) => setDefaultPlanId(event.target.value)}>
+                {!entitlementsEnabled && <option value="">未设置</option>}
                 {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name || plan.id}</option>)}
               </AdminSelect>
             </AdminField>
           </div>
+          {removed.length > 0 && <section aria-label="待删除的权益方案" className="space-y-2">
+            <AdminNotice tone="warning">已标记 {removed.length} 个方案待删除。点击「保存计费与权益」后生效。</AdminNotice>
+            <ul className="space-y-1.5">{removed.map(plan => <li key={plan.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-1.5 text-sm"><span className="min-w-0 break-all">{removedDrafts[plan.id].name || plan.name || plan.id}</span><ControlButton type="button" variant="secondary" className="min-h-11 sm:min-h-8" onClick={() => undoRemoval(plan.id)} aria-label={`撤销删除 ${removedDrafts[plan.id].name || plan.name || plan.id}`}>撤销删除</ControlButton></li>)}</ul>
+          </section>}
           <div className="flex flex-col gap-3">
             {plans.map((plan, index) => (
-              <div key={plan.id} className="rounded-md border border-border p-3">
+              <div key={plan.draftKey} className="rounded-md border border-border p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge tone="muted">方案标识：{plan.id}</StatusBadge>
+                  <AdminField label="方案标识" hint="保存时同步更新关联商品、会员和签到规则；不改变积分余额与有效期。" className="min-w-64 flex-1"><AdminInput aria-label={`方案标识 ${index + 1}`} required maxLength={120} value={plan.id} onChange={event => { const id = event.target.value.trim(); if (defaultPlanId === plan.id) setDefaultPlanId(id); setPlans(current => current.map((item, position) => position === index ? { ...item, id } : item)) }} /></AdminField>
                   <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={plan.enabled} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, enabled: event.target.checked } : item))} />启用</label>
+                  <ControlButton type="button" variant="danger" className="min-h-11 sm:min-h-8" disabled={plan.id === defaultPlanId} title={plan.id === defaultPlanId ? '请先选择其他默认方案' : undefined} aria-label={`删除权益方案 ${plan.name || plan.id}${plan.id === defaultPlanId ? '（请先更换默认方案）' : ''}`} onClick={() => markForRemoval(plan)}><Trash2 className="size-4" aria-hidden="true" />删除</ControlButton>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <AdminField label="方案名称"><AdminInput value={plan.name} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, name: event.target.value } : item))} /></AdminField>
                   <AdminField label="存储容量（GB）" hint="上传与生成结果共用；0 表示不限。降额不删除已有文件，超额后不能新增。"><AdminInput type="number" min="0" step="0.01" value={(plan.storageQuotaBytes??defaultStorageQuotaBytes)/1024**3} onChange={event=>setPlans(current=>current.map((item,position)=>position===index?{...item,storageQuotaBytes:Math.round(Number(event.target.value)*1024**3)}:item))}/></AdminField>
-                  <AdminField label="每日赠送积分"><AdminInput type="number" min="0" value={plan.dailyPoints ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, dailyPoints: Number(event.target.value) || 0 } : item))} /></AdminField>
+                  <AdminField label="每日签到奖励" hint="用于管理员分配的会员方案。购买商品的签到奖励取商品设置。"><AdminInput type="number" min="0" value={plan.dailyPoints ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, dailyPoints: Number(event.target.value) || 0 } : item))} /></AdminField>
                   <AdminField label="每日积分消耗上限"><AdminInput type="number" min="0" value={plan.limits.dailyPointSpend ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyPointSpend: Number(event.target.value) || 0 } } : item))} /></AdminField>
                   <AdminField label="每日图片上限"><AdminInput type="number" min="0" value={plan.limits.dailyImages ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyImages: Number(event.target.value) || 0 } } : item))} /></AdminField>
                   <AdminField label="每日视频上限"><AdminInput type="number" min="0" value={plan.limits.dailyVideos ?? 0} onChange={(event) => setPlans((current) => current.map((item, position) => position === index ? { ...item, limits: { ...item.limits, dailyVideos: Number(event.target.value) || 0 } } : item))} /></AdminField>
@@ -443,12 +443,13 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{ENTITLEMENT_GENERATION_KINDS.map(kind => <label key={kind.value} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={plan.allowedGenerationKinds.includes(kind.value)} onChange={event => setPlans(current => current.map((item, position) => position === index ? { ...item, allowedGenerationKinds: event.target.checked ? [...item.allowedGenerationKinds, kind.value] : item.allowedGenerationKinds.filter(value => value !== kind.value) } : item))} />{kind.label}</label>)}</div>
                   <p className="mt-3 text-xs leading-5 text-muted-foreground">启用套餐权益限制后生效。只限制新任务，不影响查看已有项目和资产；创作助手调用生成工具时同样受对应限制。不选择任何项表示禁止新建以上任务。历史方案未设置时默认全部允许。</p>
                 </fieldset>
+                <PlanConcurrencyFields defaults={settings.generationConcurrency} value={plan.generationConcurrency} disabled={saving} onChange={generationConcurrency => setPlans(current => current.map(item => item.draftKey === plan.draftKey ? { ...item, generationConcurrency } : item))} />
                 <div className="mt-4"><PlanModelControl models={settings.logicalModels} value={plan.allowedModelIds} disabled={saving} onChange={allowedModelIds => setPlans(current => current.map((item, position) => position === index ? { ...item, allowedModelIds } : item))} /></div>
                 {plan.features.length > 0 && <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">历史功能标签（兼容保留）</summary><p className="mt-2 leading-5">以下旧标签仅作记录，不控制功能访问。保存方案时会保留。</p><ul className="mt-2 flex flex-wrap gap-2">{plan.features.map((feature, at) => <li key={`${at}:${feature}`} className="max-w-full break-all rounded bg-muted px-2 py-1">{feature}</li>)}</ul></details>}
               </div>
             ))}
             {!plans.length && <AdminEmpty title="暂无权益方案" description="系统尚未返回任何套餐方案定义。" />}
-            <ControlButton type="button" variant="secondary" onClick={()=>{const id=crypto.randomUUID();setPlans(current=>[...current,{id,name:'新会员方案',allowedModelIds:undefined,enabled:true,dailyPoints:0,storageQuotaBytes:defaultStorageQuotaBytes,limits:{dailyPointSpend:0,dailyApiCalls:0,dailyImages:0,dailyVideos:0,dailyAudio:0,dailyText:0},features:[],allowedGenerationKinds:ENTITLEMENT_GENERATION_KINDS.map(item=>item.value)}]);if(!defaultPlanId)setDefaultPlanId(id)}}>新增会员方案</ControlButton>
+            <ControlButton type="button" variant="secondary" onClick={()=>{const id=crypto.randomUUID();setPlans(current=>[...current,{id,draftKey:`new:${id}`,originalId:null,name:'新会员方案',allowedModelIds:undefined,enabled:true,dailyPoints:0,storageQuotaBytes:defaultStorageQuotaBytes,limits:{dailyPointSpend:0,dailyApiCalls:0,dailyImages:0,dailyVideos:0,dailyAudio:0,dailyText:0},features:[],allowedGenerationKinds:ENTITLEMENT_GENERATION_KINDS.map(item=>item.value)}]);if(!defaultPlanId)setDefaultPlanId(id)}}>新增会员方案</ControlButton>
           </div>
         </fieldset>
       </AdminSectionCard>
@@ -467,8 +468,10 @@ function PointsSection({ settings, onSave, saving, canUpstream }: { settings: Ad
         <div><AdminDefinition label="视频时长倍率" value={Object.entries(settings.generationPointMultipliers.videoSeconds || {}).map(([key, value]) => `${key}×${value}`).join(' · ') || '-'} /></div>
       </AdminSectionCard>
 
-      <AdminSaveBar hint="保存前会列出变更项，确认后才写入。"><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存计费与权益'}</ControlButton></AdminSaveBar>
+      <AdminSaveBar hint={removed.length ? `${removed.length} 个权益方案待删除，保存后生效。` : '保存前会列出变更项，确认后才写入。'}><ControlButton type="submit" variant="primary" disabled={saving}><Wallet className="size-3.5" />{saving ? '保存中' : '保存计费与权益'}</ControlButton></AdminSaveBar>
     </form>
+    {confirm.dialog}
+    </>
   )
 }
 
@@ -478,23 +481,21 @@ function GenerationSection({ settings, onSave, saving }: { settings: AdminSettin
   const [concurrency, setConcurrency] = useState<GenerationConcurrencySettings>(settings.generationConcurrency)
   const [defaults, setDefaults] = useState<GenerationDefaultSettings>(settings.generationDefaults)
 
-  const concurrencyKeys: Array<[keyof GenerationConcurrencySettings, string]> = [['agent', '导演 Agent'], ['image', '图片'], ['video', '视频'], ['audio', '音频'], ['text', '文本'], ['render', '渲染']]
-
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const summary: string[] = []
-    for (const [key, label] of concurrencyKeys) if (concurrency[key] !== settings.generationConcurrency[key]) summary.push(`${label}并发`)
+    for (const [key, label] of CONCURRENCY_FIELDS) if (concurrency[key] !== settings.generationConcurrency[key]) summary.push(`${label}并发`)
     if (JSON.stringify(defaults) !== JSON.stringify(settings.generationDefaults)) summary.push('生成默认参数')
     onSave({ generationConcurrency: concurrency, generationDefaults: defaults }, summary)
   }
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
-      <AdminSectionCard title="生成并发限制" description="限制每类任务同时执行的数量，避免上游限流与本地资源耗尽。">
+      <AdminSectionCard title="默认生成并发" description="用于没有单独设置并发的个人权益方案。个人方案在「计费与权益」中覆盖；团队使用自己的团队与成员上限。">
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-3">
-          {concurrencyKeys.map(([key, label]) => (
+          {CONCURRENCY_FIELDS.map(([key, label]) => (
             <AdminField key={key} label={`${label}并发`}>
-              <AdminInput type="number" min="1" max="200" value={concurrency[key]} onChange={(event) => setConcurrency({ ...concurrency, [key]: Number(event.target.value) || 1 })} />
+              <AdminInput type="number" min="1" max="100" step="1" value={concurrency[key]} onChange={(event) => setConcurrency({ ...concurrency, [key]: Number(event.target.value) || 1 })} />
             </AdminField>
           ))}
         </fieldset>
@@ -638,7 +639,7 @@ function StorageSection({ storage, onReload, onMessage, onError }: { storage: Ob
 
   if (storage.provider === 'vercel-blob') return (
     <div className="flex flex-col gap-4">
-      <AdminNotice>Vercel Blob 私有存储由项目集成托管，无需填写 S3 访问密钥。素材通过鉴权接口读取，不对外暴露存储直链。</AdminNotice>
+      <AdminNotice>Vercel Blob 私有存储由项目集成托管，无需填写 S3 访问密钥。素材通过分享链接读取，上传和资产管理仍需登录。</AdminNotice>
       <AdminSectionCard title="对象存储 · Vercel Blob" description="连接由项目设置管理。检测会上传、读取并删除一个独立测试文件，不影响现有素材。" action={<StatusBadge tone={storage.enabled ? 'success' : 'muted'}>{storage.enabled ? '已启用' : '未启用'}</StatusBadge>}>
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">新素材保存至已连接的私有存储。切换存储前请先迁移已有素材，避免文件失联。</p>

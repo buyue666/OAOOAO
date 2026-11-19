@@ -7,7 +7,7 @@ import { ArrowRight, Check, ChevronDown, LoaderCircle } from 'lucide-react'
 import type { ModelConfig } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
 import { ModelIcon } from './model-icon'
-import { ModelNote } from './ui'
+import { ModelNote,ModelSubscriptionBadge } from './ui'
 
 type CreateMode = 'agent' | 'image' | 'video' | 'text'
 
@@ -200,18 +200,19 @@ function ModelPicker({ selectedModel, modelOptions, groupedModels, dropdownOpen,
                     type="button"
                     role="option"
                     aria-selected={selected}
-                    aria-description={item.note?.trim() || undefined}
-                    onClick={() => onSelectModel(item.id)}
-                    className={cn('flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors duration-150 hover:bg-muted focus-visible:bg-muted focus-visible:outline-none', selected && 'bg-studio-accent/10')}
+                    aria-description={item.subscriptionLocked?tx('需要订阅套餐才可使用'):item.note?.trim() || undefined}
+                    aria-disabled={item.subscriptionLocked||undefined} title={item.subscriptionLocked?tx('需要订阅套餐才可使用'):undefined} onClick={() => {if(!item.subscriptionLocked)onSelectModel(item.id)}}
+                    className={cn('flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors duration-150 hover:bg-muted focus-visible:bg-muted focus-visible:outline-none', selected && !item.subscriptionLocked && 'bg-studio-accent/10',item.subscriptionLocked&&'cursor-not-allowed text-muted-foreground')}
                   >
                     <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-studio-accent"><ModelIcon model={item} /></span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
-                        <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
-                        {item.note?.trim() && <ModelNote note={item.note} interactive={false} />}
-                        {selected && <Check className="size-3.5 shrink-0 text-studio-accent" aria-hidden="true" />}
+                        <span className={cn('truncate text-sm font-medium',item.subscriptionLocked?'text-muted-foreground':'text-foreground')}>{item.name}</span>
+                        <ModelSubscriptionBadge required={item.requiresSubscription} locked={item.subscriptionLocked}/>{item.note?.trim() && <ModelNote note={item.note} interactive={false} />}
+                        {selected && !item.subscriptionLocked && <Check className="size-3.5 shrink-0 text-studio-accent" aria-hidden="true" />}
                       </span>
                       <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-muted-foreground">{item.description || tx('当前可用模型')}</span>
+                      {item.subscriptionLocked&&<span data-model-disabled-reason className="mt-1 block text-xs font-medium leading-5 text-foreground">{tx('需要订阅套餐才可使用')}</span>}
                       <span className="mt-1 flex flex-wrap gap-1 text-xs text-muted-foreground">
                         {item.capabilities.ratios.length > 0 && <span className="rounded bg-muted px-1.5 py-0.5">{item.capabilities.ratios.slice(0, 3).join(' / ')}</span>}
                         {item.capabilities.durations.length > 0 && <span className="rounded bg-muted px-1.5 py-0.5">{item.capabilities.durations.slice(0, 3).join(' / ')}</span>}

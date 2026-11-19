@@ -1,4 +1,5 @@
 import type { CommercePolicy } from '@/lib/studio/commerce-policy'
+import type { ReactNode } from 'react'
 
 export type MembershipAudience = 'creator' | 'team'
 export type BillingCycle = 'annual' | 'quarterly' | 'monthly' | 'once'
@@ -25,6 +26,7 @@ export interface TierPricing {
   creditLabel?: string
   priceInCents?: number
   originalPriceInCents?: number
+  periodDays?: number
   renewalText?: string
   equivalentText?: string
 }
@@ -44,6 +46,7 @@ export interface TierDisplayPayload {
   extraBenefits?: string[]
   promotionBenefits?: PromotionBenefit[]
   generationSummary?: string
+  generationSummaryNote?: string
 }
 export interface MembershipTier {
   id: string
@@ -53,6 +56,7 @@ export interface MembershipTier {
   displayByCycle?: Partial<Record<BillingCycle, TierDisplayPayload>>
   // Legacy inputs are supported only when no cycle-specific map exists.
   generationSummary?: string
+  generationSummaryNote?: string
   dailyPoints?: number
   badge?: string
   promotionLabel?: string
@@ -108,6 +112,9 @@ export interface MembershipSelection {
 /** Storefront and editor preview share this consumer contract. */
 export interface MembershipPurchaseViewProps {
   storefront?: 'plans' | 'credits'
+  embedded?: boolean
+  paymentControl?: ReactNode
+  guest?: boolean
   commercePolicy?: CommercePolicy | null
   products: MembershipPlan[]
   campaign?: CampaignBannerConfig

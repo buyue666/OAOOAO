@@ -1,0 +1,32 @@
+{
+  "remix": {
+    "version": "0.1.0",
+    "fingerprint": "ce115f860e7b513105406790d529e557bd36de29814164367c97d6136bc365f6",
+    "files": 1
+  },
+  "tryon": {
+    "version": "0.1.0",
+    "fingerprint": "318dff876868c83ab6fb3e916dc1281286d3a95b303a873cfb64fb0f994869f0",
+    "files": 3
+  },
+  "agent": {
+    "version": "0.1.0",
+    "fingerprint": "d7c9b10753b102e5c3aecbe74017cb71d6f9e0a6d769b91583ea7f15ab025487",
+    "files": 5
+  },
+  "drama": {
+    "version": "0.1.2",
+    "fingerprint": "da231e6495bdb0b4af0e09f40a4f2e0a8ecc23b261967eaf98717b626118c94f",
+    "files": 9
+  },
+  "canvas": {
+    "version": "0.1.7",
+    "fingerprint": "dc534b1a0805983ecaf88c0b5138480abb06a9422f6cc78605ab94c46aba6b8f",
+    "files": 50
+  },
+  "director": {
+    "version": "0.1.0",
+    "fingerprint": "d003090622be9f765794f0ab61ab928ef9e35fa569de8c10a354a0e1a67c45a6",
+    "files": 13
+  }
+}

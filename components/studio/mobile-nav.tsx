@@ -10,6 +10,7 @@ import { useStudio } from '@/lib/studio/store'
 import { StudioNavLink, StudioToolsNav, studioAdminNav, studioPrimaryNav, studioSecondaryNav, studioSettingsNav } from './studio-nav'
 import { workspaceHref } from '@/lib/studio/workspace-navigation'
 import { useWorkspace } from '@/lib/studio/workspace-context'
+import { WechatContactButton } from './wechat-contact-button'
 
 function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => void }) {
   const tx = useUiText()
@@ -21,7 +22,7 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
   useEffect(() => {
     if (!open) return
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !event.defaultPrevented && !(event.target instanceof Element && event.target.closest('[data-wechat-contact-popover]'))) onClose()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
@@ -59,6 +60,7 @@ function MobileNavContent({ open, onClose }: { open: boolean; onClose: () => voi
           </nav>
           {showAdmin && <StudioNavLink item={studioAdminNav} pathname={pathname} onNavigate={onClose} />}
           <StudioNavLink item={studioSettingsNav} pathname={pathname} onNavigate={onClose} />
+          <WechatContactButton config={state.sessionSettings?.site?.wechatContact} mobile />
         </div>
       </aside>
     </div>

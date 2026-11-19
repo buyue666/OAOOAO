@@ -5,15 +5,19 @@ import { useRouter } from 'next/navigation'
 import { request } from './api'
 import { useStudio } from './store'
 import { normalizeInstalledPlugins, type CreativePluginId } from './creative-plugins'
+import { installedDirectorVersion, normalizePluginPreferences, type DirectorPluginVersion, type PluginPreferences } from './creative-plugin-versions'
 
-type PluginSnapshot = { owner: string; installed: CreativePluginId[] }
+type PluginSnapshot = { owner: string; installed: CreativePluginId[]; preferences: PluginPreferences }
 type PluginContextValue = {
   installed: readonly CreativePluginId[]
+  preferences: PluginPreferences
+  directorVersion: DirectorPluginVersion
   ready: boolean
   pending: CreativePluginId | null
   error: string
   isInstalled: (id: CreativePluginId) => boolean
   setInstalled: (id: CreativePluginId, installed: boolean) => Promise<boolean>
+  setDirectorVersion: (version: DirectorPluginVersion, autoUpdate?: boolean) => Promise<boolean>
 }
 const PluginContext = createContext<PluginContextValue | null>(null)
 
@@ -23,7 +27,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const owner = state.backendStatus === 'connected' ? state.user.id : ''
   const identity = useRef(owner)
   identity.current = owner
-  const [snapshot, setSnapshot] = useState<PluginSnapshot>({ owner: '', installed: [] })
+  const [snapshot, setSnapshot] = useState<PluginSnapshot>({ owner: '', installed: [], preferences: {} })
   const [operation, setOperation] = useState<{ owner: string; id: CreativePluginId } | null>(null)
   const [failure, setFailure] = useState({ owner: '', message: '' })
   const busy = useRef(false)
@@ -31,13 +35,15 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const ready = Boolean(owner && state.hydrated)
   const installed = useMemo(() => !ready ? [] : snapshot.owner === owner ? snapshot.installed
     : normalizeInstalledPlugins(state.sessionSettings?.installedPlugins), [ready, snapshot, owner, state.sessionSettings?.installedPlugins])
+  const preferences = useMemo(() => !ready ? {} : snapshot.owner === owner ? snapshot.preferences
+    : normalizePluginPreferences(state.sessionSettings?.pluginPreferences), [ready, snapshot, owner, state.sessionSettings?.pluginPreferences])
 
   const sync = useCallback(async () => {
     const account = identity.current, ticket = revision.current
     if (!account || busy.current) return
     try {
-      const result = await request<{ installedPlugins: unknown }>('/api/account/plugins')
-      if (identity.current === account && ticket === revision.current) setSnapshot({ owner: account, installed: normalizeInstalledPlugins(result.installedPlugins) })
+      const result = await request<{ installedPlugins: unknown; pluginPreferences?: unknown }>('/api/account/plugins')
+      if (identity.current === account && ticket === revision.current) setSnapshot({ owner: account, installed: normalizeInstalledPlugins(result.installedPlugins), preferences: normalizePluginPreferences(result.pluginPreferences) })
     } catch { /* Retain the last confirmed preference if the connection is unavailable. */ }
   }, [])
 
@@ -50,7 +56,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     return () => { window.removeEventListener('storage', onStorage); document.removeEventListener('visibilitychange', onFocus) }
   }, [owner, sync])
 
-  const setInstalled = useCallback(async (id: CreativePluginId, enabled: boolean) => {
+  const change = useCallback(async (id: CreativePluginId, patch: { installed: boolean } | { version: DirectorPluginVersion; autoUpdate: boolean }) => {
     const account = identity.current
     if (!account || busy.current) return false
     busy.current = true
@@ -58,30 +64,34 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     setOperation({ owner: account, id })
     setFailure({ owner: account, message: '' })
     try {
-      const result = await request<{ installedPlugins: unknown }>('/api/account/plugins', {
-        method: 'PATCH', body: JSON.stringify({ pluginId: id, installed: enabled }),
+      const result = await request<{ installedPlugins: unknown; pluginPreferences?: unknown }>('/api/account/plugins', {
+        method: 'PATCH', body: JSON.stringify({ pluginId: id, ...patch }),
       })
       if (identity.current !== account) return false
-      setSnapshot({ owner: account, installed: normalizeInstalledPlugins(result.installedPlugins) })
+      const confirmed = normalizePluginPreferences(result.pluginPreferences)
+      if ('version' in patch && (confirmed.director?.version !== patch.version || confirmed.director?.autoUpdate !== patch.autoUpdate)) throw Error('服务器尚未确认功能版本，请重试。')
+      setSnapshot({ owner: account, installed: normalizeInstalledPlugins(result.installedPlugins), preferences: confirmed })
       try { localStorage.setItem(`oao-plugins:${account}`, String(Date.now())) } catch {}
       // Refresh server-loaded canvas data only after installation is committed.
       router.refresh()
       void refreshSession()
       return true
     } catch (reason) {
-      if (identity.current === account) setFailure({ owner: account, message: reason instanceof Error ? reason.message : '插件设置保存失败，请重试。' })
+      if (identity.current === account) setFailure({ owner: account, message: reason instanceof Error ? reason.message : '功能设置保存失败，请重试。' })
       return false
     } finally {
       busy.current = false
       setOperation(current => current?.owner === account ? null : current)
     }
   }, [router, refreshSession])
+  const setInstalled = useCallback((id: CreativePluginId, enabled: boolean) => change(id, { installed: enabled }), [change])
+  const setDirectorVersion = useCallback((version: DirectorPluginVersion, autoUpdate = false) => change('director', { version, autoUpdate }), [change])
 
-  const value = useMemo<PluginContextValue>(() => ({ installed, ready,
+  const value = useMemo<PluginContextValue>(() => ({ installed, preferences, directorVersion: installedDirectorVersion(preferences), ready,
     pending: operation?.owner === owner ? operation.id : null,
     error: failure.owner === owner ? failure.message : '',
-    isInstalled: id => installed.includes(id), setInstalled,
-  }), [installed, ready, operation, failure, owner, setInstalled])
+    isInstalled: id => installed.includes(id), setInstalled, setDirectorVersion,
+  }), [installed, preferences, ready, operation, failure, owner, setInstalled, setDirectorVersion])
   return <PluginContext.Provider value={value}>{children}</PluginContext.Provider>
 }
 

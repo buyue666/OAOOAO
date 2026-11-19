@@ -1,6 +1,6 @@
 /** Human-readable names for persisted API identifiers. Keep identifiers intact in requests. */
 export const adminValueLabels: Record<string, string> = {
-  admin: '管理员', user: '普通用户', manual: '人工收款', epay: '易支付', alipay: '支付宝', wechat: '微信支付', stripe: 'Stripe',
+  admin: '管理员', user: '普通用户', manual: '历史人工收款', ciyuan_balance:'New API 余额支付', epay: '易支付', alipay: '支付宝', wechat: '微信支付', stripe: 'Stripe',
   text: '文本', image: '图片', video: '视频', audio: '音频', render: '成片合成',
   chat: '对话', agent: '创作助手', canvas: '自由画布', drama: '分镜项目', workbench: '创作工作台', team: '团队项目',
   registered: '已注册', qualified: '已达标', pending: '待处理', cooling: '冷静期中', cooling_off: '冷静期中',
@@ -21,7 +21,7 @@ export const currentAuditActionLabels: Record<string, string> = {
   'mail.test': '测试邮件服务', 'storage.update': '修改对象存储', 'storage.test': '测试对象存储',
   'announcement.create': '新增公告', 'announcement.update': '修改公告', 'announcement.delete': '删除公告',
   'site_popup.create': '新增推广弹窗', 'site_popup.update': '修改推广弹窗', 'site_popup.delete': '删除推广弹窗',
-  'account.check_in': '每日签到', 'watermark.preference': '修改水印偏好',
+  'account.check_in': '每日签到', 'watermark.preference': '修改水印偏好', 'account.adult_content': '修改成人内容设置',
   'billing.product.create': '新增商品', 'billing.product.update': '修改商品', 'billing.provider.update': '修改支付方式',
   'billing.order.closed': '关闭订单', 'billing.order.expired': '订单过期', 'billing.order.canceled': '取消订单',
   'billing.order.confirm_external_payment': '确认人工付款', 'billing.order.provider_settled': '支付平台确认到账',

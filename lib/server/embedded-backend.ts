@@ -49,7 +49,7 @@ function shouldWakeWorker(request: Request, status: number, payload: Buffer) {
   try {
     const body = JSON.parse(payload.toString('utf8'))
     const task = body.task || body.data || body.run
-    return !task?.needsReview && ['pending', 'planning', 'running'].includes(task?.status || task?.state)
+    return ['pending', 'planning', 'running'].includes(task?.status || task?.state)
   } catch { return false }
 }
 
@@ -61,6 +61,10 @@ export async function handleEmbeddedRequest(request: Request): Promise<Response>
   headers.origin = app.ctx.config.origin
   headers.referer = `${app.ctx.config.origin}/`
   headers['accept-encoding'] = 'identity'
+  delete headers['x-oao-media-delivery']
+  if (['GET', 'HEAD'].includes(request.method) && /^\/api\/(?:media|reference-assets|generation-log-assets)\/[a-f0-9-]{36}$/i.test(url.pathname)) {
+    headers['x-oao-media-delivery'] = request.headers.get('sec-fetch-dest') === 'empty' || request.headers.get('sec-fetch-mode') === 'cors' ? 'proxy' : 'direct'
+  }
   const upstream = await app.inject({
     method: request.method as HTTPMethods,
     url: `${url.pathname}${url.search}`,

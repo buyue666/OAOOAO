@@ -6,6 +6,7 @@ import ts from 'typescript'
 const read=path=>readFileSync(new URL(path,import.meta.url),'utf8')
 function compile(source,imports={}) {
   if (!imports['@/lib/studio/channel-model-catalog'] && source.includes('channel-model-catalog')) imports = { ...imports, '@/lib/studio/channel-model-catalog': compile(read('../lib/studio/channel-model-catalog.ts')) }
+  if (!imports['@/lib/studio/model-routing-patch'] && source.includes('model-routing-patch')) imports = { ...imports, '@/lib/studio/model-routing-patch': compile(read('../lib/studio/model-routing-patch.ts')) }
   const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText
   const module={exports:{}}
   new Function('require','module','exports',code)(name=>{assert.ok(name in imports,`Unexpected import ${name}`);return imports[name]},module,module.exports)
@@ -48,25 +49,34 @@ function harness(){
   return{render,save,saved,settings}
 }
 
-test('real routing editor keeps accounts collapsible, blocks conflicting prices and unifies from a chosen source',async()=>{
+test('real routing editor keeps accounts collapsible, preserves old prices and unifies from a chosen source',async()=>{
   const h=harness(),bindings=()=>h.render().filter(node=>node.type==='details'&&node.props.className.includes('admin-config-group rounded-xl'))
   assert.equal(bindings().length,2);assert.equal(bindings()[0].props.open,true);assert.equal(bindings()[1].props.open,false)
   const icons=h.render().filter(node=>node.type==='IconPicker')
   assert.equal(icons.length,1,'only the default model icon remains editable')
   assert.equal(icons[0].props['aria-label'],'video 默认模型图标')
   assert.equal(icons[0].props.value,h.settings.logicalModels[0].iconUrl)
-  await h.save();assert.equal(h.saved.length,0)
-  assert.ok(h.render().some(node=>text(node).includes('同上游渠道价格不一致')))
+  await h.save();assert.equal(h.saved.length,1)
+  assert.deepEqual(h.saved[0].logicalModels[0].bindings.map(binding=>binding.capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate),[1,2])
   const buttons=h.render().filter(node=>node.type==='Button'&&text(node)==='以此渠道价格统一')
   buttons[1].props.onClick()
-  await h.save();assert.equal(h.saved.length,1)
-  const [one,two]=h.saved[0].logicalModels[0].bindings
+  await h.save();assert.equal(h.saved.length,2)
+  const [one,two]=h.saved[1].logicalModels[0].bindings
   assert.equal(one.capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate,2)
   assert.equal(two.capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate,2)
   assert.equal(one.capabilityProfile.maxReferences,5);assert.equal(two.capabilityProfile.maxReferences,6)
   assert.equal(one.iconUrl,undefined);assert.equal(two.iconUrl,undefined,'saving removes obsolete binding icon overrides')
   assert.ok(h.settings.logicalModels[0].bindings[0].iconUrl,'opening does not alter saved settings')
   assert.equal(h.settings.logicalModels[0].bindings[0].capabilityProfile.videoPricing.resolutionPricing['720p'].generationRate,1,'opening and editing never mutates original settings')
+})
+
+test('subscription-only save submits model metadata without defaults or prices despite a legacy price conflict',async()=>{
+  const h=harness(),toggle=h.render().find(node=>node.props?.['aria-label']==='video 仅订阅套餐可用')
+  toggle.props.onChange({target:{checked:true}})
+  await h.save();assert.equal(h.saved.length,1)
+  assert.deepEqual(Object.keys(h.saved[0]),['logicalModels'])
+  assert.equal(h.saved[0].logicalModels[0].requiresSubscription,true)
+  assert.equal(h.settings.logicalModels[0].requiresSubscription,undefined)
 })
 
 test('real profile callbacks synchronize price changes but keep reference ceilings independent',async()=>{

@@ -31,11 +31,11 @@ export function buildVideoReferences(input: VideoReferencesInput): GenerationRef
   }
   if (input.mode === 'first') return [frame(input.first, 'first_frame')]
   if (input.mode === 'ends') return [frame(input.first, 'first_frame'), frame(input.last, 'last_frame')]
-  if (input.mode === 'edit') {
+  if (input.mode === 'edit' || input.mode === 'extend') {
     if (input.source.length !== 1 || input.source[0].type !== 'video' || !(input.source[0].url || input.source[0].dataUrl)) {
       throw new Error('请选择一个待编辑视频')
     }
-    return [{ ...input.source[0], role: 'reference' }]
+    const refs=[{ ...input.source[0], role: 'reference' as const },...input.references.map(item=>({...item,role:'reference' as const}))];if(refs.length>input.maxReferences)throw new Error(`参考素材最多 ${input.maxReferences} 个`);return refs
   }
   if (input.references.length > input.maxReferences) throw new Error(`参考素材最多 ${input.maxReferences} 个，请减少上传或选择的素材`)
   return input.references.map((item) => ({ ...item, role: 'reference' }))

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { httpError, object, pagination, string, transaction, type Context } from './core.js';
-import { decodeDataUrl, mediaPath, ownedMedia, sniffMedia, MAX_MEDIA_BYTES, MAX_VIDEO_BYTES } from './media.js';
+import { decodeDataUrl, mediaPath, ownedMedia, sniffMedia, MAX_MEDIA_BYTES, MAX_VIDEO_BYTES, mediaByteLimit } from './media.js';
 import { storageConfig, assertStorageConfigured, objectLocation, putObject, getObject, deleteObject, type ObjectLocation } from './object-storage.js';
 import { assertTeamStorage, lockTeam, projectVisibilitySql, requireTeam, requireTeamProject, teamEvent, type TeamRow } from './team-access.js';
 
@@ -14,7 +14,7 @@ export function teamAssetView(row: TeamRow) {
 
 export async function saveTeamAsset(ctx: Context, workspace: TeamWorkspace, actorId: string, input: { title: string; bytes?: Buffer; text?: string; sourceAssetId?: string }, trustedJob = false) {
   const bytes = input.bytes, mime = bytes ? sniffMedia(bytes) : 'text/plain', size = bytes?.length ?? Buffer.byteLength(input.text ?? '');
-  const limit = mime.startsWith('video/') ? MAX_VIDEO_BYTES : MAX_MEDIA_BYTES;
+  const limit = mediaByteLimit(mime);
   if (!size || size > limit || !bytes && size > 1024 * 1024) throw httpError(413, '素材为空或超过大小限制');
   const id = randomUUID(), title = string(input.title, '素材名称', 200), { teamId, projectId } = workspace;
   const prepared = await transaction(ctx.db, async db => {
@@ -69,11 +69,13 @@ export async function registerTeamAssets(app: FastifyInstance, ctx: Context) {
     await requireTeam(ctx.db, teamId, user.id);
     if (query.projectId) await requireTeamProject(ctx.db, teamId, user.id, query.projectId);
     const keyword = string(query.keyword ?? '', '搜索关键词', 200, true), kind = query.kind || '';
+    const ids = query.ids ? String(query.ids).split(',') : [];
+    if (ids.length && (!query.projectId || ids.length > 100 || ids.some(id => !/^[a-f0-9-]{36}$/i.test(id)))) throw httpError(400, '素材标识无效');
     if (kind && !['text','image','video','audio','media'].includes(kind)) throw httpError(400, '素材类型无效');
-    const rows = (await ctx.db.query(`SELECT a.*,u.display_name,u.username,count(*) OVER() total FROM oaooao_team_assets a JOIN oaooao_team_projects p ON p.id=a.project_id JOIN oaooao_team_members m ON m.team_id=p.team_id AND m.user_id=$2 JOIN oaooao_users u ON u.id=a.created_by WHERE a.team_id=$1 AND a.status='ready' AND ($3='' OR a.project_id=$3) AND ($6='' OR a.title ILIKE '%'||$6||'%') AND ($7='' OR a.kind=$7 OR ($7='media' AND a.kind<>'text')) AND ${projectVisibilitySql} ORDER BY a.created_at DESC,a.id LIMIT $4 OFFSET $5`, [teamId, user.id, query.projectId || '', page.pageSize, page.offset, keyword, kind])).rows;
+    const rows = (await ctx.db.query(`SELECT a.*,u.display_name,u.username,count(*) OVER() total FROM oaooao_team_assets a JOIN oaooao_team_projects p ON p.id=a.project_id JOIN oaooao_team_members m ON m.team_id=p.team_id AND m.user_id=$2 JOIN oaooao_users u ON u.id=a.created_by WHERE a.team_id=$1 AND a.status='ready' AND ($3='' OR a.project_id=$3) AND ($6='' OR a.title ILIKE '%'||$6||'%') AND ($7='' OR a.kind=$7 OR ($7='media' AND a.kind<>'text')) AND (cardinality($8::text[])=0 OR a.id=ANY($8::text[])) AND ${projectVisibilitySql} ORDER BY a.created_at DESC,a.id LIMIT $4 OFFSET $5`, [teamId, user.id, query.projectId || '', page.pageSize, page.offset, keyword, kind, ids])).rows;
     return { assets: rows.map(teamAssetView), total: Number(rows[0]?.total ?? 0) };
   });
-  app.post('/api/teams/:teamId/projects/:projectId/assets', { bodyLimit: 34 * 1024 * 1024 }, async request => {
+  app.post('/api/teams/:teamId/projects/:projectId/assets', { bodyLimit: MAX_VIDEO_BYTES + 1024 * 1024 }, async request => {
     const user = await ctx.requireUser(request), workspace = request.params as TeamWorkspace;
     await requireTeamProject(ctx.db, workspace.teamId, user.id, workspace.projectId, 'write');
     if (request.isMultipart()) {

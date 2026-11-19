@@ -9,9 +9,9 @@ import type {
 } from '@/components/membership/types'
 
 export const billingOptions: BillingOption[] = [
-  { value: 'annual', label: '年付', priceSuffix: '年' },
-  { value: 'quarterly', label: '季付', priceSuffix: '季' },
   { value: 'monthly', label: '月付', priceSuffix: '月' },
+  { value: 'quarterly', label: '季付', priceSuffix: '季' },
+  { value: 'annual', label: '年付', priceSuffix: '年' },
   { value: 'once', label: '积分包', priceSuffix: '次' },
 ]
 export const tones: PlanTone[] = ['standard', 'advanced', 'premium', 'luxury', 'ultimate']
@@ -71,17 +71,11 @@ function configuredBenefitsFor(product: BillingProduct): string[] {
   return configured.length ? configured : stringList(metadata.benefits)
 }
 
-/**
- * 一件商品的权益行：**该商品自己配置的权益** + 它自己的「每日 N 积分」。
- *
- * 与分组无关：同一 `tierId` 的月付/季付/年付是不同商品，权益行各自独立。
- */
 function benefitRowsFor(product: BillingProduct): string[] {
-  const dailyRow = product.productKind === 'plan' && product.dailyPoints > 0 ? `每日 ${product.dailyPoints.toLocaleString('zh-CN')} 积分` : ''
-  const benefits = [...configuredBenefitsFor(product)]
-  if (dailyRow && !benefits.includes(dailyRow)) benefits.push(dailyRow)
-  if (!benefits.length) benefits.push(...[product.description, dailyRow].filter(Boolean) as string[])
-  return benefits
+  const configured = configuredBenefitsFor(product)
+  const rows = configured.length ? configured : product.description ? [product.description] : []
+  // The structured reward is shown once in the credit summary. Ignore old auto-grant copy.
+  return product.productKind === 'plan' ? rows.filter(line => !/(?:每日|每天).{0,10}(?:积分|签到)/u.test(line)) : rows
 }
 
 /**
@@ -111,6 +105,7 @@ function displayPayloadFor(product: BillingProduct, automaticTone: PlanTone): Ti
     generationSummary: typeof display.generationSummary === 'string' && display.generationSummary.trim()
       ? display.generationSummary.trim()
       : undefined,
+    generationSummaryNote: typeof display.generationSummaryNote === 'string' ? display.generationSummaryNote.trim() || undefined : undefined,
   }
 }
 
@@ -139,6 +134,7 @@ export function resolveTierDisplay(tier: MembershipTier, cycle: BillingCycle): T
       exclusiveBenefits: tier.exclusiveBenefits,
       extraBenefits: tier.extraBenefits,
       generationSummary: tier.generationSummary,
+      generationSummaryNote: tier.generationSummaryNote,
     }
   }
   return emptyTierDisplay()
@@ -156,6 +152,7 @@ export function emptyTierDisplay(): TierDisplayPayload {
     extraBenefits: [],
     promotionBenefits: [],
     generationSummary: undefined,
+    generationSummaryNote: undefined,
   }
 }
 
@@ -179,13 +176,7 @@ export function toMembershipPlans(products: BillingProduct[]): MembershipPlan[] 
        * 早先的实现把兜底数组放在三元的 else 分支里，运营一填「基础权益」，
        * 每日积分那一行就整段消失——编辑「每日积分」看起来毫无反应。
        */
-      const configuredBenefits = stringList(display.benefits).length ? stringList(display.benefits) : stringList(metadata.benefits)
-      const dailyRow = product.productKind === 'plan' && product.dailyPoints > 0 ? `每日 ${product.dailyPoints.toLocaleString('zh-CN')} 积分` : ''
-      const baseBenefits = [...configuredBenefits]
-      if (dailyRow && !baseBenefits.includes(dailyRow)) baseBenefits.push(dailyRow)
-      if (!baseBenefits.length) {
-        baseBenefits.push(...[product.description, dailyRow].filter(Boolean) as string[])
-      }
+      const baseBenefits = benefitRowsFor(product)
       const listCents = product.pricing?.listUnitAmountCents ?? product.amountCents
       const saleCents = product.pricing?.saleUnitAmountCents ?? product.amountCents
       plan = {
@@ -248,11 +239,13 @@ export function toMembershipPlans(products: BillingProduct[]): MembershipPlan[] 
       exclusiveBenefits: payload.exclusiveBenefits,
       extraBenefits: payload.extraBenefits,
       generationSummary: payload.generationSummary,
+      generationSummaryNote: payload.generationSummaryNote,
     })
     tier.pricing[cycle] = {
       productId: product.id, currency: product.currency, priceInCents: price,
       originalPriceInCents: price < product.amountCents ? product.amountCents : undefined,
       credits: product.pointsAmount, creditLabel: '积分 / 次发放',
+      periodDays: product.periodDays,
       renewalText: product.productKind === 'points' ? '一次性购买' : `整期 ${product.periodDays} 天，一次支付`,
     }
   }

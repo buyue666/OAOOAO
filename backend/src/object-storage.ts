@@ -76,9 +76,9 @@ export async function deleteObject(ctx: Context, location: ObjectLocation) {
   if (location.provider === 'vercel-blob') return blobDelete(location.key);
   return objectOperation(ctx,await storageConfig(ctx),location,c=>c.send(new DeleteObjectCommand({Bucket:location.bucket,Key:location.key})));
 }
-export async function downloadObjectUrl(ctx: Context, location: ObjectLocation, lifetime=300) {
+export async function downloadObjectUrl(ctx: Context, location: ObjectLocation, lifetime=300, response:{contentDisposition?:string;contentType?:string}={}) {
   if (location.provider === 'vercel-blob') throw httpError(403, '私有文件必须通过鉴权接口读取');
-  return objectOperation(ctx,await storageConfig(ctx),location,c=>getSignedUrl(c,new GetObjectCommand({Bucket:location.bucket,Key:location.key}),{expiresIn:lifetime}));
+  return objectOperation(ctx,await storageConfig(ctx),location,c=>getSignedUrl(c,new GetObjectCommand({Bucket:location.bucket,Key:location.key,ResponseContentDisposition:response.contentDisposition,ResponseContentType:response.contentType}),{expiresIn:lifetime}));
 }
 export async function verifyStorage(ctx: Context, config: StorageConfig) {
   const location=objectLocation(config,'connection-check',randomUUID()),bytes=Buffer.from('OAOOAO storage verification');

@@ -73,6 +73,8 @@ export type GenerationHistoryItem = {
   settings?: { modelId?: string; ratio?: string; resolution?: string; quality?: string; count?: number }
   source?: string
   durationMs?: number
+  durationSeconds?:number
+  lastFrameUrl?:string
   pointsCost?: number
   pointsRefunded?: boolean
   assets: GenerationAsset[]
@@ -103,6 +105,8 @@ export type StudioWork = {
   category?: AssetCategory
   prompt: string
   durationMs?: number
+  durationSeconds?:number
+  lastFrameUrl?:string
   taskStatus: string
   /** All outputs from the same generation record; `src` remains the selected/first output for compatibility. */
   assets?: GenerationAsset[]
@@ -156,6 +160,8 @@ function toHistoryItem(raw: Record<string, unknown>): GenerationHistoryItem | nu
     category: raw.category === 'character' || raw.category === 'scene' || raw.category === 'prop' || raw.category === 'style' || raw.category === 'garment' ? raw.category : 'general',
     source: raw.source ? String(raw.source) : undefined,
     durationMs: Number(raw.durationMs) || undefined,
+    durationSeconds:raw.result&&typeof raw.result==='object'?Number((raw.result as Record<string,unknown>).durationSeconds)||undefined:undefined,
+    lastFrameUrl:raw.result&&typeof raw.result==='object'&&typeof (raw.result as Record<string,unknown>).lastFrameUrl==='string'?(raw.result as Record<string,string>).lastFrameUrl:undefined,
     pointsCost: Number(raw.pointsCost) || Number(billing?.pointsCost) || undefined,
     pointsRefunded: raw.pointsRefunded === true || billing?.refunded === true,
     assets,
@@ -190,6 +196,7 @@ export function historyToWorks(items: GenerationHistoryItem[]): StudioWork[] {
         category: item.category,
         prompt: item.prompt,
         durationMs: item.durationMs,
+        durationSeconds:item.durationSeconds,lastFrameUrl:item.lastFrameUrl,
         taskStatus: item.status,
         assets: item.assets,
         groupId: item.id,

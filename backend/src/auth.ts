@@ -1,11 +1,12 @@
 import { pbkdf2, randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import bcrypt from 'bcryptjs';
+import { argon2id } from 'hash-wasm';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PoolClient } from 'pg';
 import { type AppUser, type Context, ADMIN_PERMISSIONS, codeHash, hashToken, hasPermission, httpError, object, pagination, rateLimit, string, transaction, userFromRow } from './core.js';
 import { getSettings, publicSettings, sendMail } from './settings.js';
-import { getWallet, setPermanentBalance, assignAdminPlan, getPlanSummary } from './wallet.js';
+import { activeBatchAssignment, getWallet, setPermanentBalance, assignAdminPlan, getPlanSummary } from './wallet.js';
 import { recordReferral } from './commerce.js';
 import { registerWechatOfficial } from './wechat.js';
 import type {WechatQrProvider} from './wechat-protocol.js';
@@ -25,6 +26,15 @@ const derivePbkdf2=promisify(pbkdf2);
 export async function verifyPassword(password:string,encoded:string):Promise<boolean>{
   if(Buffer.byteLength(password,'utf8')>4096)return false;
   if(/^\$2[aby]\$\d\d\$/.test(encoded))return Buffer.byteLength(password,'utf8')<=72&&bcrypt.compare(password,encoded);
+  // Reuse existing Lunapi credentials without accepting unbounded KDF parameters.
+  if(encoded.startsWith('$argon2id$')){
+    const match=/^\$argon2id\$v=19\$m=19456,t=2,p=1\$([A-Za-z0-9+/]{22})\$([A-Za-z0-9+/]{43})$/.exec(encoded);
+    if(!match||Buffer.byteLength(password,'utf8')>512)return false;
+    const salt=Buffer.from(match[1],'base64'),expected=Buffer.from(match[2],'base64');
+    if(salt.toString('base64').replace(/=+$/,'')!==match[1]||expected.toString('base64').replace(/=+$/,'')!==match[2])return false;
+    const actual=await argon2id({password,salt,parallelism:1,iterations:2,memorySize:19456,hashLength:32,outputType:'binary'});
+    return timingSafeEqual(actual,expected);
+  }
   const fields=encoded.split('$');
   if(fields.length!==4||fields[0]!=='pbkdf2_sha256'||!/^\d{1,7}$/.test(fields[1])||fields[2].length!==22||!/^[A-Za-z0-9_-]{43}$/.test(fields[3]))return false;
   const iterations=Number(fields[1]);if(iterations<10000||iterations>2000000)return false;
@@ -72,7 +82,9 @@ export async function registerAuth(app:FastifyInstance,ctx:Context,options:{wech
   });
   app.post('/api/auth/logout',async(request,reply)=>{const token=request.cookies[ctx.config.sessionCookieName];if(token)await ctx.db.query('DELETE FROM oaooao_sessions WHERE token_hash=$1',[hashToken(token)]);reply.clearCookie(ctx.config.sessionCookieName,{path:'/'});return {ok:true};});
   app.post('/api/auth/register',async(request,reply)=>{
-    await rateLimit(ctx,`register-ip:${request.ip}`,5,3600);const settings=await getSettings(ctx);if(!settings.registrationEnabled)throw httpError(403,'Registration is disabled');
+    const settings=await getSettings(ctx);if(!settings.registrationEnabled)throw httpError(403,'Registration is disabled');
+    const registrationLimit=settings.registrationRateLimit;
+    if(registrationLimit?.enabled===true)await rateLimit(ctx,`register-ip:${request.ip}:${registrationLimit.maxAttempts}:${registrationLimit.windowSeconds}`,registrationLimit.maxAttempts,registrationLimit.windowSeconds);
     const body=object(request.body);if(body.policyAccepted!==true)throw httpError(400,'Terms and privacy acceptance is required');
     const username=validateUsername(body.username),password=validatePassword(body.password),email=normalizeEmail(body.email,true);
     if(settings.emailRegistrationEnabled&&!email)throw httpError(400,'A verified email is required');
@@ -109,17 +121,22 @@ export async function registerAuth(app:FastifyInstance,ctx:Context,options:{wech
     const settings=await getSettings(ctx);if(!settings.mail.host||!settings.mail.fromEmail)throw httpError(503,'Email delivery is not configured');
     if(purpose==='register'&&!settings.registrationEnabled)throw httpError(403,'Registration is disabled');
     const user=purpose==='email-change'?await ctx.requireUser(request):null;
-    await rateLimit(ctx,`email-code-ip:${request.ip}`,10,3600);await rateLimit(ctx,`email-code:${email}:${purpose}`,1,60);await rateLimit(ctx,`email-code-day:${email}`,10,86400);
-    const exists=(await ctx.db.query('SELECT id FROM oaooao_users WHERE lower(email)=$1 AND email_verified=true AND enabled=true',[email])).rowCount;
-    if((purpose==='password-reset'&&!exists)||(purpose==='register'&&exists))return {ok:true,expiresInSeconds:600};
+    await rateLimit(ctx,`email-code-ip:${request.ip}`,10,3600);
+    // Imported accounts may have an email without the newer verification flag.
+    // Ownership is proven by consuming this freshly mailed code, not by a legacy flag.
+    const account=(await ctx.db.query('SELECT enabled FROM oaooao_users WHERE lower(email)=$1',[email])).rows[0];
+    const english=String(request.headers['accept-language']||'').toLowerCase().startsWith('en');
+    if(purpose==='register'&&account)throw httpError(409,english?'This email is already registered. Sign in or use password recovery.':'该邮箱已注册，请登录或使用“找回密码”。');
+    if(purpose==='password-reset'&&!account?.enabled)return {ok:true,expiresInSeconds:600};
+    await rateLimit(ctx,`email-code:${email}:${purpose}`,1,60);await rateLimit(ctx,`email-code-day:${email}`,10,86400);
     const code=String(randomInt(0,1000000)).padStart(6,'0'),id=randomUUID();await ctx.db.query('INSERT INTO oaooao_email_codes(id,email,purpose,user_id,code_hash,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval \'10 minutes\')',[id,email,purpose,user?.id||null,codeHash(ctx,`${email}:${purpose}:${code}`)]);
-    try{await sendMail(ctx,settings.mail,email,'OAOOAO verification code',`Your verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this message.`);await ctx.db.query('UPDATE oaooao_email_codes SET sent_at=now() WHERE id=$1',[id]);}
+    try{await sendMail(ctx,settings.mail,email,english?'OAO verification code':'OAO 邮箱验证码',english?`Your verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this message.`:`您的验证码是 ${code}，10 分钟内有效。请勿向他人透露。如非本人操作，请忽略此邮件。`);await ctx.db.query('UPDATE oaooao_email_codes SET sent_at=now() WHERE id=$1',[id]);}
     catch(error){await ctx.db.query('DELETE FROM oaooao_email_codes WHERE id=$1',[id]);throw error;}
     return {ok:true,expiresInSeconds:600};
   });
   app.post('/api/auth/password/reset',async(request,reply)=>{
     const body=object(request.body),email=normalizeEmail(body.email)!,password=validatePassword(body.newPassword);await codeAttempt(ctx,email,'password-reset',request.ip);const hash=await bcrypt.hash(password,12);
-    await transaction(ctx.db,async client=>{await consumeCode(ctx,client,email,'password-reset',body.code);const {rows}=await client.query('UPDATE oaooao_users SET password_hash=$2,updated_at=now() WHERE lower(email)=$1 AND email_verified=true AND enabled=true RETURNING id',[email,hash]);if(!rows[0])throw httpError(400,'Verification code is invalid or expired');await client.query('DELETE FROM oaooao_sessions WHERE user_id=$1',[rows[0].id]);await ctx.audit({actorId:rows[0].id,action:'auth.password.reset',targetType:'user',targetId:rows[0].id},client);});reply.clearCookie(ctx.config.sessionCookieName,{path:'/'});return {ok:true};
+    await transaction(ctx.db,async client=>{await consumeCode(ctx,client,email,'password-reset',body.code);const {rows}=await client.query('UPDATE oaooao_users SET password_hash=$2,email_verified=true,updated_at=now() WHERE lower(email)=$1 AND enabled=true RETURNING id',[email,hash]);if(!rows[0])throw httpError(400,'Verification code is invalid or expired');await client.query('DELETE FROM oaooao_sessions WHERE user_id=$1',[rows[0].id]);await ctx.audit({actorId:rows[0].id,action:'auth.password.reset',targetType:'user',targetId:rows[0].id},client);});reply.clearCookie(ctx.config.sessionCookieName,{path:'/'});return {ok:true};
   });
   await registerWechatOfficial(app,ctx,verifyPassword,options.wechatProvider);
 
@@ -132,7 +149,7 @@ export async function registerAuth(app:FastifyInstance,ctx:Context,options:{wech
     const count=await ctx.db.query(`SELECT count(*) FROM oaooao_users ${where}`,params);params.push(pageSize,offset);
     const {rows}=await ctx.db.query(`SELECT * FROM oaooao_users ${where} ORDER BY created_at DESC,id DESC LIMIT $${params.length-1} OFFSET $${params.length}`,params);
     const summary=(await ctx.db.query("SELECT count(*) AS total,count(*) FILTER(WHERE enabled) AS active,count(*) FILTER(WHERE NOT enabled) AS disabled,count(*) FILTER(WHERE role='admin') AS admins,count(*) FILTER(WHERE role='admin' AND enabled) AS active_admins,count(*) FILTER(WHERE plan_id IS NOT NULL) AS users_with_plan FROM oaooao_users")).rows[0];
-    const balance=(await ctx.db.query('SELECT (SELECT coalesce(sum(permanent_balance+CASE WHEN daily_expires_at>clock_timestamp() THEN daily_balance ELSE 0 END),0) FROM oaooao_wallets)+(SELECT coalesce(sum(remaining_amount),0) FROM oaooao_credit_batches WHERE expired_at IS NULL AND expires_at>clock_timestamp()) AS total')).rows[0];
+    const balance=(await ctx.db.query(`SELECT (SELECT coalesce(sum(permanent_balance+CASE WHEN daily_expires_at>clock_timestamp() THEN daily_balance ELSE 0 END),0) FROM oaooao_wallets)+(SELECT coalesce(sum(remaining_amount),0) FROM oaooao_credit_batches b WHERE expired_at IS NULL AND expires_at>clock_timestamp() AND (membership_assignment_at IS NULL OR ${activeBatchAssignment})) AS total`)).rows[0];
     return {users:await Promise.all(rows.map(row=>viewUser(ctx,userFromRow(row)))),total:Number(count.rows[0].count),page,pageSize,summary:{total:Number(summary.total),active:Number(summary.active),disabled:Number(summary.disabled),admins:Number(summary.admins),activeAdmins:Number(summary.active_admins),usersWithPlan:Number(summary.users_with_plan),totalPointsBalance:Number(balance.total)}};
   });
   async function writeUser(request:any,isNew:boolean){

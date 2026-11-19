@@ -27,6 +27,8 @@ function load(source, mocks = {}) {
   new Function('require', 'module', 'exports', compile(source))((name) => {
     if (Object.hasOwn(mocks, name)) return mocks[name]
     if (name === '@/lib/studio/i18n') return chineseLocale
+    if (name === '@/lib/studio/store') return { useStudio: () => ({ state: { sessionSettings: { logicalModels: [] } } }) }
+    if (name === '@/lib/studio/model-display') return load(readFileSync(new URL('../lib/studio/model-display.ts', import.meta.url), 'utf8'))
     if (name === './ui') return ui
     if (name === '@/lib/utils') return { cn: (...items) => items.filter(Boolean).join(' ') }
     return require(name)

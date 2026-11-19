@@ -1,8 +1,11 @@
 import { createRequire } from 'node:module'
 import { withWorkflow } from 'workflow/next'
 const require = createRequire(import.meta.url)
+const deploymentId = process.env.NEXT_DEPLOYMENT_ID || 'oao-public-0.1'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  deploymentId,
+  generateBuildId: async () => deploymentId,
   webpack(config) {
     config.cache = false
     config.resolve.extensionAlias = { ...config.resolve.extensionAlias, '.js': ['.ts', '.tsx', '.js'] }

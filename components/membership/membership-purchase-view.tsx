@@ -4,12 +4,13 @@ import { useRef, useState, type CSSProperties } from 'react'
 import { Button } from '@/components/ui/button'
 import { planNeedsFold } from './benefits'
 import { PlanCard } from './plan-card'
+import { CreditPackagePicker } from './credit-package-picker'
 import { isCurrentSelection, liveSelection, selectedBenefits, validPricing } from './purchase-helpers'
 import { policyCanBeReviewed, PurchaseConfirmation } from './purchase-confirmation'
 import type { BillingCycle, MembershipAudience, MembershipPurchaseViewProps, MembershipSelection } from './types'
 import styles from './membership.module.css'
 
-export function MembershipPurchaseView({ storefront = 'plans', products, campaign, billingOptions, generationColumns, generationRows, faqItems, currentMembership, initialAudience, initialBillingCycle, controlledAudience, controlledBillingCycle, onAudienceChange, onBillingCycleChange, onTierChange, commercePolicy, status = 'ready', errorMessage, onRetry, preview = false, interactive = true, showMoreDefault = false, onSelectPlan, onClose }: MembershipPurchaseViewProps) {
+export function MembershipPurchaseView({ storefront = 'plans', embedded = false, paymentControl, guest, products, campaign, billingOptions, generationColumns, generationRows, faqItems, currentMembership, initialAudience, initialBillingCycle, controlledAudience, controlledBillingCycle, onAudienceChange, onBillingCycleChange, onTierChange, commercePolicy, status = 'ready', errorMessage, onRetry, preview = false, interactive = true, showMoreDefault = false, onSelectPlan, onClose }: MembershipPurchaseViewProps) {
   const creditsStore = storefront === 'credits'
   const [localAudience, setLocalAudience] = useState<MembershipAudience>(initialAudience ?? products[0]?.audience ?? 'creator')
   const [localCycle, setLocalCycle] = useState<BillingCycle>(initialBillingCycle ?? billingOptions[0]?.value ?? 'monthly')
@@ -32,6 +33,10 @@ export function MembershipPurchaseView({ storefront = 'plans', products, campaig
     return tier ? [{ plan, tier }] : []
   }) : []
   const folds = offers.some(({ plan, tier }) => planNeedsFold(selectedBenefits(plan, tier, cycle)))
+  const packages = creditsStore && embedded ? visiblePlans.filter(plan => !plan.disabled).flatMap(plan => plan.tiers.flatMap(tier => {
+    const pricing = tier.pricing.once
+    return validPricing(pricing) ? [{ plan, tier, pricing, billingCycle: 'once' as const }] : []
+  })) : []
   const canPurchase = interactive && !preview && status === 'ready'
   const policyIdentity = commercePolicy ? JSON.stringify(commercePolicy) : ''
   const agreed = Boolean(agreementPolicy) && agreementPolicy === policyIdentity
@@ -83,20 +88,20 @@ export function MembershipPurchaseView({ storefront = 'plans', products, campaig
     }
   }
 
-  return <section className={`${styles.themeScope} ${styles.viewportScope} ${preview ? styles.previewRoot : styles.storeRoot}`} aria-label={creditsStore ? '积分超市' : '会员套餐'} aria-busy={busy || status === 'loading'} data-storefront={storefront}>
+  return <section className={`${styles.themeScope} ${styles.viewportScope} ${embedded ? styles.embeddedPurchase : preview ? styles.previewRoot : styles.storeRoot}`} aria-label={creditsStore ? '积分包与结算' : '会员套餐对比'} aria-busy={busy || status === 'loading'} data-storefront={storefront}>
     <div className={styles.storeContent}>
-      <header className={styles.storeHeader}>
+      {!embedded && <header className={styles.storeHeader}>
         <div><p className={styles.storeEyebrow}>{creditsStore ? '积分超市' : '创作会员'}</p><h1>{creditsStore ? '给灵感，多一点可能' : '为下一部作品，选好创作空间'}</h1><p className={styles.storeIntro}>{creditsStore ? '无需开通会员，按需购买，支付确认后计入账户。' : '选择适合你的套餐，积分与权益清晰可见。'}</p></div>
         <button className={styles.exitButton} type="button" aria-label="关闭并返回" disabled={busy} onClick={onClose}><span aria-hidden="true">×</span><span>返回</span></button>
-      </header>
+      </header>}
       {campaign ? <aside className={styles.campaignPanel}><img src={campaign.imageSrc} alt={campaign.imageAlt} /><div><p>{campaign.title}</p><span>{campaign.subtitle}</span></div></aside> : null}
-      {!creditsStore ? <div className={styles.browseBar}>
+      {!creditsStore && (audiences.length > 1 || browseOptions.length > 1) ? <div className={styles.browseBar}>
         {audiences.length > 1 ? <div className={styles.browseGroup} role="group" aria-label="会员类型">{audiences.map(value => <button type="button" key={value} aria-pressed={audience === value} disabled={busy} onClick={() => changeAudience(value)}>{value === 'team' ? '团队版' : '创作会员'}</button>)}</div> : null}
-        <div className={styles.browseGroup} role="group" aria-label="付款周期">{browseOptions.map(item => <button type="button" key={item.value} aria-pressed={cycle === item.value} disabled={busy} onClick={() => changeCycle(item.value)}>{item.label}</button>)}</div>
+        {browseOptions.length > 1 ? <div className={styles.browseGroup} role="group" aria-label="付款周期">{browseOptions.map(item => <button type="button" key={item.value} aria-pressed={cycle === item.value} disabled={busy} onClick={() => changeCycle(item.value)}>{item.label}</button>)}</div> : null}
       </div> : null}
       {preview || !interactive ? <p className={styles.previewNotice}>仅供预览 · 可切换商品选项，购买功能已关闭。</p> : null}
 
-      {status === 'loading' ? <div className={styles.catalogState} role="status">正在读取商品与价格…</div> : status === 'error' ? <div className={styles.catalogState} role="alert"><p>{errorMessage || '商品加载失败。'}</p>{onRetry ? <Button type="button" onClick={onRetry}>重新加载</Button> : null}</div> : offers.length ? <>
+      {status === 'loading' ? <div className={styles.catalogState} role="status">正在读取商品与价格…</div> : status === 'error' ? <div className={styles.catalogState} role="alert"><p>{errorMessage || '商品加载失败。'}</p>{onRetry ? <Button type="button" onClick={onRetry}>重新加载</Button> : null}</div> : embedded && creditsStore ? <CreditPackagePicker packages={packages} paymentControl={paymentControl} busy={busy} canPurchase={canPurchase} onReview={review} /> : offers.length ? <>
         <div className={styles.planGrid} style={{ '--plan-count': offers.length } as CSSProperties}>
           {offers.map(({ plan, tier }) => <PlanCard key={plan.id} plan={plan} tier={tier} billingCycle={cycle} billingOption={option!} showMore={showMore} isCurrent={isCurrentSelection({ plan, tier, billingCycle: cycle }, currentMembership)} interactive={canPurchase} busy={busy} onTierChange={next => { if (purchaseLock.current) return; setTierIds(previous => ({ ...previous, [plan.id]: next.id })); onTierChange?.(plan.id, next.id) }} onSelect={review} onInstallment={() => undefined} />)}
         </div>
@@ -106,6 +111,6 @@ export function MembershipPurchaseView({ storefront = 'plans', products, campaig
       {generationColumns.length > 0 && generationRows.length > 0 ? <section className={styles.detailSection} aria-label="商品能力对比"><h2>商品能力对比</h2><div className={styles.comparisonScroll} tabIndex={0}><table><caption>以下数值由商品配置提供</caption><thead><tr><th scope="col">项目</th>{generationColumns.map(column => <th scope="col" key={column.id}>{column.label}</th>)}</tr></thead><tbody>{generationRows.map((row, index) => <tr key={`${row.name}-${index}`}><th scope="row">{row.name}（{row.unit}）</th>{generationColumns.map(column => <td key={column.id}>{row.values[column.id] ?? '—'}</td>)}</tr>)}</tbody></table></div></section> : null}
       {faqItems.length > 0 ? <section className={styles.detailSection} aria-label="购买常见问题"><h2>常见问题</h2>{faqItems.map((item, index) => <details className={styles.questionRow} key={`${index}-${item.question}`}><summary>{item.question}</summary>{item.answer ? <p>{item.answer}</p> : null}</details>)}</section> : null}
     </div>
-    {selection && canPurchase ? <PurchaseConfirmation selection={selection} billingOption={billingOptions.find(item => item.value === selection.billingCycle)} commercePolicy={commercePolicy} agreed={agreed} busy={busy} error={purchaseError} onAgreementChange={value => setAgreementPolicy(value ? policyIdentity : '')} onConfirm={confirm} onCancel={cancelReview} /> : null}
+    {selection && canPurchase ? <PurchaseConfirmation selection={selection} billingOption={billingOptions.find(item => item.value === selection.billingCycle)} commercePolicy={commercePolicy} paymentControl={paymentControl} guest={guest} agreed={agreed} busy={busy} error={purchaseError} onAgreementChange={value => setAgreementPolicy(value ? policyIdentity : '')} onConfirm={confirm} onCancel={cancelReview} /> : null}
   </section>
 }

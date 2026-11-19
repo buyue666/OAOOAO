@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { BadgePercent, CircleDollarSign, Copy, Gift, Hourglass, Pencil, Plus, RefreshCw, RotateCcw, Save, Ticket, Users } from 'lucide-react'
+import { MEMBERSHIP_CHECK_IN_VALIDITY_LABEL } from '@/backend/src/membership-policy'
+import { BENEFIT_FOLD_THRESHOLD } from '@/components/membership/benefits'
 import {
   closeBillingOrder,
   cancelBillingOrderRefund,
@@ -30,7 +32,7 @@ import {
 import type { BillingOrder, BillingProduct, CouponTemplate, FinanceSummary, PromotionCampaign, ReferralOverview, ReferralRelationship, ReferralReward } from '@/lib/studio/admin-types'
 import { discountLabelOf, objectValue } from '@/lib/studio/membership'
 import { adminValueLabel } from '@/lib/studio/admin-labels'
-import { draftToPayload, emptyDraft, linesToList, productToDraft, resolvePreviewPricing, resolvePromotionForAmount, validateDraft, type ProductDraft } from '@/lib/studio/product-draft'
+import { draftToPayload, emptyDraft, linesToList, productToDraft, renameProductDraft, resolvePreviewPricing, resolvePromotionForAmount, validateDraft, type ProductDraft } from '@/lib/studio/product-draft'
 import { buildPromotionPayload, buildPromotionRemoval, findPromotionForProduct, promotionAmountFor, validatePromotionAmount } from '@/lib/studio/promotion-draft'
 import { diffProductDraft, hasSensitiveDiff, type DraftDiffEntry } from '@/lib/studio/product-diff'
 import { StudioApiError } from '@/lib/studio/api'
@@ -100,16 +102,17 @@ export function AdminProductsPanel() {
 
   const toggle = useCallback((product: BillingProduct) => {
     const disabling = product.enabled
+    const blocked = !disabling && Boolean(product.saleBlockers?.length)
     confirm.confirm({
       title: disabling ? `下架商品「${product.name}」？` : `上架商品「${product.name}」？`,
-      description: disabling ? '下架后订阅页不再展示该商品，已产生的订单不受影响。' : '上架后商品会立即出现在订阅页可选列表中。',
+      description: disabling ? '下架后订阅页不再展示该商品，已产生的订单不受影响。' : blocked ? `会保存上架状态。完成以下设置后商品才会公开：${product.saleBlockers!.join('；')}。` : '上架后商品会出现在公开购买页。',
       confirmLabel: disabling ? '确认下架' : '确认上架',
       tone: disabling ? 'danger' : 'default',
       onConfirm: async () => {
         setBusy(product.id)
         try {
           await updateBillingProduct(product.id, { enabled: !product.enabled })
-          setMessage(disabling ? '商品已下架' : '商品已上架')
+          setMessage(disabling ? '商品已下架' : blocked ? '已保存上架状态，待权益配置完成后公开。' : '商品已上架')
           load()
         } finally { setBusy(null) }
       },
@@ -280,7 +283,9 @@ export function AdminProductsPanel() {
                 <AdminCell className="text-xs">{formatAdminNumber(product.pointsAmount)}{product.dailyPoints ? <span className="mt-1 block text-[11px] text-muted-foreground">每日 {formatAdminNumber(product.dailyPoints)}</span> : null}</AdminCell>
                 <AdminCell className="text-xs">{product.productKind === 'plan' ? `${product.periodDays} 天` : '一次性'}</AdminCell>
                 <AdminCell className="text-xs">{product.sortOrder}</AdminCell>
-                <AdminCell><StatusBadge tone={product.enabled ? 'success' : 'muted'}>{product.enabled ? '已上架' : '已下架'}</StatusBadge></AdminCell>
+                <AdminCell><StatusBadge tone={!product.enabled ? 'muted' : product.saleBlockers?.length ? 'warning' : 'success'}>{!product.enabled ? '已下架' : product.saleBlockers?.length ? '上架待配置' : '已上架'}</StatusBadge>
+                  {!!product.saleBlockers?.length && <div className="mt-2 max-w-60 text-xs leading-5 text-foreground">{product.saleBlockers.map(reason => <p key={reason} className="whitespace-normal break-words">{reason}</p>)}</div>}
+                </AdminCell>
                 <AdminCell>
                   <div className="flex flex-wrap gap-1.5">
                     {canManage && <ControlButton variant="secondary" size="sm" onClick={() => setEditor(product)}><Pencil className="size-3.5" />编辑</ControlButton>}
@@ -520,6 +525,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
   const [promoBusy, setPromoBusy] = useState(false)
   const [promoError, setPromoError] = useState('')
   const [promoNotice, setPromoNotice] = useState('')
+  const [productNotice, setProductNotice] = useState('')
 
   /**
    * 输入框跟随后端权威值。
@@ -567,9 +573,10 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy) return
+    if (busy || promoBusy) return
     setError('')
     setConflict('')
+    setProductNotice('')
     if (errors.length) {
       setError(`请先修正 ${errors.length} 处校验错误：${errors[0].message}`)
       return
@@ -582,10 +589,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
      * （避免产生一次无意义的写入与审计记录）。
      */
     const changes = diffProductDraft(initialDraft, draft)
-    if (!changes.length) {
-      setError('没有检测到任何修改，未提交保存。')
-      return
-    }
+    if (!changes.length) { setProductNotice(promoNotice ? '活动价已单独保存，商品资料没有其他改动。' : '商品资料已是最新。'); return }
     setPendingDiff(changes)
   }
 
@@ -628,7 +632,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
     const cents = Math.round(Number(text) * 100)
     const invalid = validatePromotionAmount(cents, draft.amountCents)
     if (invalid) { setPromoError(invalid); return }
-    setPromoBusy(true)
+    setError(''); setProductNotice(''); setPromoBusy(true)
     try {
       const built = buildPromotionPayload({
         promotion: ownerPromotion,
@@ -658,7 +662,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
   async function clearPromotionAmount() {
     if (!product || promoBusy || !ownerPromotion) return
     setPromoError(''); setPromoNotice('')
-    setPromoBusy(true)
+    setError(''); setProductNotice(''); setPromoBusy(true)
     try {
       const removal = buildPromotionRemoval({ promotion: ownerPromotion, productId: product.id })
       if (removal.remove) {
@@ -713,7 +717,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
           <div className="flex min-w-0 flex-col gap-5">
             <fieldset disabled={busy} className="grid min-w-0 gap-4 sm:grid-cols-2">
               <legend className="sr-only">商品基础信息</legend>
-              <Field label="商品名称" error={errorFor('name')} fieldId="name"><AdminInput aria-label="商品名称" value={draft.name} onChange={(event) => patch({ name: event.target.value })} maxLength={80} /></Field>
+              <Field label="商品名称" error={errorFor('name')} fieldId="name" hint="默认同时用于订单和前台展示。"><AdminInput aria-label="商品名称" value={draft.name} onChange={(event) => { const name = event.target.value; setDraft(current => renameProductDraft(current, name)) }} maxLength={80} /></Field>
               <Field label="商品类型" fieldId="productKind"><AdminSelect aria-label="商品类型" value={draft.productKind} onChange={(event) => patch({ productKind: event.target.value === 'plan' ? 'plan' : 'points' })}><option value="points">积分包</option><option value="plan">订阅套餐</option></AdminSelect></Field>
               <NumberField
                 label="日常价（元）" fieldId="amountCents" amount testId="product-amount"
@@ -737,7 +741,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
                 onChange={(value) => patch({ sortOrder: value })}
               />
               {draft.productKind === 'plan' && <>
-                <Field label="关联权益方案 ID" error={errorFor('planId')} fieldId="planId" hint="模型使用范围在「系统设置 → 计费与权益 → 对应方案 → 可用模型」配置。"><AdminInput aria-label="关联权益方案 ID" value={draft.planId} onChange={(event) => patch({ planId: event.target.value })} /></Field>
+                <Field label="关联权益方案 ID" error={errorFor('planId')} fieldId="planId" hint="可先保存商品；对应权益方案启用后才开放购买。模型范围在「系统设置 → 计费与权益」配置。"><AdminInput aria-label="关联权益方案 ID" value={draft.planId} onChange={(event) => patch({ planId: event.target.value })} /></Field>
                 <NumberField
                   label="有效期（天）" fieldId="periodDays" testId="product-period"
                   error={errorFor('periodDays')}
@@ -745,7 +749,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
                   onChange={(value) => patch({ periodDays: value })}
                 />
                 <NumberField
-                  label="每日积分" fieldId="dailyPoints" testId="product-daily"
+                  label="每日签到奖励" fieldId="dailyPoints" testId="product-daily" hint={`会员主动签到后领取。${MEMBERSHIP_CHECK_IN_VALIDITY_LABEL} 0 表示无签到奖励。`}
                   error={errorFor('dailyPoints')}
                   value={draft.dailyPoints}
                   onChange={(value) => patch({ dailyPoints: value })}
@@ -757,7 +761,10 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
 
             <fieldset disabled={busy} className="grid min-w-0 gap-4 border-t border-border pt-4 sm:grid-cols-2">
               <legend className="text-sm font-semibold">{draft.productKind === 'points' ? '积分超市展示' : '套餐页展示'}</legend>
-              <Field label="套餐显示名称" fieldId="displayName"><AdminInput aria-label="套餐显示名称" value={draft.display.name} onChange={(event) => patchDisplay({ name: event.target.value })} /></Field>
+              <details className="sm:col-span-2 rounded-lg border border-border p-3">
+                <summary className="cursor-pointer text-xs text-muted-foreground">自定义前台显示名称（选填）{draft.display.name && draft.display.name !== draft.name ? `：${draft.display.name}` : ''}</summary>
+                <div className="mt-3"><Field label="前台显示名称" fieldId="displayName" hint="留空时使用商品名称；仅在订单名称与套餐标题需要不同时填写。"><AdminInput aria-label="前台显示名称" placeholder={draft.name} value={draft.display.name === draft.name ? '' : draft.display.name} onChange={(event) => patchDisplay({ name: event.target.value })} /></Field></div>
+              </details>
               {draft.productKind === 'plan' && <Field label="会员类型" fieldId="audience"><AdminSelect aria-label="会员类型" value={draft.display.audience} onChange={(event) => patchDisplay({ audience: event.target.value === 'team' ? 'team' : 'creator' })}><option value="creator">创作会员</option><option value="team">团队版会员</option></AdminSelect></Field>}
               {draft.productKind === 'points' && <p className="text-xs leading-5 text-muted-foreground">积分包在独立积分超市出售，所有账户均可购买，无需开通会员。支付确认后一次发放积分。</p>}
               <Field label="套餐分组标识" fieldId="groupId" hint={draft.productKind === 'points' ? '同一组积分包可配置不同积分档位；留空则单独展示。' : '同套餐的月付、季付、年付使用相同标识。'}><AdminInput aria-label="套餐分组标识" value={draft.display.groupId} onChange={(event) => patchDisplay({ groupId: event.target.value })} /></Field>
@@ -770,6 +777,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
               </Field>
               <Field label="活动角标" fieldId="badge" hint="展示在卡片标题旁；留空则不显示"><AdminInput aria-label="活动角标" value={draft.display.badge} onChange={(event) => patchDisplay({ badge: event.target.value })} /></Field>
               <Field label="生成量说明" fieldId="generationSummary"><AdminInput aria-label="生成量说明" value={draft.display.generationSummary} onChange={(event) => patchDisplay({ generationSummary: event.target.value })} /></Field>
+              <Field label="生成量说明备注" fieldId="generationSummaryNote" hint="填写后在生成量说明旁显示感叹号，悬浮或点击查看；留空不显示。"><AdminTextarea aria-label="生成量说明备注" maxLength={1000} rows={2} value={draft.display.generationSummaryNote} onChange={(event) => patchDisplay({ generationSummaryNote: event.target.value })} /></Field>
               {([['benefits', '基础权益'], ['promotions', '限时活动'], ['exclusiveBenefits', '独家功能'], ['extraBenefits', '更多权益']] as const).map(([name, label]) => (
                 <Field key={name} label={`${label}（每行一项）`} fieldId={name}>
                   <AdminTextarea aria-label={label} rows={3} value={draft.display[name]} onChange={(event) => patchDisplay({ [name]: event.target.value } as Partial<ProductDraft['display']>)} />
@@ -796,7 +804,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
                       ? `${computedDiscount}（由日常价与活动价推导，卡片会自动展示）`
                       : '无折扣（活动价必须低于日常价才会显示折扣）'}
                   </span>
-                  <span>权益行数：{benefitRows} 行{benefitRows > 6 ? '（超过 6 行，卡片会自动折叠并显示「查看更多权益」）' : '（不超过 6 行，不折叠）'}</span>
+                  <span>权益行数：{benefitRows} 行{benefitRows > BENEFIT_FOLD_THRESHOLD ? `（默认显示前 ${BENEFIT_FOLD_THRESHOLD} 项，其余通过「查看更多权益」展开）` : '（已完整展示，无需展开）'}</span>
                 </div>
 
                 {/**
@@ -868,6 +876,7 @@ function ProductEditor({ product, products, promotions, onClose, onSaved, onProm
         </div>
 
         {error && <AdminNotice tone="danger">{error}</AdminNotice>}
+        {productNotice && <div role="status"><AdminNotice>{productNotice}</AdminNotice></div>}
         {conflict && (
           <div data-testid="product-conflict">
             <AdminNotice tone="danger">
@@ -1167,10 +1176,10 @@ export function AdminOrdersPanel() {
   }, [])
 
   const prepareRefund = useCallback((order: BillingOrder) => {
-    if (!['manual', 'epay'].includes(order.provider || '')) { setError('该支付渠道尚未支持退款登记，请先核对支付记录。'); return }
+    if (!['manual', 'epay', 'ciyuan_balance'].includes(order.provider || '')) { setError('该支付渠道尚未支持退款登记，请先核对支付记录。'); return }
     confirm.confirm({
       title: `先为订单 ${order.orderNo} 预留退款积分？`,
-      description: `本步骤先从可用余额中预留本单积分和已发放的邀请奖励，退款金额为 ${formatAdminMoney(order.amountCents, order.currency)}。预留失败时请勿退款；预留成功后，再通过原收款渠道退款并核实到账。易支付订单需要在支付平台办理退款。本步骤不会转出现金，预留不会自动释放。`,
+      description: order.provider==='ciyuan_balance' ? `先预留本单积分和已发放的邀请奖励，退款金额为 ${formatAdminMoney(order.amountCents, order.currency)}。预留成功后点击「退回 New API 余额」，服务器会将金额退回原付款账户。此步骤尚未退款。` : `本步骤先从可用余额中预留本单积分和已发放的邀请奖励，退款金额为 ${formatAdminMoney(order.amountCents, order.currency)}。预留失败时请勿退款；预留成功后，再通过原收款渠道退款并核实到账。易支付订单需要在支付平台办理退款。本步骤不会转出现金，预留不会自动释放。`,
       confirmLabel: '先预留积分，尚未汇款',
       tone: 'danger',
       onConfirm: async () => {
@@ -1178,7 +1187,7 @@ export function AdminOrdersPanel() {
         try {
           const result = await prepareBillingOrderRefund(order.id, '管理员准备通过原收款渠道退款，尚未转账')
           applyRefundOrder(result.order)
-          setMessage(`订单 ${order.orderNo} 已预留积分，尚未退款。请通过原收款渠道退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账，再点击「确认已退款」。若未发起退款，可取消预留。`)
+          setMessage(order.provider==='ciyuan_balance' ? `订单 ${order.orderNo} 已预留积分，点击「退回 New API 余额」完成退款。` : `订单 ${order.orderNo} 已预留积分，尚未退款。请通过原收款渠道退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账，再点击「确认已退款」。若未发起退款，可取消预留。`)
           load()
         }
         finally { setActing(null) }
@@ -1190,14 +1199,14 @@ export function AdminOrdersPanel() {
     const reservationId = refundReservationId(order)
     if (!reservationId) { setError('这笔订单缺少有效退款预留，请刷新并核对记录，暂勿汇款。'); return }
     confirm.confirm({
-      title: `确认订单 ${order.orderNo} 的退款已到账？`,
-      description: `积分已预留。请仅在原收款渠道退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账后确认。本操作登记退款完成并撤销本单套餐权益，不会再次转出现金，也不会重复扣减预留积分。若退款结果不确定，请保留当前状态并先查询原收款渠道。`,
-      confirmLabel: '已核实退款到账，完成登记',
+      title: order.provider==='ciyuan_balance' ? `退回订单 ${order.orderNo} 的 New API 余额？` : `确认订单 ${order.orderNo} 的退款已到账？`,
+      description: order.provider==='ciyuan_balance' ? `将 ${formatAdminMoney(order.amountCents, order.currency)} 退回原 LunAPI 付款账户，同时撤销本单套餐权益。退款失败或结果不明确时会继续预留积分，可以重试核对，服务器会防止重复退款。` : `积分已预留。请仅在原收款渠道退还 ${formatAdminMoney(order.amountCents, order.currency)} 并核实到账后确认。本操作登记退款完成并撤销本单套餐权益，不会再次转出现金，也不会重复扣减预留积分。若退款结果不确定，请保留当前状态并先查询原收款渠道。`,
+      confirmLabel: order.provider==='ciyuan_balance' ? '确认退回余额' : '已核实退款到账，完成登记',
       tone: 'danger',
       onConfirm: async () => {
         setActing(order.id)
         try {
-          const result = await refundBillingOrder(order.id, '管理员已核实原收款渠道退款到账', reservationId)
+          const result = await refundBillingOrder(order.id, order.provider==='ciyuan_balance' ? '管理员确认退回原 New API 付款账户余额' : '管理员已核实原收款渠道退款到账', reservationId)
           applyRefundOrder(result.order); setMessage(`订单 ${order.orderNo} 的退款已登记`); load()
         } finally { setActing(null) }
       },
@@ -1313,11 +1322,10 @@ export function AdminOrdersPanel() {
                 <AdminCell>
                   <div className="flex flex-wrap gap-1.5">
                     <ControlButton variant="secondary" size="sm" onClick={() => setDetail(order)}>详情</ControlButton>
-                    {canManage && order.status === 'pending' && order.provider === 'manual' && <ControlButton variant="secondary" size="sm" disabled={acting === order.id} onClick={() => complete(order)}>标记已支付</ControlButton>}
                     {canManage && order.status === 'pending' && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => close(order)}>关闭</ControlButton>}
-                    {canManage && order.status === 'paid' && ['manual', 'epay'].includes(order.provider || '') && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => prepareRefund(order)}><CircleDollarSign className="size-3.5" />预留退款积分</ControlButton>}
-                    {canManage && order.status === 'refunding' && ['manual', 'epay'].includes(order.provider || '') && <><ControlButton variant="danger" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => refund(order)}>确认已退款</ControlButton><ControlButton variant="secondary" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => cancelRefund(order)}>未退款，取消预留</ControlButton></>}
-                    {canManage && order.status === 'paid' && !['manual', 'epay'].includes(order.provider || '') && <span className="text-[11px] text-muted-foreground">该渠道退款登记暂不可用</span>}
+                    {canManage && order.status === 'paid' && ['manual', 'epay', 'ciyuan_balance'].includes(order.provider || '') && <ControlButton variant="danger" size="sm" disabled={acting === order.id} onClick={() => prepareRefund(order)}><CircleDollarSign className="size-3.5" />预留退款积分</ControlButton>}
+                    {canManage && order.status === 'refunding' && ['manual', 'epay', 'ciyuan_balance'].includes(order.provider || '') && <><ControlButton variant="danger" size="sm" disabled={acting === order.id || !refundReservationId(order)} onClick={() => refund(order)}>{order.provider==='ciyuan_balance' ? '退回 New API 余额' : '确认已退款'}</ControlButton><ControlButton variant="secondary" size="sm" disabled={acting === order.id || !refundReservationId(order) || order.metadata?.balanceRefundStarted === true} onClick={() => cancelRefund(order)}>未退款，取消预留</ControlButton></>}
+                    {canManage && order.status === 'paid' && !['manual', 'epay', 'ciyuan_balance'].includes(order.provider || '') && <span className="text-[11px] text-muted-foreground">该渠道退款登记暂不可用</span>}
                   </div>
                 </AdminCell>
               </AdminRow>

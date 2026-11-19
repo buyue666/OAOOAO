@@ -31,7 +31,7 @@ export function AdminTeamPlansPanel() {
   const [tab, setTab] = useState<'plans' | 'teams'>(canPlans ? 'plans' : 'teams')
   const selected = tab === 'plans' && !canPlans ? 'teams' : tab === 'teams' && !canGrants ? 'plans' : tab
   return <div className="flex flex-col gap-5">
-    <AdminNotice>团队版当前使用人工开通。开通权益与发放积分会记录审计日志，不会创建已支付订单。</AdminNotice>
+    <AdminNotice>团队套餐支持在线支付并自动开通。这里的手动开通用于管理员补发权益，不会伪造已支付订单。</AdminNotice>
     <AdminTabs label="团队管理分区" value={selected} onChange={setTab} items={[...(canPlans ? [['plans', '套餐配置'] as const] : []), ...(canGrants ? [['teams', '团队与权益'] as const] : [])]} />
     {selected === 'plans' && canPlans && <TeamPlansAdmin />}
     {selected === 'teams' && canGrants && <TeamEntitlementsAdmin />}

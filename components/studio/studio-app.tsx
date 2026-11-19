@@ -6,13 +6,15 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useStudio } from '@/lib/studio/store'
 import { MobileNav } from './mobile-nav'
 import { Sidebar } from './sidebar'
+import { StudioTourLauncher } from './studio-tour-launcher'
 import { Topbar } from './topbar'
+import { AdultContentNotice } from './account-adult-content'
 import { cn } from '@/lib/utils'
 import { HomepageAnnouncement } from '@/components/homepage-announcement'
 import { RETURN_PATH_KEY } from '@/lib/studio/return-path'
 import { isStudioPreview } from '@/lib/studio/preview-mode'
 import { useWorkspace } from '@/lib/studio/workspace-context'
-import { workspaceDestination } from '@/lib/studio/workspace-navigation'
+import { workspaceDestination, workspaceSection } from '@/lib/studio/workspace-navigation'
 
 function isProtectedStudioRoute(pathname: string) {
   return pathname === '/studio'
@@ -55,7 +57,8 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/plans' || pathname === '/credits'
   const isPolicyPage = pathname === '/terms' || pathname === '/privacy'
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
-  const isWorkspace = pathname === '/image' || pathname === '/video'
+  const section = workspaceSection(pathname)
+  const isWorkspace = ['/image', '/video', '/studio/image', '/studio/video'].includes(section)
   const isCanvasRoute = pathname === '/canvas' || pathname.startsWith('/canvas/') || /^\/teams\/[^/]+\/projects\/[^/]+\/canvas$/.test(pathname)
   const isProtectedRoute = isProtectedStudioRoute(pathname)
   const authRequired = isProtectedRoute && !isStudioPreview()
@@ -88,11 +91,11 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
    */
   if (isLanding || isAuthPage || isPolicyPage) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
   if (isAdmin) return <div className="min-h-dvh bg-background text-foreground">{children}</div>
-  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground"><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
+  if (isCanvasRoute) return <div className="oao-canvas-route flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground"><AdultContentNotice /><div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div></div>
 
   return (
       <div
-        data-studio-route={pathname === '/studio' ? 'home' : isWorkspace ? 'workspace' : 'inner'}
+        data-studio-route={section === '/studio' ? 'home' : isWorkspace ? 'workspace' : 'inner'}
         data-studio-skin={state.skin}
         className="studio-app-shell relative min-h-dvh text-foreground"
       >
@@ -105,6 +108,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
       */}
       <div className={cn('relative z-10 min-h-dvh transition-[padding] duration-200 ease-out', state.sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-56')}>
         <Topbar onMenuClick={() => setMobileNavOpen(true)} />
+        <AdultContentNotice />
         <main className="min-h-[calc(100dvh-60px)]">
           {/* ·���л�ʱ������΢���벢���ƣ��������ۼƲ���ƫ�� */}
           <div key={pathname} className={isWorkspace ? undefined : 'motion-page'}>{children}</div>
@@ -112,6 +116,7 @@ export function StudioApp({ children }: { children: React.ReactNode }) {
       </div>
       <MobileNav open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
       <div data-studio-portal-root />
+      {state.backendStatus === 'connected' && <StudioTourLauncher account={state.user.id} pathname={pathname} home={section === '/studio'} />}
       </div>
   )
 }

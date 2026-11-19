@@ -18,6 +18,8 @@
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StatusBadge } from '@/components/studio/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Maximize2 } from 'lucide-react'
 import { benefitGroupsOf, planNeedsFold } from '@/components/membership/benefits'
 import { MembershipPurchaseView } from '@/components/membership/membership-purchase-view'
 import { PlanCard } from '@/components/membership/plan-card'
@@ -61,12 +63,20 @@ function cycleOfDraft(draft: ProductDraft): BillingCycle {
 export function ProductPreviewPanel({
   draft,
   products,
+  enlarged = false,
+  initialMode = 'current',
+  initialViewport = 'desktop',
 }: {
   draft: ProductDraft
   products: Parameters<typeof mergeDraftIntoProducts>[0]
+  enlarged?: boolean
+  initialMode?: 'current' | 'full'
+  initialViewport?: Viewport
 }) {
-  const [mode, setMode] = useState<'current' | 'full'>('current')
-  const [viewport, setViewport] = useState<Viewport>('desktop')
+  const [mode, setMode] = useState<'current' | 'full'>(initialMode)
+  const [viewport, setViewport] = useState<Viewport>(initialViewport)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [manualScale, setManualScale] = useState<number | null>(null)
   /**
    * 周期与受众：默认**跟随草稿**，但允许像真实页面一样切换浏览。
    *
@@ -161,9 +171,10 @@ export function ProductPreviewPanel({
    * 缩放后的盒子就是视觉尺寸（不会在面板里留下 1440px 的横向溢出），
    * 而内部布局宽度仍是 `viewportWidth`，容器查询因此拿到真实宽度。
    */
-  const previewScale = availableWidth <= 0
+  const fitScale = availableWidth <= 0
     ? 1
     : Math.min(MAX_PREVIEW_SCALE, Math.max(MIN_PREVIEW_SCALE, availableWidth / viewportWidth))
+  const previewScale = enlarged && manualScale !== null ? manualScale : fitScale
   /** 缩放后的视觉宽度：外壳按这个宽度贴合内容（面板更宽时不会拉出空白）。 */
   const surfaceVisualWidth = viewportWidth * previewScale
 
@@ -272,7 +283,7 @@ export function ProductPreviewPanel({
     if ((event.target as HTMLElement | null)?.tagName === 'INPUT') event.preventDefault()
   }
 
-  return (
+  return <>
     <section className="studio-surface flex min-w-0 flex-col gap-3 p-4" data-testid="product-preview-panel" aria-label="商品实时预览">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
@@ -282,6 +293,7 @@ export function ProductPreviewPanel({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          {!enlarged && <button type="button" onClick={() => setPreviewOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium hover:bg-muted" aria-label="放大预览"><Maximize2 className="size-3.5" aria-hidden="true" />放大预览</button>}
           {([['current', '当前套餐'], ['full', '完整套餐页']] as const).map(([value, label]) => (
             <button
               key={value}
@@ -305,6 +317,13 @@ export function ProductPreviewPanel({
           ))}
         </div>
       </div>
+
+      {enlarged && <div className="flex flex-wrap items-center gap-3" role="group" aria-label="预览缩放控制">
+        <label className="flex items-center gap-2 text-xs">缩放<input type="range" aria-label="预览缩放比例" min="25" max="200" step="5" value={Math.round(previewScale * 100)} onChange={event => setManualScale(Number(event.target.value) / 100)} className="w-40 accent-[var(--studio-accent)]" /></label>
+        <span className="text-xs tabular-nums">{Math.round(previewScale * 100)}%</span>
+        <button type="button" onClick={() => setManualScale(1)} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">原始大小</button>
+        <button type="button" onClick={() => setManualScale(null)} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted">适应窗口</button>
+      </div>}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
         <span className="text-[11px] text-muted-foreground">草稿属性：</span>
@@ -359,6 +378,7 @@ export function ProductPreviewPanel({
         * 外框用 `outline`（不参与布局），保证内层作用域宽度精确等于
         * `viewportWidth`；缩放用 `zoom`（同时参与布局，见 previewScale 注释）。
         */}
+      <div className={enlarged ? 'max-h-[62dvh] overflow-auto overscroll-contain rounded-xl p-1' : undefined} data-testid="preview-scroll-region">
       <div
         data-testid="preview-surface"
         data-viewport={viewport}
@@ -367,7 +387,7 @@ export function ProductPreviewPanel({
         className="mx-auto overflow-hidden rounded-xl outline outline-1 outline-border [container-type:normal]"
         style={{
           width: `${surfaceVisualWidth}px`,
-          maxWidth: '100%',
+          maxWidth: enlarged ? 'none' : '100%',
           ...(previewScale !== 1 && contentHeight > 0 ? { height: `${contentHeight}px` } : null),
         }}
       >
@@ -464,6 +484,7 @@ export function ProductPreviewPanel({
           )}
         </div>
       </div>
+      </div>
 
       <p className="text-[11px] leading-5 text-muted-foreground">
         {mode === 'full'
@@ -491,7 +512,13 @@ export function ProductPreviewPanel({
         </p>
       )}
     </section>
-  )
+    {!enlarged && <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+      <DialogContent className="z-[180] flex max-h-[96dvh] w-[96vw] max-w-[96vw] flex-col overflow-hidden sm:max-w-[96vw]" overlayClassName="z-[179]" onKeyDown={event => { if (event.key === 'Enter' && (event.target as HTMLElement)?.tagName === 'INPUT') event.preventDefault() }}>
+        <DialogHeader><DialogTitle>放大预览</DialogTitle><DialogDescription>预览只读，不会保存商品或创建订单。</DialogDescription></DialogHeader>
+        <div className="min-h-0 overflow-auto"><ProductPreviewPanel draft={draft} products={products} enlarged initialMode={mode} initialViewport={viewport} /></div>
+      </DialogContent>
+    </Dialog>}
+  </>
 }
 
 /** 供 Playwright 断言使用的稳定入口。 */

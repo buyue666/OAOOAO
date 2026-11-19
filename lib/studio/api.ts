@@ -48,7 +48,10 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionSettings = {
+  adultContent?: { enabled: boolean; policyVersion: string; acknowledgedAt: string | null }
   installedPlugins?: string[]
+  pluginPreferences?: Record<string, { version: string; autoUpdate: boolean }>
+  subscriptionAccess?: boolean
   personalModelIds?: string[]
   site?: SiteSettings
   operationMode?: 'self_use' | 'commercial'
@@ -64,6 +67,9 @@ export type SessionSettings = {
     id: string
     name: string
     capability: 'text' | 'image' | 'video' | 'audio'
+    requiresSubscription?: boolean
+    description?: string
+    allowAdultContent?: boolean
     enabled: boolean
     bindings: Array<{
       id: string
@@ -80,6 +86,7 @@ export type SessionSettings = {
       supportsVideoReference?: boolean
       supportsAudioReference?: boolean
       supportsFastMode?: boolean
+      fastModeEnabled?: boolean
       supportsContextIr?: boolean
       supportsVideoRegeneration?: boolean
       supportsVideoExtension?: boolean
@@ -94,7 +101,15 @@ export type SessionSettings = {
       maxReferenceAudios?: number
       durationsByMode?: Record<string, number[]>
       videoDurationRules?: Record<string, {mode: string; min?: number; max?: number; step?: number; values?: number[]}>
-      videoReferenceRules?: Record<string, {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number}>
+      nativeReferenceRules?: Record<string, {maxFileBytes?:number;minItemSeconds?:number;maxItemSeconds?:number;maxTotalSeconds?:number;acceptedMimeTypes?:string[]}>
+      supportsDraft?:boolean
+      supportsSmartDuration?:boolean
+      frameAdaptiveRatio?:boolean
+      videoTaskTypes?:string[]
+      videoOutputFormats?:string[]
+      supportsWebSearch?:boolean
+      webSearchEnabled?:boolean
+      videoReferenceRules?: Record<string, {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number; minItemSeconds?: number; maxFileBytes?: number}>
       videoBillingUnit?: string
       supportsReferenceImage?: boolean
         maxReferenceImages?: number
@@ -215,9 +230,9 @@ export class StudioApiError extends Error {
    * `unavailable`（网络中断 / 5xx / 429）表示「结果未知」，不代表任务失败；
    * 页面必须据此继续重试或提示手动重新检查，不能据此宣布生成失败或已退款。
    */
-  get outcome(): 'rejected' | 'expired' | 'unavailable' | 'not-found' | 'pending-confirmation' | 'failed' | 'unknown' {
+  get outcome(): 'rejected' | 'expired' | 'unavailable' | 'not-found' | 'failed' | 'unknown' {
     const explicit = this.payload && typeof this.payload === 'object' ? (this.payload as { outcome?: unknown }).outcome : undefined
-    if (typeof explicit === 'string') return explicit as 'rejected' | 'expired' | 'unavailable' | 'not-found' | 'pending-confirmation' | 'failed' | 'unknown'
+    if (typeof explicit === 'string') return explicit as 'rejected' | 'expired' | 'unavailable' | 'not-found' | 'failed' | 'unknown'
     // 402（及文案表明余额不足）是确定性拒绝，不是「稍后重试」。
     if (this.status === 402 || /积分不足|余额不足|配额不足|insufficient\s+(points|balance)/i.test(this.message)) return 'failed'
     if (this.status === 0 || this.status >= 500 || this.status === 429 || this.status === 408) return 'unavailable'
@@ -303,10 +318,11 @@ export function listBillingOrders() {
   return request<{ orders: Array<Record<string, unknown>>; total: number }>('/api/billing/orders')
 }
 
-export function createBillingOrder(productId: string, provider: string) {
+export type TeamPurchaseInput = { teamPlanId: string; seats: number; expectedAmountCents: number; teamId?: string; teamName?: string; idempotencyKey?: string }
+export function createBillingOrder(productId: string, provider: string, team?: TeamPurchaseInput) {
   return request<{ order: Record<string, unknown> }>('/api/billing/orders', {
     method: 'POST',
-    body: JSON.stringify({ productId, quantity: 1, provider }),
+    body: JSON.stringify({ productId, quantity: 1, provider, ...team }),
   })
 }
 

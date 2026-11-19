@@ -1,6 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import {prepareVideoPolicy,validateVideoInput} from './video-policy.js';
+import {adultContentPreference,assertAdultModelAllowed} from './content-policy.js';
 import {effectiveChannelProtocol} from './channel-protocol.js';
-import { prepareVideoPolicy, validateVideoInput } from './video-policy.js';
+import { createTextStream, TextStreamError, type TextProgress } from './text-stream.js';
+import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { httpError, safeFetch, type Context } from './core.js';
 import { getSettings } from './settings.js';
@@ -12,7 +14,7 @@ import { assertTeamStorage } from './team-access.js';
 import { storageConfig, assertStorageConfigured } from './object-storage.js';
 import { saveGeneratedMedia } from './generated-media.js';
 import { saveTeamAsset } from './team-assets.js';
-import { personalGenerationPlan, assertPlanGenerationAllowed, assertPlanModelAllowed } from './entitlements.js';
+import { personalGenerationPlan, assertPlanGenerationAllowed, assertPlanModelAllowed,modelSubscriptionAccess,assertModelSubscription } from './entitlements.js';
 
 export type GenerationKind='text'|'image'|'video'|'audio'|'render';
 export type Json=Record<string,any>;
@@ -39,13 +41,20 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   const plan=userId?await personalGenerationPlan(ctx,settings,userId,client):undefined;
   if(plan)assertPlanGenerationAllowed(plan,kind);
   const permitted=(id:string)=>!plan?.allowedModelIds||settings.logicalModels.some((m:Json)=>plan.allowedModelIds.includes(m.id)&&(m.id===id||(m.aliases||[]).includes(id)||(m.bindings||[]).some((b:Json)=>b.requestAlias===id)));
+  const adult = await adultContentPreference(ctx,userId,client);
+  const adultPermitted=(id:string)=>!adult.enabled||settings.logicalModels.some((m:Json)=>m.allowAdultContent===true&&(m.id===id||(m.aliases||[]).includes(id)||(m.bindings||[]).some((b:Json)=>b.requestAlias===id)));
+  const subscription=settings.logicalModels.some((m:Json)=>m.requiresSubscription===true)?await modelSubscriptionAccess(ctx,settings,userId,client):false;
+  const subscriptionAllowed=(id:string)=>settings.logicalModels.some((m:Json)=>(m.id===id||(m.aliases||[]).includes(id)||(m.bindings||[]).some((b:Json)=>b.requestAlias===id))&&(!m.requiresSubscription||subscription));
   const saved=chosen[kind+'Model'];
-  const selectedDefault=saved&&permitted(saved)&&availableDefault(settings,kind+'Model',saved)?saved:settings.defaultModels?.[kind+'Model'];
-  const fallback=selectedDefault&&permitted(selectedDefault)?selectedDefault:settings.logicalModels.find((m:Json)=>m.enabled&&m.capability===kind&&permitted(m.id))?.id;
+  const selectedDefault=saved&&permitted(saved)&&adultPermitted(saved)&&subscriptionAllowed(saved)&&availableDefault(settings,kind+'Model',saved)?saved:settings.defaultModels?.[kind+'Model'];
+  const fallback=selectedDefault&&permitted(selectedDefault)&&adultPermitted(selectedDefault)&&subscriptionAllowed(selectedDefault)?selectedDefault:settings.logicalModels.find((m:Json)=>m.enabled&&m.capability===kind&&permitted(m.id)&&adultPermitted(m.id)&&subscriptionAllowed(m.id))?.id;
   const wanted=String(input.config?.model||fallback||'');
   const model=(settings.logicalModels||[]).find((m:Json)=>m.enabled&&m.capability===kind&&(m.id===wanted||(m.aliases||[]).includes(wanted)||(m.bindings||[]).some((b:Json)=>b.requestAlias===wanted)));
   if(!model&&Array.isArray(plan?.allowedModelIds))throw httpError(403,'当前个人套餐未开放此类模型，请选择套餐允许的模型');
+  if(!model&&adult.enabled&&!input.config?.model)throw httpError(403,'成人内容模式下没有可用的此类模型。请在账户菜单关闭成人内容，或联系管理员开放模型。');
   if(!model)throw httpError(503,`No enabled ${kind} model is configured`);
+  await assertModelSubscription(ctx,settings,model,userId,client);
+  assertAdultModelAllowed(adult.enabled,model);
   if(plan)assertPlanModelAllowed(plan,model.id);
   const routeAlias=(model.bindings||[]).some((b:Json)=>b.requestAlias===wanted);
   const binding=[...(model.bindings||[])].filter((b:Json)=>b.enabled&&(!routeAlias||b.requestAlias===wanted)).sort((a:Json,b:Json)=>a.priority-b.priority).find((b:Json)=>settings.systemChannels?.some((c:Json)=>c.id===b.channelId&&c.enabled&&(c.apiKey||c.advancedConfig?.authMode==='none')));
@@ -54,16 +63,16 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   const storeGeneratedMedia=!!ctx.workspace||channel.storeGeneratedMedia!==false;
   if(kind!=='text'&&storeGeneratedMedia)await preflightStorage();
   const protocol=effectiveChannelProtocol(channel.advancedConfig?.protocol,channel.apiFormat);
-
   if(!protocols.has(protocol))throw httpError(503,`Configured protocol ${protocol} is not supported by this backend`);
   const base=new URL(channel.baseUrl);
   if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash)throw httpError(503,'Provider requires a valid HTTPS base URL');
   const price=(binding.requestAlias?settings.modelPointCosts?.[binding.requestAlias]:undefined)??settings.modelPointCosts?.[binding.upstreamModel]??settings.modelPointCosts?.[model.id];
   const defaults=settings.generationDefaults||{};const profile=binding.capabilityProfile||{};
   const resolution=String(input.config?.vquality||profile.videoQualities?.[0]||'');
-  const videoRate=kind==='video'&&profile.videoBillingUnit&&(profile.videoBillingUnit==='duration'||profile.videoPricingTemplate==='reference-video-output'||profile.videoPricing?.resolutionRates?.[resolution]!==undefined||profile.videoPricing?.resolutionPricing?.[resolution]!==undefined);
+  const videoRate=kind==='video'&&profile.videoBillingUnit&&(profile.videoBillingUnit==='duration'||['reference-video-output','doubao-video'].includes(profile.videoPricingTemplate)||profile.videoPricing?.resolutionRates?.[resolution]!==undefined||profile.videoPricing?.resolutionPricing?.[resolution]!==undefined);
   if(price===undefined&&!videoRate)throw httpError(503,'Model price must be configured before generation');
   let cost=creditUnits(price??0);const multipliers=settings.generationPointMultipliers||{};
+  if(kind==='video'&&profile.videoProtocol&&profile.videoProtocol!==protocol)throw httpError(400,'视频能力配置与渠道协议不匹配，请重新设置渠道能力');
   if(kind==='video')for(const ref of input.references||[]){
     const key=ref.role==='last_frame'?'last_frame':ref.role==='first_frame'?'first_frame':ref.type||'image';
     if(!['first_frame','image'].includes(key)&&!profile.videoReferenceFieldMap?.[key])throw httpError(400,'请先按上游文档配置尾帧、视频或音频的 API 字段名');
@@ -134,7 +143,9 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   // Persist the selected capability snapshot with the job.  Queued jobs must
   // keep using the exact size map that was validated at submission time even
   // if an administrator edits the model binding before the worker runs.
-  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey,capabilityProfile:profile,...videoSnapshot,storeGeneratedMedia},cost:creditDecimal(cost)};
+  const asyncTaskTimeoutMinutes=Number.isInteger(model.asyncTaskTimeoutMinutes)&&model.asyncTaskTimeoutMinutes>=1&&model.asyncTaskTimeoutMinutes<=1440?model.asyncTaskTimeoutMinutes:3;
+  const statusQueryRetries=Number.isInteger(model.statusQueryRetries)&&model.statusQueryRetries>=0&&model.statusQueryRetries<=10?model.statusQueryRetries:3;
+  return {model:model.id,channelId:channel.id,upstreamModel:binding.upstreamModel,config:{protocol,baseUrl:base.toString(),apiKey:channel.apiKey,capabilityProfile:profile,asyncTaskTimeoutMinutes,statusQueryRetries,...videoSnapshot,storeGeneratedMedia},cost:creditDecimal(cost)};
 }
 function multipart(fields:Record<string,string>,files:Array<{name:string;data:Buffer;mime:string}>){
   const boundary='oaooao'+randomUUID().replaceAll('-','');const chunks:Buffer[]=[];
@@ -171,7 +182,7 @@ export function imageSize(value:unknown,resolution:unknown,profile:Json){
   } as Record<string,string>)[ratio]||ratio;
 }
 function videoSize(value:unknown){const v=String(value||'720x1280');return ({'1:1':'720x1280','16:9':'1280x720','9:16':'720x1280'} as Record<string,string>)[v]||v;}
-export type ProviderResult={type:'complete';result:Json}|{type:'pending';upstreamId:string};
+export type ProviderResult={type:'complete';result:Json;settledCost?:string}|{type:'pending';upstreamId:string};
 async function providerTextMessages(ctx:Context,userId:string,input:Json){
   const messages=Array.isArray(input.messages)?input.messages:[{role:'user',content:input.prompt}];
   return Promise.all(messages.map(async (message:Json)=>{
@@ -193,21 +204,40 @@ async function invokeProviderInternal(ctx:Context,job:Json,poll:boolean,transpor
   if(job.kind==='render'){const result=await renderShots(ctx,job.user_id,job.input.shots,job.input.ratio);return{type:'complete',result:{url:result.url}};}
   const settings=await getSettings(ctx);const channel=settings.systemChannels?.find((c:Json)=>c.id===job.channel_id&&c.enabled&&c.apiKey);
   if(!channel&&!poll)throw new ProviderFailure('Provider channel is no longer available',true);
+  if(!poll&&(await adultContentPreference(ctx,job.user_id)).enabled){
+    const model=settings.logicalModels.find((item:Json)=>item.id===job.model);
+    if(!model||model.allowAdultContent!==true)throw new ProviderFailure('成人内容模式已开启，此任务的模型未获准用于成人内容。任务已结束，积分已退还，请更换模型或关闭成人内容。',true);
+  }
   const key=ctx.decrypt(job.provider_config.apiKey);const base=String(job.provider_config.baseUrl).replace(/\/$/,'');const profile=job.provider_config.capabilityProfile||{};const protocol=String(job.provider_config.protocol||'openai');
-  const request=async(path:string,body?:string|Buffer,contentType='application/json',method=body===undefined?'GET':'POST',extraHeaders:Record<string,string>={})=>{
+  const request=async(path:string,body?:string|Buffer,contentType='application/json',method=body===undefined?'GET':'POST',extraHeaders:Record<string,string>={},onChunk?:(chunk:Buffer)=>void)=>{
     let response:Response;
-    try{if(method==='POST')onSubmit();response=await transport(base+path,{method,headers:{authorization:`Bearer ${key}`,...(body===undefined?{}:{'content-type':contentType}),...extraHeaders},body,timeoutMs:120000,maxBytes:job.kind==='video'&&path.endsWith('/content')?MAX_VIDEO_BYTES:MAX_MEDIA_BYTES*2});}
+    try{if(method==='POST')onSubmit();response=await transport(base+path,{method,headers:{authorization:`Bearer ${key}`,...(body===undefined?{}:{'content-type':contentType}),...extraHeaders},body,timeoutMs:onChunk?180000:120000,totalTimeoutMs:onChunk?600000:undefined,onChunk,maxBytes:job.kind==='video'&&path.endsWith('/content')?MAX_VIDEO_BYTES:MAX_MEDIA_BYTES*2});}
     catch(error){
       if(!poll&&((error as any)?.statusCode===400||['ENOTFOUND','EAI_AGAIN'].includes((error as any)?.code)))throw new ProviderFailure('Provider destination was rejected before submission',true);
-      throw new ProviderFailure('Provider connection result is unknown; manual verification may be required');
+      throw new ProviderFailure('Provider connection ended without a confirmed result');
     }
     if(!response.ok)throw new ProviderFailure(`Provider rejected request (HTTP ${response.status})`,!poll&&response.status>=400&&response.status<500&&![408,409].includes(response.status));
     return response;
   };
   const model=job.upstream_model,input=job.input,config=input.config||{};
   if(job.kind==='text'){
-    const response=await request('/chat/completions',JSON.stringify({model,messages:await providerTextMessages(ctx,job.user_id,input),stream:false}));
-    const data=await response.json() as Json;const content=data.choices?.[0]?.message?.content;
+    let progressWrites=Promise.resolve(),lastWrite=0;
+    const persistProgress=(progress:TextProgress)=>{
+      if(!job.lease_owner||Date.now()-lastWrite<900)return;
+      lastWrite=Date.now();
+      progressWrites=progressWrites.then(async()=>{await ctx.db.query("UPDATE oaooao_generation_jobs SET result=$3,updated_at=clock_timestamp() WHERE id=$1 AND lease_owner=$2 AND status='running' AND phase='submitting'",[job.id,job.lease_owner,{textProgress:progress}]);}).catch(()=>undefined);
+    };
+    const stream=createTextStream(persistProgress);
+    let content:unknown;
+    try{
+      const messages=await providerTextMessages(ctx,job.user_id,input);
+      onSubmit();
+      const response=await transport(base+'/chat/completions',{method:'POST',headers:{authorization:`Bearer ${key}`,'content-type':'application/json',accept:'text/event-stream'},body:JSON.stringify({model,messages,stream:true}),onChunk:chunk=>stream.push(chunk),timeoutMs:180000,totalTimeoutMs:600000,maxBytes:2*1024*1024});
+      if(!response.ok)throw new ProviderFailure(`Provider rejected request (HTTP ${response.status})`,response.status>=400&&response.status<500);
+      content=stream.finish();
+      if(content===undefined){const data=await response.json() as Json;content=data.choices?.[0]?.message?.content;}
+    }catch(error){if(error instanceof TextStreamError)throw new ProviderFailure(error.message,true);throw error;}
+    finally{await progressWrites;}
     if(typeof content!=='string')throw new ProviderFailure('Provider returned no usable text output');
     const asset = ctx.workspace ? await saveTeamAsset(ctx, ctx.workspace, job.user_id, { title: input.prompt.slice(0, 100) || '文本生成结果', text: content }, true) : undefined;
     return{type:'complete',result:{content,...(asset ? { teamAssetId: asset.id } : {})}};

@@ -51,7 +51,7 @@ function errorMessage(payload: unknown, status: number) {
     const record = payload as Record<string, unknown>
     for (const key of ['error', 'msg', 'message']) {
       const value = record[key]
-      if (typeof value === 'string' && value.trim()) return value.trim() === 'Model price must be configured before generation' ? '请先在后台配置该视频模型的积分单价，再开始生成。' : value.trim()
+      if (typeof value === 'string' && value.trim()) return value.trim()
     }
   }
   return `����ʧ�ܣ�${status}��`
@@ -63,9 +63,8 @@ function errorMessage(payload: unknown, status: number) {
  * �ؼ����֣�`unavailable` ��ʾ�����û�ʵ�����`failed` �ű�ʾ���������ʧ�ܡ���
  * ���ȰѲ�ѯʧ��ֱ�ӵ�������ʧ�ܣ�����������������ʱ���в�ֹͣ��ѯ��
  */
-export type RequestOutcome = 'ok' | 'rejected' | 'expired' | 'unavailable' | 'not-found' | 'pending-confirmation' | 'failed'
+export type RequestOutcome = 'ok' | 'rejected' | 'expired' | 'unavailable' | 'not-found' | 'failed'
 
-const CONFIRMATION_PATTERN = /��ȷ��|��Ҫ�˹�|�˹��ӹ�|�޷�ȷ��/
 
 /**
  * ��һ�� HTTP ������ࡣ
@@ -77,7 +76,6 @@ const CONFIRMATION_PATTERN = /��ȷ��|��Ҫ�˹�|�˹��ӹ�|�
  * - 404 �� not-found�������ں�˲����ڣ������ѹ�����������
  * - 409 �� rejected��״̬�ѱ仯�������ͻ����Ҫˢ�º����ԡ�
  * - ���� 4xx �� failed�������ȷ�ܾ�������ʵʧ�ܡ�
- * - 200/202 ����ȷ�ϱ�� �� pending-confirmation�����δ������δ֪�������˹�/���¼�顣
  */
 export function classifyOutcome(status: number | undefined, message = '', payload?: unknown): RequestOutcome {
   const text = `${message} ${payload && typeof payload === 'object' ? JSON.stringify(payload) : ''}`
@@ -89,21 +87,11 @@ export function classifyOutcome(status: number | undefined, message = '', payloa
   if (status === 404) return 'not-found'
   if (status === 409) return 'rejected'
   if (status === 0) return 'unavailable'
-  if (CONFIRMATION_PATTERN.test(text)) return 'pending-confirmation'
   if (status >= 400) return 'failed'
-  return CONFIRMATION_PATTERN.test(text) ? 'pending-confirmation' : 'ok'
+  return 'ok'
 }
 
 /** ����״̬��������ʵ�ӳ�䣬����ѯ�ж��ܷ�����ȴ��� */
-export function outcomeOfTask(task: { status?: string; needsReview?: boolean } | undefined): RequestOutcome {
-  if (!task) return 'unavailable'
-  if (task.needsReview) return 'pending-confirmation'
-  if (task.status === 'success') return 'ok'
-  if (task.status === 'pending' || task.status === 'running' || task.status === 'paused') return 'unavailable'
-  if (task.status === 'cancelled') return 'rejected'
-  return 'failed'
-}
-
 /**
  * ���ɽӿڿ��ܷ��� 200 �� 202�����δ��������ȷ�ϣ���
  * ���߶�Я�����������������ֻ�� 4xx/5xx ��Ϊʧ�ܡ�
@@ -200,15 +188,10 @@ function projectTaskContext(input: { projectId?: string; episodeId?: string; sho
   }).filter(([, value]) => value !== undefined && value !== ''))
 }
 
-export async function quoteVideoGeneration(input: Pick<VideoGenerationInput, 'model' | 'ratio' | 'quality' | 'seconds' | 'references'>,signal?:AbortSignal) {
+export async function quoteVideoGeneration(input: Pick<VideoGenerationInput, 'model' | 'ratio' | 'quality' | 'seconds' | 'references'>, signal?: AbortSignal) {
   const result = await generate<{ points: number; estimated: boolean }>('/api/video-generation-tasks/quote', {
-    method: 'POST',
-    signal,
-    body: JSON.stringify({
-      prompt: '费用预估',
-      config: { model: input.model, size: input.ratio, vquality: input.quality, videoSeconds: String(input.seconds || 4) },
-      references: input.references || [],
-    }),
+    method: 'POST', signal,
+    body: JSON.stringify({ prompt: '费用预估', config: { model: input.model, size: input.ratio, vquality: input.quality, videoSeconds: String(input.seconds || 4) }, references: input.references || [] }),
   })
   return result.data
 }
@@ -234,6 +217,13 @@ export function createVideoTask(input: VideoGenerationInput) {
 }
 
 /** ��������ڵĲο��زĽ��������Ȩ��У�����ʱ����������� blob: URL ֱ�Ӵ������Ρ� */
+export async function publishReferenceFile(type:'image'|'video'|'audio',file:Blob,name='reference') {
+  const form=new FormData();form.append('type',type);form.append('persistent','false');form.append('file',file,name)
+  const response=await fetch('/api/reference-assets',{method:'POST',credentials:'same-origin',body:form})
+  const body=await response.json();const data=body.data||body
+  if(!response.ok||!data.url)throw new StudioApiError(data.error||body.error||'参考文件上传失败',response.status)
+  return data.url as string
+}
 export async function publishReferenceAsset(type: 'image' | 'video' | 'audio', dataUrl: string) {
   if (!dataUrl) throw new StudioApiError('�ο��زĶ�ȡʧ�ܣ��������ϴ�', 400)
   if (dataUrl.length > 32 * 1024 * 1024) throw new StudioApiError('�ο��زĳ�����ǰֱ�����ƣ���ѹ��������', 413)
@@ -274,7 +264,7 @@ export function createTextTask(input: TextGenerationInput) {
   return generate<{ task: GenerationTask }>('/api/text-tasks', {
     method: 'POST',
     body: JSON.stringify({
-      config: input.model ? { model: input.model } : {},
+      config: { ...(input.model ? { model: input.model } : {}), ...(input.stream ? { stream: true } : {}) },
       messages: input.messages?.length ? input.messages : [{ role: 'user', content: input.prompt }],
       context: {
         ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
@@ -357,7 +347,6 @@ export function createAgentRun(input: CreateAgentRunInput) {
       ...(input.projectId ? { projectId: input.projectId } : {}),
       ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       ...(input.assetIds?.length ? { assetIds: input.assetIds } : {}),
-      ...(input.skillIds?.length ? { skillIds: input.skillIds } : {}),
       ...(input.modelIds?.length ? { modelIds: input.modelIds } : {}),
       ...(input.publicPrompt ? { publicPrompt: input.publicPrompt } : {}),
       ...(input.snapshot !== undefined ? { snapshot: input.snapshot } : {}),

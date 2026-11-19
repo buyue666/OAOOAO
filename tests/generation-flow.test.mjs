@@ -138,7 +138,7 @@ if (videoModel) {
   if (created.status === 429) {
     check('视频任务频率限制生效', true, 'status=429 已限流（后端保护正常）')
   } else {
-    check('创建视频任务', [200, 202].includes(created.status) && Boolean(task?.id), `status=${created.status} id=${task?.id || '-'} needsReview=${task?.needsReview}`)
+    check('创建视频任务', [200, 202].includes(created.status) && Boolean(task?.id), `status=${created.status} id=${task?.id || '-'}`)
     if (task?.id) {
       const detail = await call(`/api/video-tasks/${task.id}`)
       check('视频任务状态可查询', detail.status === 200 && Boolean(detail.json?.task?.status), `status=${detail.json?.task?.status}`)

@@ -38,7 +38,7 @@ const protectedPaths = ['/studio', '/image', '/video', '/agent', '/canvas', '/ca
 test('preview startup explicitly selects the bundler used by the project configuration', () => {
   const manifest = JSON.parse(read('../package.json'))
   assert.equal(manifest.scripts.dev, 'next dev --webpack')
-  assert.equal(manifest.scripts.build, 'next build --webpack')
+  assert.equal(manifest.scripts.build, 'node scripts/check-plugin-releases.mjs && next build --webpack')
 })
 
 test('guest preview is enabled only for development, never production or an unknown environment', () => {

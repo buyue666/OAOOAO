@@ -5,6 +5,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ExternalLink, RotateCcw, Save } from 'lucide-react'
 import { SiteBrand } from '@/components/site-brand'
 import { safeBrandImageUrl } from '@/lib/studio/site-brand'
+import { normalizeWechatContact } from '@/lib/studio/wechat-contact'
+import { AdminWechatContactFields } from './admin-wechat-contact-fields'
 import { normalizeSiteFooter, validateSiteFooter } from '@/lib/studio/site-footer'
 import type { AdminSettingsPatch } from '@/lib/studio/admin-api'
 import type { SiteSettings } from '@/lib/studio/admin-types'
@@ -14,13 +16,14 @@ import { AdminSiteFooter } from './admin-site-footer'
 
 const textFields = ['title', 'logoUrl', 'iconUrl', 'seoTitle', 'seoDescription', 'seoKeywords', 'termsUrl', 'termsVersion', 'termsContent', 'privacyUrl', 'privacyVersion', 'privacyContent'] as const
 const labels: Record<(typeof textFields)[number], string> = { title: '网站名称', logoUrl: '品牌 Logo', iconUrl: '浏览器图标', seoTitle: '搜索标题', seoDescription: '搜索描述', seoKeywords: '搜索关键词', termsUrl: '服务条款地址', termsVersion: '服务条款版本', termsContent: '服务条款正文', privacyUrl: '隐私政策地址', privacyVersion: '隐私政策版本', privacyContent: '隐私政策正文' }
-const tabs = [['brand', '品牌标识'], ['search', '搜索信息'], ['footer', '页脚'], ['policies', '条款与隐私']] as const
+const tabs = [['brand', '品牌标识'], ['search', '搜索信息'], ['contact', '微信入口'], ['footer', '页脚'], ['policies', '条款与隐私']] as const
 type BrandTab = (typeof tabs)[number][0]
 
 function draftFromSite(site: SiteSettings) {
   return {
     ...Object.fromEntries(textFields.map((key) => [key, String(site[key] ?? '')])) as Record<(typeof textFields)[number], string>,
     footer: normalizeSiteFooter(site.footer),
+    wechatContact: normalizeWechatContact(site.wechatContact),
   }
 }
 
@@ -31,7 +34,8 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
   const original = draftFromSite(site)
   const changed = textFields.filter((key) => draft[key] !== original[key])
   const footerChanged = JSON.stringify(draft.footer) !== JSON.stringify(original.footer)
-  const dirty = changed.length > 0 || footerChanged
+  const contactChanged = JSON.stringify(draft.wechatContact) !== JSON.stringify(original.wechatContact)
+  const dirty = changed.length > 0 || footerChanged || contactChanged
 
   useEffect(() => { setDraft(draftFromSite(site)); setError('') }, [site])
   useEffect(() => { onDirtyChange(dirty) }, [dirty, onDirtyChange])
@@ -53,16 +57,22 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
     }
     const footerError = footerChanged ? validateSiteFooter(draft.footer) : null
     if (footerError) { setActive('footer'); setError(footerError); return }
+    const qr = draft.wechatContact
+    if (contactChanged && ((qr.enabled && !qr.imageUrl.trim()) || (qr.imageUrl.trim() && !qr.imageUrl.startsWith('data:image/png;base64,') && !safeBrandImageUrl(qr.imageUrl)))) {
+      setActive('contact'); setError('请上传二维码图片或填写有效的图片地址，再开启微信入口。'); return
+    }
     setError('')
-    const next: SiteSettings = { ...Object.fromEntries(changed.map((key) => [key, draft[key].trim()])), ...(footerChanged ? { footer: normalizeSiteFooter(draft.footer) } : {}) }
-    onSave({ site: next }, [...changed.map((key) => labels[key]), ...(footerChanged ? ['页脚'] : [])])
+    const next: SiteSettings = { ...Object.fromEntries(changed.map((key) => [key, draft[key].trim()])), ...(footerChanged ? { footer: normalizeSiteFooter(draft.footer) } : {}),
+      ...(contactChanged ? { wechatContact: { enabled: qr.enabled, caption: qr.caption.trim(), ...(qr.imageUrl !== original.wechatContact.imageUrl ? { imageUrl: qr.imageUrl.trim() } : {}) } } : {}),
+    }
+    onSave({ site: next }, [...changed.map((key) => labels[key]), ...(footerChanged ? ['页脚'] : []), ...(contactChanged ? ['工作台微信二维码'] : [])])
   }
 
   return (
     <form onSubmit={submit} className="flex min-w-0 flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <AdminTabs label="站点展示设置" items={tabs} value={active} onChange={setActive} />
-        <StatusBadge tone={dirty ? 'warning' : 'neutral'}>{dirty ? `${changed.length + Number(footerChanged)} 项未保存` : '已保存配置'}</StatusBadge>
+        <StatusBadge tone={dirty ? 'warning' : 'neutral'}>{dirty ? `${changed.length + Number(footerChanged) + Number(contactChanged)} 项未保存` : '已保存配置'}</StatusBadge>
       </div>
       {error && <AdminNotice tone="danger">{error}</AdminNotice>}
 
@@ -110,6 +120,10 @@ export function AdminSiteSettings({ site, onSave, saving, onDirtyChange }: { sit
             </fieldset>
           </AdminSectionCard>
         ))}
+      </div>
+
+      <div hidden={active !== 'contact'}>
+        <AdminWechatContactFields value={draft.wechatContact} disabled={saving} onChange={wechatContact => setDraft(current => ({ ...current, wechatContact }))} />
       </div>
 
       <div hidden={active !== 'footer'}><AdminSiteFooter value={draft.footer} site={draft} disabled={saving} onChange={footer => setDraft(current => ({ ...current, footer }))} /></div>

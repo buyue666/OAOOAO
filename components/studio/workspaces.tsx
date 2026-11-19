@@ -22,14 +22,16 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import {PromptReferenceInput} from './prompt-reference-input'
+import { ImageComparisonReference, useImageComparisonReference } from './image-comparison-reference'
 import {scheduleVideoQuote} from '@/lib/studio/video-quote'
+import { quoteVideoGeneration } from '@/lib/studio/generation-api'
 import {VideoDurationSlider} from './video-duration-slider'
 import {orderedPromptReferences, serializePromptReferences, type PromptReference} from '@/lib/studio/prompt-references'
 import {selectableVideoDurations,videoReferenceLimit,videoReferenceUploadLimit,videoLibrarySelectionLimit} from '@/lib/studio/video-policy'
-import { quoteVideoGeneration } from '@/lib/studio/generation-api'
 import { useRouter } from 'next/navigation'
 import { DirectorAgent } from './director-agent'
 import { MediaDownloadButton } from './media-download-button'
+import { publicModelLabel } from '@/lib/studio/model-display'
 import {
   ControlButton,
   IconAction,
@@ -56,6 +58,8 @@ import {
 } from './workspace-kit'
 import { useStudio } from '@/lib/studio/store'
 import { useGeneration } from '@/lib/studio/generation-store'
+import { quoteTeamImage, quoteTeamVideo, uploadTeamMedia, useTeamMedia, useTeamMediaLibrary, useTeamMediaWorks } from '@/lib/studio/team-media-context'
+import { availableTeamModels } from '@/lib/studio/team-generation'
 import { GenerationErrorNotice, GenerationNotice, LiveTaskList, LocalPreviewNotice } from './live-generation'
 import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioDimension } from '@/lib/studio/studio-models'
 import { accountDataEpoch } from '@/lib/studio/account-data-sync'
@@ -255,6 +259,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
   fit?: boolean
 }) {
   const tx = useUiText()
+  const { state } = useStudio()
   return (
     <div className={cn('group relative min-w-0 overflow-hidden rounded-lg border bg-studio-ink', selected ? 'border-studio-accent ring-1 ring-inset ring-studio-accent' : 'border-studio-ink-line', className)}>
       <button type="button" onClick={() => { onSelect(); onImageClick?.() }} aria-pressed={selected} aria-label={`${onImageClick ? '编辑并选择' : '选择'} ${label}`} className={cn('block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent', fit && 'h-full')}>
@@ -278,7 +283,7 @@ function ReuseDraftNotice({ apply, dismiss }: { apply: () => void; dismiss: () =
         )}
       </span>
       <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-studio-ink/90 to-transparent px-2 pb-2 pt-6 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:has-[[role=alert]]:opacity-100">
-        <span className="truncate text-[10px] text-studio-ink-foreground">{work.model}</span>
+        <span className="truncate text-[10px] text-studio-ink-foreground">{publicModelLabel(work.model, state.sessionSettings)}</span>
         <span className="flex shrink-0 items-center gap-0.5">
           <Tooltip label={tx("预览")}>
             <IconAction label={tx("预览 {0}", [work.title])} onClick={onOpen} className="size-6 text-studio-ink-foreground hover:bg-studio-ink-surface hover:text-studio-ink-foreground">
@@ -439,6 +444,8 @@ function ZoomableMedia({ work }: { work: Work }) {
 
 function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onClose: () => void; onNotice: (text: string) => void }) {
   const tx = useUiText()
+  const teamMedia = useTeamMedia()
+  const { state } = useStudio()
   const router = useRouter()
   const [zoomed, setZoomed] = useState(false)
   if (!work) return null
@@ -455,7 +462,7 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
     <Modal
       open
       title={zoomed ? tx("{0} · 放大预览", [work.title]) : work.title}
-      description={zoomed ? tx('使用按钮或滚轮放大，拖动画面查看细节。') : `${work.kind === 'image' ? '图片' : '视频'} · ${work.model} · ${work.ratio}`}
+      description={zoomed ? tx('使用按钮或滚轮放大，拖动画面查看细节。') : `${work.kind === 'image' ? '图片' : '视频'} · ${publicModelLabel(work.model, state.sessionSettings)} · ${work.ratio}`}
       onClose={closeModal}
       className={zoomed ? 'max-w-[min(96vw,1100px)]' : undefined}
       footer={
@@ -472,12 +479,12 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
               * 早先写死 `/canvas/aurora`（演示项目，真实账号下 404）；
               * 现在进入画布入口页，由它解析当前用户的真实项目。
               */}
-            <ControlButton variant="secondary" size="sm" onClick={() => router.push('/canvas')}>
+            {!teamMedia && <><ControlButton variant="secondary" size="sm" onClick={() => router.push('/canvas')}>
               <Send className="size-3.5" aria-hidden="true" />
               {tx("送入画布")}</ControlButton>
             <ControlButton variant="primary" size="sm" onClick={() => onNotice('请在结果舞台使用「加入项目」，那里会真实写入所选项目。')}>
               <Plus className="size-3.5" aria-hidden="true" />
-              {tx("加入项目")}</ControlButton>
+              {tx("加入项目")}</ControlButton></>}
             <MediaDownloadButton media={{ url: work.src, kind: work.kind }} title={work.title} prompt={work.prompt} taskId={work.taskId ?? work.id} className="inline-flex h-8 items-center gap-2 rounded-lg border border-border px-3 text-xs hover:bg-muted disabled:opacity-50" />
           </>
         )
@@ -514,7 +521,10 @@ function ResultDetailModal({ work, onClose, onNotice }: { work: Work | null; onC
 
 export function ImageWorkspace() {
   const tx = useUiText()
-  const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
+  const { state, estimateCredits, liveModels: personalModels, liveReady: personalReady, defaultModels } = useStudio()
+  const teamMedia = useTeamMedia(), team = teamMedia?.team
+  const liveModels = useMemo(() => team ? availableTeamModels(personalModels, team.modelIds, state.sessionSettings, team.subscriptionExpiresAt) : personalModels, [personalModels, state.sessionSettings, team])
+  const liveReady = team ? liveModels.length > 0 : personalReady
   const generation = useGeneration()
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
@@ -522,7 +532,9 @@ export function ImageWorkspace() {
   const imageModelList = useMemo(() => filterModelsByCapability(liveModels, 'image'), [liveModels])
   const videoModelList = useMemo(() => filterModelsByCapability(liveModels, 'video'), [liveModels])
   /** 真实生成结果：既作为参考素材候选，也作为结果舞台的展示来源。 */
-  const serverWorksResult = useServerWorks({ pageSize: 24, kind: 'image' })
+  const personalWorks = useServerWorks({ pageSize: 24, kind: 'image', enabled: !teamMedia })
+  const teamWorks = useTeamMediaWorks(teamMedia, 'image')
+  const serverWorksResult = teamMedia ? teamWorks : personalWorks
   /** 素材库搜索词（服务端 keyword 参数）：素材超过一页时用户仍能找到目标素材。 */
   const [libraryKeyword, setLibraryKeyword] = useState('')
   /**
@@ -532,14 +544,17 @@ export function ImageWorkspace() {
    * 于是用户在 /assets 上传的图片在这里选不到，「从素材库选择」永远是空网格。
    * 视频工作台早已用 `useLibraryAssets` 修好同类问题，这里与之对齐。
    */
-  const serverLibrary = useLibraryAssets({ pageSize: 60, kind: 'image', keyword: libraryKeyword })
-  const [modelId, setModelId] = useState(() => imageModelList[0]?.id ?? '')
+  const personalLibrary = useLibraryAssets({ pageSize: 60, kind: 'image', keyword: libraryKeyword, enabled: !teamMedia })
+  const teamLibrary = useTeamMediaLibrary(teamMedia, 'image', libraryKeyword)
+  const serverLibrary = teamMedia ? teamLibrary : personalLibrary
+  const [modelId, setModelId] = useState(() => defaultModelFor('image', state.sessionSettings, imageModelList))
   const [ratio, setRatio] = useState(defaultModels.imageSize || '16:9')
   const [resolution, setResolution] = useState('1K')
   // 1K 只接受 auto；保持首屏状态与清晰度约束一致，避免先渲染一个旧的中文质量值。
   const [quality, setQuality] = useState('auto')
   const [count, setCount] = useState(String(defaultModels.imageCount || 4))
   const [view, setView] = useState('grid')
+  const [comparisonReference, setComparisonReference] = useImageComparisonReference(teamMedia ? `${state.user.id}:${teamMedia.team.id}:${teamMedia.project.id}` : state.user?.id ?? '')
   const [advanced, setAdvanced] = useState(false)
   /**
    * 已选参考素材（**完整快照**，含媒体地址）。
@@ -570,11 +585,13 @@ export function ImageWorkspace() {
    * 这里只暴露会随请求提交、且影响真实结果的参数。
    */
   const [advancedValues, setAdvancedValues] = useState<Record<string, string>>({})
+  const teamUploadUrls = useRef(new Map<string, Promise<string>>())
+  const [teamQuote, setTeamQuote] = useState<{ key: string; points?: number; error?: string }>({ key: '' })
 
   // 拿到真实模型目录后自动切到后端默认模型，避免继续使用演示模型 ID。
   useEffect(() => {
     if (!imageModelList.length) return
-    setModelId((current) => imageModelList.some((item) => item.id === current) ? current : defaultModelFor('image', state.sessionSettings, imageModelList))
+    setModelId((current) => imageModelList.some((item) => item.id === current && !item.subscriptionLocked) ? current : defaultModelFor('image', state.sessionSettings, imageModelList))
   }, [imageModelList, state.sessionSettings])
 
   /**
@@ -585,6 +602,7 @@ export function ImageWorkspace() {
    * `consumeCreateIntent` 读取即清除，因此不会在刷新后重复套用。
    */
   useEffect(() => {
+    if (teamMedia) return
     const intent = consumeCreateIntent('image')
     if (!intent) return
     intentDraft.current = true
@@ -600,7 +618,7 @@ export function ImageWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const reused = useWorkReuseParams({ kind: 'image', accountId: state.user.id, connected: state.backendStatus === 'connected', models: imageModelList, prompt, protectDraft: intentDraft, setPrompt, setModelId, setNotice })
+  const reused = useWorkReuseParams({ kind: 'image', accountId: state.user.id, connected: !teamMedia && state.backendStatus === 'connected', models: imageModelList, prompt, protectDraft: intentDraft, setPrompt, setModelId, setNotice })
 
   const model = imageModelList.find((item) => item.id === modelId) ?? imageModelList[0]
   const ratioOptions = model?.capabilities.ratios.length ? model.capabilities.ratios : ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4', '21:9']
@@ -611,8 +629,22 @@ export function ImageWorkspace() {
     label: item,
     hint: ratioDimension(item, model?.capabilities.outputDimensions, resolution, model?.capabilities.outputDimensionsByResolution),
   })), [model, ratioOptions, resolution])
-  const credits = model ? estimateCredits(model.id, { ratio, quality, count: Number(count) }) : 0
-  const submitBlock = generationBlockReason(state.backendStatus, Boolean(model), credits, state.credits)
+  const teamQuoteKey = JSON.stringify([model?.id, ratio, resolution, quality, advancedValues.kind, selectedRefs, uploads.map(item => [item.id, item.status])])
+  useEffect(() => {
+    if (!teamMedia || !model) return
+    return scheduleVideoQuote({
+      load: async signal => {
+        const references = await resolveImageReferences()
+        signal.throwIfAborted()
+        return quoteTeamImage(teamMedia.root, { prompt: '费用预估', model: model.id, ratio, resolution, quality, count: 1, references, kind: resolveGenerationKind(advancedValues.kind, references.length) }, signal)
+      },
+      onSuccess: result => setTeamQuote({ key: teamQuoteKey, points: result.points }),
+      onError: reason => setTeamQuote({ key: teamQuoteKey, error: reason instanceof Error ? reason.message : '团队报价失败' }),
+    })
+  }, [teamMedia?.root, teamQuoteKey])
+  const quotePending = Boolean(teamMedia && model && teamQuote.key !== teamQuoteKey)
+  const credits = teamMedia ? (teamQuote.key === teamQuoteKey ? teamQuote.points ?? 0 : 0) * Number(count) : model ? estimateCredits(model.id, { ratio, quality, count: Number(count) }) : 0
+  const submitBlock = model?.subscriptionLocked ? '需要订阅套餐才可使用此模型' : quotePending ? '正在核对图片参数与预计消耗…' : (teamMedia ? teamQuote.error : '') || (teamMedia && teamMedia.balance === null ? '暂无法读取团队积分' : generationBlockReason(state.backendStatus, Boolean(model), credits, teamMedia?.balance ?? state.credits))
   /**
    * 后端图片任务一次请求只产出一张图，因此批量数量来自后端 `maxBatchSize`：
    * 上限为 1 时不提供多张选项，避免界面给出后端无法满足的参数。
@@ -1002,7 +1034,11 @@ export function ImageWorkspace() {
     const uploadedReferences = await Promise.all(uploads.filter((item) => item.dataUrl).map(async (item) => ({
       name: item.name,
       type: 'image',
-      url: await publishReferenceAsset('image', item.dataUrl as string),
+      url: await (teamMedia ? (() => {
+        let upload = teamUploadUrls.current.get(item.id)
+        if (!upload) { upload = uploadTeamMedia(teamMedia.root, item.dataUrl as string, item.name); teamUploadUrls.current.set(item.id, upload); void upload.catch(() => teamUploadUrls.current.delete(item.id)) }
+        return upload
+      })() : publishReferenceAsset('image', item.dataUrl as string)),
     })))
     return [...libraryReferences, ...uploadedReferences]
   }
@@ -1061,6 +1097,7 @@ export function ImageWorkspace() {
   }
 
   async function sendToCanvas() {
+    if (teamMedia) { router.push(`/teams/${teamMedia.team.id}/projects/${teamMedia.project.id}/canvas`); return }
     const added = await addToProject()
     if (added && state.selectedProjectId) router.push(`/canvas/${state.selectedProjectId}`)
   }
@@ -1128,6 +1165,12 @@ export function ImageWorkspace() {
 
   const saveEditorVersion = useCallback(async (imageUrl: string) => {
     if (!editorWork) return
+    if (teamMedia) {
+      if (!imageUrl.startsWith('data:image/')) throw new Error('已生成的结果会自动收藏在团队项目。')
+      await uploadTeamMedia(teamMedia.root, imageUrl, `${editorWork.title} 编辑版`.slice(0, 120))
+      setNotice({ tone: 'accent', text: '已保存到团队素材。' })
+      return
+    }
     await createLibraryAsset({
       kind: 'image',
       title: `${editorWork.title} 编辑版`.slice(0, 120),
@@ -1136,7 +1179,7 @@ export function ImageWorkspace() {
       data: { serverUrl: imageUrl, dataUrl: imageUrl, mediaKind: 'image', assetRole: 'general' },
     })
     setNotice({ tone: 'accent', text: '已保存到资产库。' })
-  }, [editorWork])
+  }, [editorWork, teamMedia])
 
   /** 当前项目已引用的媒体，用于按钮文案如实反映状态。 */
   const currentReferenced = Boolean(selectedWork && referencedIds.includes(selectedWork.src))
@@ -1144,12 +1187,12 @@ export function ImageWorkspace() {
   /** 切换项目时重新读取该项目已引用的媒体，保证「已加入」状态真实。 */
   useEffect(() => {
     let cancelled = false
-    if (state.backendStatus !== 'connected' || !state.selectedProjectId) { setReferencedIds([]); return }
+    if (teamMedia || state.backendStatus !== 'connected' || !state.selectedProjectId) { setReferencedIds([]); return }
     listProjectReferencedSourceIds(state.selectedProjectId)
       .then((ids) => { if (!cancelled) setReferencedIds(ids) })
       .catch(() => { if (!cancelled) setReferencedIds([]) })
     return () => { cancelled = true }
-  }, [state.backendStatus, state.selectedProjectId])
+  }, [state.backendStatus, state.selectedProjectId, Boolean(teamMedia)])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1174,6 +1217,7 @@ export function ImageWorkspace() {
           resolution,
           quality,
           count: 1,
+          ...(teamMedia ? { approvedCost: teamQuote.points } : {}),
           references,
           kind: resolveGenerationKind(advancedValues.kind, references.length),
           title: batch > 1 ? `图片生成 · ${prompt.trim().slice(0, 14)} · ${index + 1}/${batch}` : `图片生成 · ${prompt.trim().slice(0, 18)}`,
@@ -1214,7 +1258,7 @@ export function ImageWorkspace() {
 
   const imagePromptReferences: PromptReference[] = referenceSelectionLimit > 0 ? [
     ...selectedRefs.map(item => ({id: item.id, name: item.title, type: 'image' as const, preview: item.src})),
-    ...uploads.map(item => ({id: item.id, name: item.name, type: 'image' as const, preview: item.preview, ready: item.status === 'done' && Boolean(item.dataUrl)})),
+    ...uploads.map(item => ({id: item.id, name: item.name, type: 'image' as const, preview: item.preview, ready: item.status === 'done' && Boolean(item.dataUrl || item.file)})),
   ] : []
   const params = (
     <WorkspaceParams>
@@ -1225,7 +1269,7 @@ export function ImageWorkspace() {
       </ParamSection>
 
       <ParamSection title={tx("模型")} layout="model">
-        <SelectField label={tx("图像模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, note: item.note, icon: <ModelIcon model={item} /> }))} />
+        <SelectField label={tx("图像模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!imageModelList.length} options={imageModelList.map((item) => ({ value: item.id, label: `${item.shortName} · ${item.creditCost} 积分/次`, note: item.note, description:item.description,requiresSubscription:item.requiresSubscription,disabled:item.subscriptionLocked,disabledReason:'需要订阅套餐才可使用', icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{tx(submitBlock)}</p>}
         {liveReady && <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{tx("模型与计费以当前账户配置为准；实际扣费以任务结果为准。")}</p>}
       </ParamSection>
@@ -1384,18 +1428,24 @@ export function ImageWorkspace() {
         )}
         {view === 'compare' && (
           <div className="grid min-h-full grid-cols-1 content-start gap-2 sm:grid-cols-2">
-            {visibleWorks.slice(0, 2).map((work, index) => (
+            {visibleWorks.slice(0, 1).map((work) => (
               <ResultTile
                 key={work.id}
                 work={work}
                 ratio={ratio}
                 selected={work.id === selectedWork?.id}
-                label={index === 0 ? tx('A · 当前结果') : tx('B · 对比结果')}
+                label={tx('A · 当前结果')}
                 onSelect={() => setSelectedWorkId(work.id)}
                 onOpen={() => setDetailWork(work)}
               />
             ))}
-            {visibleWorks.length < 2 && <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center text-xs leading-6 text-muted-foreground"><Columns2 className="size-5" aria-hidden="true" />{tx("再生成一张图片，即可并排比较。")}</div>}
+            <ImageComparisonReference
+              key={state.user?.id ?? ''}
+              image={comparisonReference}
+              onChange={setComparisonReference}
+              library={{ assets: referencePool, libraryState: serverLibrary.state, libraryMessage: serverLibrary.message, libraryTotal: referencePool.length + Math.max(0, serverLibrary.total - serverLibrary.assets.length), onReload: () => { void refreshSources() }, onLoadMore: serverLibrary.hasMore ? () => { void serverLibrary.loadMore() } : undefined, loadingMore: serverLibrary.loadingMore, onSearch: setLibraryKeyword, serverSearch: true }}
+              fallback={visibleWorks[1] ? <ResultTile work={visibleWorks[1]} ratio={ratio} selected={false} label={tx('B · 对比结果')} onSelect={() => setSelectedWorkId(visibleWorks[1].id)} onOpen={() => setDetailWork(visibleWorks[1])} /> : undefined}
+            />
           </div>
         )}
       </ResultStage>
@@ -1409,21 +1459,21 @@ export function ImageWorkspace() {
            */
           setPrompt(selectedWork.prompt || prompt)
           if (selectedWork.model && imageModelList.some((item) => item.id === selectedWork.model)) setModelId(selectedWork.model)
-          setNotice({ tone: 'accent', text: `已复用参数：${selectedWork.prompt ? `提示词「${selectedWork.prompt.slice(0, 20)}」` : '（该结果没有记录提示词）'}${selectedWork.model ? ` · 模型 ${selectedWork.model}` : ''}` })
+          setNotice({ tone: 'accent', text: `已复用参数：${selectedWork.prompt ? `提示词「${selectedWork.prompt.slice(0, 20)}」` : '（该结果没有记录提示词）'}${selectedWork.model ? ` · 模型 ${publicModelLabel(selectedWork.model, state.sessionSettings)}` : ''}` })
         }}>
           <Copy className="size-3.5" aria-hidden="true" />
           {tx("复用参数")}</ControlButton>
         <ControlButton size="sm" variant="ghost" disabled={!selectedWork || projectBusy} onClick={() => void sendToCanvas()}>
           <Send className="size-3.5" aria-hidden="true" />
-          {tx("送入画布")}</ControlButton>
-        <ControlButton size="sm" variant="ghost" disabled={!selectedWork || projectBusy} onClick={() => void addToProject()}>
+          {tx(teamMedia ? '打开项目画布' : '送入画布')}</ControlButton>
+        {!teamMedia && <ControlButton size="sm" variant="ghost" disabled={!selectedWork || projectBusy} onClick={() => void addToProject()}>
           <Plus className="size-3.5" aria-hidden="true" />
           {projectBusy ? tx('处理中…') : tx('加入项目')}
-        </ControlButton>
+        </ControlButton>}
         <MediaDownloadButton media={{ url: selectedWork?.src ?? '', kind: 'image' }} title={selectedWork?.title ?? tx('作品')} prompt={selectedWork?.prompt} taskId={selectedWork?.taskId ?? selectedWork?.id} disabled={!selectedWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
-        <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
+        {!teamMedia && <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
-          {tx("导演 Agent")}</ControlButton>
+          {tx("导演 Agent")}</ControlButton>}
       </ResultActions>
 
       <section aria-labelledby="image-queue" className="studio-surface px-4 py-3">
@@ -1469,14 +1519,15 @@ export function ImageWorkspace() {
         onSubmit={submit}
         submitLabel={submitting ? tx('正在提交…') : tx('开始生成')}
         credits={credits}
+        creditsPending={quotePending}
         submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
         submitHint={submitBlock || (!prompt.trim() ? tx('先写下你想生成的画面。') : undefined)}
         paramsTitle={tx("图片参数")}
         paramsHint={model ? tx("{0} · {1} 张", [model.shortName, count]) : tx('暂无可用模型')}
       />
-      <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title={tx("导演 Agent")} description={tx("基于当前图片参数继续拆解镜头与素材")}>
+      {!teamMedia && <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title={tx("导演 Agent")} description={tx("基于当前图片参数继续拆解镜头与素材")}>
         <DirectorAgent context="图片工作台 · 极光之后" />
-      </SidePanel>
+      </SidePanel>}
       <SidePanel
         open={Boolean(editorWork)}
         onClose={() => setEditorWork(null)}
@@ -1503,7 +1554,8 @@ export function ImageWorkspace() {
           quoteVideoCredits={async (settings, signal) => {
             const selected = videoModelList.find(item => item.id === settings.model)
             if (!selected) throw new Error('所选视频模型已不可用，请重新选择')
-            return (await quoteVideoGeneration(imageEditorVideoInput(selected, editorWork.src, editorWork.ratio, settings.quality, settings.seconds), signal)).points
+            const input = imageEditorVideoInput(selected, editorWork.src, editorWork.ratio, settings.quality, settings.seconds)
+            return (await (teamMedia ? quoteTeamVideo(teamMedia.root, { ...input, prompt: '费用预估' }, signal) : quoteVideoGeneration(input, signal))).points
           }}
           initialResolution={editorWork.resolution || resolution}
           initialQuality={editorWork.quality || quality}
@@ -1526,13 +1578,16 @@ export function ImageWorkspace() {
 
 export function VideoWorkspace() {
   const tx = useUiText()
-  const { state, estimateCredits, liveModels, liveReady, defaultModels } = useStudio()
+  const { state, estimateCredits, liveModels: personalModels, liveReady: personalReady, defaultModels } = useStudio()
+  const teamMedia = useTeamMedia(), team = teamMedia?.team
+  const liveModels = useMemo(() => team ? availableTeamModels(personalModels, team.modelIds, state.sessionSettings, team.subscriptionExpiresAt) : personalModels, [personalModels, state.sessionSettings, team])
+  const liveReady = team ? liveModels.length > 0 : personalReady
   const generation = useGeneration()
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const intentDraft = useRef(false)
   const videoModelList = useMemo(() => filterModelsByCapability(liveModels, 'video'), [liveModels])
-  const [modelId, setModelId] = useState(() => videoModelList[0]?.id ?? '')
+  const [modelId, setModelId] = useState(() => defaultModelFor('video', state.sessionSettings, videoModelList))
   const [mode, setMode] = useState('text')
   const [ratio, setRatio] = useState('16:9')
   const [duration, setDuration] = useState(`${defaultModels.videoSeconds || 8} 秒`)
@@ -1559,6 +1614,7 @@ export function VideoWorkspace() {
   const [lastFrameRef, setLastFrameRef] = useState<SelectedReference[]>([])
   const [sourceVideoRef, setSourceVideoRef] = useState<SelectedReference[]>([])
   const [notice, setNotice] = useState<{ tone: 'neutral' | 'warning' | 'accent'; text: string } | null>(null)
+  const [tailPreview,setTailPreview]=useState(false)
   const [detailWork, setDetailWork] = useState<Work | null>(null)
   const [agentOpen, setAgentOpen] = useState(false)
   const [failedVideoSrc, setFailedVideoSrc] = useState('')
@@ -1575,7 +1631,9 @@ export function VideoWorkspace() {
    * 真实账号下恒为空 —— 于是「生成完成但结果舞台空白」「参考素材选不到真实素材」，
    * 必须刷新页面才可能恢复。现在与图片工作台一致，读后端作品与素材库。
    */
-  const serverWorksResult = useServerWorks({ pageSize: 24, kind: 'video' })
+  const personalWorks = useServerWorks({ pageSize: 24, kind: 'video', enabled: !teamMedia })
+  const teamWorks = useTeamMediaWorks(teamMedia, 'video')
+  const serverWorksResult = teamMedia ? teamWorks : personalWorks
   /** 素材库搜索词（服务端 keyword 参数）：素材超过一页时用户仍能找到目标素材。 */
   const [libraryKeyword, setLibraryKeyword] = useState('')
   const [libraryTarget, setLibraryTarget] = useState<'first' | 'last' | 'source' | 'image' | 'video' | 'audio' | null>(null)
@@ -1583,11 +1641,12 @@ export function VideoWorkspace() {
 
   useEffect(() => {
     if (!videoModelList.length) return
-    setModelId((current) => videoModelList.some((item) => item.id === current) ? current : defaultModelFor('video', state.sessionSettings, videoModelList))
+    setModelId((current) => videoModelList.some((item) => item.id === current && !item.subscriptionLocked) ? current : defaultModelFor('video', state.sessionSettings, videoModelList))
   }, [videoModelList, state.sessionSettings])
 
   /** 套用首页传来的创作意图（提示词 + 参考文件），替换写死的示例文案。 */
   useEffect(() => {
+    if (teamMedia) return
     const intent = consumeCreateIntent('video')
     if (!intent) return
     intentDraft.current = true
@@ -1602,7 +1661,7 @@ export function VideoWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const reused = useWorkReuseParams({ kind: 'video', accountId: state.user.id, connected: state.backendStatus === 'connected', models: videoModelList, prompt, protectDraft: intentDraft, setPrompt, setModelId, setNotice })
+  const reused = useWorkReuseParams({ kind: 'video', accountId: state.user.id, connected: !teamMedia && state.backendStatus === 'connected', models: videoModelList, prompt, protectDraft: intentDraft, setPrompt, setModelId, setNotice })
 
   const model = videoModelList.find((item) => item.id === modelId) ?? videoModelList[0]
   const videoPolicy = model?.capabilities.videoPolicy
@@ -1825,13 +1884,15 @@ export function VideoWorkspace() {
   }, [referenceSelectionLimit])
 
   const settings: GenerationSettings = { modelId: model?.id ?? modelId, ratio, quality, duration, mode }
-  const quoteKey = JSON.stringify([state.user.id, model?.id, mode, ratio, quality, duration, selectedRefs, firstFrameRef, lastFrameRef, sourceVideoRef, sourceVideoUploads.map(i => [i.id, i.status]), uploads.map(i => [i.id, i.status]), firstFrameUploads.map(i => [i.id, i.status]), lastFrameUploads.map(i => [i.id, i.status]), videoRefUploads.map(i => [i.id, i.status]), audioRefUploads.map(i => [i.id, i.status])])
+  const useExactQuote = Boolean(videoPolicy || teamMedia)
+  const quoteKey = JSON.stringify([teamMedia?.root, state.user.id, model?.id, mode, ratio, quality, duration, selectedRefs, firstFrameRef, lastFrameRef, sourceVideoRef, sourceVideoUploads.map(i => [i.id, i.status]), uploads.map(i => [i.id, i.status]), firstFrameUploads.map(i => [i.id, i.status]), lastFrameUploads.map(i => [i.id, i.status]), videoRefUploads.map(i => [i.id, i.status]), audioRefUploads.map(i => [i.id, i.status])])
   useEffect(() => {
-    if (!videoPolicy || !model || state.backendStatus !== 'connected') return
+    if (!useExactQuote || !model || state.backendStatus !== 'connected') return
     return scheduleVideoQuote({
       load: async(signal) => {
         const references = await resolveVideoReferences()
         signal.throwIfAborted()
+        if (teamMedia) return quoteTeamVideo(teamMedia.root, {prompt: '费用预估', model:model.id, ratio, quality, seconds:Number.parseInt(duration,10), references},signal)
         return await quoteVideoGeneration({ model: model.id, ratio, quality, seconds: Number.parseInt(duration, 10), references },signal)
       },
       onSuccess: data => setQuote({ key: quoteKey, points: data.points }),
@@ -1840,9 +1901,9 @@ export function VideoWorkspace() {
     // quoteKey contains all parameters and selected media affecting the price.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteKey, state.backendStatus])
-  const quoteBlock = videoPolicy ? quote.key !== quoteKey ? '正在核对视频参数与预计消耗…' : quote.error || '' : ''
-  const credits = videoPolicy ? quote.key === quoteKey ? quote.points || 0 : 0 : model ? estimateCredits(model.id, settings) : 0
-  const submitBlock = quoteBlock || generationBlockReason(state.backendStatus, Boolean(model), credits, state.credits)
+  const quoteBlock = useExactQuote && model ? quote.key !== quoteKey ? '正在核对视频参数与预计消耗…' : quote.error || '' : ''
+  const credits = useExactQuote ? quote.key === quoteKey ? quote.points || 0 : 0 : model ? estimateCredits(model.id, settings) : 0
+  const submitBlock = model?.subscriptionLocked ? '需要订阅套餐才可使用此模型' : quoteBlock || (teamMedia && teamMedia.balance === null ? '暂无法读取团队积分' : generationBlockReason(state.backendStatus, Boolean(model), credits, teamMedia?.balance ?? state.credits))
   const videoWorks = useMemo<Work[]>(() => (serverWorksResult.state === 'unauthenticated'
     ? []
     : serverWorksResult.works.map((work) => ({
@@ -1895,7 +1956,7 @@ export function VideoWorkspace() {
   const videoReady = Boolean(currentWork) && currentWork?.status !== '处理中'
   const videoFailed = Boolean(currentWork && currentWork.src === failedVideoSrc)
   const selectedMention = (item: SelectedReference): PromptReference => ({id: item.id, name: item.title, type: item.kind === 'video' ? 'video' : item.kind === 'audio' ? 'audio' : 'image', preview: item.src})
-  const uploadMention = (item: UploadItem): PromptReference => ({id: item.id, name: item.name, type: item.kind || 'image', preview: item.preview, ready: item.status === 'done' && Boolean(item.dataUrl)})
+  const uploadMention = (item: UploadItem): PromptReference => ({id: item.id, name: item.name, type: item.kind || 'image', preview: item.preview, ready: item.status === 'done' && Boolean(item.dataUrl || item.file)})
   const promptReferences = orderedPromptReferences(mode, {
     first: [...firstFrameRef.map(selectedMention), ...firstFrameUploads.map(uploadMention)],
     last: capabilities.lastFrame ? [...lastFrameRef.map(selectedMention), ...lastFrameUploads.map(uploadMention)] : [],
@@ -1906,7 +1967,7 @@ export function VideoWorkspace() {
 
   async function publishUploads(items: UploadItem[], type: 'image' | 'video' | 'audio', role: GenerationReference['role'] = 'reference'): Promise<GenerationReference[]> {
     if (items.some((item) => item.status !== 'done')) throw new Error('参考素材仍在读取，请稍候再生成')
-    return Promise.all(items.filter((item) => item.dataUrl).map(async (item) => ({
+    return Promise.all(items.filter((item) => item.dataUrl || item.file).map(async (item) => ({
       name: item.name,
       type,
       role,
@@ -1996,6 +2057,7 @@ export function VideoWorkspace() {
   }
 
   async function sendVideoToCanvas() {
+    if (teamMedia) { router.push(`/teams/${teamMedia.team.id}/projects/${teamMedia.project.id}/canvas`); return }
     const added = await addVideoToProject()
     if (added && state.selectedProjectId) router.push(`/canvas/${state.selectedProjectId}`)
   }
@@ -2003,12 +2065,12 @@ export function VideoWorkspace() {
   /** 切换项目时重新读取已引用媒体。 */
   useEffect(() => {
     let cancelled = false
-    if (state.backendStatus !== 'connected' || !state.selectedProjectId) { setReferencedIds([]); return }
+    if (teamMedia || state.backendStatus !== 'connected' || !state.selectedProjectId) { setReferencedIds([]); return }
     listProjectReferencedSourceIds(state.selectedProjectId)
       .then((ids) => { if (!cancelled) setReferencedIds(ids) })
       .catch(() => { if (!cancelled) setReferencedIds([]) })
     return () => { cancelled = true }
-  }, [state.backendStatus, state.selectedProjectId])
+  }, [state.backendStatus, state.selectedProjectId, Boolean(teamMedia)])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -2029,6 +2091,7 @@ export function VideoWorkspace() {
           ratio,
           quality,
           seconds: Number.isFinite(seconds) ? seconds : undefined,
+          ...(teamMedia ? { approvedCost: credits } : {}),
           references,
           projectId: state.selectedProjectId,
           surface: 'chat',
@@ -2089,7 +2152,7 @@ export function VideoWorkspace() {
       </ParamSection>
 
       <ParamSection title={tx("模型")} layout="model">
-        <SelectField label={tx("视频模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: item.shortName, note: item.note, icon: <ModelIcon model={item} /> }))} />
+        <SelectField label={tx("视频模型")} value={model?.id ?? ''} onChange={setModelId} disabled={!videoModelList.length} options={videoModelList.map((item) => ({ value: item.id, label: item.shortName, note: item.note, description:item.description,requiresSubscription:item.requiresSubscription,disabled:item.subscriptionLocked,disabledReason:'需要订阅套餐才可使用', icon: <ModelIcon model={item} /> }))} />
         {!model && <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status">{tx(submitBlock)}</p>}
       </ParamSection>
 
@@ -2219,21 +2282,21 @@ export function VideoWorkspace() {
           setPrompt(currentWork.prompt || prompt)
           if (currentWork.model && videoModelList.some((item) => item.id === currentWork.model)) setModelId(currentWork.model)
           if (currentWork.duration) setDuration(currentWork.duration)
-          setNotice({ tone: 'accent', text: `已复用参数：${currentWork.prompt ? `提示词「${currentWork.prompt.slice(0, 20)}」` : '（该结果没有记录提示词）'}${currentWork.model ? ` · 模型 ${currentWork.model}` : ''}` })
+          setNotice({ tone: 'accent', text: `已复用参数：${currentWork.prompt ? `提示词「${currentWork.prompt.slice(0, 20)}」` : '（该结果没有记录提示词）'}${currentWork.model ? ` · 模型 ${publicModelLabel(currentWork.model, state.sessionSettings)}` : ''}` })
         }}>
           <Copy className="size-3.5" aria-hidden="true" />
           {tx("复用参数")}</ControlButton>
-        <ControlButton size="sm" variant="ghost" disabled={!currentWork || projectBusy} onClick={() => void addVideoToProject()}>
+        {!teamMedia && <ControlButton size="sm" variant="ghost" disabled={!currentWork || projectBusy} onClick={() => void addVideoToProject()}>
           <Plus className="size-3.5" aria-hidden="true" />
           {projectBusy ? tx('处理中…') : tx('加入项目')}
-        </ControlButton>
+        </ControlButton>}
         <ControlButton size="sm" variant="ghost" disabled={!currentWork || projectBusy} onClick={() => void sendVideoToCanvas()}>
           <Send className="size-3.5" aria-hidden="true" />
-          {tx("送入画布")}</ControlButton>
+          {tx(teamMedia ? '打开项目画布' : '送入画布')}</ControlButton>
         <MediaDownloadButton media={{ url: currentWork?.src ?? '', kind: 'video' }} title={currentWork?.title ?? tx('作品')} prompt={currentWork?.prompt} taskId={currentWork?.taskId ?? currentWork?.id} disabled={!currentWork} className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs hover:bg-muted disabled:opacity-50" />
-        <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
+        {!teamMedia && <ControlButton size="sm" variant="ghost" onClick={() => setAgentOpen(true)}>
           <Bot className="size-3.5" aria-hidden="true" />
-          {tx("导演 Agent")}</ControlButton>
+          {tx("导演 Agent")}</ControlButton>}
       </ResultActions>
 
       <section aria-labelledby="video-queue" className="studio-surface px-4 py-3">
@@ -2267,15 +2330,15 @@ export function VideoWorkspace() {
         onSubmit={submit}
         submitLabel={submitting ? tx('正在提交…') : tx('开始生成')}
         credits={credits}
-        creditsPending={Boolean(videoPolicy && quoteBlock)}
+        creditsPending={Boolean(useExactQuote && quote.key !== quoteKey && model)}
         submitDisabled={!prompt.trim() || submitting || Boolean(submitBlock)}
         submitHint={submitBlock || (!prompt.trim() ? tx('先描述主体动作与镜头运动。') : undefined)}
         paramsTitle={tx("视频参数")}
         paramsHint={model ? `${model.shortName} · ${duration}` : tx('暂无可用模型')}
       />
-      <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title={tx("导演 Agent")} description={tx("基于当前视频参数继续拆解镜头与素材")}>
+      {!teamMedia && <SidePanel open={agentOpen} onClose={() => setAgentOpen(false)} title={tx("导演 Agent")} description={tx("基于当前视频参数继续拆解镜头与素材")}>
         <DirectorAgent context="视频工作台 · 极光之后" />
-      </SidePanel>
+      </SidePanel>}
       <ResultDetailModal work={detailWork} onClose={() => setDetailWork(null)} onNotice={(text) => setNotice({ tone: 'accent', text })} />
     </>
   )

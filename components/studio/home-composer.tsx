@@ -55,7 +55,7 @@ export function PromptComposer({ value, onChange, onSubmitShortcut, files, onFil
           className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
         >
           <Puzzle className="size-3.5" aria-hidden="true" />
-          {tx("技能库")}<span className="sr-only">{tx("（在新标签页打开）")}</span>
+          {tx("技能中心")}<span className="sr-only">{tx("（在新标签页打开）")}</span>
         </Link>
       </div>
     </div>

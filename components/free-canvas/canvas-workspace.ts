@@ -5,6 +5,7 @@ export type CanvasWorkspace = {
   readOnly: boolean
   canDownload: boolean
   modelIds: string[]
+  subscriptionExpiresAt?: string | null
 }
 
 export function teamCanvasRoot(workspace: Pick<CanvasWorkspace, 'teamId' | 'projectId'>) {

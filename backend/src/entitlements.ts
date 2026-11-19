@@ -8,6 +8,24 @@ const labels: Record<GenerationKind, string> = {
   text: '文本生成', image: '图片生成', video: '视频生成', audio: '音频生成', render: '成片合成',
 };
 
+export const GENERATION_CONCURRENCY_KINDS = ['agent', ...GENERATION_KINDS] as const;
+export type GenerationConcurrencyKind = typeof GENERATION_CONCURRENCY_KINDS[number];
+const concurrencyLabels = {...labels, agent:'创作助手'};
+const validConcurrency=(value:unknown):value is number=>typeof value==='number'&&Number.isInteger(value)&&value>=1&&value<=100;
+
+export function validatePlanConcurrency(plan: Record<string, unknown>): void {
+  const value=plan.generationConcurrency;
+  if(value===undefined)return;
+  if(!value||typeof value!=='object'||Array.isArray(value)||Object.entries(value).some(([kind,limit])=>
+    !Object.hasOwn(concurrencyLabels,kind)||!validConcurrency(limit)))throw httpError(400,'套餐生成并发须为 1–100 的整数，留空可沿用全局默认');
+}
+
+export function assertGenerationConcurrency(settings:Record<string,any>,plan:Record<string,any>|undefined,kind:GenerationConcurrencyKind,active:number):void {
+  const override=plan?.generationConcurrency?.[kind],fallback=settings.generationConcurrency?.[kind];
+  const limit=validConcurrency(override)?override:validConcurrency(fallback)?fallback:kind==='agent'?1:3;
+  if(active>=limit)throw httpError(429,`${concurrencyLabels[kind]}并发已满（最多 ${limit} 项），请等待已有任务完成后再试`);
+}
+
 /** Omission preserves existing plans. An explicit empty list grants no new generation. */
 export function validatePlanGenerationKinds(plan: Record<string, unknown>): void {
   const value = plan.allowedGenerationKinds;
@@ -49,4 +67,15 @@ export async function personalGenerationPlan(ctx: Context, settings: Record<stri
   if (!plan) throw httpError(403, '没有可用的个人套餐权益方案，请联系管理员');
   validatePlanModels(plan);
   return plan;
+}
+
+/** Credits alone do not confer subscription-only model access. */
+export async function modelSubscriptionAccess(ctx:Context,settings:Record<string,any>,userId?:string,client?:PoolClient):Promise<boolean>{
+ if(!userId)return false;
+ if(ctx.workspace){const team=(await (client||ctx.db).query('SELECT subscription_expires_at FROM oaooao_teams WHERE id=$1',[ctx.workspace.teamId])).rows[0];return !!team?.subscription_expires_at&&new Date(team.subscription_expires_at).getTime()>Date.now();}
+ const plan=await getPlanSummary(ctx,userId,client);
+ return plan.hasActivePlan&&plan.planId!==settings.entitlements?.defaultPlanId;
+}
+export async function assertModelSubscription(ctx:Context,settings:Record<string,any>,model:Record<string,any>,userId?:string,client?:PoolClient){
+ if(model.requiresSubscription===true&&!await modelSubscriptionAccess(ctx,settings,userId,client))throw httpError(403,'需要订阅套餐才可使用此模型');
 }

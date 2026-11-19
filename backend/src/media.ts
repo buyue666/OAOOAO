@@ -1,17 +1,19 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, rm, mkdtemp, stat } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
-import { httpError, safeFetch, transaction, type Context } from './core.js';
+import { httpError, safeFetch, transaction, object, string, rateLimit, type Context } from './core.js';
 import { storageConfig, assertStorageConfigured, objectLocation, putObject, getObject, headObject, downloadObjectUrl, type ObjectLocation } from './object-storage.js';
 import { assertStorageAvailable, lockStorage } from './storage-quota.js';
 import { readTeamAsset } from './team-assets.js';
 import { creativeReferencePath, readCreativeReference } from './creative-reference-store.js';
 
 export const MAX_MEDIA_BYTES = 24 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
+export const mediaByteLimit = (mime:string) => mime.startsWith('video/')?MAX_VIDEO_BYTES:mime.startsWith('image/')?MAX_IMAGE_BYTES:MAX_MEDIA_BYTES;
 export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 const digest = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 export function mediaPath(root: string, id: string): string {
@@ -25,6 +27,10 @@ export function sniffMedia(data: Buffer): string {
   if (data[0]===255 && data[1]===216 && data[2]===255) return 'image/jpeg';
   if (/^GIF8[79]a/.test(data.subarray(0,6).toString())) return 'image/gif';
   if (data.subarray(0,4).toString()==='RIFF' && data.subarray(8,12).toString()==='WEBP') return 'image/webp';
+  if(data.subarray(0,2).toString()==='BM')return 'image/bmp';
+  if(['49492a00','4d4d002a'].includes(data.subarray(0,4).toString('hex')))return 'image/tiff';
+  if(data.subarray(4,8).toString()==='ftyp'&&/^(heic|heix|hevc|hevx|mif1|msf1)$/.test(data.subarray(8,12).toString()))return /^(mif1|msf1)$/.test(data.subarray(8,12).toString())?'image/heif':'image/heic';
+  if(data.subarray(4,8).toString()==='ftyp'&&data.subarray(8,12).toString()==='qt  ')return 'video/quicktime';
   if (data.subarray(4,8).toString()==='ftyp' && /^M4[AB] /.test(data.subarray(8,12).toString())) return 'audio/mp4';
   if (data.subarray(4,8).toString()==='ftyp') return 'video/mp4';
   if (data.subarray(0,4).equals(Buffer.from([26,69,223,163]))) return 'video/webm';
@@ -44,7 +50,7 @@ export function decodeDataUrl(value: string): Buffer {
 }
 export async function saveMedia(ctx: Context, userId: string, bytes: Buffer, persistent = true) {
   const mimeType = sniffMedia(bytes);
-  if (!bytes.length || bytes.length > (mimeType.startsWith('video/')?MAX_VIDEO_BYTES:MAX_MEDIA_BYTES)) throw httpError(413, 'Media exceeds storage limit'); const id = randomUUID(); const token = randomBytes(32).toString('base64url');
+  if (!bytes.length || bytes.length > mediaByteLimit(mimeType)) throw httpError(413, 'Media exceeds storage limit'); const id = randomUUID(); const token = randomBytes(32).toString('base64url');
   const {storage,location}=await transaction(ctx.db,async client=>{
     const storage=await storageConfig(ctx,client),location=storage.enabled?objectLocation(storage,userId,id):{};
     if(storage.enabled)assertStorageConfigured(storage);
@@ -66,6 +72,13 @@ export async function saveMedia(ctx: Context, userId: string, bytes: Buffer, per
   }
   const url = `/api/reference-assets/${id}`;
   return { key:id, url, upstreamUrl:`${ctx.config.origin}${url}?token=${encodeURIComponent(token)}`, bytes:bytes.length, mimeType };
+}
+/** Opaque file URLs are shareable; no account directory or modification access is granted. */
+export async function accessibleMedia(ctx:Context,id:string){
+  mediaPath(ctx.config.mediaRoot,id);
+  const row=(await ctx.db.query('SELECT * FROM oaooao_media WHERE id=$1 AND delete_requested_at IS NULL AND (persistent OR expires_at>now())',[id])).rows[0];
+  if(!row)throw httpError(404,'素材不存在或已过期');
+  return row;
 }
 export async function ownedMedia(ctx: Context, userId: string, id: string, client?:PoolClient): Promise<{bytes:Buffer; mimeType:string}> {
   const result = await (client||ctx.db).query('SELECT * FROM oaooao_media WHERE id=$1 AND user_id=$2 AND delete_requested_at IS NULL AND (persistent OR expires_at>now())',[id,userId]);
@@ -102,7 +115,7 @@ export async function readReference(ctx: Context, userId: string, reference: Rec
   }
   if (url.origin === new URL(ctx.config.origin).origin && /^\/api\/(?:media|reference-assets|generation-log-assets)\//.test(url.pathname)) return ownedMedia(ctx,userId,url.pathname.split('/').pop()!);
   if (!/^https?:$/.test(url.protocol) || !/^https?:\/\//.test(raw)) throw httpError(400,'Reference must be an owned asset or public HTTPS URL');
-  const response = await safeFetch(url.toString(), {maxBytes:MAX_MEDIA_BYTES, timeoutMs:30000});
+  const response = await safeFetch(url.toString(), {maxBytes:reference.type==='video'?MAX_VIDEO_BYTES:reference.type==='image'||!reference.type?MAX_IMAGE_BYTES:MAX_MEDIA_BYTES, timeoutMs:120000});
   if (!response.ok) throw httpError(400,'Reference could not be downloaded');
   const bytes = Buffer.from(await response.arrayBuffer()); return {bytes,mimeType:sniffMedia(bytes)};
 }
@@ -192,8 +205,30 @@ export async function renderShots(ctx:Context,userId:string,shots:RenderShot[],r
     return await saveMedia(ctx,userId,await readFile(file));
   }finally{const root=resolve(tmpdir()),target=resolve(directory);if(!target.startsWith(root+(process.platform==='win32'?'\\':'/'))||!target.includes('oaooao-render-'))throw Error('Unsafe render temporary path');await rm(target,{recursive:true,force:true});}
 }
+export async function importReferenceImage(ctx:Context,userId:string,raw:string,fetcher:typeof safeFetch=safeFetch){
+    let url:URL;try{url=new URL(raw);}catch{throw httpError(400,'请填写有效的 HTTPS 图片直链');}
+    if(url.protocol!=='https:'||url.username||url.password)throw httpError(400,'请填写不含账号密码的 HTTPS 图片直链');
+
+    let response:Response;
+    try{response=await fetcher(url,{headers:{accept:'image/png,image/jpeg,image/webp'},timeoutMs:20000,maxBytes:MAX_IMAGE_BYTES,publicRedirects:3});}
+    catch(error){if((error as any).statusCode===400)throw httpError(400,'图片链接不可访问，请使用公开的 HTTPS 图片直链');throw httpError(502,'图片读取失败，链接可能已过期、禁止外部访问或超过 24 MB');}
+    if(!response.ok)throw httpError(422,'图片链接无法下载，请检查链接是否已过期或需要登录');
+    const bytes=Buffer.from(await response.arrayBuffer());
+    if(bytes.length>=30_000_000)throw httpError(413,'图片须小于 30 MB');
+    const mime=sniffMedia(bytes);
+    if(!['image/jpeg','image/png','image/webp'].includes(mime))throw httpError(415,'仅支持 JPG、PNG、WEBP 图片直链');
+    const existing=(await ctx.db.query('SELECT id,mime_type,byte_count FROM oaooao_media WHERE user_id=$1 AND sha256=$2 AND persistent=true AND delete_requested_at IS NULL LIMIT 1',[userId,digest(bytes)])).rows[0];
+    const saved=existing?{key:existing.id,url:`/api/reference-assets/${existing.id}`,mimeType:existing.mime_type,bytes:Number(existing.byte_count)}:await saveMedia(ctx,userId,bytes,true);
+    await ctx.audit({actorId:userId,action:'media.import-url',targetType:'media',targetId:saved.key,metadata:{bytes:saved.bytes,mimeType:saved.mimeType}});
+    return {key:saved.key,url:saved.url,mimeType:saved.mimeType,bytes:saved.bytes};
+}
 export async function registerMedia(app: FastifyInstance, ctx: Context) {
-  app.post('/api/reference-assets',{bodyLimit:34*1024*1024},async request=>{
+  app.post('/api/reference-assets/import-url', {bodyLimit:18000}, async request=>{
+    const user=await ctx.requireUser(request),body=object(request.body),raw=string(body.url,'图片链接',16000);
+    await rateLimit(ctx,`reference-url-import:${user.id}`,30,60);
+    return importReferenceImage(ctx,user.id,raw);
+  });
+  app.post('/api/reference-assets',{bodyLimit:MAX_VIDEO_BYTES+1024*1024},async request=>{
     const user=await ctx.requireUser(request); let bytes:Buffer; let persistent=false; let expected='';
     if(request.isMultipart()){
       let file:Buffer|undefined;
@@ -209,16 +244,13 @@ export async function registerMedia(app: FastifyInstance, ctx: Context) {
   });
   for(const route of ['/api/media/:id','/api/reference-assets/:id','/api/generation-log-assets/:id'])app.get(route,async(request,reply)=>{
     const {id}=request.params as {id:string};mediaPath(ctx.config.mediaRoot,id);
-    const row=(await ctx.db.query('SELECT *,expires_at>now() token_valid FROM oaooao_media WHERE id=$1 AND delete_requested_at IS NULL',[id])).rows[0];
-    if(!row)throw httpError(404,'Media not found');
-    const token=String((request.query as any).token||'');
-    const valid=token.length>0&&token.length<256&&row.access_token_hash&&row.token_valid&&timingSafeEqual(Buffer.from(digest(token)),Buffer.from(row.access_token_hash));
-    if(!valid){const user=await ctx.requireUser(request);if(user.id!==row.user_id||(!row.persistent&&!row.token_valid))throw httpError(404,'Media not found');}
+    const row=await accessibleMedia(ctx,id);
     reply.header('X-Content-Type-Options','nosniff').header('Cache-Control','private, no-store').type(row.mime_type);
     if(row.storage_backend==='s3'){
       // Image/video elements use direct R2 delivery. Same-origin JS fetches and
       // canvas CORS reads retain their origin without requiring a public bucket or CORS changes.
-      if(row.storage_location.provider!=='vercel-blob'&&request.headers['sec-fetch-dest']!=='empty'&&request.headers['sec-fetch-mode']!=='cors')return reply.redirect(await downloadObjectUrl(ctx,row.storage_location));
+      const delivery=request.headers['x-oao-media-delivery'];
+      if(row.storage_location.provider!=='vercel-blob'&&(delivery==='direct'||delivery!=='proxy'&&request.headers['sec-fetch-dest']!=='empty'&&request.headers['sec-fetch-mode']!=='cors'))return reply.redirect(await downloadObjectUrl(ctx,row.storage_location));
       return reply.send(await getObject(ctx,row.storage_location));
     }
     return reply.send(await readFile(mediaPath(ctx.config.mediaRoot,id)));

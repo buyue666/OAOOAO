@@ -12,7 +12,7 @@
  * 早先实现只看 `extraBenefits` 是否配置：没配「更多权益」的卡片
  * 即使有十几行权益也不会折叠，按钮也不出现（运营看不到折叠效果）。
  */
-export const BENEFIT_FOLD_THRESHOLD = 6
+export const BENEFIT_FOLD_THRESHOLD = 3
 
 type BenefitGroups = {
   promotionBenefits: readonly unknown[]
@@ -83,9 +83,8 @@ export function benefitRowCount(plan: BenefitGroups) {
 /**
  * 是否需要折叠。
  *
- * 规则：折叠状态下只显示「限时活动 + 基础权益 + 独家功能」；
- * `extraBenefits`（更多权益）在折叠时隐藏、展开时显示。
- * 因此当权益行数超过阈值时自动折叠并给出展开入口。
+ * 默认只展示前 3 项核心权益，超过阈值时给出展开入口。
+ * 活动、基础权益、独家功能、更多权益按顺序共享这一行数预算。
  */
 export function planNeedsFold(plan: BenefitGroups) {
   return benefitRowCount(plan) > BENEFIT_FOLD_THRESHOLD
@@ -93,5 +92,5 @@ export function planNeedsFold(plan: BenefitGroups) {
 
 /** 折叠状态下实际可见的权益行数（用于界面说明）。 */
 export function visibleBenefitRowCount(plan: BenefitGroups) {
-  return plan.promotionBenefits.length + plan.baseBenefits.length + plan.exclusiveBenefits.length
+  return Math.min(benefitRowCount(plan), BENEFIT_FOLD_THRESHOLD)
 }

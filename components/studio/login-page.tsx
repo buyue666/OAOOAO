@@ -15,6 +15,8 @@ import { AuthBrandPanel } from './auth-brand-panel'
 import { AuthField, AuthInput, AuthPasswordInput } from './auth-fields'
 import { ControlButton, Notice } from './ui'
 import { isStudioPreview } from '@/lib/studio/preview-mode'
+import { AuthPolicyLink, AuthPolicyReader, useAuthPolicyReader } from '@/components/legal/auth-policy-reader'
+import { authPolicyReturnLabel } from '@/lib/studio/auth-policy'
 
 export type AuthMode = 'login' | 'register' | 'reset'
 
@@ -98,6 +100,9 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
   const wechat = useWechatLogin({ active: mode === 'login' && wechatLoginEnabled && status === 'idle', refreshSession, navigate: path => router.replace(path) })
   const { session: wechatSession, status: wechatStatus, loading: wechatLoading, error: wechatError } = wechat
   const busy = status !== 'idle' || wechatLoading
+  const policyReader = useAuthPolicyReader()
+  const policyReturnPath = modePaths[mode] + (searchParams.toString() ? '?' + searchParams.toString() : '')
+  const policyLink = (kind: 'terms' | 'privacy') => <AuthPolicyLink kind={kind} configured={kind === 'terms' ? termsHref : privacyHref} returnPath={policyReturnPath} reader={policyReader} />
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -162,13 +167,13 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
       if (!email.trim()) errors.email = '注册必须填写邮箱地址。'
       if (!emailCode.trim()) errors.emailCode = '请先获取并填写邮箱验证码。'
       if (!password) errors.password = '请设置密码。'
-      else if (password.length < 8) errors.password = '密码至少 8 位。'
+      else if (password.length < 12 || new TextEncoder().encode(password).length > 72) errors.password = '密码至少 12 位，且不能超过 72 个 UTF-8 字节。'
       if (!policyAccepted) errors.policy = '请先同意服务条款与隐私政策。'
     } else {
       if (!email.trim()) errors.email = '请填写注册邮箱。'
       if (!emailCode.trim()) errors.emailCode = '请填写邮箱验证码。'
       if (!newPassword) errors.newPassword = '请设置新密码。'
-      else if (newPassword.length < 8) errors.newPassword = '新密码至少 8 位。'
+      else if (newPassword.length < 12 || new TextEncoder().encode(newPassword).length > 72) errors.newPassword = '新密码至少 12 位，且不能超过 72 个 UTF-8 字节。'
       if (newPassword && confirmPassword !== newPassword) errors.confirmPassword = '两次输入的新密码不一致。'
     }
     return errors
@@ -333,17 +338,17 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
                       </ControlButton>
                     </span>
                   </AuthField>
-                  <AuthField id={fieldIds.password} label="密码（至少 8 位）" error={fieldErrors.password}>
+                  <AuthField id={fieldIds.password} label="密码（至少 12 位）" error={fieldErrors.password}>
                     <AuthPasswordInput id={fieldIds.password} autoComplete="new-password" value={password} visible={showPassword} onToggle={() => setShowPassword((value) => !value)} onChange={(event) => setPassword(event.target.value)} error={fieldErrors.password} />
                   </AuthField>
                   <AuthField id="auth-referral" label="邀请码（可选）">
                     <AuthInput id="auth-referral" value={referralCode} onChange={(event) => setReferralCode(event.target.value)} placeholder={t('authReferralPlaceholder')} />
                   </AuthField>
                   <div className="flex flex-col gap-1.5">
-                    <label htmlFor={fieldIds.policy} className="flex items-start gap-2.5 text-xs leading-5 text-muted-foreground">
-                      <input id={fieldIds.policy} type="checkbox" checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} aria-invalid={fieldErrors.policy ? true : undefined} className="mt-0.5 size-4 shrink-0 accent-studio-accent" />
-                      <span>我已阅读并同意服务条款与隐私政策。</span>
-                    </label>
+                    <div className="flex min-h-11 items-center gap-2.5 text-xs leading-6 text-muted-foreground">
+                      <input id={fieldIds.policy} type="checkbox" checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} aria-labelledby="auth-policy-label" aria-invalid={fieldErrors.policy ? true : undefined} className="size-4 shrink-0 accent-studio-accent" />
+                      <span id="auth-policy-label"><label htmlFor={fieldIds.policy} className="cursor-pointer">我已阅读并同意</label> {policyLink('terms')} 与 {policyLink('privacy')}。</span>
+                    </div>
                     {fieldErrors.policy && <p role="alert" className="text-xs leading-5 text-destructive">{fieldErrors.policy}</p>}
                   </div>
                 </>
@@ -365,7 +370,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
                       </ControlButton>
                     </span>
                   </AuthField>
-                  <AuthField id={fieldIds.newPassword} label="新密码（至少 8 位）" error={fieldErrors.newPassword}>
+                  <AuthField id={fieldIds.newPassword} label="新密码（至少 12 位）" error={fieldErrors.newPassword}>
                     <AuthPasswordInput id={fieldIds.newPassword} autoComplete="new-password" value={newPassword} visible={showNewPassword} onToggle={() => setShowNewPassword((value) => !value)} onChange={(event) => setNewPassword(event.target.value)} error={fieldErrors.newPassword} />
                   </AuthField>
                   <AuthField id={fieldIds.confirmPassword} label="确认新密码" error={fieldErrors.confirmPassword}>
@@ -396,7 +401,7 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
 
             {mode === 'login' && wechatLoginEnabled && (
               <section aria-label="微信扫码登录" className="flex flex-col gap-4">
-                {wechatRegistrationEnabled && <div className="text-xs leading-5 text-muted-foreground"><label className="flex items-start gap-2"><input type="checkbox" checked={wechatPolicyAccepted} onChange={event => setWechatPolicyAccepted(event.target.checked)} disabled={wechatLoading || !!wechatSession} className="mt-1" /><span>首次使用微信创建账号，我同意 <a href={termsHref || '/terms'} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">服务条款</a> 和 <a href={privacyHref || '/privacy'} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">隐私政策</a>。</span></label><p className="mt-1 pl-5">未勾选仍可登录已绑定账号。修改同意选项前，请先关闭当前二维码。</p></div>}
+                {wechatRegistrationEnabled && <div className="text-xs leading-5 text-muted-foreground"><label className="flex items-start gap-2"><input type="checkbox" checked={wechatPolicyAccepted} onChange={event => setWechatPolicyAccepted(event.target.checked)} disabled={wechatLoading || !!wechatSession} className="mt-1" /><span>首次使用微信创建账号，我同意 {policyLink('terms')} 和 {policyLink('privacy')}。</span></label><p className="mt-1 pl-5">未勾选仍可登录已绑定账号。修改同意选项前，请先关闭当前二维码。</p></div>}
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="h-px flex-1 bg-border" aria-hidden="true" />
                   <span>或使用微信登录</span>
@@ -447,16 +452,17 @@ export function LoginPage({ mode: routeMode }: { mode?: AuthMode }) {
           </div>
         </div>
 
-        <footer className="px-5 pb-8 text-xs leading-5 text-muted-foreground sm:px-10 lg:px-14">
+        {mode !== 'register' && !(mode === 'login' && wechatLoginEnabled && wechatRegistrationEnabled) && <footer className="px-5 pb-8 text-xs leading-5 text-muted-foreground sm:px-10 lg:px-14">
           <p className="mx-auto max-w-[420px]">
             继续即表示你同意
-            {termsHref ? <> <a href={termsHref} className="underline underline-offset-2 hover:text-foreground">服务条款</a></> : ' 服务条款'}
+            {' '}{policyLink('terms')}
             与
-            {privacyHref ? <> <a href={privacyHref} className="underline underline-offset-2 hover:text-foreground">隐私政策</a></> : ' 隐私政策'}
+            {' '}{policyLink('privacy')}
             。
           </p>
-        </footer>
+        </footer>}
       </section>
+      <AuthPolicyReader reader={policyReader} returnLabel={authPolicyReturnLabel(policyReturnPath)} />
     </main>
   )
 }

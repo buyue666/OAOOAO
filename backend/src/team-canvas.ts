@@ -52,7 +52,7 @@ export async function registerTeamCanvas(app: FastifyInstance, ctx: Context) {
   app.get(path, async request => {
     const user = await ctx.requireUser(request), { teamId, projectId } = request.params as { teamId: string; projectId: string };
     const project = await requireTeamProject(ctx.db, teamId, user.id, projectId), team = await requireTeam(ctx.db, teamId, user.id);
-    return { data: { project: canvasView(project), workspace: { teamId, projectId, teamName: team.name, readOnly: project.role === 'reviewer', canDownload: project.role !== 'reviewer' || project.can_download, modelIds: team.model_ids ?? [] } } };
+    return { data: { project: canvasView(project), workspace: { teamId, projectId, teamName: team.name, readOnly: project.role === 'reviewer', canDownload: project.role !== 'reviewer' || project.can_download, modelIds: team.model_ids ?? [], subscriptionExpiresAt: team.subscription_expires_at?.toISOString() ?? null } } };
   });
   app.patch(path, { bodyLimit: 3 * 1024 * 1024 }, async request => {
     const user = await ctx.requireUser(request), { teamId, projectId } = request.params as { teamId: string; projectId: string }, body = object(request.body), raw = object(body.project);

@@ -72,6 +72,13 @@ async function proxy(request: NextRequest) {
   headers.set('origin', target.origin)
   headers.set('referer', `${target.origin}/`)
   headers.set('accept-encoding', 'identity')
+  // Node fetch replaces Sec-Fetch-Mode with "cors". Preserve the browser's media
+  // delivery intent separately so a navigation is not turned into a byte proxy.
+  headers.delete('x-oao-media-delivery')
+  if (['GET', 'HEAD'].includes(request.method) && /^\/api\/(?:media|reference-assets|generation-log-assets)\/[a-f0-9-]{36}$/i.test(request.nextUrl.pathname)) {
+    const byteRead = request.headers.get('sec-fetch-dest') === 'empty' || request.headers.get('sec-fetch-mode') === 'cors'
+    headers.set('x-oao-media-delivery', byteRead ? 'proxy' : 'direct')
+  }
   try {
     const init: RequestInit & { duplex?: 'half' } = { method: request.method, headers, redirect: 'manual', cache: 'no-store', signal: request.signal }
     if (!['GET', 'HEAD'].includes(request.method)) { init.body = request.body; init.duplex = 'half' }

@@ -139,11 +139,27 @@ test('controlled audience and period emit callbacks and follow parent changes', 
 test('folding also limits long base-benefit lists and preview defaults may expand them', () => {
   const catalog = membership.toMembershipPlans([product('many', { dailyPoints: 0, metadata: { membership: { benefits: Array.from({ length: 9 }, (_, index) => `Entitlement ${index + 1}`) } } })])
   const h = harness({ products: catalog })
-  assert.equal(all(card(findCards(h.render())[0].props)).filter(node => node.type === 'li').length, 6)
+  assert.equal(all(card(findCards(h.render())[0].props)).filter(node => node.type === 'li').length, 3)
   const toggle = all(h.render()).find(node => node.type === 'button' && text(node) === '查看更多权益')
   assert.equal(toggle.props['aria-expanded'], false); toggle.props.onClick()
   assert.equal(all(card(findCards(h.render())[0].props)).filter(node => node.type === 'li').length, 9)
   assert.equal(findCards(harness({ products: catalog, showMoreDefault: true }).render())[0].props.showMore, true)
+})
+
+test('six configured benefits retain an expand entry without a separate extras list', () => {
+  const catalog = membership.toMembershipPlans([product('six', { metadata: { membership: { promotions: ['限时活动'], benefits: ['云端存储', '水印设置'], exclusiveBenefits: ['创作助手', '导演台', '脚本策划'] } } })])
+  const h = harness({ products: catalog, embedded: true })
+  const readCard = () => card(findCards(h.render())[0].props)
+  assert.equal(all(readCard()).filter(node => node.type === 'li').length, 3)
+  assert.doesNotMatch(text(readCard()), /脚本策划/)
+  const expand = all(h.render()).find(node => node.type === 'button' && text(node) === '查看更多权益')
+  assert.ok(expand); assert.equal(expand.props['aria-expanded'], false)
+  expand.props.onClick()
+  assert.equal(all(readCard()).filter(node => node.type === 'li').length, 6)
+  assert.match(text(readCard()), /脚本策划/)
+  const collapse = all(h.render()).find(node => node.type === 'button' && text(node) === '收起更多权益')
+  assert.equal(collapse.props['aria-expanded'], true); collapse.props.onClick()
+  assert.equal(all(readCard()).filter(node => node.type === 'li').length, 3)
 })
 
 test('loading, failure with retry, empty catalog and close remain explicit', () => {

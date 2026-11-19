@@ -1,8 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import type { FastifyInstance } from 'fastify';
+import { normalizeEmail, validatePassword, validateUsername } from './auth.js';
 import { hashToken, httpError, object, pagination, rateLimit, string, transaction, type Context } from './core.js';
 import { creditUnits } from './wallet.js';
-import { assertTeamSeats, lockTeam, requireTeam, teamEvent, teamManager, teamStorageUsage, teamView } from './team-access.js';
+import { assertTeamSeats, lockTeam, requireTeam, teamEvent, teamManager, teamSeatCounts, teamStorageUsage, teamView } from './team-access.js';
 import { teamBudget, teamWalletBalance } from './team-wallet.js';
 
 function inviteRole(value: unknown) {
@@ -47,6 +49,37 @@ export async function registerTeams(app: FastifyInstance, ctx: Context) {
     const team = await requireTeam(ctx.db, teamId, user.id);
     const rows = (await ctx.db.query(`SELECT m.*,u.display_name,u.username,coalesce((SELECT sum(o.budget_delta) FROM oaooao_team_credit_operations o WHERE o.team_id=m.team_id AND o.actor_id=m.user_id AND o.budget_month=date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')::date),0) spent FROM oaooao_team_members m JOIN oaooao_users u ON u.id=m.user_id WHERE m.team_id=$1 ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'creator' THEN 2 ELSE 3 END,m.joined_at`, [teamId])).rows;
     return { members: rows.map(row => ({ userId: row.user_id, name: row.display_name || row.username, username: row.username, role: row.role, monthlyLimit: teamManager(team.role) || row.user_id === user.id ? row.monthly_limit === null ? null : Number(row.monthly_limit) : null, spent: teamManager(team.role) || row.user_id === user.id ? Number(row.spent) : 0, canDownload: row.can_download, joinedAt: row.joined_at.toISOString() })) };
+  });
+  app.post('/api/teams/:teamId/members', async (request, reply) => {
+    const actor = await ctx.requireUser(request), { teamId } = request.params as { teamId: string };
+    await requireTeam(ctx.db, teamId, actor.id, 'manage');
+    await rateLimit(ctx, `team-create-member:${actor.id}`, 30, 3600);
+    const body = object(request.body);
+    let email: string | null, username: string, password: string;
+    try { email = normalizeEmail(body.email) } catch { throw httpError(400, '请输入有效的邮箱地址') }
+    try { username = validateUsername(body.username) } catch { throw httpError(400, '账号须为 3 至 64 位英文字母、数字、点、下划线或短横线，并以字母或数字开头') }
+    try { password = validatePassword(body.password) } catch { throw httpError(400, '密码至少 12 个字符，且不超过 72 个字节') }
+    const passwordHash = await bcrypt.hash(password, 12), userId = randomUUID();
+    try {
+      await transaction(ctx.db, async db => {
+        await lockTeam(db, teamId);
+        const team = await requireTeam(db, teamId, actor.id, 'manage');
+        const seats = await teamSeatCounts(db, teamId);
+        if (seats.occupiedSeats + seats.reservedSeats >= team.seat_limit) throw httpError(409, '创作席位已满，请先释放席位或待接受邀请');
+        const pending = await db.query('SELECT 1 FROM oaooao_team_invitations WHERE team_id=$1 AND email=$2 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp()', [teamId, email]);
+        if (pending.rowCount) throw httpError(409, '该邮箱已有待接受邀请，请先撤销旧邀请');
+        await db.query('INSERT INTO oaooao_users(id,username,email,display_name,password_hash) VALUES($1,$2,$3,$2,$4)', [userId, username, email, passwordHash]);
+        await db.query("INSERT INTO oaooao_team_members(team_id,user_id,role,can_download) VALUES($1,$2,'creator',true)", [teamId, userId]);
+        await teamEvent(db, teamId, actor.id, 'member.created', { userId, role: 'creator' });
+      });
+    } catch (error) {
+      const conflict = error as { code?: string; constraint?: string };
+      if (conflict.code === '23505' && conflict.constraint === 'oaooao_users_email_uq') throw httpError(409, '该邮箱已有账号，请使用「邀请成员」');
+      if (conflict.code === '23505' && conflict.constraint === 'oaooao_users_username_uq') throw httpError(409, '该账号已存在，请换一个账号或邀请已有用户');
+      throw error;
+    }
+    reply.code(201);
+    return { member: { userId, username, role: 'creator' } };
   });
   app.patch('/api/teams/:teamId/members/:userId', async request => {
     const actor = await ctx.requireUser(request), { teamId, userId } = request.params as { teamId: string; userId: string }, body = object(request.body);

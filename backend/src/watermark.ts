@@ -1,3 +1,5 @@
+import {watermarkPolicy} from './watermark-policy.js';
+import {accessibleMedia} from './media.js';
 import {randomUUID} from 'node:crypto';
 import {mkdtemp,readFile,writeFile,stat,rm} from 'node:fs/promises';
 import {join,resolve,dirname,sep} from 'node:path';
@@ -7,14 +9,17 @@ import type {FastifyInstance} from 'fastify';
 import {httpError,iso,object,rateLimit,safeFetch,transaction,type Context} from './core.js';
 import {MAX_MEDIA_BYTES,ownedMedia,mediaPath} from './media.js';
 import {readExternalResult} from './generated-media.js';
+import {createDirectDownloads} from './media-download.js';
 
 export const WATERMARK_POLICY_VERSION='ai-watermark-v1';
 const LABEL='OAOOAO | AI generated';
 const MAX_EXPORT_BYTES=48*1024*1024;
-type Preference={enabled:boolean;policyVersion:string;acknowledgedPolicyVersion:string|null;acknowledgedAt:string|null};
+type Preference={enabled:boolean;preferenceEnabled:boolean;globallyEnabled:boolean;confirmationRequired:boolean;policyVersion:string;acknowledgedPolicyVersion:string|null;acknowledgedAt:string|null};
 export async function watermarkPreference(ctx:Context,userId:string):Promise<Preference>{
   const row=(await ctx.db.query('SELECT enabled,acknowledged_policy_version,acknowledged_at FROM oaooao_watermark_preferences WHERE user_id=$1',[userId])).rows[0];
-  return {enabled:row?.enabled!==false||row.acknowledged_policy_version!==WATERMARK_POLICY_VERSION,policyVersion:WATERMARK_POLICY_VERSION,acknowledgedPolicyVersion:row?.acknowledged_policy_version??null,acknowledgedAt:iso(row?.acknowledged_at)??null};
+  const policy=await watermarkPolicy(ctx);
+  const preferenceEnabled=row?.enabled!==false||(policy.confirmationRequired&&row?.acknowledged_policy_version!==WATERMARK_POLICY_VERSION);
+  return {enabled:policy.enabled&&preferenceEnabled,preferenceEnabled,globallyEnabled:policy.enabled,confirmationRequired:policy.confirmationRequired,policyVersion:WATERMARK_POLICY_VERSION,acknowledgedPolicyVersion:row?.acknowledged_policy_version??null,acknowledgedAt:iso(row?.acknowledged_at)??null};
 }
 /** Only server-owned successful job/history outputs establish AI provenance. */
 export async function isGeneratedMedia(ctx:Context,userId:string,id:string):Promise<boolean>{
@@ -111,23 +116,34 @@ export async function labelMedia(bytes:Buffer,mimeType:string):Promise<{bytes:Bu
 const extensions:Record<string,string>={'image/png':'png','image/jpeg':'jpg','image/webp':'webp','image/gif':'gif','video/mp4':'mp4','video/webm':'webm','audio/wav':'wav','audio/ogg':'ogg','audio/flac':'flac','audio/aac':'aac','audio/mpeg':'mp3'};
 export async function registerWatermark(app:FastifyInstance,ctx:Context,transport:typeof safeFetch=safeFetch){
   const active=new Set<string>();
+  const downloads=createDirectDownloads(ctx,{policyVersion:WATERMARK_POLICY_VERSION,isGeneratedMedia,watermarkPreference,labelMedia});
+  app.addHook('onClose',async()=>{await downloads.close();});
   app.get('/api/account/watermark-preference',async request=>{const user=await ctx.requireUser(request);return {watermark:await watermarkPreference(ctx,user.id)};});
   app.patch('/api/account/watermark-preference',async request=>{
     const user=await ctx.requireUser(request),body=object(request.body);
     if(Object.keys(body).some(key=>!['enabled','acknowledgedPolicyVersion'].includes(key))||typeof body.enabled!=='boolean')throw httpError(400,'Invalid watermark preference');
-    if(body.enabled===false&&body.acknowledgedPolicyVersion!==WATERMARK_POLICY_VERSION)throw httpError(400,'Read and acknowledge the current AI labelling policy before disabling the label');
     await transaction(ctx.db,async client=>{
       await client.query('SELECT id FROM oaooao_users WHERE id=$1 FOR UPDATE',[user.id]);
-      await client.query(`INSERT INTO oaooao_watermark_preferences(user_id,enabled,acknowledged_policy_version,acknowledged_at) VALUES($1,$2,$3,CASE WHEN $2=false THEN now() ELSE NULL END)
-        ON CONFLICT(user_id) DO UPDATE SET enabled=$2,acknowledged_policy_version=CASE WHEN $2=false THEN $3 ELSE oaooao_watermark_preferences.acknowledged_policy_version END,acknowledged_at=CASE WHEN $2=false THEN now() ELSE oaooao_watermark_preferences.acknowledged_at END,updated_at=now()`,[user.id,body.enabled,body.enabled?null:WATERMARK_POLICY_VERSION]);
+      const policy=await watermarkPolicy(ctx,client);
+      if(!body.enabled&&policy.confirmationRequired&&body.acknowledgedPolicyVersion!==WATERMARK_POLICY_VERSION)throw httpError(400,'请先阅读并确认 AI 水印说明');
+      const acknowledgment=!body.enabled&&policy.confirmationRequired?WATERMARK_POLICY_VERSION:null;
+      await client.query(`INSERT INTO oaooao_watermark_preferences(user_id,enabled,acknowledged_policy_version,acknowledged_at) VALUES($1,$2,$3,CASE WHEN $3::text IS NOT NULL THEN now() ELSE NULL END)
+        ON CONFLICT(user_id) DO UPDATE SET enabled=$2,acknowledged_policy_version=CASE WHEN $2=false THEN $3 ELSE oaooao_watermark_preferences.acknowledged_policy_version END,acknowledged_at=CASE WHEN $2=false THEN CASE WHEN $3::text IS NOT NULL THEN now() ELSE NULL END ELSE oaooao_watermark_preferences.acknowledged_at END,updated_at=now()`,[user.id,body.enabled,acknowledgment]);
       await client.query('INSERT INTO oaooao_watermark_events(id,user_id,event_type,policy_version) VALUES($1,$2,$3,$4)',[randomUUID(),user.id,body.enabled?'preference_enabled':'preference_disabled',WATERMARK_POLICY_VERSION]);
-      await ctx.audit({actorId:user.id,action:'watermark.preference',targetType:'user',targetId:user.id,metadata:{enabled:body.enabled,policyVersion:WATERMARK_POLICY_VERSION}},client);
+      await ctx.audit({actorId:user.id,action:'watermark.preference',targetType:'user',targetId:user.id,metadata:{enabled:body.enabled,policyVersion:WATERMARK_POLICY_VERSION,confirmationRequired:policy.confirmationRequired}},client);
     });
     return {watermark:await watermarkPreference(ctx,user.id)};
   });
   app.post('/api/media/:id/export',async(request,reply)=>{
-    const user=await ctx.requireUser(request),id=String((request.params as any).id);mediaPath(ctx.config.mediaRoot,id);
+    const id=String((request.params as any).id),row=await accessibleMedia(ctx,id),user={id:String(row.user_id)};
+    await rateLimit(ctx,`public-media-export:${request.ip}`,180,60);
     if(request.body!==undefined&&request.body!==null&&Object.keys(object(request.body)).length)throw httpError(400,'Export uses the saved account preference and accepts no overrides');
+    if(request.headers.accept?.split(',').some(value=>value.trim()==='application/json')){
+      let filename=`OAOOAO-${id}`;const encoded=request.headers['x-oao-download-name'];
+      if(typeof encoded==='string'&&encoded.length<=1500)try{filename=decodeURIComponent(encoded);}catch{throw httpError(400,'无效的下载文件名');}
+      const ticket=await downloads.prepare(user.id,id,filename);
+      if(ticket)return reply.code(ticket.status==='preparing'?202:200).header('Cache-Control','private, no-store').header('Vary','Accept').send(ticket);
+    }
     await rateLimit(ctx,`media-export:${user.id}`,20,60);
     if(active.has(user.id)||active.size>=2)throw httpError(429,'Another media export is in progress; retry shortly');
     active.add(user.id);

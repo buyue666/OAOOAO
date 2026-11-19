@@ -92,7 +92,7 @@ export function useGenerationActions() {
   const generation = useGeneration()
   const studio = useStudio()
   const workspace = useCanvasStore(state => state.workspace)
-  const models = useMemo(() => workspace ? availableTeamModels(studio.state.models, workspace.modelIds, studio.state.sessionSettings) : studio.state.models, [studio.state.models, studio.state.sessionSettings, workspace])
+  const models = useMemo(() => workspace ? availableTeamModels(studio.state.models, workspace.modelIds, studio.state.sessionSettings, workspace.subscriptionExpiresAt) : studio.state.models, [studio.state.models, studio.state.sessionSettings, workspace])
   const settings: SessionGenerationSettings | undefined = studio.state.sessionSettings
   const [approval, setApproval] = useState<Approval | null>(null)
   const approvalRef = useRef<Approval | null>(null)

@@ -1,5 +1,6 @@
 'use client'
 
+import { defaultAppearance, normalizeAppearance, paletteTokens } from './appearance'
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { backendUserToStudioUser, deleteCanvasProjects, isUnauthorized, listCanvasProjects, createCanvasProject, getSession } from './api'
 import { clearScopedTaskCache } from './task-cache'
@@ -28,10 +29,10 @@ export function emptyAccountState(): Pick<StudioState, 'user' | 'credits' | 'pro
 }
 
 /** Only harmless UI preferences may cross sessions; historical caches are untrusted. */
-export function readStudioPreferences(raw: string | null): Pick<StudioState, 'theme' | 'skin' | 'sidebarCollapsed'> {
+export function readStudioPreferences(raw: string | null): Pick<StudioState, 'theme' | 'skin' | 'appearance' | 'sidebarCollapsed'> {
   let value: Record<string, unknown> = {}
   try { const parsed = raw ? JSON.parse(raw) : {}; if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) value = parsed } catch { /* Invalid storage must not prevent session loading. */ }
-  return { theme: value.theme === 'light' ? 'light' : 'dark', skin: 'minimal', sidebarCollapsed: value.sidebarCollapsed === true }
+  return { theme: value.theme === 'light' ? 'light' : 'dark', skin: value.version === 2 && (value.skin === 'minimal' || value.skin === 'soft') ? value.skin : 'glass', appearance: normalizeAppearance(value.appearance), sidebarCollapsed: value.sidebarCollapsed === true }
 }
 
 function getInitialState(): StudioState {
@@ -39,7 +40,8 @@ function getInitialState(): StudioState {
     hydrated: false,
     backendStatus: 'checking',
     theme: 'dark',
-    skin: 'minimal',
+    skin: 'glass',
+    appearance: { ...defaultAppearance },
     sidebarCollapsed: false,
     ...emptyAccountState(),
     sessionSettings: undefined,
@@ -86,8 +88,9 @@ function reducer(state: StudioState, action: StudioAction): StudioState {
     case 'SET_THEME':
       return { ...state, theme: action.theme }
     case 'SET_SKIN':
-      // 旧版本仍可能从缓存或外部调用发来 SET_SKIN，但当前产品只保留液态玻璃。
-      return { ...state, skin: 'minimal' }
+      return { ...state, skin: action.skin === 'minimal' || action.skin === 'soft' ? action.skin : 'glass' }
+    case 'SET_APPEARANCE':
+      return { ...state, appearance: normalizeAppearance(action.appearance) }
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarCollapsed: !state.sidebarCollapsed }
     case 'SET_SELECTED_PROJECT':
@@ -246,8 +249,19 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!state.hydrated) return
     document.documentElement.classList.toggle('dark', state.theme === 'dark')
-    document.documentElement.style.colorScheme = state.theme
-  }, [state.hydrated, state.theme])
+    const root = document.documentElement
+    root.style.colorScheme = state.theme
+    root.dataset.oaoSkin = state.skin
+    root.dataset.oaoFont = state.appearance.font
+    root.dataset.oaoRadius = state.appearance.radius
+    root.dataset.oaoDensity = state.appearance.density
+    root.dataset.oaoPalette = state.appearance.preset
+    const colors = paletteTokens[state.appearance.preset][state.theme]
+    root.style.setProperty('--studio-accent', colors[0])
+    root.style.setProperty('--studio-accent-foreground', state.theme === 'dark' ? '#122022' : '#ffffff')
+    root.style.setProperty('--ring', colors[0])
+    root.style.setProperty('--oao-accent-companion', colors[1])
+  }, [state.hydrated, state.theme, state.skin, state.appearance])
 
   /**
    * 保证 `selectedProjectId` 始终指向**当前用户的真实项目**。
@@ -277,12 +291,12 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!state.hydrated) return
-    const payload = { version: 1, theme: state.theme, skin: 'minimal', sidebarCollapsed: state.sidebarCollapsed }
+    const payload = { version: 2, theme: state.theme, skin: state.skin, appearance: state.appearance, sidebarCollapsed: state.sidebarCollapsed }
     try { window.localStorage.setItem(storageKey, JSON.stringify(payload)) } catch { /* Preferences are optional; API state is unaffected. */ }
-  }, [state.hydrated, state.theme, state.sidebarCollapsed])
+  }, [state.hydrated, state.theme, state.skin, state.appearance, state.sidebarCollapsed])
 
   const setTheme = useCallback((theme: Theme) => dispatch({ type: 'SET_THEME', theme }), [])
-  const setSkin = useCallback((_skin: StudioSkin) => dispatch({ type: 'SET_SKIN', skin: 'minimal' }), [])
+  const setSkin = useCallback((skin: StudioSkin) => dispatch({ type: 'SET_SKIN', skin }), [])
   const toggleTheme = useCallback(() => dispatch({ type: 'SET_THEME', theme: state.theme === 'dark' ? 'light' : 'dark' }), [state.theme])
   const toggleSidebar = useCallback(() => dispatch({ type: 'TOGGLE_SIDEBAR' }), [])
   const liveModelList = state.liveModels

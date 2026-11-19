@@ -1,6 +1,7 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import type { ReactNode } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { isHttpsPolicyUrl, isSupportEmail, type CommercePolicy } from '@/lib/studio/commerce-policy'
 import { resolveTierDisplay } from '@/lib/studio/membership'
@@ -17,6 +18,8 @@ export interface PurchaseConfirmationProps {
   selection: MembershipSelection | null
   billingOption?: BillingOption
   commercePolicy?: CommercePolicy | null
+  paymentControl?: ReactNode
+  guest?: boolean
   agreed: boolean
   busy: boolean
   error: string
@@ -25,7 +28,7 @@ export interface PurchaseConfirmationProps {
   onCancel: () => void
 }
 
-export function PurchaseConfirmation({ selection, billingOption, commercePolicy, agreed, busy, error, onAgreementChange, onConfirm, onCancel }: PurchaseConfirmationProps) {
+export function PurchaseConfirmation({ selection, billingOption, commercePolicy, paymentControl, guest, agreed, busy, error, onAgreementChange, onConfirm, onCancel }: PurchaseConfirmationProps) {
   const reviewedPolicy = policyCanBeReviewed(commercePolicy) ? commercePolicy : null
   const display = selection ? resolveTierDisplay(selection.tier, selection.billingCycle) : null
   return <Dialog open={Boolean(selection)} onOpenChange={open => { if (!open && !busy) onCancel() }}>
@@ -36,12 +39,13 @@ export function PurchaseConfirmation({ selection, billingOption, commercePolicy,
       </DialogHeader>
       {selection ? <>
         <dl className={styles.reviewSummary}>
-          <div><dt>商品</dt><dd>{selection.plan.name} · {selection.tier.label}</dd></div>
+          <div><dt>商品</dt><dd>{selection.plan.name}{selection.tier.label !== selection.plan.name ? ` · ${selection.tier.label}` : ''}</dd></div>
           <div><dt>周期</dt><dd>{selection.billingCycle === 'once' ? '一次性购买' : billingOption?.label ?? selection.billingCycle}</dd></div>
           <div><dt>本次支付</dt><dd><strong>{formatPrice(selection.pricing)}</strong></dd></div>
           <div><dt>一次发放</dt><dd>{selection.pricing.credits?.toLocaleString('zh-CN')} 积分</dd></div>
-          {display?.dailyPoints !== undefined && display.dailyPoints > 0 ? <div><dt>每日积分</dt><dd>{display.dailyPoints.toLocaleString('zh-CN')} 积分</dd></div> : null}
+          {display?.dailyPoints !== undefined && display.dailyPoints > 0 ? <div><dt>会员签到</dt><dd>每日可领 {display.dailyPoints.toLocaleString('zh-CN')} 积分，当期会员有效期内可用</dd></div> : null}
         </dl>
+        {paymentControl}
         {selection.pricing.renewalText ? <p className={styles.reviewNote}>{selection.pricing.renewalText}</p> : null}
         {reviewedPolicy ? <>
           <dl className={styles.policyList}>
@@ -54,7 +58,7 @@ export function PurchaseConfirmation({ selection, billingOption, commercePolicy,
         {error ? <p className={styles.reviewError} role="alert">{error}</p> : null}
         <div className={styles.reviewActions}>
           <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>返回选择</Button>
-          <Button type="button" disabled={busy || !agreed || !reviewedPolicy} onClick={onConfirm}>{busy ? '正在提交…' : error ? '重试购买' : '确认并继续支付'}</Button>
+          <Button type="button" disabled={busy || !agreed || !reviewedPolicy} onClick={onConfirm}>{busy ? '正在提交…' : error ? '重试购买' : guest ? '登录后继续' : '确认并继续支付'}</Button>
         </div>
       </> : null}
     </DialogContent>

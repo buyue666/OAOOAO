@@ -3,9 +3,11 @@ export type CheckInPlanReward = CheckInRewardRule & { planId: string }
 export type CheckInSettings = CheckInRewardRule & { enabled: boolean; planRewards?: CheckInPlanReward[] }
 export type CheckInStatus = CheckInRewardRule & {
   enabled: boolean; claimed: boolean; date: string; timeZone: string
+  rewardSource?: 'general' | 'membership'; claimedRewardSource?: 'general' | 'membership' | null
   rulePlanId?: string | null; rulePlanName?: string | null
   claimedRewardPoints?: number | null; claimedValidityDays?: number | null
   claimedPlanId?: string | null; claimedPlanName?: string | null; expiresAt?: string | null
+  rewardExpiresAt?: string | null
 }
 
 type FormValues = { get(name: string): unknown; has(name: string): boolean }
@@ -58,14 +60,15 @@ export function formatPointsExpiry(value: string | null | undefined, locale = 'z
 
 /** Claimed rewards use their immutable server snapshot, never today's new rule. */
 export function checkInDisplay(status: CheckInStatus, locale = 'zh-CN') {
+  const rewardEnd = formatPointsExpiry(status.rewardExpiresAt, locale)
   if (locale === 'en-US') {
     if (status.claimed) {
       const amount = typeof status.claimedRewardPoints === 'number' ? ` ${status.claimedRewardPoints.toLocaleString(locale)} credits` : ''
       const expiry = formatPointsExpiry(status.expiresAt, locale)
-      return {title: `Claimed${amount} today`, rule: status.claimedPlanName ? `${status.claimedPlanName} · Rule at claim time` : 'Check-in rule at claim time', validity: expiry ? `Expires ${expiry} (Beijing time)` : status.claimedValidityDays === 0 || (status.expiresAt === null && status.claimedValidityDays == null) ? 'This reward never expires' : 'See account records for this reward’s expiry'}
+      return {title: `Claimed${amount} today`, rule: status.claimedPlanName ? `${status.claimedPlanName} · Rule at claim time` : 'Check-in rule at claim time', validity: expiry ? `Expires ${expiry} (Beijing time)` : status.claimedRewardSource === 'membership' ? 'Valid while the membership is active' : status.claimedValidityDays === 0 || (status.expiresAt === null && status.claimedValidityDays == null) ? 'This reward never expires' : 'See account records for this reward’s expiry'}
     }
     const days = status.validityDays ?? 0
-    return {title: status.enabled ? `Claim ${status.rewardPoints.toLocaleString(locale)} credits` : 'Check-in unavailable', rule: status.rulePlanName ? `${status.rulePlanName} check-in reward` : 'Base check-in rule', validity: days === 0 ? 'Reward never expires' : `Valid for ${days} days after claiming (24 hours per day)`}
+    return {title: status.enabled ? `Claim ${status.rewardPoints.toLocaleString(locale)} credits` : status.rewardSource === 'membership' ? 'All check-in rewards for this term claimed' : 'Check-in unavailable', rule: status.rulePlanName ? `${status.rulePlanName} check-in reward` : 'Base check-in rule', validity: status.rewardSource === 'membership' ? rewardEnd ? `Expires with this membership term: ${rewardEnd} (Beijing time)` : 'Valid while the membership is active' : days === 0 ? 'Reward never expires' : `Valid for ${days} days after claiming (24 hours per day)`}
   }
   if (status.claimed) {
     const amount = typeof status.claimedRewardPoints === 'number' ? ` ${status.claimedRewardPoints.toLocaleString('zh-CN')} 积分` : ''
@@ -73,13 +76,13 @@ export function checkInDisplay(status: CheckInStatus, locale = 'zh-CN') {
     return {
       title: `今日已领取${amount}`,
       rule: status.claimedPlanName ? `${status.claimedPlanName} · 领取时规则` : '领取时的签到规则',
-      validity: expiry ? `${expiry} 到期（北京时间）` : status.claimedValidityDays === 0 || (status.expiresAt === null && status.claimedValidityDays == null) ? '本次奖励永久有效' : '本次奖励有效期以账户记录为准',
+      validity: expiry ? `${expiry} 到期（北京时间）` : status.claimedRewardSource === 'membership' ? '签到积分在会员权益有效期间可用' : status.claimedValidityDays === 0 || (status.expiresAt === null && status.claimedValidityDays == null) ? '本次奖励永久有效' : '本次奖励有效期以账户记录为准',
     }
   }
   const days = status.validityDays ?? 0
   return {
-    title: status.enabled ? `可领 ${status.rewardPoints.toLocaleString('zh-CN')} 积分` : '签到暂未开放',
+    title: status.enabled ? `可领 ${status.rewardPoints.toLocaleString('zh-CN')} 积分` : status.rewardSource === 'membership' ? '本期会员签到奖励已领满' : '签到暂未开放',
     rule: status.rulePlanName ? `${status.rulePlanName} 专属签到` : '基础签到规则',
-    validity: days === 0 ? '奖励永久有效' : `领取后 ${days} 天有效（每天 24 小时）`,
+    validity: status.rewardSource === 'membership' ? rewardEnd ? `与本期会员一起到期：${rewardEnd}（北京时间）` : '签到积分在会员权益有效期间可用' : days === 0 ? '奖励永久有效' : `领取后 ${days} 天有效（每天 24 小时）`,
   }
 }

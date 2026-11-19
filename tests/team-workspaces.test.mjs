@@ -18,6 +18,9 @@ const teamHelpers = load('lib/studio/team-types.ts')
 const workspaceContext = { useWorkspace: () => ({ ready: true, identity: null, select() {}, href: target => target }) }
 const modelHelpers = load('lib/studio/studio-models.ts')
 const generationHelpers = load('lib/studio/team-generation.ts', { './studio-models': modelHelpers })
+const routeHelpers = load('lib/studio/workspace-navigation.ts')
+const pluginCatalog = load('lib/studio/creative-plugins.ts', { './creative-plugin-releases.json': { default: JSON.parse(readFileSync(new URL('../lib/studio/creative-plugin-releases.json', import.meta.url), 'utf8')) } })
+const featureHelpers = load('lib/studio/workspace-features.ts', { './workspace-navigation': routeHelpers, './creative-plugins': pluginCatalog })
 const pricingHelpers = load('lib/studio/team-admin.ts')
 const videoHelpers = load('lib/studio/video-policy.ts')
 function hooks() {
@@ -36,6 +39,18 @@ function hooks() {
 }
 const team = { id: '11111111-1111-4111-8111-111111111111', name: '测试团队', role: 'owner', modelIds: [], subscriptionExpiresAt: new Date(Date.now() + 86400000).toISOString(), canDownload: true }
 const project = { id: '22222222-2222-4222-8222-222222222222', title: '测试项目' }
+
+test('creation and feature links preserve the team and only offer supported tools', () => {
+  const identity = { teamId: team.id, projectId: project.id }, root = `/teams/${team.id}/projects/${project.id}`
+  assert.equal(routeHelpers.workspaceDestination('/studio', identity), `${root}/studio`)
+  assert.equal(routeHelpers.workspaceDestination('/image', identity), `${root}/studio/image`)
+  assert.equal(routeHelpers.workspaceDestination('/video', { teamId: team.id }), `/teams/${team.id}/studio/video`)
+  assert.equal(routeHelpers.workspaceDestination('/tools', identity), `${root}/studio/features`)
+  assert.equal(routeHelpers.workspaceDestination(`${root}/studio/image`, identity), `${root}/studio/image`)
+  assert.equal(featureHelpers.workspaceFeature('canvas', identity, true).href, `${root}/canvas`)
+  assert.equal(featureHelpers.workspaceFeature('canvas', identity, false).available, false)
+  for (const id of ['agent', 'drama', 'tryon', 'remix']) assert.deepEqual(featureHelpers.workspaceFeature(id, identity, true), { supported:false, available:false, href:undefined })
+})
 const caps = { ratios: ['1:1', '16:9'], resolutions: ['1K', '2K'], qualities: ['720p', '1080p'], durations: ['4 秒', '6 秒'], maxBatchSize: 2 }
 function formFixture(options = {}) {
   const h = hooks(), writes = [], storage = options.storage || new Map()
@@ -91,6 +106,25 @@ test('team model restrictions include allowed request aliases and reject disable
   const settings = { logicalModels: [{ id: 'image-a', bindings: [{ requestAlias: 'alias-a', enabled: true }] }] }
   assert.deepEqual(generationHelpers.availableTeamModels(models, ['image-a'], settings).map(model => model.id), ['image-a', 'alias-a'])
   assert.equal(generationHelpers.availableTeamModels(models, [], settings).length, 3)
+})
+
+test('team subscription locks use the current team expiry independently of the member personal plan',()=>{
+ const future=new Date(Date.now()+86400000).toISOString(),past=new Date(Date.now()-86400000).toISOString()
+ const source=[{id:'premium',status:'可用',requiresSubscription:true,subscriptionLocked:false},{id:'open',status:'可用',requiresSubscription:false}]
+ for(const expiry of [undefined,null,'',past,'invalid']){
+  const result=generationHelpers.availableTeamModels(source,[],{subscriptionAccess:true},expiry)
+  assert.equal(result.find(m=>m.id==='premium').subscriptionLocked,true)
+  assert.equal(result.find(m=>m.id==='open').subscriptionLocked,false)
+ }
+ assert.equal(generationHelpers.availableTeamModels(source,[],{subscriptionAccess:false},future)[0].subscriptionLocked,false)
+ assert.equal(source[0].subscriptionLocked,false,'team policy never mutates the personal catalog')
+ const settings={subscriptionAccess:false,personalModelIds:[],logicalModels:[{id:'premium',name:'Premium',requiresSubscription:true,capability:'image',enabled:true,bindings:[{id:'p',channelId:'provider',upstreamModel:'premium',requestAlias:'premium-alias',enabled:true}]},{id:'open',name:'Open',capability:'image',enabled:true,bindings:[{id:'o',channelId:'provider',upstreamModel:'open',enabled:true}]}]}
+ const free=generationHelpers.availableTeamModels([],['premium'],settings,null)
+ assert.deepEqual(free.map(m=>[m.id,m.subscriptionLocked]),[['premium-alias',true]])
+ const paid=generationHelpers.availableTeamModels([],['premium'],settings,future)
+ assert.deepEqual(paid.map(m=>[m.id,m.subscriptionLocked]),[['premium-alias',false]])
+ assert.equal(modelHelpers.defaultModelFor('image',settings,free),'')
+ assert.equal(modelHelpers.defaultModelFor('image',settings,paid),'premium-alias')
 })
 
 test('the header shows the team wallet and a direct usage link, including explicit unavailable state', () => {

@@ -1,14 +1,16 @@
 import { brandSettingsFields, type SiteBrandInput } from './site-brand'
+import { normalizeWechatContact, type WechatContact } from './wechat-contact'
 import { normalizeSiteFooter, safeFooterHref, type SiteFooterSettings } from './site-footer'
 
-export type PublicSiteAppearance = ReturnType<typeof brandSettingsFields> & { footer?: SiteFooterSettings; termsUrl?: string; privacyUrl?: string }
-type AppearanceInput = SiteBrandInput & { footer?: unknown; termsUrl?: unknown; privacyUrl?: unknown }
+export type PublicSiteAppearance = ReturnType<typeof brandSettingsFields> & { footer?: SiteFooterSettings; wechatContact?: WechatContact; termsUrl?: string; privacyUrl?: string }
+type AppearanceInput = SiteBrandInput & { footer?: unknown; wechatContact?: unknown; termsUrl?: unknown; privacyUrl?: unknown }
 
 /** Only public display fields may cross tabs; account and system settings stay private. */
 function publicAppearanceFields(site?: AppearanceInput): PublicSiteAppearance {
   return {
     ...brandSettingsFields(site),
     ...(site?.footer !== undefined ? { footer: normalizeSiteFooter(site.footer) } : {}),
+    ...(site?.wechatContact !== undefined ? { wechatContact: normalizeWechatContact(site.wechatContact) } : {}),
     ...(site?.termsUrl !== undefined ? { termsUrl: safeFooterHref(site.termsUrl) } : {}),
     ...(site?.privacyUrl !== undefined ? { privacyUrl: safeFooterHref(site.privacyUrl) } : {}),
   }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Plus, ShieldCheck, X } from 'lucide-react'
+import { Copy, Plus, ShieldCheck, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -21,6 +21,8 @@ export function TeamMembers({ team }: { team: TeamSummary }) {
   const members = useTeamQuery<{ members: TeamMember[] }>(`/api/teams/${team.id}/members`)
   const invites = useTeamQuery<{ invitations: TeamInvitation[] }>(manager ? `/api/teams/${team.id}/invitations` : null)
   const action = useTeamAction()
+  const [addOpen, setAddOpen] = useState(false)
+  const [added, setAdded] = useState('')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [target, setTarget] = useState('')
   const [role, setRole] = useState<Exclude<TeamRole, 'owner'>>('creator')
@@ -30,6 +32,15 @@ export function TeamMembers({ team }: { team: TeamSummary }) {
   const [limit, setLimit] = useState('')
   const [download, setDownload] = useState(false)
   const [removing, setRemoving] = useState<TeamMember | null>(null)
+  async function add(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const password = String(form.get('password') ?? '')
+    const result = await action.run<{ member: { username: string } }>(`/api/teams/${team.id}/members`, {
+      email: form.get('email'), username: form.get('username'), password,
+    })
+    if (result) { setAdded(result.member.username); setAddOpen(false) }
+  }
   function edit(member: TeamMember) { action.clearError(); setEditing(member); setRole(member.role === 'owner' ? 'admin' : member.role); setLimit(member.monthlyLimit === null ? '' : String(member.monthlyLimit)); setDownload(member.canDownload) }
   async function invite(event: React.FormEvent) {
     event.preventDefault()
@@ -42,8 +53,10 @@ export function TeamMembers({ team }: { team: TeamSummary }) {
     if (result) setEditing(null)
   }
   return <div className="flex flex-col gap-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">成员与席位</h2><p className="mt-1 text-sm text-muted-foreground">创作席位 {team.occupiedSeats} / {team.seatLimit} · 待加入 {team.reservedSeats} · 审阅成员 {team.reviewers} / {team.reviewerLimit}</p></div>{manager && <Button onClick={() => { action.clearError(); setInviteLink(''); setCopyStatus(''); setRole('creator'); setTarget(''); setInviteOpen(true) }}><Plus data-icon="inline-start" />邀请成员</Button>}</div>
-    <TeamError error={members.error || invites.error || (!inviteOpen && !editing && !removing ? action.error : '')} />
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">成员与席位</h2><p className="mt-1 text-sm text-muted-foreground">创作席位 {team.occupiedSeats} / {team.seatLimit} · 待加入 {team.reservedSeats} · 审阅成员 {team.reviewers} / {team.reviewerLimit}</p></div>{manager && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { action.clearError(); setInviteLink(''); setCopyStatus(''); setRole('creator'); setTarget(''); setInviteOpen(true) }}><Plus data-icon="inline-start" />邀请成员</Button><Button onClick={() => { action.clearError(); setAdded(''); setAddOpen(true) }}><UserPlus data-icon="inline-start" />添加成员</Button></div>}</div>
+    <TeamError error={members.error || invites.error || (!addOpen && !inviteOpen && !editing && !removing ? action.error : '')} />
+    {added && <p role="status" className="break-words text-sm text-foreground">@{added} 已加入团队，可使用设置的密码登录。</p>}
+    {manager && <Dialog open={addOpen} onOpenChange={open => { if (!action.pending) setAddOpen(open) }}><DialogContent><DialogHeader><DialogTitle>添加成员</DialogTitle><DialogDescription>创建新账号并立即加入团队，默认角色为创作成员。已有 OAO 账号请使用「邀请成员」。</DialogDescription></DialogHeader><form onSubmit={add} className="flex flex-col gap-5"><FieldGroup><Field><FieldLabel htmlFor="new-member-email">邮箱</FieldLabel><Input id="new-member-email" type="email" name="email" autoComplete="off" maxLength={320} required /></Field><Field><FieldLabel htmlFor="new-member-username">账号</FieldLabel><Input id="new-member-username" name="username" autoComplete="off" autoCapitalize="none" minLength={3} maxLength={64} required /></Field><Field><FieldLabel htmlFor="new-member-password">密码</FieldLabel><Input id="new-member-password" name="password" type="password" autoComplete="new-password" minLength={12} maxLength={72} aria-describedby="new-member-password-description" required /><FieldDescription id="new-member-password-description">至少 12 个字符，无需邮件验证码。</FieldDescription></Field></FieldGroup><TeamError error={action.error} /><DialogFooter><Button type="button" variant="outline" disabled={action.pending} onClick={() => setAddOpen(false)}>取消</Button><Button type="submit" disabled={action.pending}>{action.pending ? '正在添加…' : '创建账号并加入'}</Button></DialogFooter></form></DialogContent></Dialog>}
     {members.isLoading ? <TeamLoading /> : <Table><TableHeader><TableRow><TableHead>成员</TableHead><TableHead>角色</TableHead>{manager && <><TableHead>本月已用 / 上限</TableHead><TableHead>下载权限</TableHead><TableHead><span className="sr-only">操作</span></TableHead></>}</TableRow></TableHeader><TableBody>{members.data?.members.map(member => <TableRow key={member.userId}><TableCell><p className="font-medium">{member.name}{member.userId === state.user.id && <span className="ml-1 text-xs text-muted-foreground">（你）</span>}</p><p className="mt-0.5 text-xs text-muted-foreground">@{member.username}</p></TableCell><TableCell><Badge variant="secondary">{teamRoleLabels[member.role]}</Badge></TableCell>{manager && <><TableCell>{teamNumber(member.spent)} / {member.monthlyLimit === null ? '不单独设限' : teamNumber(member.monthlyLimit)}</TableCell><TableCell>{member.role !== 'reviewer' || member.canDownload ? '允许' : '未授权'}</TableCell><TableCell>{member.role !== 'owner' && member.userId !== state.user.id && (team.role === 'owner' || member.role !== 'admin') && <div className="flex justify-end gap-1"><Button variant="ghost" size="sm" onClick={() => edit(member)}>设置</Button><Button variant="destructive" size="sm" onClick={() => { action.clearError(); setRemoving(member) }}>移除</Button></div>}</TableCell></>}</TableRow>)}</TableBody></Table>}
     {manager && !!invites.data?.invitations.length && <section className="flex flex-col gap-3"><h3 className="text-sm font-semibold">待接受的邀请</h3><Table><TableHeader><TableRow><TableHead>邀请对象</TableHead><TableHead>角色</TableHead><TableHead>有效期至</TableHead><TableHead><span className="sr-only">操作</span></TableHead></TableRow></TableHeader><TableBody>{invites.data.invitations.map(invite => <TableRow key={invite.id}><TableCell>{invite.target || '一次性邀请链接'}</TableCell><TableCell>{teamRoleLabels[invite.role]}</TableCell><TableCell>{new Date(invite.expiresAt).toLocaleDateString('zh-CN')}</TableCell><TableCell><Button variant="outline" size="sm" aria-label={`撤销对 ${invite.target || '此链接'} 的邀请`} className="min-h-9 gap-1.5 border-border bg-background text-foreground shadow-sm transition-colors hover:border-destructive/45 hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-2 focus-visible:ring-destructive/30" disabled={action.pending || team.role !== 'owner' && invite.role === 'admin'} onClick={() => void action.run(`/api/teams/${team.id}/invitations/${invite.id}`, undefined, 'DELETE')}><X className="size-3.5" aria-hidden="true" />撤销</Button></TableCell></TableRow>)}</TableBody></Table></section>}
     <Alert><ShieldCheck /><AlertTitle>角色只在当前团队内生效</AlertTitle><AlertDescription>团队管理员没有站点后台权限。待接受邀请会预留名额，7 天后自动释放；移除成员不会删除团队作品。</AlertDescription></Alert>

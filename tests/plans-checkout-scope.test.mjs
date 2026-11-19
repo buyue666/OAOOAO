@@ -18,7 +18,7 @@ function harness() {
   }
   const orders = [], payments = [], queries = [], ready = [], sessions = []
   const api = {
-    createBillingOrder(productId, provider) { const next = deferred(); orders.push({ ...next, productId, provider }); return next.promise },
+    createBillingOrder(productId, provider, team) { const next = deferred(); orders.push({ ...next, productId, provider, team }); return next.promise },
     createCheckout(id, provider) { const next = deferred(); payments.push({ ...next, id, provider }); return next.promise },
     request(path) { const next = deferred(); queries.push({ ...next, path }); return next.promise },
   }
@@ -97,13 +97,14 @@ test('the actual topbar activation handler captures current query and hash, incl
   const topbar = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'Topbar')
   const handler = topbar.body.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'capturePlansDestination')
   const helpers = { exports: {} }; new Function('module', 'exports', compile(readFileSync(new URL('../lib/studio/return-path.ts', import.meta.url), 'utf8')))(helpers, helpers.exports)
+  const billing = { exports: {} }; new Function('module', 'exports', 'require', compile(readFileSync(new URL('../lib/studio/billing-store-route.ts', import.meta.url), 'utf8')))(billing, billing.exports, () => helpers.exports)
   const location = { pathname: '/projects/real', search: '?section=shots', hash: '#selected-shot' }; const pushes = [], storage = []
   const module = { exports: {} }
-  const initialize = teamSpace => new Function('module', 'exports', 'window', 'router', 'sessionStorage', 'safeReturnPath', 'RETURN_PATH_KEY', 'teamSpace', compile(`export ${handler.getText(ast)}`))(module, module.exports, { location }, { push: value => pushes.push(value) }, { setItem: (...args) => storage.push(args) }, helpers.exports.safeReturnPath, helpers.exports.RETURN_PATH_KEY, teamSpace)
+  const initialize = teamSpace => new Function('module', 'exports', 'window', 'router', 'sessionStorage', 'safeReturnPath', 'RETURN_PATH_KEY', 'teamSpace', 'billingStoreHref', compile(`export ${handler.getText(ast)}`))(module, module.exports, { location }, { push: value => pushes.push(value) }, { setItem: (...args) => storage.push(args) }, helpers.exports.safeReturnPath, helpers.exports.RETURN_PATH_KEY, teamSpace, billing.exports.billingStoreHref)
   initialize(false)
   const event = { currentTarget: { href: '/plans' }, button: 0, preventDefault() { this.prevented = true } }
   module.exports.capturePlansDestination(event)
-  assert.equal(new URL(pushes[0], 'https://local.invalid').pathname, '/credits')
+  assert.equal(new URL(pushes[0], 'https://local.invalid').pathname, '/plans')
   assert.equal(new URL(pushes[0], 'https://local.invalid').searchParams.get('returnTo'), '/projects/real?section=shots#selected-shot')
   location.search = '?section=assets'; const modified = { ...event, currentTarget: { href: '/plans' }, ctrlKey: true, prevented: false }
   module.exports.capturePlansDestination(modified)
@@ -116,4 +117,22 @@ test('the actual topbar activation handler captures current query and hash, incl
   initialize(true)
   module.exports.capturePlansDestination(membership)
   assert.equal(new URL(pushes[2], 'https://local.invalid').searchParams.get('edition'), 'team')
+  const credits = { ...event, currentTarget: { href: '/credits', dataset: { storefront: 'credits' } } }
+  module.exports.capturePlansDestination(credits)
+  const points = new URL(pushes[3], 'https://local.invalid')
+  assert.equal(points.pathname, '/plans')
+  assert.equal(points.searchParams.get('view'), 'credits')
+})
+
+
+test('team checkout includes selected seats and destination, preserves payment retries and isolates another team', async () => {
+  const h=harness(),input={teamPlanId:'team-standard',seats:4,expectedAmountCents:7320,teamId:'team-one'}
+  let pending=h.render().purchase('team:team-standard','ciyuan_balance',input)
+  assert.equal(h.orders[0].team.seats,4);assert.equal(h.orders[0].team.teamId,'team-one');assert.equal(h.orders[0].team.expectedAmountCents,7320);assert.ok(h.orders[0].team.idempotencyKey)
+  h.orders[0].resolve({order:{id:'team-order'}});await tick();h.payments[0].reject(Error('temporary checkout failure'));await assert.rejects(pending,/temporary/)
+  pending=h.render().purchase('team:team-standard','ciyuan_balance',input)
+  assert.equal(h.orders.length,1);h.payments[1].resolve({checkout:checkout('team-order','redirect')});await pending
+  pending=h.render().purchase('team:team-standard','ciyuan_balance',{...input,teamId:'team-two'})
+  assert.equal(h.orders.length,2);h.orders[1].resolve({order:{id:'team-two-order'}});await tick();h.payments[2].resolve({checkout:checkout('team-two-order','redirect')});await pending
+  assert.equal(h.render().checkout.orderId,'team-two-order')
 })

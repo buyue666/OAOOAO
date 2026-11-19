@@ -9,6 +9,7 @@ import { registerAuth } from './auth.js';
 import { registerSettings } from './settings.js';
 import { registerSitePopups } from './site-popups.js';
 import { registerWatermark } from './watermark.js';
+import { registerContentPreferences } from './content-preferences.js';
 import { registerCheckIn } from './check-in.js';
 import { registerCommerce } from './commerce.js';
 import { registerContent } from './content.js';
@@ -59,11 +60,16 @@ export async function buildApp(options:BuildOptions={}):Promise<FastifyInstance 
     assertCsrfOrigin(ctx,request.method,request.headers.origin,request.headers['sec-fetch-site'] as string|undefined,Boolean(request.cookies[config.sessionCookieName]),request.url);
   });
   app.setErrorHandler((error,request,reply)=>{
-    const err=error as Error&{statusCode?:number;code?:string;outcome?:string;expose?:boolean};let status=err.statusCode&&err.statusCode>=400&&err.statusCode<=599?err.statusCode:500;
+    const err=error as Error&{statusCode?:number;code?:string;outcome?:string;expose?:boolean;retryAfterSeconds?:number};let status=err.statusCode&&err.statusCode>=400&&err.statusCode<=599?err.statusCode:500;
     if(err.code==='23505')status=409;
-    const message=err.code==='23505'?'A record with this identifier already exists':status>=500&&!err.expose?'The requested service is unavailable':err.message;
+    let message=err.code==='23505'?'A record with this identifier already exists':status>=500&&!err.expose?'The requested service is unavailable':err.message;
+    const retryAfterSeconds=status===429&&Number.isSafeInteger(err.retryAfterSeconds)&&err.retryAfterSeconds!>0?err.retryAfterSeconds:undefined;
+    if(retryAfterSeconds!==undefined){
+      reply.header('Retry-After',retryAfterSeconds);
+      if(message==='Too many requests; try again later'&&!String(request.headers['accept-language']||'').toLowerCase().startsWith('en'))message=`操作过于频繁，请在 ${retryAfterSeconds>=60?Math.ceil(retryAfterSeconds/60)+' 分钟':retryAfterSeconds+' 秒'}后重试。`;
+    }
     if(status>=500)request.log.error({errorType:err.name,errorCode:err.code},'Request failed');
-    reply.code(status).send({code:status,msg:message,error:message,outcome:err.outcome||(status>=500||status===429?'unavailable':status===401||status===403?'expired':status===404?'not-found':status===409?'rejected':'failed')});
+    reply.code(status).send({code:status,msg:message,error:message,...(retryAfterSeconds!==undefined?{retryAfterSeconds}:{}),outcome:err.outcome||(status>=500||status===429?'unavailable':status===401||status===403?'expired':status===404?'not-found':status===409?'rejected':'failed')});
   });
   const expectedMigrations=await readMigrations();
   const live=async()=>({ok:true});
@@ -77,7 +83,7 @@ export async function buildApp(options:BuildOptions={}):Promise<FastifyInstance 
   };
   app.get('/health',live);app.get('/api/health/live',live);
   app.get('/ready',ready);app.get('/api/health/ready',ready);
-  await registerAuth(app,ctx);await registerSettings(app,ctx);await registerSitePopups(app,ctx);await registerWatermark(app,ctx);await registerCheckIn(app,ctx);
+  await registerAuth(app,ctx);await registerSettings(app,ctx);await registerSitePopups(app,ctx);await registerWatermark(app,ctx);await registerContentPreferences(app,ctx);await registerCheckIn(app,ctx);
   await registerTeams(app,ctx);await registerTeamPlans(app,ctx);await registerTeamProjects(app,ctx);await registerTeamAssets(app,ctx);await registerTeamCanvas(app,ctx);
   if(!options.coreOnly){await registerCommerce(app,ctx);await registerContent(app,ctx);const {registerCreative}=await import('./creative.js');await registerCreative(app,ctx);await registerTeamGeneration(app,ctx);}
   if(ownedPool)app.addHook('onClose',async()=>{await db.end();});

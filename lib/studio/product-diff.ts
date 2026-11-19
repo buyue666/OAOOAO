@@ -71,6 +71,7 @@ export function diffProductDraft(before: ProductDraft, after: ProductDraft): Dra
     ['tierLabel', '档位名称', false],
     ['badge', '活动角标', false],
     ['generationSummary', '生成量说明', false],
+    ['generationSummaryNote', '生成量说明备注', false],
     // 权益分组是敏感变更：用户按权益决定买哪个套餐。
     ['benefits', '基础权益', true],
     ['promotions', '限时活动', true],

@@ -47,15 +47,33 @@ test('queued cancellation and confirmed worker failure refund once; worker succe
     release();await work;assert.equal(calls,1);assert.equal((await f.ctx.db.query('SELECT status FROM oaooao_generation_jobs WHERE id=$1',[running.id])).rows[0].status,'success');assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,90);
   }finally{await f.cleanup();}
 });
-test('ambiguous provider results and expired submit leases retain debit until audited confirmation',async()=>{
+test('ambiguous submissions and expired submit leases fail and refund without replaying the provider request',async()=>{
   const f=await fixture();try{
-    const owner=f.users[0],admin=f.users[2];const job=await createJob(f.ctx,owner.id,'text',input,'ambiguous');let calls=0;
-    await processNextJob(f.ctx,async()=>{calls++;throw new ProviderFailure('Network outcome unknown');});assert.equal(await processNextJob(f.ctx,async()=>{calls++;throw Error('Must not retry POST');}),false);assert.equal(calls,1);assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,90);
-    const review=await f.app.inject({method:'POST',url:`/api/admin/generation-operations/text/${job.id}/review`,headers:admin.headers,payload:{action:'confirm_failed',reason:'Synthetic provider ledger confirms no output'}});assert.equal(review.statusCode,200,review.body);assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,100);
-    const again=await f.app.inject({method:'POST',url:`/api/admin/generation-operations/text/${job.id}/review`,headers:admin.headers,payload:{action:'confirm_failed',reason:'duplicate'}});assert.equal(again.statusCode,409);
+    const owner=f.users[0];const job=await createJob(f.ctx,owner.id,'text',input,'ambiguous');let calls=0;
+    await processNextJob(f.ctx,async()=>{calls++;throw new ProviderFailure('Network outcome unknown');});assert.equal(await processNextJob(f.ctx,async()=>{calls++;throw Error('Must not retry POST');}),false);assert.equal(calls,1);assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,100);
+    const rowAfterUnknown=(await f.ctx.db.query('SELECT status,phase FROM oaooao_generation_jobs WHERE id=$1',[job.id])).rows[0];assert.equal(rowAfterUnknown.status,'error');assert.equal(rowAfterUnknown.phase,'complete');
+    assert.equal((await f.app.inject({method:'POST',url:`/api/admin/generation-operations/text/${job.id}/review`,headers:f.users[2].headers,payload:{action:'confirm_failed'}})).statusCode,404);
     const crashed=await createJob(f.ctx,owner.id,'text',input,'crash');await f.ctx.db.query("UPDATE oaooao_generation_jobs SET status='running',phase='submitting',lease_owner='dead-worker',lease_until=now()-interval '1 second' WHERE id=$1",[crashed.id]);
-    await processNextJob(f.ctx,async()=>{throw Error('Must not replay crashed submission');});const row=(await f.ctx.db.query('SELECT * FROM oaooao_generation_jobs WHERE id=$1',[crashed.id])).rows[0];assert.equal(row.needs_review,true);assert.equal(row.phase,'review');assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,90);
-    assert.equal(Number((await f.ctx.db.query("SELECT count(*) FROM oaooao_audit_logs WHERE action='generation.review.confirm_failed'")).rows[0].count),1);
+    await processNextJob(f.ctx,async()=>{throw Error('Must not replay crashed submission');});const row=(await f.ctx.db.query('SELECT * FROM oaooao_generation_jobs WHERE id=$1',[crashed.id])).rows[0];assert.equal(row.status,'error');assert.equal(row.phase,'complete');assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,100);
+  }finally{await f.cleanup();}
+});
+test('async status retries are bounded by model settings and async jobs refund at the configured deadline',async()=>{
+  const f=await fixture();try{
+    const owner=f.users[0],retrying=await createJob(f.ctx,owner.id,'video',{...input,config:{model:'synthetic-video'}},'poll-retries');
+    await f.ctx.db.query("UPDATE oaooao_generation_jobs SET status='running',phase='polling',upstream_id='synthetic-upstream',started_at=now(),provider_config=provider_config||$2,next_poll_at=now() WHERE id=$1",[retrying.id,{asyncTaskTimeoutMinutes:30,statusQueryRetries:1}]);
+    let queries=0;await processNextJob(f.ctx,async()=>{queries++;throw Error('Synthetic poll timeout')});
+    await f.ctx.db.query('UPDATE oaooao_generation_jobs SET next_poll_at=now() WHERE id=$1',[retrying.id]);await processNextJob(f.ctx,async()=>{queries++;throw Error('Synthetic poll timeout')});
+    const failed=(await f.ctx.db.query('SELECT status,error FROM oaooao_generation_jobs WHERE id=$1',[retrying.id])).rows[0];assert.equal(queries,2);assert.equal(failed.status,'error');assert.match(failed.error,/连续 2 次/);assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,100);
+
+    const timedOut=await createJob(f.ctx,owner.id,'video',{...input,config:{model:'synthetic-video'}},'poll-timeout');
+    await f.ctx.db.query("UPDATE oaooao_generation_jobs SET status='running',phase='polling',upstream_id='synthetic-upstream-timeout',started_at=now()-interval '2 minutes',provider_config=provider_config||$2,next_poll_at=now() WHERE id=$1",[timedOut.id,{asyncTaskTimeoutMinutes:1,statusQueryRetries:3}]);
+    let executions=0;assert.equal(await processNextJob(f.ctx,async()=>{executions++;return{type:'pending',upstreamId:'synthetic-upstream-timeout'}}),false);
+    const timeout=(await f.ctx.db.query('SELECT status,error FROM oaooao_generation_jobs WHERE id=$1',[timedOut.id])).rows[0];assert.equal(executions,0);assert.equal(timeout.status,'error');assert.match(timeout.error,/超过 1 分钟/);assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,100);
+
+    const defaultTimeout=await createJob(f.ctx,owner.id,'video',{...input,config:{model:'synthetic-video'}},'default-poll-timeout');
+    await f.ctx.db.query("UPDATE oaooao_generation_jobs SET status='running',phase='polling',upstream_id='synthetic-default-timeout',started_at=now()-interval '181 seconds',provider_config=provider_config-'asyncTaskTimeoutMinutes',next_poll_at=now() WHERE id=$1",[defaultTimeout.id]);
+    assert.equal(await processNextJob(f.ctx,async()=>{throw Error('Legacy jobs use the three-minute default before querying')}),false);
+    const defaultResult=(await f.ctx.db.query('SELECT status,error FROM oaooao_generation_jobs WHERE id=$1',[defaultTimeout.id])).rows[0];assert.equal(defaultResult.status,'error');assert.match(defaultResult.error,/超过 3 分钟/);assert.equal((await getWallet(f.ctx,owner.id)).pointsBalance,100);
   }finally{await f.cleanup();}
 });
 test('project handoff retries, concurrent saves and library media enforce owner boundaries',async()=>{
@@ -68,10 +86,10 @@ test('project handoff retries, concurrent saves and library media enforce owner 
     const media=await saveMedia(f.ctx,a.id,image,true);const library={kind:'image',title:'Synthetic pixel',data:{storageKey:media.key,serverUrl:media.url}};
     assert.equal((await f.app.inject({method:'POST',url:'/api/library-assets',headers:b.headers,payload:library})).statusCode,404);
     const saved=await f.app.inject({method:'POST',url:'/api/library-assets',headers:a.headers,payload:library});assert.equal(saved.statusCode,200,saved.body);
-    assert.equal((await f.app.inject({url:media.url,headers:b.headers})).statusCode,404);
+    assert.equal((await f.app.inject({url:media.url,headers:b.headers})).statusCode,200);
     assert.equal((await f.app.inject({url:media.url,headers:a.headers})).statusCode,200);
     const signed=new URL(media.upstreamUrl);assert.equal((await f.app.inject({url:signed.pathname+signed.search})).statusCode,200);
-    await f.ctx.db.query("UPDATE oaooao_media SET expires_at=now()-interval '1 second' WHERE id=$1",[media.key]);assert.equal((await f.app.inject({url:signed.pathname+signed.search})).statusCode,401);assert.equal((await f.app.inject({url:media.url,headers:a.headers})).statusCode,200);
+    await f.ctx.db.query("UPDATE oaooao_media SET expires_at=now()-interval '1 second' WHERE id=$1",[media.key]);assert.equal((await f.app.inject({url:signed.pathname+signed.search})).statusCode,200);assert.equal((await f.app.inject({url:media.url,headers:a.headers})).statusCode,200);
     assert.throws(()=>mediaPath(f.ctx.config.mediaRoot,'../secrets'));assert.throws(()=>decodeDataUrl('data:image/svg+xml;base64,'+Buffer.from('<svg/>').toString('base64')));
   }finally{await f.cleanup();}
 });
@@ -136,7 +154,7 @@ test('malicious Agent plans cannot execute unselected models or cyclic reference
 test('official protocol adapter serializes real requests and persists returned media without network access',async()=>{
   const f=await fixture();try{
     const owner=f.users[0];let captured:any;
-    const text=await createJob(f.ctx,owner.id,'text',input,'provider-text');const result=await invokeProvider(f.ctx,text,false,async(url,options)=>{captured={url,options};return new Response(JSON.stringify({choices:[{message:{content:'Fixture output'}}]}),{status:200});});assert.equal(result.type,'complete');assert.equal(captured.url,'https://provider.example/v1/chat/completions');assert.equal(JSON.parse(captured.options.body).model,'fixture-model');
+    const text=await createJob(f.ctx,owner.id,'text',input,'provider-text');const result=await invokeProvider(f.ctx,text,false,async(url,options)=>{captured={url,options};options?.onChunk?.(Buffer.from('data: {"choices":[{"delta":{"content":"Fixture output"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));return new Response(null,{status:200,headers:{'content-type':'text/event-stream'}});});assert.equal(result.type,'complete');assert.equal(captured.url,'https://provider.example/v1/chat/completions');assert.equal(JSON.parse(captured.options.body).model,'fixture-model');assert.equal(JSON.parse(captured.options.body).stream,true);if(result.type==='complete')assert.equal(result.result.content,'Fixture output');
     const imageJob=await createJob(f.ctx,owner.id,'image',{...input,config:{model:'synthetic-image'}},'provider-image');const imageResult=await invokeProvider(f.ctx,imageJob,false,async(url)=>{assert.equal(url,'https://provider.example/v1/images/generations');return new Response(JSON.stringify({data:[{b64_json:image.toString('base64')}]}),{status:200});});assert.equal(imageResult.type,'complete');if(imageResult.type==='complete')assert.match(imageResult.result.remoteUrl,/^\/api\/reference-assets\//);
     const videoJob=await createJob(f.ctx,owner.id,'video',{...input,config:{model:'synthetic-video',videoSeconds:'4'}},'provider-video');const pending=await invokeProvider(f.ctx,videoJob,false,async(url,options)=>{assert.equal(url,'https://provider.example/v1/videos');assert.match(String(options?.headers?.['content-type']),/^multipart\/form-data/);return new Response(JSON.stringify({id:'synthetic-upstream',status:'queued'}),{status:200});});assert.deepEqual(pending,{type:'pending',upstreamId:'synthetic-upstream'});
     await assert.rejects(invokeProvider(f.ctx,text,false,async()=>new Response('{}',{status:400})),error=>error instanceof ProviderFailure&&error.definitive);

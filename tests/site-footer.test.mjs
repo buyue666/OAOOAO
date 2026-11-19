@@ -16,6 +16,7 @@ function sourceModule(path, modules = {}) {
 const announcements = sourceModule('../lib/studio/announcements.ts')
 const footer = sourceModule('../lib/studio/site-footer.ts', { './announcements': announcements })
 const brand = sourceModule('../lib/studio/site-brand.ts')
+const wechat = sourceModule('../lib/studio/wechat-contact.ts', { './site-brand': brand })
 const all = node => node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(all)] : []
 
 test('footer defaults use the known contact and real routes, hide studio, and invent no registration or social account', () => {
@@ -103,6 +104,7 @@ function editorHarness(site) {
   const ui = Object.fromEntries(['AdminField', 'AdminInput', 'AdminNotice', 'AdminSaveBar', 'AdminSectionCard', 'AdminTabs', 'AdminTextarea'].map(name => [name, name]))
   const { AdminSiteSettings } = sourceModule('../components/studio/admin-site-settings.tsx', {
     react, 'next/link': 'Link', '@/components/site-brand': { SiteBrand: 'SiteBrand' }, '@/lib/studio/site-brand': brand,
+    '@/lib/studio/wechat-contact': wechat, './admin-wechat-contact-fields': { AdminWechatContactFields: 'AdminWechatContactFields' },
     '@/lib/studio/site-footer': footer, './ui': { ControlButton: 'ControlButton', StatusBadge: 'StatusBadge' }, './admin-kit': ui, './admin-site-footer': { AdminSiteFooter: 'AdminSiteFooter' },
   })
   const render = () => { stateIndex = 0; effectIndex = 0; tree = AdminSiteSettings({ site, saving, onSave: (patch, summary) => writes.push({ patch, summary }), onDirtyChange() {} }); return tree }
@@ -152,7 +154,7 @@ test('invalid footer draft selects its tab and stays editable without sending a 
 })
 
 test('confirmed footer updates survive older session responses and never broadcast private settings or the old fallback banner', () => {
-  const sync = sourceModule('../lib/studio/site-brand-sync.ts', { './site-brand': brand, './site-footer': footer }).createSiteBrandSync()
+  const sync = sourceModule('../lib/studio/site-brand-sync.ts', { './site-brand': brand, './site-footer': footer, './wechat-contact': wechat }).createSiteBrandSync()
   let received
   sync.subscribe(value => { received = value })
   const before = sync.getRevision()

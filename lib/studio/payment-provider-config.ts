@@ -1,14 +1,14 @@
 import type { AdminPaymentConfigField, AdminPaymentConfigSummary, AdminPaymentProviderConfig } from './admin-types'
 
 const supportedKinds = new Set(['text', 'url', 'secret', 'textarea', 'select'])
-export const paymentProviderName = (provider: AdminPaymentProviderConfig) => ({ manual: '人工收款', epay: '易支付', alipay: '支付宝', wechat: '微信支付', stripe: '银行卡支付' }[provider.id] || provider.name)
+export const paymentProviderName = (provider: AdminPaymentProviderConfig) => ({ ciyuan_balance: 'New API 余额支付', epay: '易支付', alipay: '支付宝', wechat: '微信支付', stripe: '银行卡支付' }[provider.id] || provider.name)
 export function canConfigureOnlinePayment(provider?: AdminPaymentProviderConfig): provider is AdminPaymentProviderConfig {
-  return !!provider && provider.id === 'epay' && ['form', 'redirect', 'qr'].includes(provider.checkoutKind)
-    && Array.isArray(provider.fields) && ['gatewayUrl', 'pid', 'protocol', 'paymentType'].every(key => provider.fields.some(field => field.key === key))
+  return !!provider && ['epay','ciyuan_balance'].includes(provider.id) && ['form', 'redirect', 'qr'].includes(provider.checkoutKind)
+    && Array.isArray(provider.fields) && (provider.id==='ciyuan_balance'?['gatewayUrl','merchantId','secret']:['gatewayUrl','pid','protocol','paymentType']).every(key => provider.fields.some(field => field.key === key))
     && provider.fields.every(field => supportedKinds.has(field.kind))
 }
 export function paymentFieldLabel(field: AdminPaymentConfigField) {
-  return ({ gatewayUrl: '支付网关地址', pid: '商户编号', protocol: '签名协议', paymentType: '默认付款方式', key: '商户密钥（MD5）', merchantPrivateKey: '商户私钥（RSA）', platformPublicKey: '平台公钥（RSA）' } as Record<string, string>)[field.key] || field.label
+  return ({ gatewayUrl: '支付网关地址', pid: '商户编号', protocol: '签名协议', paymentType: '默认付款方式', key: '商户密钥（MD5）', merchantId:'商户标识', secret:'商户签名密钥', merchantPrivateKey: '商户私钥（RSA）', platformPublicKey: '平台公钥（RSA）' } as Record<string, string>)[field.key] || field.label
 }
 export function paymentOptionLabel(value: string, fallback: string) {
   return ({ v2_rsa: '易支付 V2 · RSA 签名', v1_md5: '易支付 V1 · MD5 签名', cashier: '收银台（用户自行选择）', alipay: '支付宝', wxpay: '微信支付' } as Record<string, string>)[value] || fallback

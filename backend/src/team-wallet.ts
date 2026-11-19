@@ -82,3 +82,19 @@ export async function refundTeamJob(db: PoolClient, job: TeamRow) {
     await db.query('INSERT INTO oaooao_team_credit_allocations(operation_id,batch_id,delta) VALUES($1,$2,$3)', [refundId, row.batch_id, value]);
   }
 }
+
+/** Partial return after a successful variable-duration task, in the same transaction. */
+export async function refundTeamDifference(db:PoolClient,job:TeamRow,amount:CreditAmount){
+ const units=creditUnits(amount);if(units<=0n||units>creditUnits(job.cost))throw httpError(409,'团队任务结算金额无效');
+ await lockTeam(db,job.team_id);
+ const debitId=`team-job:${job.id}:debit`,refundId=`team-job:${job.id}:refund`;
+ if((await db.query('SELECT id FROM oaooao_team_credit_operations WHERE refund_of=$1',[debitId])).rowCount)return;
+ const debit=(await db.query('SELECT * FROM oaooao_team_credit_operations WHERE id=$1 AND team_id=$2',[debitId,job.team_id])).rows[0];
+ if(!debit||debit.actor_id!==job.user_id||creditUnits(debit.amount)!==-creditUnits(job.cost))throw httpError(409,'团队预扣记录不匹配');
+ const allocations=(await db.query('SELECT a.*,b.expires_at IS NULL OR b.expires_at>clock_timestamp() valid FROM oaooao_team_credit_allocations a JOIN oaooao_team_credit_batches b ON b.id=a.batch_id WHERE a.operation_id=$1 ORDER BY b.expires_at DESC NULLS FIRST,b.id DESC FOR UPDATE OF b',[debitId])).rows;
+ let remaining=units,restored=0n;const changes=[];
+ for(const row of allocations){const take=remaining<-creditUnits(row.delta)?remaining:-creditUnits(row.delta);remaining-=take;if(row.valid&&take>0n){restored+=take;changes.push({id:row.batch_id,take});}}
+ if(remaining!==0n)throw httpError(409,'团队预扣分配不匹配');
+ await db.query("INSERT INTO oaooao_team_credit_operations(id,team_id,actor_id,kind,amount,budget_delta,budget_month,job_id,refund_of,reason) VALUES($1,$2,$3,'refund',$4,$5,$6,$7,$8,'智能时长结算；过期积分不延长有效期')",[refundId,job.team_id,job.user_id,creditDecimal(restored),creditDecimal(-units),debit.budget_month,job.id,debitId]);
+ for(const change of changes){await db.query('UPDATE oaooao_team_credit_batches SET remaining_amount=remaining_amount+$2 WHERE id=$1',[change.id,creditDecimal(change.take)]);await db.query('INSERT INTO oaooao_team_credit_allocations(operation_id,batch_id,delta) VALUES($1,$2,$3)',[refundId,change.id,creditDecimal(change.take)]);}
+}

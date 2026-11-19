@@ -84,10 +84,12 @@ test('R2 adapter stores no local copy, authorizes signed downloads, verifies con
   await f.db.query("UPDATE oaooao_settings SET value=$1 WHERE id='object-storage'",[config]);
   const saved=await saveMedia(f.ctx,a.id,pixel);assert.equal(objects.size,1);await assert.rejects(access(mediaPath(f.config.mediaRoot,saved.key)));
   assert.deepEqual((await ownedMedia(f.ctx,a.id,saved.key)).bytes,pixel);assert.equal((await ownedMediaInfo(f.ctx,a.id,saved.key)).bytes,pixel.length);
-  assert.equal((await f.app.inject({url:saved.url})).statusCode,401);
-  assert.equal((await f.app.inject({url:saved.url,headers:f.users[1].headers})).statusCode,404);
+  assert.equal((await f.app.inject({url:saved.url})).statusCode,302);
+  assert.equal((await f.app.inject({url:saved.url,headers:f.users[1].headers})).statusCode,302);
   const download=await f.app.inject({url:saved.url,headers:a.headers});assert.equal(download.statusCode,302);const url=new URL(download.headers.location!);assert.equal(url.searchParams.get('X-Amz-Expires'),'300');assert.equal(url.hostname,new URL(config.endpoint).hostname);
   const canvasRead=await f.app.inject({url:saved.url,headers:{...a.headers,'sec-fetch-dest':'empty','sec-fetch-mode':'cors'}});assert.equal(canvasRead.statusCode,200);assert.deepEqual(canvasRead.rawPayload,pixel);
+  const proxiedNavigation=await f.app.inject({url:saved.url,headers:{...a.headers,'sec-fetch-mode':'cors','sec-fetch-dest':'document','x-oao-media-delivery':'direct'}});assert.equal(proxiedNavigation.statusCode,302);assert.ok(proxiedNavigation.headers.location);
+  const preservedCanvas=await f.app.inject({url:saved.url,headers:{...a.headers,'sec-fetch-mode':'no-cors','x-oao-media-delivery':'proxy'}});assert.equal(preservedCanvas.statusCode,200);assert.deepEqual(preservedCanvas.rawPayload,pixel);
   const check=await f.app.inject({method:'POST',url:'/api/admin/object-storage',headers:a.headers});assert.equal(check.statusCode,200,check.body);assert.equal(check.json().data.deleteVerified,true);assert.equal(objects.size,1);
   const publicSettings=await f.app.inject({url:'/api/admin/object-storage',headers:a.headers});assert.ok(!publicSettings.body.includes('synthetic-secret-key'));assert.ok(!publicSettings.body.includes('synthetic-key-id'));
   const changeBucket=await f.app.inject({method:'PATCH',url:'/api/admin/object-storage',headers:a.headers,payload:{...config,accessKeyId:undefined,secretAccessKey:undefined,bucket:'different-bucket'}});assert.equal(changeBucket.statusCode,409);

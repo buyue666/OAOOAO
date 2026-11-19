@@ -10,11 +10,13 @@ import { lockTeam, requireTeam, requireTeamProject, teamEvent, teamManager } fro
 import { debitTeamCredits } from './team-wallet.js';
 import { cancelJob } from './worker.js';
 import type { TeamWorkspace } from './team-assets.js';
+import { assertImageReferencePolicy } from './image-reference-policy.js';
 
 function parseInput(body: Json, workspace: TeamWorkspace) {
   if (!['text','image','video','audio'].includes(body.kind)) throw httpError(400, '生成类型无效');
   const kind = body.kind as GenerationKind;
-  const input = generationInput(kind, { ...body, kind: undefined, context: { teamId: workspace.teamId, projectId: workspace.projectId }, source: 'team' });
+  if (body.imageMode !== undefined && (kind !== 'image' || !['generation','edit'].includes(body.imageMode))) throw httpError(400, '图片生成方式无效');
+  const input = generationInput(kind, { ...body, kind: body.imageMode, context: { teamId: workspace.teamId, projectId: workspace.projectId }, source: 'team' });
   return { kind, input };
 }
 
@@ -23,6 +25,10 @@ async function prepareTeamGeneration(ctx: Context, db: PoolClient, workspace: Te
   await requireTeamProject(db, workspace.teamId, userId, workspace.projectId, 'write');
   const now = (await db.query('SELECT clock_timestamp() at')).rows[0].at;
   if (!team.subscription_expires_at || team.subscription_expires_at <= now) throw httpError(402, '团队套餐尚未开通或已到期，现有项目仍可按权限查看');
+  if (kind === 'video' && input.config?.sourceJobId) {
+    const source = await db.query("SELECT id FROM oaooao_generation_jobs WHERE id=$1 AND team_id=$2 AND team_project_id=$3 AND kind='video' AND status='success'", [input.config.sourceJobId, workspace.teamId, workspace.projectId]);
+    if (!source.rowCount) throw httpError(403, '原视频任务不属于当前团队项目');
+  }
   const references = [...(input.references || []), ...(input.edit?.mask ? [input.edit.mask] : [])];
   for (const ref of references) {
     if (typeof ref.url !== 'string') continue;
@@ -35,6 +41,7 @@ async function prepareTeamGeneration(ctx: Context, db: PoolClient, workspace: Te
   }
   const provider = await resolveProvider({ ...ctx, workspace }, kind, input, db, userId);
   if (team.model_ids.length && !team.model_ids.includes(provider.model)) throw httpError(403, '此模型不在团队可用范围内');
+  if (kind === 'image') assertImageReferencePolicy(input, provider.config.capabilityProfile || {});
   return { team, provider };
 }
 

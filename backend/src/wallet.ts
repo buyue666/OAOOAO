@@ -34,7 +34,15 @@ export interface WalletBalance {
 }
 /** Internal test clock only; HTTP clients cannot supply it. One instant is captured after the wallet lock. */
 export type WalletClock = () => Date;
-interface CreditBatch { id:string; remaining_amount:string; expires_at:Date; expired_at:Date|null; }
+interface CreditBatch { id:string; remaining_amount:string; expires_at:Date|null; expired_at:Date|null; assignment_ended?:boolean; }
+const batchDeadline=(batch:CreditBatch)=>batch.expires_at?.getTime() ?? Number.POSITIVE_INFINITY;
+// Assignment batches keep a storage deadline for compatibility with previous runtimes.
+const assignmentDeadline = new Date('9999-12-31T00:00:00.000Z');
+export const activeBatchAssignment=`EXISTS (
+  SELECT 1 FROM oaooao_admin_plan_assignments a JOIN oaooao_settings s ON s.id='global'
+  WHERE a.user_id=b.user_id AND a.assigned_at=b.membership_assignment_at AND s.value->'entitlements'->'enabled'='true'::jsonb
+    AND s.value->'entitlements'->'plans' @> jsonb_build_array(jsonb_build_object('id',a.plan_id,'enabled',true))
+)`;
 interface WalletRow {
   user_id: string; permanent_balance: string; daily_balance: string;
   daily_allowance: string; daily_spent: string; daily_expires_at: Date | null; daily_refresh_date: string | Date | null;
@@ -74,20 +82,15 @@ async function lockWallet(db: PoolClient, userId: string): Promise<WalletRow> {
 async function operationTime(db:PoolClient,userId:string,at:Date):Promise<string>{
   return (await db.query<{at:string}>("SELECT greatest($2::timestamptz,coalesce(max(created_at)+interval '1 microsecond',$2::timestamptz))::text AS at FROM oaooao_wallet_operations WHERE user_id=$1",[userId,at])).rows[0]!.at;
 }
-async function dailyEntitlement(db: PoolClient, userId: string, at?:Date): Promise<bigint> {
+async function dailyEntitlement(db: PoolClient): Promise<bigint> {
   const settings = (await db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0]?.value ?? {};
-  const free = settings.freeDailyPointsEnabled === true ? creditUnits(settings.freeDailyPoints ?? 0) : 0n;
-  const paid = creditUnits((await db.query("SELECT coalesce(sum(daily_points),0)::text AS amount FROM oaooao_plan_grants WHERE user_id=$1 AND revoked_at IS NULL AND starts_at<=coalesce($2,clock_timestamp()) AND expires_at>coalesce($2,clock_timestamp())", [userId,at ?? null])).rows[0]!.amount);
-  const assignment = (await db.query('SELECT plan_id FROM oaooao_admin_plan_assignments WHERE user_id=$1',[userId])).rows[0];
-  const plan = settings.entitlements?.enabled === true && assignment ? settings.entitlements.plans?.find((item:Record<string,unknown>)=>item.id===assignment.plan_id && item.enabled===true) : null;
-  const administrative = plan ? creditUnits(plan.dailyPoints ?? 0) : 0n;
-  return [free,paid,administrative].reduce((largest,current)=>current>largest?current:largest,0n);
+  return settings.freeDailyPointsEnabled === true ? creditUnits(settings.freeDailyPoints ?? 0) : 0n;
 }
 async function refreshDaily(db: PoolClient, row: WalletRow, at:Date): Promise<WalletRow> {
   const clock = (await db.query<{ today: string; expires: Date; now: Date }>("SELECT to_char($1::timestamptz AT TIME ZONE 'UTC','YYYY-MM-DD') AS today, ((date_trunc('day',$1::timestamptz AT TIME ZONE 'UTC') + interval '1 day') AT TIME ZONE 'UTC') AS expires, $1::timestamptz AS now",[at])).rows[0]!;
   const date = row.daily_refresh_date instanceof Date ? row.daily_refresh_date.toISOString().slice(0, 10) : String(row.daily_refresh_date ?? '').slice(0, 10);
   if (date === clock.today && (!row.daily_expires_at || row.daily_expires_at > clock.now)) return row;
-  const grant = await dailyEntitlement(db,row.user_id,at);
+  const grant = await dailyEntitlement(db);
   const previous = creditUnits(row.daily_balance);
   // Imported, still-valid daily credits are preserved until their explicit expiry.
   if (row.daily_expires_at && row.daily_expires_at > clock.now && date !== clock.today) {
@@ -107,17 +110,20 @@ async function walletNow(db:PoolClient,clock?:WalletClock):Promise<Date>{
 }
 async function prepareWallet(db:PoolClient,userId:string,clock?:WalletClock):Promise<{row:WalletRow;at:Date}>{
   const row=await lockWallet(db,userId);const at=await walletNow(db,clock);
-  const all=(await db.query<CreditBatch>('SELECT id,remaining_amount,expires_at,expired_at FROM oaooao_credit_batches WHERE user_id=$1 AND expired_at IS NULL ORDER BY expires_at,id FOR UPDATE',[userId])).rows;
+  const all=(await db.query<CreditBatch>(`SELECT b.id,b.remaining_amount,CASE WHEN b.membership_assignment_at IS NULL THEN b.expires_at END AS expires_at,b.expired_at,
+    CASE WHEN b.membership_assignment_at IS NULL THEN false ELSE NOT ${activeBatchAssignment} END AS assignment_ended
+    FROM oaooao_credit_batches b WHERE b.user_id=$1 AND b.expired_at IS NULL ORDER BY b.expires_at,b.id FOR UPDATE OF b`,[userId])).rows;
+  const due=(batch:CreditBatch)=>batch.assignment_ended===true || batchDeadline(batch)<=at.getTime();
   let total=all.reduce((sum,batch)=>sum+creditUnits(batch.remaining_amount),0n);
-  for(const batch of all.filter(item=>item.expires_at<=at)){
+  for(const batch of all.filter(due)){
     const remainder=creditUnits(batch.remaining_amount);total-=remainder;
     await db.query('UPDATE oaooao_credit_batches SET remaining_amount=0,expired_at=$2 WHERE id=$1',[batch.id,at]);
     if(remainder===0n)continue;
     const operationId=`timed-expire:${batch.id}`;
-    await db.query(`INSERT INTO oaooao_wallet_operations(operation_id,user_id,requested_delta,permanent_delta,daily_delta,timed_delta,permanent_after,daily_after,timed_after,daily_expires_at,metadata,created_at) VALUES($1,$2,$3,0,0,$3,$4,$5,$6,$7,$8,$9)`,[operationId,userId,creditDecimal(-remainder),row.permanent_balance,row.daily_balance,creditDecimal(total),row.daily_expires_at,{kind:'timed_expiration',type:'expire',description:'限时签到积分到期',batchId:batch.id,expiresAt:batch.expires_at.toISOString()},await operationTime(db,userId,at)]);
+    await db.query(`INSERT INTO oaooao_wallet_operations(operation_id,user_id,requested_delta,permanent_delta,daily_delta,timed_delta,permanent_after,daily_after,timed_after,daily_expires_at,metadata,created_at) VALUES($1,$2,$3,0,0,$3,$4,$5,$6,$7,$8,$9)`,[operationId,userId,creditDecimal(-remainder),row.permanent_balance,row.daily_balance,creditDecimal(total),row.daily_expires_at,{kind:'timed_expiration',type:'expire',description:batch.assignment_ended?'会员权益结束，签到积分失效':'限时签到积分到期',batchId:batch.id,expiresAt:(batch.expires_at ?? at).toISOString()},await operationTime(db,userId,at)]);
     await db.query('INSERT INTO oaooao_wallet_batch_allocations(operation_id,batch_id,delta) VALUES($1,$2,$3)',[operationId,batch.id,creditDecimal(-remainder)]);
   }
-  row.batches=all.filter(batch=>batch.expires_at>at);
+  row.batches=all.filter(batch=>!due(batch));
   // First settle all expired batches against the original daily balance. Only then
   // expire/refresh the daily bucket, so each ledger snapshot follows its delta.
   return {row:await refreshDaily(db,row,at),at};
@@ -134,7 +140,10 @@ function checkId(value: string): void {
   if (typeof value !== 'string' || !value.trim() || value.length > 240) throw httpError(400, 'A stable operation identifier is required');
 }
 /** Positive adjustments grant permanent credit. Refunds must name the debit with metadata.refundOf. */
-export async function adjustWallet(ctx: Context, userId: string, operationId: string, delta: CreditAmount, metadata: Meta = {}, client?: PoolClient,clock?:WalletClock): Promise<WalletBalance> {
+export async function adjustWallet(ctx: Context,userId:string,operationId:string,delta:CreditAmount,metadata:Meta={},client?:PoolClient,clock?:WalletClock):Promise<WalletBalance>{return applyWalletAdjustment(ctx,userId,operationId,delta,metadata,client,clock,false);}
+/** Only completed variable-duration jobs may return part of their original reservation. */
+export async function refundWalletDifference(ctx:Context,userId:string,operationId:string,amount:CreditAmount,refundOf:string,client:PoolClient):Promise<WalletBalance>{return applyWalletAdjustment(ctx,userId,operationId,amount,{kind:'generation_settlement',refundOf},client,undefined,true);}
+async function applyWalletAdjustment(ctx: Context, userId: string, operationId: string, delta: CreditAmount, metadata: Meta, client: PoolClient|undefined,clock:WalletClock|undefined,partial:boolean): Promise<WalletBalance> {
   checkId(operationId);
   const amount = creditUnits(delta);
   const refundOf = typeof metadata.refundOf === 'string' ? metadata.refundOf : null;
@@ -155,9 +164,29 @@ export async function adjustWallet(ctx: Context, userId: string, operationId: st
     if (refundOf) {
       if (amount <= 0n) throw httpError(400, 'Refund amount must be positive');
       const original = (await db.query<OperationRow>('SELECT * FROM oaooao_wallet_operations WHERE operation_id=$1 AND user_id=$2', [refundOf, userId])).rows[0];
-      if (!original || creditUnits(original.requested_delta) >= 0n || -creditUnits(original.requested_delta) !== amount) throw httpError(409, 'Refund must match an existing debit in full');
+      if (!original || creditUnits(original.requested_delta) >= 0n || (partial?-creditUnits(original.requested_delta)<amount:-creditUnits(original.requested_delta)!==amount)) throw httpError(409, 'Refund must match an existing debit in full');
       const already = await db.query('SELECT operation_id FROM oaooao_wallet_operations WHERE refund_of=$1', [refundOf]);
       if (already.rowCount) return balances(row);
+      if(partial){
+        // Return the unused tail of the debit in reverse consumption order. Expired
+        // daily/timed credits retain their original expiry and are never made permanent.
+        let remaining=amount;permanentDelta=0n;
+        const take=(available:bigint)=>{const value=remaining<available?remaining:available;remaining-=value;return value;};
+        permanentDelta=take(-creditUnits(original.permanent_delta));
+        const spent=(await db.query<{batch_id:string;delta:string}>('SELECT batch_id,delta FROM oaooao_wallet_batch_allocations WHERE operation_id=$1 AND delta<0 ORDER BY batch_id',[refundOf])).rows;
+        for(const allocation of spent.reverse()){
+          const value=take(-creditUnits(allocation.delta)),batch=row.batches?.find(item=>item.id===allocation.batch_id);
+          if(!value||!batch)continue;
+          timedDelta+=value;batch.remaining_amount=creditDecimal(creditUnits(batch.remaining_amount)+value);allocations.push({batchId:batch.id,delta:value});
+        }
+        const dailyReturn=take(-creditUnits(original.daily_delta));
+        if(original.daily_expires_at&&row.daily_expires_at&&original.daily_expires_at.getTime()===row.daily_expires_at.getTime()){
+          dailySpent=dailySpent>dailyReturn?dailySpent-dailyReturn:0n;
+          const room=creditUnits(row.daily_allowance)-dailySpent-creditUnits(row.daily_balance);
+          dailyDelta=room>0n?(room<dailyReturn?room:dailyReturn):0n;
+        }
+        if(remaining!==0n)throw httpError(409,'原任务预扣分配与结算金额不一致');
+      }else{
       permanentDelta = -creditUnits(original.permanent_delta);
       if(original.daily_expires_at && row.daily_expires_at && original.daily_expires_at.getTime()===row.daily_expires_at.getTime()) {
         dailySpent += creditUnits(original.daily_delta);
@@ -169,15 +198,16 @@ export async function adjustWallet(ctx: Context, userId: string, operationId: st
       for(const allocation of spent){
         const batch=row.batches?.find(item=>item.id===allocation.batch_id);
         // Missing from active batches means the original expiry has passed. Never create a replacement.
-        if(!batch || batch.expires_at<=at)continue;
+        if(!batch)continue;
         const restore=-creditUnits(allocation.delta);timedDelta+=restore;
         batch.remaining_amount=creditDecimal(creditUnits(batch.remaining_amount)+restore);
         allocations.push({batchId:batch.id,delta:restore});
       }
+      }
     } else if (amount < 0n) {
       if(metadata.bucket!=='permanent'){
         let remaining=-amount;
-        const slots=[{id:null as string|null,available:creditUnits(row.daily_balance),expires:row.daily_expires_at?.getTime() ?? Number.POSITIVE_INFINITY},...(row.batches ?? []).map(batch=>({id:batch.id,available:creditUnits(batch.remaining_amount),expires:batch.expires_at.getTime()}))].sort((a,b)=>a.expires-b.expires || String(a.id ?? '').localeCompare(String(b.id ?? '')));
+        const slots=[{id:null as string|null,available:creditUnits(row.daily_balance),expires:row.daily_expires_at?.getTime() ?? Number.POSITIVE_INFINITY},...(row.batches ?? []).map(batch=>({id:batch.id,available:creditUnits(batch.remaining_amount),expires:batchDeadline(batch)}))].sort((a,b)=>a.expires-b.expires || String(a.id ?? '').localeCompare(String(b.id ?? '')));
         for(const slot of slots){
           const take=remaining<slot.available?remaining:slot.available;if(take===0n)continue;remaining-=take;
           if(slot.id===null)dailyDelta-=take;
@@ -203,28 +233,50 @@ export async function adjustWallet(ctx: Context, userId: string, operationId: st
   });
 }
 /** Dedicated grant path: ordinary positive adjustments, purchases and imported credits stay permanent. */
-export async function grantTimedCredits(ctx:Context,userId:string,operationId:string,amount:CreditAmount,expiresAt:Date,metadata:Meta={},client?:PoolClient,clock?:WalletClock):Promise<WalletBalance>{
+export async function grantTimedCredits(ctx:Context,userId:string,operationId:string,amount:CreditAmount,expiresAt:Date|null,metadata:Meta={},client?:PoolClient,clock?:WalletClock,assignmentAt?:string):Promise<WalletBalance>{
   checkId(operationId);const units=creditUnits(amount);
-  if(units<=0n || !Number.isFinite(expiresAt.getTime()))throw httpError(400,'Invalid timed credit grant');
+  if(units<=0n || (expiresAt ? !Number.isFinite(expiresAt.getTime()) || Boolean(assignmentAt) : !assignmentAt))throw httpError(400,'Invalid timed credit grant');
   return walletTransaction(ctx,client,async db=>{
     await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[operationId]);
     const {row,at}=await prepareWallet(db,userId,clock);
     const previous=(await db.query<OperationRow>('SELECT * FROM oaooao_wallet_operations WHERE operation_id=$1',[operationId])).rows[0];
-    if(previous){if(previous.user_id!==userId || creditUnits(previous.requested_delta)!==units || previous.metadata.bucket!=='timed' || previous.metadata.expiresAt!==expiresAt.toISOString())throw httpError(409,'Operation identifier already used');return balances(row);}
-    if(expiresAt<=at)throw httpError(400,'Timed credits must expire in the future');
+    const expiry=expiresAt?.toISOString() ?? null;
+    if(previous){if(previous.user_id!==userId || creditUnits(previous.requested_delta)!==units || previous.metadata.bucket!=='timed' || previous.metadata.expiresAt!==expiry || previous.metadata.membershipAssignmentAt!==assignmentAt)throw httpError(409,'Operation identifier already used');return balances(row);}
+    if(expiresAt && expiresAt<=at)throw httpError(400,'Timed credits must expire in the future');
     const id=randomUUID();const batch:CreditBatch={id,remaining_amount:creditDecimal(units),expires_at:expiresAt,expired_at:null};
-    row.batches=[...(row.batches ?? []),batch].sort((a,b)=>a.expires_at.getTime()-b.expires_at.getTime() || a.id.localeCompare(b.id));
+    row.batches=[...(row.batches ?? []),batch].sort((a,b)=>batchDeadline(a)-batchDeadline(b) || a.id.localeCompare(b.id));
     balances(row); // Check the full supported balance range before any write.
-    await db.query('INSERT INTO oaooao_credit_batches(id,user_id,grant_operation_id,original_amount,remaining_amount,created_at,expires_at) VALUES($1,$2,$3,$4,$4,$5,$6)',[id,userId,operationId,creditDecimal(units),at,expiresAt]);
-    await db.query(`INSERT INTO oaooao_wallet_operations(operation_id,user_id,requested_delta,permanent_delta,daily_delta,timed_delta,permanent_after,daily_after,timed_after,daily_expires_at,metadata,created_at) VALUES($1,$2,$3,0,0,$3,$4,$5,$6,$7,$8,$9)`,[operationId,userId,creditDecimal(units),row.permanent_balance,row.daily_balance,creditDecimal(timedUnits(row)),row.daily_expires_at,{...metadata,bucket:'timed',expiresAt:expiresAt.toISOString(),batchId:id},await operationTime(db,userId,at)]);
+    await db.query('INSERT INTO oaooao_credit_batches(id,user_id,grant_operation_id,original_amount,remaining_amount,created_at,expires_at,membership_assignment_at) VALUES($1,$2,$3,$4,$4,$5,$6,$7)',[id,userId,operationId,creditDecimal(units),at,expiresAt ?? assignmentDeadline,assignmentAt ?? null]);
+    await db.query(`INSERT INTO oaooao_wallet_operations(operation_id,user_id,requested_delta,permanent_delta,daily_delta,timed_delta,permanent_after,daily_after,timed_after,daily_expires_at,metadata,created_at) VALUES($1,$2,$3,0,0,$3,$4,$5,$6,$7,$8,$9)`,[operationId,userId,creditDecimal(units),row.permanent_balance,row.daily_balance,creditDecimal(timedUnits(row)),row.daily_expires_at,{...metadata,bucket:'timed',expiresAt:expiry,...(assignmentAt?{membershipAssignmentAt:assignmentAt}:{}),batchId:id},await operationTime(db,userId,at)]);
     await db.query('INSERT INTO oaooao_wallet_batch_allocations(operation_id,batch_id,delta) VALUES($1,$2,$3)',[operationId,id,creditDecimal(units)]);
     return balances(row);
   });
 }
 /** Bounded maintenance, using the same per-account lock and idempotent expiry ledger as reads/debits. */
 export async function expireCreditBatches(ctx:Context,limit=100):Promise<number>{
-  const users=(await ctx.db.query('SELECT user_id FROM oaooao_credit_batches WHERE expired_at IS NULL AND expires_at<=clock_timestamp() GROUP BY user_id ORDER BY min(expires_at),user_id LIMIT $1',[Math.max(1,Math.min(100,Math.trunc(limit)))])).rows;
+  const users=(await ctx.db.query(`SELECT user_id FROM (
+    SELECT user_id,expires_at FROM oaooao_credit_batches WHERE expired_at IS NULL AND expires_at<=clock_timestamp()
+    UNION ALL SELECT user_id,now() FROM oaooao_credit_batches b WHERE b.expired_at IS NULL AND b.membership_assignment_at IS NOT NULL AND NOT ${activeBatchAssignment}
+  ) due GROUP BY user_id ORDER BY min(expires_at),user_id LIMIT $1`,[Math.max(1,Math.min(100,Math.trunc(limit)))])).rows;
   for(const row of users)await getWallet(ctx,row.user_id);return users.length;
+}
+
+/** A refunded order only revokes its own unused, unexpired membership check-in reward. */
+export async function revokeMembershipCheckIn(ctx:Context,userId:string,orderId:string,client:PoolClient) {
+  return walletTransaction(ctx,client,async db=>{
+    const {row,at}=await prepareWallet(db,userId);
+    const ids=(await db.query<{id:string}>("SELECT b.id FROM oaooao_credit_batches b JOIN oaooao_wallet_operations o ON o.operation_id=b.grant_operation_id WHERE b.user_id=$1 AND b.expired_at IS NULL AND o.metadata->>'rewardSource'='membership' AND o.metadata->>'membershipOrderId'=$2",[userId,orderId])).rows;
+    for (const {id} of ids) {
+      const batch=row.batches?.find(item=>item.id===id);
+      if(!batch)continue;
+      const delta=-creditUnits(batch.remaining_amount),operationId=`member-check-in-revoke:${id}`;
+      await db.query('UPDATE oaooao_credit_batches SET remaining_amount=0,expired_at=$2 WHERE id=$1',[id,at]);
+      row.batches=row.batches?.filter(item=>item.id!==id);
+      if(delta===0n)continue;
+      await db.query(`INSERT INTO oaooao_wallet_operations(operation_id,user_id,requested_delta,permanent_delta,daily_delta,timed_delta,permanent_after,daily_after,timed_after,daily_expires_at,metadata,created_at) VALUES($1,$2,$3,0,0,$3,$4,$5,$6,$7,$8,$9)`,[operationId,userId,creditDecimal(delta),row.permanent_balance,row.daily_balance,creditDecimal(timedUnits(row)),row.daily_expires_at,{kind:'membership_check_in_revoked',description:'订单退款，收回未使用的会员签到积分',orderId,batchId:id},await operationTime(db,userId,at)]);
+      await db.query('INSERT INTO oaooao_wallet_batch_allocations(operation_id,batch_id,delta) VALUES($1,$2,$3)',[operationId,id,creditDecimal(delta)]);
+    }
+  });
 }
 export async function setPermanentBalance(ctx: Context, userId: string, operationId: string, targetBalance: CreditAmount, metadata: Meta = {}, client?: PoolClient): Promise<WalletBalance> {
   checkId(operationId);
@@ -272,7 +324,7 @@ export async function syncDailyEntitlement(ctx: Context, userId: string, operati
     const {row,at}=await prepareWallet(db,userId);
     const previous = (await db.query('SELECT user_id FROM oaooao_wallet_operations WHERE operation_id=$1',[operationId])).rows[0];
     if (previous) { if (previous.user_id !== userId) throw httpError(409,'Operation identifier already used'); return balances(row); }
-    const allowance = await dailyEntitlement(db,userId,at);
+    const allowance = await dailyEntitlement(db);
     const newBalance = allowance - creditUnits(row.daily_spent);
     const daily = newBalance > 0n ? newBalance : 0n;
     const delta = daily - creditUnits(row.daily_balance);
@@ -291,7 +343,7 @@ export async function assignAdminPlan(ctx: Context, userId: string, operationId:
     const settings=(await db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0]?.value ?? {};
     if(planId && (settings.entitlements?.enabled!==true || !settings.entitlements.plans?.some((plan:Record<string,unknown>)=>plan.id===planId && plan.enabled===true)))throw httpError(400,'Administrative plan must refer to an enabled entitlement plan');
     await adjustWallet(ctx,userId,operationId,0,{kind:'admin_plan_assignment',planId},db);
-    if(planId)await db.query('INSERT INTO oaooao_admin_plan_assignments(user_id,plan_id) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,assigned_at=now()',[userId,planId]);
+    if(planId)await db.query('INSERT INTO oaooao_admin_plan_assignments(user_id,plan_id) VALUES($1,$2) ON CONFLICT(user_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,assigned_at=now() WHERE oaooao_admin_plan_assignments.plan_id IS DISTINCT FROM EXCLUDED.plan_id',[userId,planId]);
     else await db.query('DELETE FROM oaooao_admin_plan_assignments WHERE user_id=$1',[userId]);
     await db.query('UPDATE oaooao_users SET plan_id=$2,updated_at=now() WHERE id=$1',[userId,planId]);
     return syncDailyEntitlement(ctx,userId,`${operationId}:daily`,db);

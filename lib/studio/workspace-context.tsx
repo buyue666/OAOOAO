@@ -3,9 +3,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useStudio } from './store'
-import { parseWorkspaceIdentity, workspaceHref, workspaceIdentity } from './workspace-navigation'
+import { parseWorkspaceIdentity, workspaceHref, workspaceIdentity, workspaceRoot, type WorkspaceIdentity } from './workspace-navigation'
 
-type WorkspaceIdentity = { teamId: string; projectId?: string }
 const WorkspaceContext = createContext<{ ready: boolean; identity: WorkspaceIdentity | null; select: (identity: WorkspaceIdentity | null) => void; href: (target: string) => string }>({ ready: true, identity: null, select() {}, href: target => target })
 
 /** Login identity and working identity are separate; a team selection persists until explicitly changed. */
@@ -31,9 +30,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (identity) { setSnapshot({ account, identity }); persist(identity) }
   }, [account, pathname])
   const ready = !account || snapshot?.account === account
-  const identity = snapshot?.account === account ? snapshot.identity : null
+  const identity = workspaceIdentity(pathname) || (snapshot?.account === account ? snapshot.identity : null)
   const select = (next: WorkspaceIdentity | null) => { seenPath.current = pathname; setSnapshot({ account, identity: next }); persist(next) }
-  const href = (target: string) => identity ? workspaceHref(`/teams/${identity.teamId}${identity.projectId ? `/projects/${identity.projectId}` : ''}`, target) : target
+  const href = (target: string) => identity ? workspaceHref(workspaceRoot(identity), target) : target
   return <WorkspaceContext.Provider value={{ ready, identity, select, href }}>{children}</WorkspaceContext.Provider>
 }
 export const useWorkspace = () => useContext(WorkspaceContext)

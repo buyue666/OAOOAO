@@ -2525,7 +2525,7 @@ function StoryboardPanel({
     settledRef.current.add(taskId);
     const media = task.media?.[0];
     const success = task.status === "success" && Boolean(media?.url);
-    const message = task.error || (task.needsReview ? `上游返回待人工确认：${task.reviewReason ?? "需要人工检查"}` : "任务失败");
+    const message = task.error || "任务失败";
     void drama.save((current) => ({
       ...current,
       episodes: current.episodes.map((episode) => episode.id !== episodeId ? episode : {

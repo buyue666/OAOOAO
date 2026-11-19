@@ -34,7 +34,7 @@ export function GenerationSettings({ nodeId }: { nodeId: string; placement?: Set
   const data = node.data, store = useCanvasStore.getState()
   void revision
   const references = canvasReferences(nodeId, data, store.nodes, store.edges)
-  const models = filterModelsByCapability(workspace ? availableTeamModels(state.models, workspace.modelIds, state.sessionSettings) : state.models, data.kind)
+  const models = filterModelsByCapability(workspace ? availableTeamModels(state.models, workspace.modelIds, state.sessionSettings, workspace.subscriptionExpiresAt) : state.models, data.kind)
   const effectiveId = data.model || defaultModelFor(data.kind, state.sessionSettings, models)
   const model = models.find(item => item.id === effectiveId), caps = model?.capabilities
   const busy = Boolean(workspace?.readOnly || data.task?.phase === 'queued' || data.task?.phase === 'running' || data.task?.unconfirmed)
@@ -85,7 +85,7 @@ export function GenerationSettings({ nodeId }: { nodeId: string; placement?: Set
         <Field label={<span className="flex items-center gap-1.5">生成模型{model?.note && <ModelNote note={model.note} />}</span>}>
           <select aria-label="生成模型" value={data.model} onChange={event => changeModel(event.target.value)} className={FIELD}>
             <option value="">使用我的默认模型{model ? ` · ${model.shortName || model.name}` : ''}</option>
-            {models.map(item => <option key={item.id} value={item.id}>{item.shortName || item.name}</option>)}
+            {models.map(item => <option key={item.id} value={item.id} disabled={item.subscriptionLocked} title={item.subscriptionLocked?'需要订阅套餐才可使用':item.description}>{item.shortName || item.name}{item.subscriptionLocked?' · 需要订阅套餐才可使用':''}</option>)}
           </select>
           {!models.length && <p className="text-xs text-muted-foreground">当前空间没有可用的{data.kind === 'image' ? '图片' : data.kind === 'video' ? '视频' : data.kind === 'audio' ? '音频' : '文本'}模型。</p>}
         </Field>

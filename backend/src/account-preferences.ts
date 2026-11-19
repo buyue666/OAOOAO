@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
 import { httpError, object, transaction, type Context } from './core.js';
 import { getSettings, publicSettings } from './settings.js';
-import { personalGenerationPlan } from './entitlements.js';
-import { accountInstalledPlugins, registerCreativePlugins } from './creative-plugins.js';
+import { personalGenerationPlan,modelSubscriptionAccess,assertModelSubscription } from './entitlements.js';
+import { accountInstalledPlugins, accountPluginPreferences, registerCreativePlugins } from './creative-plugins.js';
+
+import {adultContentPreference,assertAdultModelAllowed} from './content-policy.js';
 
 const capabilities = ['image', 'video', 'text', 'audio'] as const;
 export async function accountModelDefaults(ctx: Context, userId: string, client?: PoolClient): Promise<Record<string,string>> {
@@ -18,15 +20,18 @@ export async function userSessionSettings(ctx: Context, userId: string, settings
   let personalModelIds: string[] | undefined;
   try { personalModelIds = (await personalGenerationPlan(ctx, settings, userId))?.allowedModelIds }
   catch (error) { if ((error as { statusCode?: number }).statusCode === 403) personalModelIds = []; else throw error }
+  const adultContent = await adultContentPreference(ctx,userId);
+  const subscriptionAccess=await modelSubscriptionAccess(ctx,settings,userId);
   const visible = publicSettings(settings);
-  const available = { ...settings, logicalModels: settings.logicalModels.filter((model: any) => personalModelIds === undefined || personalModelIds.includes(model.id)) };
+  visible.logicalModels=visible.logicalModels.filter((model:any)=>!adultContent.enabled||model.allowAdultContent===true);
+  const available = { ...settings, logicalModels: settings.logicalModels.filter((model: any) => (!adultContent.enabled||model.allowAdultContent===true)&&(personalModelIds === undefined || personalModelIds.includes(model.id))&&(!model.requiresSubscription||subscriptionAccess)) };
   const defaults = { ...settings.defaultModels };
   for (const [key,id] of Object.entries(chosen)) if (availableDefault(available, key, id)) defaults[key] = id;
   for (const kind of capabilities) {
     const key = kind + 'Model';
     if (!availableDefault(available, key, defaults[key] || '')) defaults[key] = publicSettings(available).logicalModels.find((model: any) => model.capability === kind)?.id || '';
   }
-  return { ...visible, defaultModels: defaults, userDefaultModels: chosen, installedPlugins: await accountInstalledPlugins(ctx, userId), ...(personalModelIds !== undefined ? { personalModelIds } : {}) };
+  return { ...visible, subscriptionAccess, adultContent, defaultModels: defaults, userDefaultModels: chosen, installedPlugins: await accountInstalledPlugins(ctx, userId), pluginPreferences: await accountPluginPreferences(ctx, userId), ...(personalModelIds !== undefined ? { personalModelIds } : {}) };
 }
 export async function registerAccountPreferences(app: FastifyInstance, ctx: Context) {
   await registerCreativePlugins(app, ctx);
@@ -39,9 +44,11 @@ export async function registerAccountPreferences(app: FastifyInstance, ctx: Cont
     const result = await transaction(ctx.db, async client => {
       const settings = await getSettings(ctx, client);
       const plan = await personalGenerationPlan(ctx, settings, user.id, client);
+      const adult = await adultContentPreference(ctx,user.id,client);
       for (const [key,id] of Object.entries(patch)) {
         if (!capabilities.some(c => c + 'Model' === key) || typeof id !== 'string' || id.length > 250)
           throw httpError(400, '默认模型设置无效');
+        if(id){const model=settings.logicalModels.find((m:any)=>m.id===id||(m.bindings||[]).some((b:any)=>b.requestAlias===id));if(model){await assertModelSubscription(ctx,settings,model,user.id,client);assertAdultModelAllowed(adult.enabled,model);}}
         if (id && !availableDefault(settings,key,id)) throw httpError(400, '所选模型不可用，请刷新后重新选择');
         if (id && Array.isArray(plan?.allowedModelIds) && !settings.logicalModels.some((model: any) => plan.allowedModelIds.includes(model.id) && (model.id === id || model.bindings.some((binding: any) => binding.requestAlias === id)))) throw httpError(403, '当前个人套餐未开放此模型');
       }

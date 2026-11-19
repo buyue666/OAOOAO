@@ -4,7 +4,7 @@ import { useUiText } from '@/lib/studio/i18n'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
-import { Bell, CalendarCheck, Coins, Crown, Languages, LogIn, LogOut, Menu, Moon, Sun, UserRound } from 'lucide-react'
+import { Bell, CircleHelp, CalendarCheck, CircleAlert, ShieldCheck, Coins, Crown, Languages, LogIn, LogOut, Menu, Moon, Sun, UserRound } from 'lucide-react'
 import { useStudio } from '@/lib/studio/store'
 import { logout } from '@/lib/studio/account-api'
 import { useLocale } from '@/lib/studio/i18n'
@@ -14,11 +14,15 @@ import { localizedStudioPageTitle } from './studio-nav'
 import { cn } from '@/lib/utils'
 import { AnnouncementList, useAnnouncements } from '@/components/site-announcements'
 import { RETURN_PATH_KEY, safeReturnPath } from '@/lib/studio/return-path'
+import { billingStoreHref } from '@/lib/studio/billing-store-route'
 import { useCheckIn } from '@/lib/studio/use-check-in'
+import { useAccountSettingsVisibility } from '@/lib/studio/use-account-settings-visibility'
 import { checkInDisplay } from '@/lib/studio/check-in-rules'
-import { AccountWatermarkMenuItem } from './account-watermark'
+import { AccountWatermarkDialog } from './account-watermark'
+import { AccountAdultContentDialog } from './account-adult-content'
 import { WorkspaceCredits, WorkspaceSwitcher } from './workspace-switcher'
 import { useWorkspace } from '@/lib/studio/workspace-context'
+import { STUDIO_TOUR_EVENT } from '@/lib/studio/studio-tour'
 
 const creditChipClass = 'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-[var(--lg-shadow-1)]'
 const iconButtonClass = 'flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70'
@@ -36,6 +40,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { locale, toggleLocale, t } = useLocale()
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [watermarkOpen, setWatermarkOpen] = useState(false), [adultOpen, setAdultOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [signOutError, setSignOutError] = useState('')
   const notificationsRef = useRef<HTMLDivElement>(null)
@@ -52,11 +57,15 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const creditsLabel = tx('{0} 积分', [state.credits.toLocaleString(locale)])
   const teamSpace = Boolean(workspace.identity) || /^\/teams\/[a-f0-9-]{36}(?:\/|$)/i.test(pathname)
   const checkIn = useCheckIn({ accountId: state.user.id, connected: isConnected, active: accountOpen && !teamSpace, refreshSession })
+  const accountSettingsVisibility = useAccountSettingsVisibility({ accountId: state.user.id, connected: isConnected, active: accountOpen })
+  useEffect(() => {
+    if (!accountSettingsVisibility?.watermark) setWatermarkOpen(false)
+    if (!accountSettingsVisibility?.adultContent) setAdultOpen(false)
+  }, [accountSettingsVisibility?.watermark, accountSettingsVisibility?.adultContent, state.user.id])
   const checkInDetails = checkIn.status ? checkInDisplay(checkIn.status, locale) : null
   function capturePlansDestination(event: React.MouseEvent<HTMLAnchorElement>) {
     const returnTo = safeReturnPath(`${window.location.pathname}${window.location.search}${window.location.hash}`)
-    const destination = event.currentTarget.dataset?.storefront === 'plans' ? '/plans' : '/credits'
-    const href = `${destination}?${teamSpace && destination === '/plans' ? 'edition=team&' : ''}returnTo=${encodeURIComponent(returnTo)}`
+    const href = billingStoreHref(event.currentTarget.dataset?.storefront === 'credits' ? 'credits' : teamSpace ? 'team' : 'personal', returnTo)
     event.currentTarget.href = href
     try { sessionStorage.setItem(RETURN_PATH_KEY, returnTo) } catch { /* Explicit query retains the return target. */ }
     // Keep modified clicks as native link navigation while reading location at activation time.
@@ -108,9 +117,10 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   }
 
   return (
+    <>
     <header className="studio-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b px-3 md:px-5">
       <div className="flex min-w-0 items-center gap-2">
-        <button type="button" onClick={onMenuClick} aria-label={tx("打开导航")} className={cn(iconButtonClass, 'lg:hidden')}>
+        <button type="button" data-tour="mobile-menu" onClick={onMenuClick} aria-label={tx("打开导航")} className={cn(iconButtonClass, 'lg:hidden')}>
           <Menu className="size-5" aria-hidden="true" />
         </button>
         <p className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground" aria-current="page">{pageTitle}</p>
@@ -119,7 +129,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         {isStudioPreview() && !isConnected && <StatusBadge tone="muted">免登录预览</StatusBadge>}
         {isConnected && (teamSpace ? <WorkspaceCredits pathname={workspace.identity ? `/teams/${workspace.identity.teamId}` : pathname} /> : rechargeEnabled ? (
-          <a href="/credits" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={tx("{0}，查看积分超市", [creditsLabel])} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
+          <a href="/plans" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} aria-label={tx("{0}，查看会员套餐", [creditsLabel])} className={cn(creditChipClass, 'transition-colors duration-150 hover:bg-muted')}>
             <Coins className="size-4 text-studio-accent" aria-hidden="true" />
             <span className="tabular-nums">{creditsLabel}</span>
           </a>
@@ -161,6 +171,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               }}
               aria-expanded={isConnected ? accountOpen : undefined}
               aria-haspopup={isConnected ? 'menu' : undefined}
+              data-tour="account"
               aria-label={isConnected ? tx('打开账户菜单') : tx('登录')}
               className="flex size-9 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold text-foreground transition-colors duration-150 hover:border-studio-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
             >
@@ -187,15 +198,17 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               <div className="mt-1 flex flex-col gap-0.5">
                 <Link href={workspace.identity ? `/teams/${workspace.identity.teamId}?tab=settings` : '/account'} role="menuitem" onClick={() => setAccountOpen(false)} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted">
                   <UserRound className="size-4 text-muted-foreground" aria-hidden="true" />{tx(teamSpace ? '团队设置与套餐' : '账户与套餐')}</Link>
-                {!teamSpace && rechargeEnabled && <a href="/credits" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Coins className="size-4 text-muted-foreground" aria-hidden="true" />{tx("积分超市")}</a>}
+                {!teamSpace && rechargeEnabled && <a href={billingStoreHref('credits')} data-storefront="credits" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Coins className="size-4 text-muted-foreground" aria-hidden="true" />{tx("积分超市")}</a>}
                 {rechargeEnabled && <a href="/plans" data-storefront="plans" role="menuitem" onClick={capturePlansDestination} onAuxClick={capturePlansDestination} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-muted"><Crown className="size-4 text-muted-foreground" aria-hidden="true" />{tx("会员套餐")}</a>}
-                {!teamSpace && <AccountWatermarkMenuItem onSelect={() => setAccountOpen(false)} />}
+                {!teamSpace && accountSettingsVisibility?.watermark && <button type="button" role="menuitem" onClick={() => { setWatermarkOpen(true); setAccountOpen(false) }} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted"><ShieldCheck className="size-4 text-muted-foreground" aria-hidden="true" />{tx('AI 水印设置')}</button>}
+                {accountSettingsVisibility?.adultContent && <button type="button" role="menuitem" onClick={() => { setAdultOpen(true); setAccountOpen(false) }} className="flex min-h-9 items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"><CircleAlert className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />{tx('成人内容设置')}<span className="ml-auto text-xs text-muted-foreground">{tx(state.sessionSettings?.adultContent?.enabled ? '已开启' : '已关闭')}</span></button>}
                 <button type="button" role="menuitem" onClick={() => { toggleTheme(); setAccountOpen(false) }} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted">
                   {state.theme === 'dark' ? <Sun className="size-4 text-muted-foreground" aria-hidden="true" /> : <Moon className="size-4 text-muted-foreground" aria-hidden="true" />}{themeLabel}
                 </button>
                 <button type="button" role="menuitem" onClick={() => { toggleLocale(); setAccountOpen(false) }} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted">
                   <Languages className="size-4 text-muted-foreground" aria-hidden="true" />{localeLabel}
                 </button>
+                <button type="button" role="menuitem" onClick={() => { setAccountOpen(false); window.dispatchEvent(new Event(STUDIO_TOUR_EVENT)) }} className="flex min-h-11 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted"><CircleHelp className="size-4 text-muted-foreground" aria-hidden="true" />{locale === 'en-US' ? 'Getting started' : '新手引导'}</button>
                 <button type="button" role="menuitem" onClick={() => void signOut()} disabled={signingOut} className="flex h-9 items-center gap-2.5 rounded-md px-2.5 text-left text-sm text-foreground hover:bg-muted disabled:opacity-60">
                   <LogOut className="size-4 text-muted-foreground" aria-hidden="true" />{signingOut ? tx('正在退出…') : tx('退出登录')}
                 </button>
@@ -206,5 +219,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         </div>
       </div>
     </header>
+    <AccountWatermarkDialog open={watermarkOpen && Boolean(accountSettingsVisibility?.watermark)} onOpenChange={setWatermarkOpen} />
+    <AccountAdultContentDialog open={adultOpen && Boolean(accountSettingsVisibility?.adultContent)} onOpenChange={setAdultOpen} />
+    </>
   )
 }

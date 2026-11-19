@@ -98,7 +98,7 @@ export function safeDownloadName(title: string, extension: string, fallbackName?
   return `${chosen}.${extension}`
 }
 
-export type DownloadResult = { ok: true; filename: string } | { ok: false; message: string }
+export type DownloadResult = { ok: true; filename: string; directUrl?: string; expiresAt?: string } | { ok: false; message: string }
 export type DownloadOptions = { accountId?: string; signal?: AbortSignal; taskId?: string; prompt?: string }
 
 /** Only canonical, same-origin owned media may be submitted to the export service. */
@@ -115,11 +115,8 @@ export function mediaExportPath(value: string, origin: string): string | null {
 /**
  * 真实下载一个结果文件。
  *
- * 关键：**必须取到实际文件内容**再触发保存，而不是给 `<a href>` 加 `download` 属性。
- * 原因是跨源（后端媒体域名与前端不同源）时 `download` 属性会被浏览器忽略，
- * 点击只会导航到文件；而且不 fetch 就无法知道真实 MIME 与大小。
- *
- * 失败时返回结构化原因，由调用方提示，不静默失败。
+ * R2 文件先用短请求完成权限/水印检查，再用带 attachment 响应头的临时地址
+ * 交给浏览器下载，避免整段视频经过站点代理和浏览器内存。其他存储保留字节导出。
  */
 export async function downloadMedia(media: DeliverableMedia, title: string, options: DownloadOptions = {}): Promise<DownloadResult> {
   if (!media?.url) return { ok: false, message: '该结果没有可下载的文件地址' }
@@ -145,20 +142,49 @@ export async function downloadMedia(media: DeliverableMedia, title: string, opti
     }
     // Cookies can change in another tab without this component knowing. Check both sides
     // of a potentially long export and never hand an old account's bytes to the browser.
-    const accountId = await currentAccount()
-    if (options.accountId !== undefined && options.accountId !== accountId) return { ok: false, message: '账户已切换，请刷新当前页面后重新下载。' }
-    const response = await fetch(exportPath || (externalExport ? '/api/account/media/export' : media.url), { method: exportPath || externalExport ? 'POST' : 'GET', credentials: exportPath || externalExport ? 'include' : 'same-origin', ...(externalExport ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: media.url }) } : {}), cache: 'no-store', signal: options.signal })
+    const accountId = exportPath ? undefined : await currentAccount()
+    if (!exportPath && options.accountId !== undefined && options.accountId !== accountId) return { ok: false, message: '账户已切换，请刷新当前页面后重新下载。' }
+    const requestExport = () => fetch(exportPath || (externalExport ? '/api/account/media/export' : media.url), { method: exportPath || externalExport ? 'POST' : 'GET', credentials: exportPath || externalExport ? 'include' : 'same-origin', ...(exportPath ? { headers: { Accept: 'application/json', 'X-OAO-Download-Name': encodeURIComponent(filename) } } : externalExport ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: media.url }) } : {}), cache: 'no-store', signal: options.signal })
+    let response = await requestExport()
+    const preparationStarted = Date.now()
+    while (response.status === 202 && response.headers.get('content-type')?.includes('application/json')) {
+      assertActive()
+      const pending = await response.json()
+      if (pending?.status !== 'preparing') throw new Error('下载准备状态无效，请重试')
+      if (Date.now() - preparationStarted > 5 * 60_000) throw new Error('下载准备时间较长，请稍后重试')
+      const delay = Math.max(1000, Math.min(3000, Number(pending.retryAfterMs) || 1500))
+      await new Promise<void>((resolve, reject) => {
+        const cancel = () => { window.clearTimeout(timer); reject(new Error('导出已取消')) }
+        const timer = window.setTimeout(() => { options.signal?.removeEventListener('abort', cancel); resolve() }, delay)
+        options.signal?.addEventListener('abort', cancel, { once: true })
+      })
+      assertActive()
+      response = await requestExport()
+    }
     assertActive()
     if (!response.ok) {
       const payload = await response.json().catch(() => null)
       return { ok: false, message: typeof payload?.error === 'string' ? payload.error : typeof payload?.message === 'string' ? payload.message : `下载失败（HTTP ${response.status}）` }
+    }
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      const ticket = await response.json()
+      if (ticket?.status !== 'ready' || typeof ticket.url !== 'string' || typeof ticket.filename !== 'string' || !ticket.filename || !/^(?:image|video|audio)\//.test(ticket.mimeType || '') || !(ticket.bytes > 0)) throw new Error('下载服务没有返回有效文件')
+      const direct = new URL(ticket.url)
+      if (direct.protocol !== 'https:' || direct.username || direct.password || direct.hash || direct.searchParams.get('response-content-disposition')?.startsWith('attachment;') !== true) throw new Error('下载服务返回的地址无效')
+      if (!exportPath && await currentAccount() !== accountId) return { ok: false, message: '账户已切换，本次导出已取消，请重新下载。' }
+      assertActive()
+      const anchor = document.createElement('a')
+      anchor.href = direct.toString(); anchor.download = ticket.filename; anchor.rel = 'noopener noreferrer'; anchor.referrerPolicy = 'no-referrer'
+      document.body.appendChild(anchor)
+      try { anchor.click() } finally { anchor.remove() }
+      return { ok: true, filename: ticket.filename, directUrl: direct.toString(), expiresAt: ticket.expiresAt }
     }
     const blob = await response.blob()
     assertActive()
     if (!blob.size) return { ok: false, message: '下载到的文件为空' }
     const actualMime = blob.type.split(';')[0].trim().toLowerCase()
     if (!/^(?:image|video|audio)\//.test(actualMime)) return { ok: false, message: '导出服务未返回有效的媒体文件，请稍后重试。' }
-    if (await currentAccount() !== accountId) return { ok: false, message: '账户已切换，本次导出已取消，请重新下载。' }
+    if (!exportPath && await currentAccount() !== accountId) return { ok: false, message: '账户已切换，本次导出已取消，请重新下载。' }
     assertActive()
     /**
      * 服务端返回的 MIME 是权威值：URL 后缀可能缺失或错误
@@ -183,7 +209,8 @@ export async function downloadMedia(media: DeliverableMedia, title: string, opti
     }
     return { ok: true, filename: finalName }
   } catch (reason) {
-    return { ok: false, message: reason instanceof Error ? `下载失败：${reason.message}` : '下载失败' }
+    const message = reason instanceof Error ? reason.message : ''
+    return { ok: false, message: /Failed to fetch|NetworkError|Load failed|fetch failed/i.test(message) ? '无法连接下载服务，请检查网络后重试；已生成下载链接时也可点击直接下载。' : message ? `下载失败：${message}` : '下载失败' }
   }
 }
 

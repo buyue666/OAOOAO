@@ -24,7 +24,6 @@ import {
   isTerminalStatus,
   newClientRequestId,
   normalizeTaskResult,
-  outcomeOfTask,
   recoverGenerationTask as recoverTaskRequest,
   retryAgentRunTask,
   type RequestOutcome,
@@ -170,6 +169,11 @@ export type GenerationContextValue = {
 
 const GenerationContext = createContext<GenerationContextValue | null>(null)
 
+/** A project workbench must never consume the personal task list or actions. */
+export function ProjectGenerationProvider({ value, children }: { value: GenerationContextValue; children: ReactNode }) {
+  return <GenerationContext.Provider value={value}>{children}</GenerationContext.Provider>
+}
+
 /* ------------------------------ 本地缓存（按账号隔离） ------------------------------ */
 
 // 缓存读写实现见 `./task-cache`：那里是纯存储逻辑，且被 store 复用于
@@ -218,15 +222,15 @@ function toView(kind: GenerationKind, task: GenerationTask, local: ViewSeed | un
   return {
     ...task,
     kind,
-    title: local?.title || task.model || `${kind} 任务`,
-    prompt: local?.prompt || '',
+    title: local?.title || task.title || task.model || `${kind} 任务`,
+    prompt: local?.prompt || task.prompt || '',
     // 任务开始时间来自后端或本地首次记录，跨刷新保持稳定。
     createdAt: taskStartedAt(task, local),
     updatedAt: Date.now(),
     media,
     text,
     pointsCost,
-    retryInput: local?.retryInput,
+    retryInput: local?.retryInput || task.retryInput,
   }
 }
 
@@ -819,7 +823,6 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
   const retryTask = useCallback(async (task: GenerationTaskView) => {
     setLastError(null)
     try {
-      if (task.needsReview) throw new Error('上游结果待确认，请先重新检查任务，避免重复扣费')
       if (task.canRetry === false) throw new Error('当前任务不允许重试')
       const retryInput = task.retryInput
       // 重试是一次**新的**创作，必须使用新的 clientRequestId，否则会被后端当成旧任务直接返回。

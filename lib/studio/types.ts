@@ -35,7 +35,7 @@ export interface CanvasBoard {
 }
 
 export type Theme = 'dark' | 'light'
-export type StudioSkin = 'minimal' | 'gradient'
+export type StudioSkin = 'minimal' | 'glass' | 'soft' | 'gradient'
 export type BackendStatus = 'checking' | 'connected' | 'unauthenticated' | 'offline'
 export type StudioMode = 'image' | 'video' | 'audio' | 'drama'
 /** 后端 logicalModels.capability 的原样取值，是模型分组的唯一事实来源。 */
@@ -151,6 +151,8 @@ export interface ModelConfig {
   iconUrl?: string
   /** 管理员填写的公开模型备注，按原文展示。 */
   note?: string
+  requiresSubscription?:boolean
+  subscriptionLocked?:boolean
 }
 
 export interface GenerationSettings {
@@ -182,6 +184,7 @@ export interface Task {
 }
 
 export interface Work {
+  lastFrameUrl?:string
   id: ID
   /** 生成任务 ID；下载文件名过长时用作稳定回退名称。 */
   taskId?: ID
@@ -300,6 +303,7 @@ export interface StudioState {
   backendError?: string
   theme: Theme
   skin: StudioSkin
+  appearance: import('./appearance').StudioAppearance
   sidebarCollapsed: boolean
   user: User
   credits: number
@@ -329,6 +333,7 @@ export type StudioAction =
   | { type: 'SET_BACKEND_STATUS'; status: BackendStatus; error?: string }
   | { type: 'SET_THEME'; theme: Theme }
   | { type: 'SET_SKIN'; skin: StudioSkin }
+  | { type: 'SET_APPEARANCE'; appearance: import('./appearance').StudioAppearance }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SELECTED_PROJECT'; projectId: ID }
   | { type: 'CREATE_PROJECT'; project: Project }

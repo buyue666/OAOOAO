@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PoolClient } from 'pg';
 import { httpError, object, string, hasPermission, transaction, type Context, type AppUser } from './core.js';
 import { getSettings } from './settings.js';
+import { assertGenerationConcurrency, personalGenerationPlan } from './entitlements.js';
 import { assetView, createJob, inputHash } from './creative.js';
 import { resolveProvider, type Json, type GenerationKind } from './providers.js';
 import { cancelJob } from './worker.js';
@@ -104,6 +105,15 @@ export async function advanceAgentRuns(ctx:Context):Promise<void>{
     await client.query("UPDATE oaooao_agent_runs SET state='completed',updated_at=clock_timestamp() WHERE id=$1",[run.id]);await event(client,run.id,'run.completed',{runId:run.id});
   });
 }
+async function enforceAgentConcurrency(ctx:Context,client:PoolClient,userId:string,excludeId:string|null=null){
+  const account=(await client.query('SELECT enabled FROM oaooao_users WHERE id=$1 FOR NO KEY UPDATE',[userId])).rows[0];
+  if(!account?.enabled)throw httpError(403,'账号已停用，无法运行创作助手');
+  const settings=await getSettings(ctx,client),plan=await personalGenerationPlan(ctx,settings,userId,client);
+  const active=Number((await client.query("SELECT count(*) n FROM oaooao_agent_runs WHERE user_id=$1 AND id IS DISTINCT FROM $2::text AND state IN ('planning','awaiting_approval','running','paused')",[userId,excludeId])).rows[0].n);
+  assertGenerationConcurrency(settings,plan,'agent',active);
+  return settings;
+}
+
 export async function registerAgentRoutes(app:FastifyInstance,ctx:Context){
   app.post('/api/agent/runs',async(request,reply)=>{
     const user=await ctx.requireUser(request);const body=object(request.body);const idempotency=string(body.clientRequestId,'clientRequestId',200);string(body.prompt,'prompt',32000);if(!['chat','canvas','drama'].includes(body.surface))throw httpError(400,'Invalid Agent surface');
@@ -124,7 +134,7 @@ export async function registerAgentRoutes(app:FastifyInstance,ctx:Context){
         skills.push({id,title:String(doc.title||'').slice(0,80),prompt:prompt.trim()});
       }
       const assets=[];for(const id of body.assetIds||[]){const asset=(await client.query('SELECT * FROM oaooao_library_assets WHERE id=$1 AND user_id=$2',[id,user.id])).rows[0];if(!asset)throw httpError(404,'Referenced asset not found');assets.push({id:asset.id,kind:asset.kind,title:asset.document.title,text:asset.kind==='text'?String(asset.document.data.content||asset.document.data.textContent||'').slice(0,24000):undefined});}
-      const settings=await getSettings(ctx,client);const count=Number((await client.query("SELECT count(*) n FROM oaooao_agent_runs WHERE user_id=$1 AND state IN ('planning','awaiting_approval','running','paused')",[user.id])).rows[0].n);if(count>=Number(settings.generationConcurrency.agent||1))throw httpError(429,'Agent concurrency limit reached');
+      const settings=await enforceAgentConcurrency(ctx,client,user.id);
       const models=(settings.logicalModels||[]).filter((m:Json)=>m.enabled&&(!body.modelIds?.length||body.modelIds.includes(m.id))).map((m:Json)=>({id:m.id,name:m.name,capability:m.capability}));if(!models.length)throw httpError(503,'No enabled generation models are available');
       const runId=randomUUID();const prompt=JSON.stringify({request:body.prompt,publicPrompt:body.publicPrompt,preferences:body.preferences||{},skills,assets,models,snapshot:projectSnapshot||body.snapshot});if(prompt.length>256000)throw httpError(413,'Agent context is too large');
       const input={prompt,config:{},messages:[{role:'system',content:plannerInstructions},{role:'user',content:prompt}],context:{projectId:body.projectId,conversationId:body.conversationId,runId,agentRole:'planner'},source:body.surface};
@@ -158,7 +168,7 @@ export async function registerAgentRoutes(app:FastifyInstance,ctx:Context){
         await client.query("UPDATE oaooao_agent_runs SET state='running',approved_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1",[id]);
       }else if(operation==='retry'){
         if(run.state!=='failed')throw httpError(409,'Only a failed run can be retried');
-        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`generation:${run.user_id}`]);const settings=await getSettings(ctx,client);const active=Number((await client.query("SELECT count(*) n FROM oaooao_agent_runs WHERE user_id=$1 AND id<>$2 AND state IN ('planning','awaiting_approval','running','paused')",[run.user_id,run.id])).rows[0].n);if(active>=Number(settings.generationConcurrency.agent||1))throw httpError(429,'Agent concurrency limit reached');
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`generation:${run.user_id}`]);await enforceAgentConcurrency(ctx,client,run.user_id,run.id);
         const target=taskId?jobs.find(j=>j.id===taskId):jobs.find(j=>j.status==='error');
         if(target){if(target.status!=='error')throw httpError(409,'Only a confirmed failed child task can be retried');const replacement=await createJob(ctx,run.user_id,target.kind,target.input,target.client_request_id,target.attempt_no+1,client);if(target.id===run.job_id)await client.query('UPDATE oaooao_agent_runs SET job_id=$2 WHERE id=$1',[id,replacement.id]);else await client.query('UPDATE oaooao_agent_steps SET job_id=$3,asset_ids=\'[]\' WHERE run_id=$1 AND job_id=$2',[id,target.id,replacement.id]);}
         else if(taskId)throw httpError(404,'Retry task not found');

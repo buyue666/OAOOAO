@@ -36,7 +36,7 @@ export function OnlinePaymentProviderEditor({ provider, onSaved, onMessage, onEr
     finally { lock.current = false; if (mounted.current) setSaving(false) }
   }
   return <form onSubmit={submit} aria-busy={saving}>
-    <AdminSectionCard title={paymentProviderName(provider)} description="配置支付网关、签名协议和默认付款方式。配置完整只代表必要字段齐全，不代表已经核实实际收款。">
+    <AdminSectionCard title={paymentProviderName(provider)} description={provider.id==='ciyuan_balance'?'用户在 LunAPI 登录并确认余额付款，积分在服务端核验回执后到账。商户密钥加密保存。':'配置支付网关、签名协议和默认付款方式。配置完整只代表必要字段齐全，不代表已经核实实际收款。'}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4"><div className="flex flex-wrap gap-2"><StatusBadge tone={provider.ready ? 'success' : 'neutral'}>{provider.ready ? '配置完整' : provider.enabled ? '已开启 · 待完善' : '已关闭'}</StatusBadge></div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} disabled={saving} />启用{paymentProviderName(provider)}</label></div>
       <fieldset disabled={saving} className="grid min-w-0 gap-4 sm:grid-cols-2">
         {provider.fields.filter(field => paymentFieldVisible(field, values)).map(field => {
@@ -52,8 +52,9 @@ export function OnlinePaymentProviderEditor({ provider, onSaved, onMessage, onEr
         })}
         {provider.webhookUrl && <AdminField label="异步通知地址" hint="复制到支付商户后台。积分与权益只会在服务端确认有效支付通知后发放，页面跳转不代表付款成功。" className="sm:col-span-2"><AdminInput readOnly value={provider.webhookUrl} /></AdminField>}
       </fieldset>
-      <p className="mt-4 text-xs leading-5 text-muted-foreground">V2 使用 RSA 签名，需商户私钥与平台公钥；V1 使用 MD5 商户密钥。请按你使用的支付平台协议选择，切换协议不会自动转换凭证。</p>
-      <p className="mt-2 text-xs leading-5 text-muted-foreground">易支付退款需先在本站订单中预留退款积分，再到支付平台人工退款并核实，最后回本站确认；只有确认未转账时才能取消预留。本站不会自动向支付平台发起退款。</p>
+      {provider.id==='epay' && <p className="mt-4 text-xs leading-5 text-muted-foreground">V2 使用 RSA 签名，需商户私钥与平台公钥；V1 使用 MD5 商户密钥。请按你使用的支付平台协议选择，切换协议不会自动转换凭证。</p>}
+      {provider.id==='epay' && <p className="mt-2 text-xs leading-5 text-muted-foreground">易支付退款需先在本站订单中预留退款积分，再到支付平台人工退款并核实，最后回本站确认；只有确认未转账时才能取消预留。本站不会自动向支付平台发起退款。</p>}
+      {provider.id==='ciyuan_balance' && <p className="mt-4 text-xs leading-5 text-muted-foreground">使用独立商户凭据，按订单人民币金额结算，余额换算由 LunAPI 收银台展示。退款须先预留对应积分，再由服务器退回原付款账户；退款结果未确认前会继续保留预留积分。</p>}
       <AdminSaveBar hint="只保存当前渠道，不会修改其他支付方式或确认任何订单。"><ControlButton type="submit" variant="primary" disabled={saving}><Save className="size-3.5" />{saving ? '保存中' : `保存${paymentProviderName(provider)}配置`}</ControlButton></AdminSaveBar>
     </AdminSectionCard>
   </form>

@@ -1,6 +1,8 @@
 'use client'
 
 import { useUiText } from '@/lib/studio/i18n'
+import { useStudio } from '@/lib/studio/store'
+import { publicModelLabel } from '@/lib/studio/model-display'
 import { useCallback, useMemo, useState } from 'react'
 import { AlertTriangle, Ban, CheckCircle2, Coins, Info, Loader2, RefreshCw, RotateCcw, Undo2 } from 'lucide-react'
 import { useGeneration } from '@/lib/studio/generation-store'
@@ -131,7 +133,6 @@ function TaskActions({ task, compact }: { task: GenerationTaskView; compact?: bo
   }, [cancelTask, recoverTask, resubmit, retryTask, task])
 
   const canCancel = isActiveStatus(task.status)
-  const canRecover = task.status === 'error'
   /** 查询失败但未达上限：状态未知，允许手动重新检查而不是判定失败。 */
   const queryFailed = (task.queryFailures ?? 0) > 0 && (task.queryFailures ?? 0) < (task.queryFailureLimit ?? 6)
   const queryExhausted = (task.queryFailures ?? 0) >= (task.queryFailureLimit ?? 6)
@@ -165,11 +166,6 @@ function TaskActions({ task, compact }: { task: GenerationTaskView; compact?: bo
         {task.status === 'error' && (
           <ControlButton size="sm" variant="secondary" disabled={busy !== null} onClick={() => void run('retry')}>
             <RotateCcw className="size-3.5" aria-hidden="true" />{busy === 'retry' ? tx('提交中') : tx('重试')}
-          </ControlButton>
-        )}
-        {canRecover && (
-          <ControlButton size="sm" variant="ghost" disabled={busy !== null} onClick={() => void run('recover')}>
-            <Undo2 className="size-3.5" aria-hidden="true" />{busy === 'recover' ? tx('检查中') : tx('重新检查上游')}
           </ControlButton>
         )}
         {/* 提交结果未确认：复用原幂等标识重试，后端会返回原任务而不是新建。 */}
@@ -206,7 +202,6 @@ function TaskActions({ task, compact }: { task: GenerationTaskView; compact?: bo
         </p>
       )}
       {error && <p role="alert" className="text-[11px] text-destructive">{error}</p>}
-      {!compact && task.needsReview && <p className="text-[11px] text-studio-warn">{tx("上游创建结果待确认：")}{task.reviewReason || tx('请联系管理员在该任务的人工接管中处理。')}</p>}
     </div>
   )
 }
@@ -224,13 +219,14 @@ function TaskActions({ task, compact }: { task: GenerationTaskView; compact?: bo
 function pointsSummary(task: GenerationTaskView): string {
   if (task.pointsCost) return `消耗 ${task.pointsCost} 积分${task.pointsRefunded ? ' · 已退回' : ''}`
   const settled = task.status === 'success' || task.status === 'error' || task.status === 'cancelled'
-  const uncertain = Boolean(task.unconfirmed) || task.needsReview || (task.queryFailures ?? 0) > 0
+  const uncertain = Boolean(task.unconfirmed) || (task.queryFailures ?? 0) > 0
   if (uncertain || !settled) return '费用待确认（以后端账单为准）'
   return task.pointsRefunded ? '未产生积分消耗 · 已退回' : '未产生积分消耗'
 }
 
 export function GenerationTaskCard({ task, compact = false, onSelect }: { task: GenerationTaskView; compact?: boolean; onSelect?: (task: GenerationTaskView) => void }) {
   const tx = useUiText()
+  const { state } = useStudio()
   const unconfirmed = Boolean(task.unconfirmed) || task.id.startsWith('unconfirmed:')
   const meta = unconfirmed ? { label: '提交未确认', tone: 'warning' as Tone } : taskStatusMeta(task.status)
   const active = isActiveStatus(task.status) && !unconfirmed
@@ -254,7 +250,7 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
           {onSelect ? (
             <button type="button" onClick={() => onSelect(task)} className="block max-w-full truncate text-left text-xs font-medium text-foreground hover:text-studio-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-studio-accent" title={tx("在预览中查看此任务结果")}>{task.title}</button>
           ) : <p className="truncate text-xs font-medium text-foreground">{task.title}</p>}
-          <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{task.model || tx('未指定模型')} · {task.id.slice(0, 8)}</p>
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{publicModelLabel(task.model, state.sessionSettings)} · {task.id.slice(0, 8)}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {active && <Loader2 className="size-3.5 animate-spin text-studio-accent motion-reduce:animate-none" aria-hidden="true" />}
@@ -262,6 +258,7 @@ export function GenerationTaskCard({ task, compact = false, onSelect }: { task: 
           <StatusBadge tone={meta.tone}>{tx(meta.label)}</StatusBadge>
         </div>
       </header>
+
 
       {task.media.length > 0 && (
         <div className={cn('grid gap-2', task.media.length > 1 ? 'grid-cols-2' : 'grid-cols-1', compact && 'gap-1.5')}>
@@ -318,7 +315,7 @@ export function LiveTaskList({ kinds, limit = 6, compact = false, emptyHint, onS
   const tx = useUiText()
   const { tasks, loading, refresh, queryUnavailable } = useGeneration()
   const matching = useMemo(() => kinds?.length ? tasks.filter((task) => kinds.includes(task.kind)) : tasks, [kinds, tasks])
-  const activeCount = matching.filter((task) => isActiveStatus(task.status)).length
+  const activeCount = matching.filter((task) => isActiveStatus(task.status) && !task.unconfirmed).length
   const visible = useMemo(() => {
     return matching.slice(0, limit)
   }, [matching, limit])

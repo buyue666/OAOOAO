@@ -16,6 +16,16 @@ export function formatPrice(pricing: TierPricing, fractionDigits = 2) {
   }
 }
 
+export function subscriptionCredits(pricing: TierPricing, dailyPoints?: number) {
+  const upfront = Math.max(0, pricing.credits ?? 0)
+  const daily = Math.max(0, dailyPoints ?? 0)
+  const days = Math.max(0, pricing.periodDays ?? 0)
+  const signInTotal = daily * days
+  const total = upfront + signInTotal
+  const unitPrice = total > 0 ? (pricing.priceInCents ?? 0) / total : null
+  return { upfront, daily, days, signInTotal, total, unitPrice }
+}
+
 export function selectedBenefits(plan: MembershipPlan, tier: MembershipTier, cycle: BillingCycle) {
   const display = resolveTierDisplay(tier, cycle)
   const specific = Boolean(tier.displayByCycle && Object.keys(tier.displayByCycle).length)

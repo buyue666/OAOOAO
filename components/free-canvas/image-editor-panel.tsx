@@ -57,6 +57,9 @@ export type ImageEditorRegion = { id: number; prompt?: string; referenceImageDat
 /** Model and capability data used by the editor settings strip. Kept small so
  * the canvas editor can opt out without importing the studio model registry. */
 export type ImageEditorModelOption = {
+  description?:string
+  requiresSubscription?:boolean
+  subscriptionLocked?:boolean
   id: string
   label: string
   note?: string
@@ -1051,7 +1054,7 @@ export function ImageEditorPanel({
       </div>
 
       {editorModelChoices.length > 0 && <div className={styles.editorSettingsBar} aria-label="改图参数">
-        <SelectField className={`${styles.editorSettingField} ${styles.editorModelSelect}`} label={editorCapability === 'video' ? '视频模型' : '改图模型'} value={selectedEditorModel?.id ?? selectedEditorModelId} onChange={editorCapability === 'video' ? setEditorVideoModelId : setEditorModelId} options={editorModelChoices.map(item => ({ value: item.id, label: item.label, icon: item.icon, note: item.note }))} />
+        <SelectField className={`${styles.editorSettingField} ${styles.editorModelSelect}`} label={editorCapability === 'video' ? '视频模型' : '改图模型'} value={selectedEditorModel?.id ?? selectedEditorModelId} onChange={editorCapability === 'video' ? setEditorVideoModelId : setEditorModelId} options={editorModelChoices.map(item => ({ value: item.id, label: item.label, icon: item.icon, note: item.note,description:item.description,requiresSubscription:item.requiresSubscription,disabled:item.subscriptionLocked,disabledReason:'需要订阅套餐才可使用' }))} />
         {editorCapability === 'image' && <label className={styles.editorSettingField}>
           <span>清晰度</span>
           <select value={editorResolution} onChange={(event) => setEditorResolution(event.target.value)} aria-label="改图清晰度">

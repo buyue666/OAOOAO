@@ -464,7 +464,7 @@ for (let index = 0; index < 10 && contractTaskId; index += 1) {
   await new Promise((resolve) => setTimeout(resolve, 1500))
   const polled = await api(`/api/image-tasks/${contractTaskId}`)
   contractFinal = polled.body?.task ?? null
-  if (['success', 'error', 'cancelled', 'needs_review'].includes(contractFinal?.status)) break
+  if (['success', 'error', 'cancelled'].includes(contractFinal?.status)) break
 }
 const referenceRejected = /参考(图|素材)|公网图片|能力不满足/.test(String(contractFinal?.error ?? ''))
 check('参考图地址未被后端拒绝（任务没有因参考图失败）', Boolean(contractFinal) && !referenceRejected && contractFinal.status !== 'error',

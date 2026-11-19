@@ -148,7 +148,6 @@ export type AdminGenerationTask = {
   updatedAt: number
   canCancel: boolean
   retryTaskId?: string
-  canReview: boolean
 }
 
 export type AdminGenerationChannel = {
@@ -313,6 +312,9 @@ export type LogicalModelBinding = {
 }
 
 export type LogicalModel = {
+  requiresSubscription?:boolean
+  description?:string
+  allowAdultContent?: boolean
   id: string
   name: string
   capability: 'text' | 'image' | 'video' | 'audio'
@@ -321,6 +323,10 @@ export type LogicalModel = {
   iconUrl?: string
   /** 在模型选择器中按需展示的公开备注。 */
   note?: string
+  /** 异步生成任务从首次提交起允许运行的分钟数。 */
+  asyncTaskTimeoutMinutes?: number
+  /** 查询上游任务状态失败后，额外允许的重试次数。 */
+  statusQueryRetries?: number
   bindings: LogicalModelBinding[]
   /**
    * 可请求别名。
@@ -375,6 +381,7 @@ export type SiteSettings = {
   seoKeywords?: string
   footerCopyright?: string
   footer?: Partial<import('./site-footer').SiteFooterSettings>
+  wechatContact?: Partial<import('./wechat-contact').WechatContact>
   termsUrl?: string
   termsVersion?: string
   termsContent?: string
@@ -426,7 +433,7 @@ export type DataLifecycleSettings = {
 }
 export type EntitlementPlanLimits = Record<'dailyPointSpend' | 'dailyApiCalls' | 'dailyImages' | 'dailyVideos' | 'dailyAudio' | 'dailyText', number>
 export type EntitlementGenerationKind = 'text' | 'image' | 'video' | 'audio' | 'render'
-export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[]; allowedGenerationKinds?: EntitlementGenerationKind[]; allowedModelIds?: string[]; storageQuotaBytes?: number }
+export type EntitlementPlan = { id: string; name: string; enabled: boolean; dailyPoints: number; limits: EntitlementPlanLimits; features: string[]; allowedGenerationKinds?: EntitlementGenerationKind[]; allowedModelIds?: string[]; storageQuotaBytes?: number; generationConcurrency?: Partial<GenerationConcurrencySettings> }
 export type EntitlementSettings = { enabled: boolean; defaultPlanId: string; plans: EntitlementPlan[]; defaultStorageQuotaBytes?: number }
 export type GenerationPointMultipliers = { imageQuality?: Record<string, number>; videoQuality?: Record<string, number>; videoSeconds?: Record<string, number> }
 
@@ -455,6 +462,9 @@ export type AdminSettings = {
   commercePolicy?: import('./commerce-policy').CommercePolicy
   registrationEnabled: boolean
   emailRegistrationEnabled: boolean
+  watermarkPolicy?: { enabled: boolean; confirmationRequired: boolean }
+  accountMenu?: { adultContentSettingsVisible: boolean }
+  registrationRateLimit?: { enabled: boolean; maxAttempts: number; windowSeconds: number }
   freeDailyPointsEnabled: boolean
   freeDailyPoints: number
   checkIn?: CheckInSettings
@@ -568,6 +578,7 @@ export type BillingProduct = {
   enabled: boolean
   sortOrder: number
   metadata?: Record<string, unknown>
+  saleBlockers?: string[]
   pricing?: BillingProductPricing
   createdAt?: string
   updatedAt?: string

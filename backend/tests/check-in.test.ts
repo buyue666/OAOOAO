@@ -26,7 +26,7 @@ test('isolated PostgreSQL: manual check-in is permanent, atomic and once per Sha
   const clock = () => new Date('2026-10-14T12:00:00Z');
   await t.test('disabled and status-only requests never create claims or credits', async () => {
     const id = await user(); const state = await getCheckInStatus(ctx, id, clock);
-    assert.deepEqual(state, { enabled: false, rewardPoints: 10,validityDays:0,rulePlanId:null,rulePlanName:null, claimed: false, date: '2026-10-14', timeZone: 'Asia/Shanghai',claimedRewardPoints:null,claimedValidityDays:null,claimedPlanId:null,claimedPlanName:null,expiresAt:null });
+    assert.deepEqual(state, { enabled: false, rewardPoints: 10,validityDays:0,rulePlanId:null,rulePlanName:null,rewardSource:'general', claimed: false, date: '2026-10-14', timeZone: 'Asia/Shanghai',claimedRewardPoints:null,claimedValidityDays:null,claimedPlanId:null,claimedPlanName:null,claimedRewardSource:null,expiresAt:null });
     await assert.rejects(claimCheckIn(ctx, id, clock), { statusCode: 409, outcome: 'rejected' });
     assert.equal((await ctx.db.query('SELECT 1 FROM oaooao_wallets WHERE user_id=$1', [id])).rowCount, 0);
     assert.equal((await ctx.db.query('SELECT 1 FROM oaooao_check_ins WHERE user_id=$1', [id])).rowCount, 0);
@@ -86,4 +86,40 @@ test('isolated PostgreSQL: check-in HTTP route authenticates, checks CSRF, ignor
   assert.equal((await app.inject({ url: '/api/account/check-in', headers: buyer.headers })).json().claimed, true);
   assert.equal((await app.inject({ url: '/api/account/check-in', headers: commerce.headers })).json().claimed, false);
   assert.equal((await fixture.db.query('SELECT 1 FROM oaooao_check_ins WHERE user_id=$1', [commerce.id])).rowCount, 0);
+});
+
+test('saving registration and check-in bypasses old model validation without rewriting the catalog', async t => {
+  const fixture=await createTestDatabase();
+  const app=await buildApp({db:fixture.db,config:fixture.config,coreOnly:true});
+  t.after(async()=>{await app.close();await fixture.cleanup();});
+  const id=randomUUID(),token=randomBytes(32).toString('base64url');
+  await fixture.db.query("INSERT INTO oaooao_users(id,username,password_hash,role,admin_permissions) VALUES($1,$1,'synthetic-unused','admin',$2)",[id,JSON.stringify(['system.manage','commerce.manage','upstream.manage'])]);
+  await fixture.db.query("INSERT INTO oaooao_sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[hashToken(token),id]);
+  const headers={origin:fixture.config.origin,cookie:`${fixture.config.sessionCookieName}=${token}`};
+  const save=(payload:Record<string,unknown>)=>app.inject({method:'PATCH',url:'/api/admin/settings',headers,payload});
+  const stored={
+    systemChannels:[{id:'video-channel',name:'Synthetic',baseUrl:'https://video.example.invalid',enabled:true,apiFormat:'openai',advancedConfig:{protocol:'openai',authMode:'none'},models:['fixture-video']}],
+    logicalModels:[{id:'fixture-video',name:'Synthetic video',capability:'video',enabled:true,bindings:[{id:'legacy-route',channelId:'video-channel',upstreamModel:'fixture-video',enabled:true,priority:1,capabilityProfile:{videoReferenceRules:{image:{maxCount:4}}}}]}],
+    modelPointCosts:{'fixture-video':2},
+    defaultModels:{videoModel:'fixture-video'},
+  };
+  await fixture.db.query("UPDATE oaooao_settings SET value=$1 WHERE id='global'",[stored]);
+  const patch={registrationEnabled:true,registrationRateLimit:{enabled:false,maxAttempts:5,windowSeconds:3600},freeDailyPointsEnabled:false,freeDailyPoints:0,checkIn:{enabled:true,rewardPoints:10,validityDays:1,planRewards:[]}};
+  const saved=await save(patch);
+  assert.equal(saved.statusCode,200,saved.body);
+  assert.deepEqual(saved.json().settings.checkIn,patch.checkIn);
+  const read=async()=>(await fixture.db.query("SELECT value FROM oaooao_settings WHERE id='global'")).rows[0].value;
+  assert.deepEqual(await read(),{...stored,...patch});
+  const audit=await fixture.db.query("SELECT metadata FROM oaooao_audit_logs WHERE action='settings.update'");
+  assert.deepEqual(audit.rows.map(row=>row.metadata.fields),[Object.keys(patch)]);
+
+  // Changing the limit still enforces the cap; unchanged legacy limits are not an edit.
+  const models=structuredClone(stored.logicalModels);models[0].bindings[0].capabilityProfile.videoReferenceRules.image.maxCount=-1;
+  const invalidModel=await save({logicalModels:models});
+  assert.equal(invalidModel.statusCode,400,invalidModel.body);
+  assert.match(invalidModel.body,/参考数量/);
+  const invalidReward=await save({checkIn:{rewardPoints:0}});
+  assert.equal(invalidReward.statusCode,400,invalidReward.body);
+  assert.match(invalidReward.body,/Check-in requires/);
+  assert.deepEqual(await read(),{...stored,...patch});
 });

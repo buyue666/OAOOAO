@@ -4,7 +4,7 @@ import { useUiText } from '@/lib/studio/i18n'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, CircleAlert, Image as ImageIcon, Search, X } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, Gem, Image as ImageIcon, Search, X } from 'lucide-react'
 import { Tooltip as RadixTooltip } from 'radix-ui'
 import { cn } from '@/lib/utils'
 
@@ -42,11 +42,11 @@ export function ControlButton({ className, variant = 'secondary', size = 'md', .
  * 通过 Radix 的浮层定位渲染提示：自动翻转、避让视口边缘，并通过 portal
  * 脱离侧栏和缩略图容器的 overflow。顶部工具栏尤其需要这个碰撞处理。
  */
-export function Tooltip({ label, side = 'top', className, contentClassName, children, translateLabel = true, scrollable = false }: { label: string; side?: 'top' | 'right'; className?: string; contentClassName?: string; children: ReactNode; translateLabel?: boolean; scrollable?: boolean }) {
+export function Tooltip({ label, side = 'top', className, contentClassName, children, translateLabel = true, scrollable = false, open, onOpenChange }: { label: string; side?: 'top' | 'right'; className?: string; contentClassName?: string; children: ReactNode; translateLabel?: boolean; scrollable?: boolean; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   const tx = useUiText()
   return (
     <RadixTooltip.Provider delayDuration={100} skipDelayDuration={100}>
-      <RadixTooltip.Root disableHoverableContent={!scrollable}>
+      <RadixTooltip.Root disableHoverableContent={!scrollable} open={open} onOpenChange={onOpenChange}>
         <span className={cn('inline-flex', className)}>
           <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
         </span>
@@ -185,7 +185,13 @@ export function SearchField({ value, onChange, placeholder = '搜索' }: { value
   )
 }
 
-export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string; icon?: ReactNode; note?: string }>; className?: string; hint?: string; disabled?: boolean }) {
+export function ModelSubscriptionBadge({required,locked}:{required?:boolean;locked?:boolean}){
+ const tx=useUiText();if(!required)return null
+ const label=tx(locked?'需要订阅套餐才可使用':'订阅套餐专属模型')
+ return <Tooltip label={label} contentClassName="z-[250]"><span role="img" aria-label={label} className={cn('inline-flex size-5 shrink-0 items-center justify-center',locked?'text-muted-foreground':'text-studio-accent')}><Gem className="size-3.5" aria-hidden="true"/></span></Tooltip>
+}
+export type StudioSelectOption={value:string;label:string;icon?:ReactNode;note?:string;description?:string;requiresSubscription?:boolean;disabled?:boolean;disabledReason?:string}
+export function SelectField({ label, value, onChange, options, className, hint, disabled }: { label?: string; value: string; onChange: (value: string) => void; options: StudioSelectOption[]; className?: string; hint?: string; disabled?: boolean }) {
   const tx = useUiText()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -199,7 +205,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
       if (!trigger) return
       const rect = trigger.getBoundingClientRect()
       const gap = 6
-      const preferredHeight = Math.min(280, Math.max(120, options.length * 38 + 8))
+      const preferredHeight = Math.min(280, Math.max(120, options.reduce((sum,option)=>sum+(option.description?64:38)+(option.disabled?22:0),8)))
       const roomBelow = window.innerHeight - rect.bottom - gap - 12
       const roomAbove = rect.top - gap - 12
       const openAbove = roomBelow < Math.min(preferredHeight, 220) && roomAbove > roomBelow
@@ -239,9 +245,10 @@ export function SelectField({ label, value, onChange, options, className, hint, 
   }, [disabled, open, options.length])
 
   const moveSelection = (direction: 1 | -1) => {
-    if (!options.length) return
-    const index = Math.max(0, options.findIndex((option) => option.value === value))
-    onChange(options[(index + direction + options.length) % options.length].value)
+    const available=options.filter(option=>!option.disabled)
+    if (!available.length) return
+    const index = Math.max(0, available.findIndex((option) => option.value === value))
+    onChange(available[(index + direction + available.length) % available.length].value)
   }
 
   return (
@@ -265,7 +272,7 @@ export function SelectField({ label, value, onChange, options, className, hint, 
         >
           <span className={cn('flex min-w-0 items-center gap-2 truncate', !selected && 'text-muted-foreground')}>
             {selected?.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{selected.icon}</span>}
-            <span className="truncate">{selected?.label ? tx(selected.label) : tx('暂无选项')}</span>
+            <span className="truncate">{selected?.label ? tx(selected.label) : tx('暂无选项')}</span><ModelSubscriptionBadge required={selected?.requiresSubscription} locked={selected?.disabled}/>
           </span>
           <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-180 text-studio-accent')} aria-hidden="true" />
         </button>
@@ -280,12 +287,15 @@ export function SelectField({ label, value, onChange, options, className, hint, 
           >
             {options.map((option) => {
               const active = option.value === value
-              return <button key={option.value} type="button" role="option" aria-selected={active} aria-description={option.note?.trim() || undefined} className={cn('studio-select-option', active && 'is-selected')} onClick={() => { onChange(option.value); setOpen(false); triggerRef.current?.focus() }}>{option.icon && <span className="flex size-5 shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-studio-accent">{option.icon}</span>}<span className="min-w-0 flex-1 truncate whitespace-nowrap">{tx(option.label)}</span><ModelNote note={option.note} interactive={false} />{active && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
+              const reason=tx(option.disabledReason||'需要订阅套餐才可使用')
+              const row=<button key={option.value} type="button" role="option" aria-selected={active} aria-disabled={option.disabled||undefined} title={option.disabled?reason:undefined} aria-description={option.disabled?reason:[option.description,option.note].filter(Boolean).join('；')||undefined} className={cn('studio-select-option', active && !option.disabled && 'is-selected',option.disabled&&'cursor-not-allowed text-muted-foreground')} onClick={() => {if(option.disabled)return;onChange(option.value);setOpen(false);triggerRef.current?.focus()}}>{option.icon && <span className={cn('flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted p-1 text-studio-accent',option.disabled&&'opacity-50')}>{option.icon}</span>}<span className="min-w-0 flex-1"><span className="flex items-center gap-1.5"><span className={cn('min-w-0 truncate',option.disabled&&'text-muted-foreground')}>{tx(option.label)}</span><ModelSubscriptionBadge required={option.requiresSubscription} locked={option.disabled}/></span>{option.description&&<span className="mt-0.5 block line-clamp-2 text-xs font-normal leading-5 text-muted-foreground">{tx(option.description)}</span>}{option.disabled&&<span data-model-disabled-reason className="mt-1 block text-xs font-medium leading-5 text-foreground">{reason}</span>}</span><ModelNote note={option.note} interactive={false} />{active && !option.disabled && <Check className="ml-auto size-3.5 shrink-0" aria-hidden="true" />}</button>
+              return option.disabled?<Tooltip key={option.value} label={reason} className="w-full" contentClassName="z-[250]">{row}</Tooltip>:row
             })}
           </div>,
           document.body,
         )}
       </span>
+      {selected?.disabled&&<span role="status" className="text-xs leading-5 text-muted-foreground">{tx(selected.disabledReason||'需要订阅套餐才可使用')}</span>}
       {hint && <span className="text-[11px] leading-4 text-muted-foreground">{tx(hint)}</span>}
     </div>
   )

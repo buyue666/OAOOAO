@@ -68,6 +68,70 @@ test('CDN downloads use the authenticated export service and retain account-swit
   assert.deepEqual(JSON.parse(calls[0][1].body), { url }); assert.deepEqual(anchors, ['CDN作品.webp'])
 }))
 
+function readyTicket() {
+  const url = new URL('https://synthetic.r2.cloudflarestorage.com/bucket/video')
+  url.searchParams.set('response-content-disposition', 'attachment; filename="test.mp4"')
+  return { status: 'ready', url: url.toString(), filename: '测试视频.mp4', mimeType: 'video/mp4', bytes: 10_000_000, expiresAt: new Date(Date.now() + 3600_000).toISOString() }
+}
+
+test('R2 downloads navigate to a signed attachment without fetching its bytes or creating a Blob', async () => withDownloads(async ({ anchors, calls }) => {
+  const ticket = readyTicket()
+  global.fetch = async (url, options) => {
+    calls.push([url, options])
+    if (url === '/api/auth/session') return Response.json({ user: { id: 'account-a' } })
+    assert.equal(url, `/api/media/${id}/export`)
+    assert.equal(options.headers.Accept, 'application/json')
+    return Response.json(ticket)
+  }
+  const result = await downloadMedia({ url: `/api/reference-assets/${id}`, kind: 'video' }, '视频', { accountId: 'account-a' })
+  assert.deepEqual(result, { ok: true, filename: ticket.filename, directUrl: ticket.url, expiresAt: ticket.expiresAt })
+  assert.deepEqual(anchors, [ticket.filename]); assert.equal(calls.length, 1)
+  assert.ok(calls.every(([url]) => url.startsWith('/api/')))
+}))
+
+test('slow watermark exports poll small status responses and cancel cleanly before a direct download', async () => withDownloads(async ({ anchors, calls }) => {
+  const originalTimeout = global.window.setTimeout
+  const originalClear = global.window.clearTimeout
+  global.window.setTimeout = callback => setTimeout(callback, 0)
+  global.window.clearTimeout = timer => clearTimeout(timer)
+  let polls = 0
+  try {
+    global.fetch = async (url, options) => {
+      if (url === '/api/auth/session') return Response.json({ user: { id: 'account-a' } })
+      calls.push([url, options]); polls++
+      return polls < 3 ? Response.json({ status: 'preparing', retryAfterMs: 1500 }, { status: 202 }) : Response.json(readyTicket())
+    }
+    assert.equal((await downloadMedia({ url: `/api/media/${id}`, kind: 'video' }, '视频')).ok, true)
+    assert.equal(polls, 3); assert.equal(anchors.length, 1)
+    const controller = new AbortController()
+    global.fetch = async url => {
+      if (url === '/api/auth/session') return Response.json({ user: { id: 'account-a' } })
+      setTimeout(() => controller.abort(), 0)
+      return Response.json({ status: 'preparing' }, { status: 202 })
+    }
+    const stopped = await downloadMedia({ url: `/api/media/${id}`, kind: 'video' }, '视频', { signal: controller.signal })
+    assert.equal(stopped.ok, false); assert.match(stopped.message, /取消/); assert.equal(anchors.length, 1)
+  } finally { global.window.setTimeout = originalTimeout; global.window.clearTimeout = originalClear }
+}))
+
+test('direct tickets reject non-attachments and network errors become Chinese', async () => withDownloads(async ({ anchors }) => {
+  for (const mode of ['insecure', 'inline', 'network']) {
+    let reads = 0
+    global.fetch = async url => {
+      if (url === '/api/auth/session') return Response.json({ user: { id: mode === 'switch' && ++reads > 1 ? 'account-b' : 'account-a' } })
+      if (mode === 'network') throw new TypeError('Failed to fetch')
+      const ticket = readyTicket()
+      if (mode === 'insecure') ticket.url = ticket.url.replace('https:', 'http:')
+      if (mode === 'inline') ticket.url = 'https://synthetic.r2.cloudflarestorage.com/video'
+      return Response.json(ticket)
+    }
+    const result = await downloadMedia({ url: `/api/media/${id}`, kind: 'video' }, '视频')
+    assert.equal(result.ok, false, mode)
+    if (mode === 'network') { assert.match(result.message, /无法连接下载服务/); assert.ok(!result.message.includes('Failed to fetch')) }
+  }
+  assert.equal(anchors.length, 0)
+}))
+
 async function withDownloads(run) {
   const oldWindow = global.window, oldDocument = global.document, oldFetch = global.fetch
   const anchors = [], calls = []
@@ -78,6 +142,7 @@ async function withDownloads(run) {
 const media = { url: `/api/media/${id}`, kind: 'image' }
 
 test('an account switch before exporting does not send the export request', async () => withDownloads(async ({ anchors, calls }) => {
+  const media = { url: 'https://cdn.example/external-result.png', kind: 'image' }
   global.fetch = async (url) => { calls.push(url); return Response.json({ user: { id: 'account-b' } }) }
   const result = await downloadMedia(media, 'A的作品', { accountId: 'account-a' })
   assert.equal(result.ok, false); assert.match(result.message, /账户已切换/)
@@ -85,6 +150,7 @@ test('an account switch before exporting does not send the export request', asyn
 }))
 
 test('a cookie switch in another tab during export cancels the downloaded bytes', async () => withDownloads(async ({ anchors, calls }) => {
+  const media = { url: 'https://cdn.example/external-result.png', kind: 'image' }
   let reads = 0
   global.fetch = async (url) => {
     calls.push(url)
@@ -99,6 +165,7 @@ test('a cookie switch in another tab during export cancels the downloaded bytes'
 }))
 
 test('exported bytes are discarded when the final session check fails or the account has logged out', async () => withDownloads(async ({ anchors }) => {
+  const media = { url: 'https://cdn.example/external-result.png', kind: 'image' }
   for (const final of ['offline', 'logged-out']) {
     let reads = 0
     global.fetch = async url => {
@@ -125,6 +192,7 @@ test('aborting while an export resolves never creates a download even if fetch i
 }))
 
 test('session verification failures, empty files and successful HTML responses cannot become downloads', async () => withDownloads(async ({ anchors }) => {
+  const media = { url: 'https://cdn.example/external-result.png', kind: 'image' }
   for (const mode of ['expired', 'unknown-session', 'empty', 'html']) {
     global.fetch = async url => {
       if (url === '/api/auth/session') return mode === 'expired' ? Response.json({ user: null }) : mode === 'unknown-session' ? new Response('Unavailable', { status: 503 }) : Response.json({ user: { id: 'account-a' } })
@@ -148,6 +216,7 @@ function buttonHarness() {
   }
   const exports = {}
   const dependencies = {
+    '@/lib/studio/team-media-context': {useTeamMedia:()=>null},
     '@/lib/studio/i18n': chineseLocale,
     react,
     'react/jsx-runtime': { jsx: (type, props, key) => ({ type, props, key }), jsxs: (type, props, key) => ({ type, props, key }) },
@@ -212,6 +281,16 @@ test('the actual download button resets account state and cancels the previous a
   assert.equal(signal.aborted, true); assert.equal(next.find(node => node.type === 'button').props.disabled, false)
   finish(new Response(new Blob(['old account bytes'], { type: 'image/png' }))); await tick()
   assert.equal(anchors.length, 0); assert.equal(h.render().some(node => node.props?.role === 'alert'), false)
-  h.account.connected = false; assert.equal(h.render().find(node => node.type === 'button').props.disabled, true)
+  h.account.connected = false; assert.equal(h.render().find(node => node.type === 'button').props.disabled, false)
   h.unmount()
+}))
+
+test('opaque media downloads never query a session and work for logged-out recipients', async () => withDownloads(async ({ anchors, calls }) => {
+  global.fetch = async (url, options) => {
+    calls.push(url)
+    assert.equal(url, `/api/media/${id}/export`)
+    return Response.json(readyTicket())
+  }
+  const result = await downloadMedia(media, '共享作品')
+  assert.equal(result.ok, true); assert.equal(calls.length, 1); assert.equal(anchors.length, 1)
 }))

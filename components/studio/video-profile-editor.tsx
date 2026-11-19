@@ -4,11 +4,11 @@ import {useState} from 'react'
 import {AdminField, AdminInput, AdminSelect} from './admin-kit'
 import {ControlButton} from './ui'
 import {formatVideoDurations, parseVideoDurationInput, type VideoDurationRule} from '@/lib/studio/video-duration'
-import {copyVideoResolutionParameters, durationRulesPatch, resolutionPricing, validVideoQuality, videoDurationRule, videoDurationValues, type ReferencePrices, type ResolutionPricing, type VideoPricing, type VideoProfile} from '@/lib/studio/video-profile'
+import {copyVideoResolutionParameters, durationRulesPatch, resolutionPricing, isConditionalVideoPricing, DOUBAO_VIDEO_PRICING_TEMPLATE, videoAspectRatios, videoAspectRatioChoices, addVideoAspectRatio, validVideoQuality, videoDurationRule, videoDurationValues, type ReferencePrices, type ResolutionPricing, type VideoPricing, type VideoProfile} from '@/lib/studio/video-profile'
 import {qualityLabel} from '@/lib/studio/studio-models'
 import {VideoGenerationPrices} from './video-generation-prices'
 
-type RefRule = {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number}
+type RefRule = {maxCount?: number; freeCount?: number; maxItemSeconds?: number; maxTotalSeconds?: number; minItemSeconds?: number; maxFileBytes?: number}
 export type ExtraVideoPriceField = {key: string; label: string; hint?: string; defaultValue?: number}
 type Props = {
   profile?: VideoProfile
@@ -25,17 +25,22 @@ type Props = {
   featureSwitches?: Array<{key: string; label: string; hint?: string}>
 }
 
-export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRate, defaultFreeCounts = {}, longDurationMultiplier = 1, includeReferenceVideoDuration = false, roundReferenceVideoDuration = false, extraPriceFields = [], showReferenceFieldMap = true, defaultPricingTemplate = 'standard', pricingTemplates = [{value: 'standard', label: '通用'}, {value: 'reference-video-output', label: '按参考视频区分输出价'}], featureSwitches = []}: Props) {
+export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRate, defaultFreeCounts = {}, longDurationMultiplier = 1, includeReferenceVideoDuration = false, roundReferenceVideoDuration = false, extraPriceFields = [], showReferenceFieldMap = true, defaultPricingTemplate = 'standard', pricingTemplates = [{value: 'standard', label: '通用'}, {value: 'reference-video-output', label: '按参考视频区分输出价'}, {value: 'doubao-video', label: '豆包视频'}], featureSwitches = []}: Props) {
   const template = String(profile.videoPricingTemplate || defaultPricingTemplate)
-  const conditional = template === 'reference-video-output'
+  const doubao = template === DOUBAO_VIDEO_PRICING_TEMPLATE
+  const conditional = isConditionalVideoPricing(template)
   profile = {...profile, videoPricingTemplate: template}
   const [custom, setCustom] = useState('')
+  const [customRatio, setCustomRatio] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [sourceId, setSourceId] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const pricing = (profile.videoPricing || {}) as VideoPricing
-  const unit = String(profile.videoBillingUnit || 'request')
+  const unit = doubao ? 'second' : String(profile.videoBillingUnit || 'request')
+  const ratios = videoAspectRatios(profile)
+  const ratioChoices = videoAspectRatioChoices(profile)
+  const effectiveExtraPriceFields = doubao ? extraPriceFields.filter(item => !['longVideoMultiplier', 'progressiveAfterSeconds', 'progressiveRate'].includes(item.key)) : extraPriceFields
   const qualities = (profile.videoQualities || []) as string[]
   const native = (profile.nativeVideoQualities || []) as string[]
   const choices = [...new Set([...qualities, ...native])]
@@ -78,7 +83,21 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
     <summary className="flex min-h-12 cursor-pointer flex-wrap items-center gap-2 px-4 py-3 text-sm font-semibold">视频能力与计费<span className="ml-auto text-xs font-normal text-muted-foreground">{qualities.map(quality => qualityLabel(quality)).join(' / ') || '未开启清晰度'} · {unit === 'second' ? '按秒计费' : unit === 'duration' ? '指定时长定价' : '按次计费'}</span></summary>
     <div className="space-y-5 border-t border-border p-4">
     <p className="text-xs leading-5 text-muted-foreground">按输出清晰度设置价格；展开清晰度卡片编辑时长与价格。</p>
-    <div className="grid gap-3 sm:grid-cols-2"><AdminField label="价格定价模板"><AdminSelect aria-label="价格定价模板" value={template} onChange={event => update({videoPricingTemplate: event.target.value, ...(event.target.value === 'reference-video-output' ? {videoBillingUnit: 'second'} : {})})}>{pricingTemplates.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</AdminSelect></AdminField><AdminField label="视频计费方式"><AdminSelect value={unit} onChange={event => update({videoBillingUnit: event.target.value})}><option value="second">按生成秒数</option><option value="request">按次生成</option><option value="duration">按清晰度与指定时长定价</option></AdminSelect></AdminField></div>
+    <div className="grid gap-3 sm:grid-cols-2"><AdminField label="价格定价模板"><AdminSelect aria-label="价格定价模板" value={template} onChange={event => update({videoPricingTemplate: event.target.value, ...(isConditionalVideoPricing(event.target.value) ? {videoBillingUnit: 'second'} : {})})}>{pricingTemplates.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</AdminSelect></AdminField><AdminField label="视频计费方式"><AdminSelect aria-label="视频计费方式" disabled={doubao} value={unit} onChange={event => update({videoBillingUnit: event.target.value})}><option value="second">按生成秒数</option><option value="request">按次生成</option><option value="duration">按清晰度与指定时长定价</option></AdminSelect></AdminField></div>
+    {doubao && <p className="text-xs leading-5 text-muted-foreground">豆包视频按秒计费：无参考视频时，输出时长 × 视频生成单价；有参考视频时，（全部参考视频时长＋输出时长）× 参考视频生成单价。单价按输出清晰度选择，每段参考视频分别向上取整到整秒后累加。</p>}
+    {!conditional && <p className="text-xs leading-5 text-muted-foreground">通用模板分别计算生成费用与输入素材附加费，最终相加；输入素材价格不是替换生成单价。</p>}
+    <fieldset className="space-y-3 rounded-lg border border-border p-3" data-testid="video-aspect-ratios">
+      <legend className="px-1 text-xs font-semibold">画幅比例</legend>
+      <p className="text-xs leading-5 text-muted-foreground">勾选后在视频生成页提供选择，并将所选比例发送给上游。请仅启用渠道实际支持的比例。</p>
+      <div className="flex flex-wrap gap-x-5 gap-y-1">{ratioChoices.map(value => <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 text-xs"><input type="checkbox" aria-label={`启用视频比例 ${value}`} checked={ratios.includes(value)} onChange={event => {
+        if (!event.target.checked && ratios.length === 1) {setError('请至少保留一种视频比例'); return}
+        setError(''); update({aspectRatios: event.target.checked ? [...ratios, value] : ratios.filter(item => item !== value)})
+      }} />{['auto', 'adaptive'].includes(value) ? `自动适配（${value}）` : value}</label>)}</div>
+      <div className="flex flex-wrap items-end gap-2"><AdminField label="自定义比例" className="min-w-0 flex-1"><AdminInput aria-label="自定义视频比例" value={customRatio} placeholder="例如 16:9、9:16、2:1" onChange={event => setCustomRatio(event.target.value)} /></AdminField><ControlButton onClick={() => {
+        try { update({aspectRatios: addVideoAspectRatio(profile, customRatio)}); setCustomRatio(''); setError('') }
+        catch (reason) { setError(reason instanceof Error ? reason.message : '添加比例失败') }
+      }}>添加比例</ControlButton></div>
+    </fieldset>
     <details className="admin-config-group rounded-lg border border-border"><summary className="min-h-11 cursor-pointer px-3 py-3 text-xs font-semibold">功能开关与首尾帧</summary><div className="space-y-4 border-t border-border p-3">
     {featureSwitches.length > 0 && <fieldset className="space-y-2 rounded-lg border border-border p-3"><legend className="text-xs font-semibold">功能开关</legend>{featureSwitches.map(feature => <label key={feature.key} className="flex min-h-11 items-center gap-3 text-xs"><input type="checkbox" aria-label={feature.label} checked={profile[feature.key] === true} onChange={event => update({[feature.key]: event.target.checked})} /><span>{feature.label}{feature.hint && <span className="mt-1 block leading-5 text-muted-foreground">{feature.hint}</span>}</span></label>)}</fieldset>}
     <fieldset className="space-y-2 border-t border-border pt-4"><legend className="text-xs font-semibold">首尾帧功能</legend>
@@ -117,7 +136,7 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
             }} /></AdminField>
             {rule.mode === 'range' && <AdminField label="步长（秒）"><AdminInput aria-label={`${quality} 时长步长`} type="number" min="1" value={rule.step || 1} onChange={event => setDuration(quality, {...rule, step: Number(event.target.value)})} /></AdminField>}
           </div>
-          <div className="space-y-3 border-t border-border pt-3"><p className="text-xs font-semibold">生成视频价格</p><VideoGenerationPrices quality={quality} row={row} unit={unit} allowed={allowed} conditional={conditional} longMultiplier={longDurationMultiplier} includeReferenceVideoDuration={includeReferenceVideoDuration} roundReferenceVideoDuration={roundReferenceVideoDuration} onChange={patch => setRow(quality, patch)} /></div>
+          <div className="space-y-3 border-t border-border pt-3"><p className="text-xs font-semibold">生成视频价格</p><VideoGenerationPrices quality={quality} row={row} unit={unit} allowed={allowed} conditional={conditional} doubao={doubao} longMultiplier={doubao ? 1 : longDurationMultiplier} includeReferenceVideoDuration={doubao || includeReferenceVideoDuration} roundReferenceVideoDuration={doubao || roundReferenceVideoDuration} onChange={patch => setRow(quality, patch)} /></div>
           {inputPriceFields.length > 0 && <div className="space-y-3 border-t border-border pt-3"><div><p className="text-xs font-semibold">输入素材价格 · {qualityLabel(quality)} 输出</p><p className="mt-1 text-xs leading-5 text-muted-foreground">按生成结果的清晰度计价。免费数量与素材上限在下方统一设置。</p></div>
             <label className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" aria-label={`${quality} 按生成时长分段设置输入素材价格`} checked={Boolean(tiers)} onChange={event => {
               if (!event.target.checked) {setRow(quality, {referenceDurationTiers: undefined}); return}
@@ -127,20 +146,21 @@ export function VideoProfileEditor({profile = {}, onChange, fallbackGenerationRa
             }} />按生成时长分段设置输入素材价格</label>
             {tiers ? <div className="space-y-3">{tiers.map((tier, index) => <div key={index} className="space-y-3 rounded-lg border border-border bg-muted/20 p-3"><div className="flex flex-wrap items-end gap-3"><p className="min-w-24 py-3 text-xs font-semibold">{index === 0 ? `${Math.min(...allowed)}-${tier.maxSeconds}` : `${tiers[index - 1].maxSeconds + 1}-${tier.maxSeconds}`} 秒生成视频</p><AdminField className="max-w-40" label="分段结束时长（秒）"><AdminInput aria-label={`${quality} 第${index + 1}段结束秒数`} type="number" min={index ? tiers[index - 1].maxSeconds + 1 : 1} max="3600" value={tier.maxSeconds} onChange={event => setRow(quality, {referenceDurationTiers: tiers.map((item, position) => position === index ? {...item, maxSeconds: Number(event.target.value)} : item)})} /></AdminField><ControlButton className="min-h-11" variant="ghost" disabled={tiers.length === 1} aria-label={`${quality} 移除第${index + 1}个价格分段`} onClick={() => setRow(quality, {referenceDurationTiers: tiers.filter((_, position) => position !== index)})}>移除分段</ControlButton></div>{referenceFields(quality, tier.prices, value => setRow(quality, {referenceDurationTiers: tiers.map((item, position) => position === index ? {...item, prices: value} : item)}), ` 第${index + 1}段`)}</div>)}<ControlButton className="min-h-11" disabled={tiers.length >= 16 || tiers.at(-1)!.maxSeconds >= max} onClick={() => setRow(quality, {referenceDurationTiers: [...tiers, {maxSeconds: max, prices: {...tiers.at(-1)!.prices}}]})}>添加价格分段</ControlButton></div> : <>{referenceFields(quality, localPrices, value => setRow(quality, {referencePrices: value}))}{longDurationMultiplier > 1 && <p className="text-xs text-muted-foreground">未设置分段时，16 秒起沿用原长视频倍率；分段价格按填写值计算。</p>}</>}
           </div>}
-          {extraPriceFields.length > 0 && <details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-xs font-medium">附加价格与倍率 · {qualityLabel(quality)}</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">{extraPriceFields.map(field => <div key={field.key}>{priceField(`${quality} ${field.label}`, row.additionalPrices?.[field.key] ?? (pricing[field.key] as number | undefined) ?? field.defaultValue, text => {const next = {...row.additionalPrices}; if (text.trim()) next[field.key] = Number(text); else delete next[field.key]; setRow(quality, {additionalPrices: next})}, field.hint)}</div>)}</div></details>}
+          {effectiveExtraPriceFields.length > 0 && <details className="rounded-lg border border-border p-3"><summary className="cursor-pointer text-xs font-medium">附加价格与倍率 · {qualityLabel(quality)}</summary><div className="mt-3 grid gap-3 sm:grid-cols-2">{effectiveExtraPriceFields.map(field => <div key={field.key}>{priceField(`${quality} ${field.label}`, row.additionalPrices?.[field.key] ?? (pricing[field.key] as number | undefined) ?? field.defaultValue, text => {const next = {...row.additionalPrices}; if (text.trim()) next[field.key] = Number(text); else delete next[field.key]; setRow(quality, {additionalPrices: next})}, field.hint)}</div>)}</div></details>}
           </div></details>
         </section>
       })}
     </div>
     {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
     {notice && <p className="text-xs leading-5 text-muted-foreground" role="status">{notice}</p>}
-    <details className="admin-config-group rounded-lg border border-border"><summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold">输入素材数量与时长限制<span className="ml-2 text-xs font-normal text-muted-foreground">合计 {Number(profile.videoReferenceTotalLimit) > 0 ? `${profile.videoReferenceTotalLimit} 个` : `沿用模型上限${Number(profile.maxReferences) > 0 ? ` ${profile.maxReferences} 个` : ''}`}</span></summary><div className="space-y-3 border-t border-border p-3"><AdminField label="参考素材合计上限（个）" hint={`图片、视频、音频合计，包含上传文件与素材库选择；0 表示沿用模型上限${Number(profile.maxReferences) > 0 ? `（${profile.maxReferences} 个）` : ''}。不能突破上游限制。`}><AdminInput aria-label="参考素材合计上限（个）" type="number" min="0" max="1000" step="1" value={Number(profile.videoReferenceTotalLimit) || 0} onChange={event => update({videoReferenceTotalLimit: Number(event.target.value)})} /></AdminField><p className="text-xs leading-5 text-muted-foreground">各清晰度共用。数量、时长上限为 0 时不加额外限制；免费数量为 0 表示没有免费额度。</p>
+    <details className="admin-config-group rounded-lg border border-border"><summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-semibold">输入素材数量、大小与时长限制<span className="ml-2 text-xs font-normal text-muted-foreground">合计 {Number(profile.videoReferenceTotalLimit) > 0 ? `${profile.videoReferenceTotalLimit} 个` : `沿用模型上限${Number(profile.maxReferences) > 0 ? ` ${profile.maxReferences} 个` : ''}`}</span></summary><div className="space-y-3 border-t border-border p-3"><AdminField label="参考素材合计上限（个）" hint={`图片、视频、音频合计，包含上传文件与素材库选择；0 表示沿用模型上限${Number(profile.maxReferences) > 0 ? `（${profile.maxReferences} 个）` : ''}。不能突破上游限制。`}><AdminInput aria-label="参考素材合计上限（个）" type="number" min="0" max="1000" step="1" value={Number(profile.videoReferenceTotalLimit) || 0} onChange={event => update({videoReferenceTotalLimit: Number(event.target.value)})} /></AdminField><p className="text-xs leading-5 text-muted-foreground">各清晰度共用。数量、时长上限为 0 时不加额外限制；免费数量为 0 表示没有免费额度。</p>
       {(['image','video','audio'] as const).map(type => {
         const label = type === 'image' ? '参考图片' : type === 'video' ? '参考视频' : '参考音频', flag = type === 'image' ? 'supportsReferenceImage' : type === 'video' ? 'supportsVideoReference' : 'supportsAudioReference'
         const nativeMax = Number(profile[type === 'image' ? 'maxReferenceImages' : type === 'video' ? 'maxReferenceVideos' : 'maxReferenceAudios']) || 0, rule = references[type] || {}, free = rule.freeCount ?? defaultFreeCounts[type] ?? 0
         const setRule = (key: keyof RefRule, value: number) => update({videoReferenceRules: {...references, [type]: {...rule, freeCount: free, [key]: value}}})
-        const limit = (field: keyof RefRule, title: string, hint?: string) => <AdminField label={title} hint={hint}><AdminInput aria-label={`${label} ${title}`} type="number" min="0" step={field.endsWith('Seconds') ? '0.001' : '1'} value={field === 'freeCount' ? free : rule[field] ?? 0} onChange={event => setRule(field, Number(event.target.value))} /></AdminField>
-        return <fieldset key={type} className="space-y-3 rounded-lg border border-border bg-background p-3"><label className="flex min-h-11 items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={Boolean(profile[flag])} onChange={event => update({[flag]: event.target.checked, ...(type === 'image' && !event.target.checked ? {supportsFirstFrame: false, supportsLastFrame: false} : {})})} />{label}</label>{Boolean(profile[flag]) && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{limit('maxCount', '数量上限（个）', nativeMax ? `上游上限 ${nativeMax} 个` : '0 表示不额外限制')}{!(conditional && type === 'video') && limit('freeCount', '免费数量（个）')}{type !== 'image' && <>{limit('maxItemSeconds', '单个最长时长（秒）')}{limit('maxTotalSeconds', '合计最长时长（秒）')}</>}</div>}</fieldset>
+        const nativeRule = ((profile.nativeReferenceRules || {}) as Record<string, RefRule>)[type] || {}
+        const limit = (field: keyof RefRule, title: string, hint?: string) => <AdminField label={title} hint={hint}><AdminInput aria-label={`${label} ${title}`} type="number" min="0" step={field.endsWith('Seconds') || field === 'maxFileBytes' ? '0.001' : '1'} value={field === 'freeCount' ? free : field === 'maxFileBytes' ? rule[field] ? rule[field]! / 1_000_000 : 0 : rule[field] ?? 0} onChange={event => setRule(field, Number(event.target.value) * (field === 'maxFileBytes' ? 1_000_000 : 1))} /></AdminField>
+        return <fieldset key={type} className="space-y-3 rounded-lg border border-border bg-background p-3"><label className="flex min-h-11 items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={Boolean(profile[flag])} onChange={event => update({[flag]: event.target.checked, ...(type === 'image' && !event.target.checked ? {supportsFirstFrame: false, supportsLastFrame: false} : {})})} />{label}</label>{nativeRule.maxFileBytes&&<p className="text-xs leading-5 text-muted-foreground">上游单个上限 {Math.ceil(nativeRule.maxFileBytes / 1_000_000)} MB{type === 'image' ? '（图片须小于上限）' : nativeRule.maxItemSeconds ? ` · ${nativeRule.minItemSeconds || 0}–${nativeRule.maxItemSeconds} 秒 · 总时长 ${nativeRule.maxTotalSeconds} 秒` : ''}。未填写或填 0 时沿用此限制。</p>}{Boolean(profile[flag]) && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{limit('maxFileBytes', '单个大小上限（MB）', '0 沿用上游限制；不能突破模型原生上限')}{limit('maxCount', '数量上限（个）', nativeMax ? `上游上限 ${nativeMax} 个` : '0 表示不额外限制')}{!(conditional && type === 'video') && limit('freeCount', '免费数量（个）')}{type !== 'image' && <>{limit('minItemSeconds', '单个最短时长（秒）')}{limit('maxItemSeconds', '单个最长时长（秒）')}{limit('maxTotalSeconds', '合计最长时长（秒）')}</>}</div>}</fieldset>
       })}
     </div></details>
     </div>

@@ -12,12 +12,12 @@ export function mergeVideoReferenceEvidence(ids: readonly string[], sources: rea
   return scopedEvidence(ids, ids.filter((id) => found.has(id)))
 }
 
-export function useVideoReferenceLibrary(mode: string, keyword: string, includeAudio = false) {
+export function useVideoReferenceLibrary(mode: string, keyword: string, includeAudio = false, enabled = true) {
   // Keep both hooks mounted and their kind stable when switching modes. Their
   // unfiltered verification queries can still prove either kind exists.
-  const images = useLibraryAssets({ kind: 'image', pageSize: 60, keyword })
-  const videos = useLibraryAssets({ kind: 'video', pageSize: 60, keyword })
-  const audio = useLibraryAssets({ kind: includeAudio ? 'audio' : 'image', pageSize: 60, keyword, enabled: includeAudio })
+  const images = useLibraryAssets({ kind: 'image', pageSize: 60, keyword, enabled })
+  const videos = useLibraryAssets({ kind: 'video', pageSize: 60, keyword, enabled })
+  const audio = useLibraryAssets({ kind: includeAudio ? 'audio' : 'image', pageSize: 60, keyword, enabled: enabled && includeAudio })
   const sources = mode === 'edit' || mode === 'video' ? [videos] : mode === 'audio' ? (includeAudio ? [audio] : []) : mode === 'references' || mode === 'mixed' ? [images, videos, ...(includeAudio ? [audio] : [])] : mode === 'frames' ? [images, ...(includeAudio ? [audio] : [])] : [images]
   const pending = useRef(false)
   const verify = async (ids: readonly string[]) => {

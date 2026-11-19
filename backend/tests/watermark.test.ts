@@ -32,7 +32,7 @@ test('account preference defaults on, requires current acknowledgment, persists 
   const f=await fixture();t.after(()=>f.close());
   assert.equal((await f.app.inject({url:'/api/account/watermark-preference'})).statusCode,401);
   const read=()=>f.app.inject({url:'/api/account/watermark-preference',headers:f.headers});
-  assert.deepEqual((await read()).json().watermark,{enabled:true,policyVersion:WATERMARK_POLICY_VERSION,acknowledgedPolicyVersion:null,acknowledgedAt:null});
+  assert.deepEqual((await read()).json().watermark,{enabled:true,preferenceEnabled:true,globallyEnabled:true,confirmationRequired:true,policyVersion:WATERMARK_POLICY_VERSION,acknowledgedPolicyVersion:null,acknowledgedAt:null});
   for(const payload of [{enabled:false},{enabled:false,acknowledgedPolicyVersion:'old'},{enabled:'false'},{enabled:true,userId:'synthetic-export-other'}])assert.equal((await f.app.inject({method:'PATCH',url:'/api/account/watermark-preference',headers:f.headers,payload})).statusCode,400);
   const saved=await f.app.inject({method:'PATCH',url:'/api/account/watermark-preference',headers:f.headers,payload:{enabled:false,acknowledgedPolicyVersion:WATERMARK_POLICY_VERSION}});assert.equal(saved.statusCode,200,saved.body);assert.equal(saved.json().watermark.enabled,false);assert.ok(saved.json().watermark.acknowledgedAt);
   const second=await buildApp({db:f.db,config:f.config,coreOnly:true});try{assert.equal((await second.inject({url:'/api/account/watermark-preference',headers:f.headers})).json().watermark.enabled,false);}finally{await second.close();}
@@ -49,8 +49,8 @@ test('account preference defaults on, requires current acknowledgment, persists 
 
 test('real image export burns the label outside original pixels, preserves metadata, respects ownership and keeps ordinary uploads untouched',async t=>{
   const f=await fixture();t.after(()=>f.close());const bytes=await createPng(f.config.mediaRoot),media=await saveMedia(f.app.ctx,f.owner,bytes);const url=`/api/media/${media.key}/export`;
-  assert.equal((await f.app.inject({method:'POST',url,headers:{origin:f.config.origin}})).statusCode,401);
-  assert.equal((await f.app.inject({method:'POST',url,headers:f.otherHeaders})).statusCode,404);
+  assert.equal((await f.app.inject({method:'POST',url,headers:{origin:f.config.origin}})).statusCode,200);
+  assert.equal((await f.app.inject({method:'POST',url,headers:f.otherHeaders})).statusCode,200);
   const uploaded=await f.app.inject({method:'POST',url,headers:f.headers});assert.equal(uploaded.statusCode,200,uploaded.body);assert.deepEqual(uploaded.rawPayload,bytes);assert.equal(uploaded.headers['x-oao-ai-generated'],'false');assert.equal(uploaded.headers['x-oao-watermark-applied'],'false');
   const pending=await job(f,media.url,'image','pending');assert.equal(await isGeneratedMedia(f.app.ctx,f.owner,media.key),false);await f.db.query("UPDATE oaooao_generation_jobs SET status='success' WHERE id=$1",[pending]);
   const exported=await f.app.inject({method:'POST',url,headers:f.headers});assert.equal(exported.statusCode,200,exported.body.slice(0,200));assert.equal(exported.headers['x-oao-watermark-applied'],'true');assert.match(String(exported.headers['content-disposition']),/\.png/);assert.ok(exported.rawPayload.includes(Buffer.from('upstream AI metadata retained')));

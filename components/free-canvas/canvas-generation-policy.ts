@@ -45,6 +45,7 @@ export function canvasModelDefaults(data: GenerationNodeData, model: ModelConfig
 
 export function validateCanvasGeneration(data: GenerationNodeData, model: ModelConfig | undefined, references: NodeReference[]) {
   if (!model) throw new Error('请先选择一个当前可用的模型')
+  if (model.subscriptionLocked) throw new Error('需要订阅套餐才可使用此模型')
   const caps = model.capabilities
   if (references.some(ref => !isSubmittableReferenceUrl(ref.url))) throw new Error('参考素材尚未上传完成，请重新选择素材')
   if (references.length > caps.maxReferences) throw new Error(`当前模型最多支持 ${caps.maxReferences} 个参考素材，已选择 ${references.length} 个；请移除多余素材或连线`)
