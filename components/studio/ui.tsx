@@ -180,7 +180,7 @@ export function SearchField({ value, onChange, placeholder = '搜索' }: { value
   return (
     <label className="studio-search-field studio-field flex h-8 min-w-0 items-center gap-2 border border-border bg-card px-2.5 text-muted-foreground transition-colors duration-150 focus-within:border-studio-accent/60 focus-within:ring-2 focus-within:ring-studio-accent/15">
       <Search className="size-4 shrink-0" aria-hidden="true" />
-      <input className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+      <input data-focus-managed aria-label={placeholder} className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
     </label>
   )
 }
