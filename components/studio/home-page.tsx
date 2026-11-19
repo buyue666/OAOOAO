@@ -2,9 +2,10 @@
 
 import { useUiText } from '@/lib/studio/i18n'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowRight, Bot, Clapperboard, Image as ImageIcon, Puzzle, Video, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bot, History, Clapperboard, Image as ImageIcon, Puzzle, Video, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStudio } from '@/lib/studio/store'
 import { defaultModelFor, filterModelsByCapability, imageQualityOptions, qualityLabel, ratioLabel } from '@/lib/studio/studio-models'
@@ -22,6 +23,8 @@ import { RecentWorks } from './home-recent-works'
 import { HomeShowcase, type ShowcasePreset } from './home-showcase'
 import { PluginProjectStarter } from './plugins/plugin-workspaces'
 import { TeamProjects } from './team-projects'
+
+const HomeAssistant = dynamic(() => import('./director-agent').then(module => module.DirectorAgentWorkspace), { ssr: false, loading: () => <p role="status" className="py-10 text-center text-sm text-muted-foreground">正在恢复创作对话…</p> })
 
 type EntryMode = 'agent' | 'image' | 'video' | 'project'
 
@@ -85,7 +88,7 @@ function groupByProvider(models: ModelConfig[], fallbackLabel: string) {
   return groups
 }
 
-export function HomePage({ team, project }: { team?: TeamSummary; project?: TeamProject } = {}) {
+export function HomePage({ team, project, initialAssistant = false }: { team?: TeamSummary; project?: TeamProject; initialAssistant?: boolean } = {}) {
   const tx = useUiText()
   const router = useRouter()
   const { state, estimateCredits, defaultModels } = useStudio()
@@ -94,6 +97,9 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
 
   const [mode, setMode] = useState<EntryMode>(team ? 'image' : 'agent')
   const [prompt, setPrompt] = useState('')
+  const [assistantMounted, setAssistantMounted] = useState(initialAssistant && !team)
+  const [assistantVisible, setAssistantVisible] = useState(initialAssistant && !team)
+  const [entryRevision, setEntryRevision] = useState(0)
   const [files, setFiles] = useState<File[]>([])
   const [fileError, setFileError] = useState('')
   const [startError, setStartError] = useState('')
@@ -336,7 +342,13 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
         setStarting(false)
         return
       }
-      router.push(mode === 'agent' ? '/agent' : href(mode === 'image' ? '/image' : '/video'))
+      if (mode === 'agent') {
+        setEntryRevision(current => current + 1)
+        setAssistantMounted(true)
+        setAssistantVisible(true)
+        setStarting(false)
+        submitLock.current = false
+      } else router.push(href(mode === 'image' ? '/image' : '/video'))
     } catch (reason) {
       setStartError(reason instanceof Error ? reason.message : tx('进入工作台失败，请重试。'))
       submitLock.current = false
@@ -351,7 +363,7 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
         { id: 'project', title: '团队项目', icon: Clapperboard },
       ]
     : [
-        { id: 'agent', title: '创作助手', icon: Bot },
+        { id: 'agent', title: '智能创作', icon: Bot },
         { id: 'image', title: '图片生成', icon: ImageIcon },
         { id: 'video', title: '视频生成', icon: Video },
         { id: 'project', title: '完整作品', icon: Clapperboard },
@@ -378,7 +390,15 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
   const displayedSkills = team ? QUICK_IDEAS.filter((skill) => skill.mode !== 'agent') : QUICK_IDEAS
 
   return (
-    <div className="studio-home mx-auto flex w-full max-w-[1160px] flex-col gap-10 px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
+    <div className={cn('studio-home mx-auto flex w-full flex-col gap-6 px-4 pb-8 pt-6 sm:px-6 lg:px-8', assistantVisible ? 'max-w-[1440px]' : 'max-w-[1160px] lg:pt-10')}>
+      {assistantMounted && !team && <section hidden={!assistantVisible} className={cn('min-h-0 flex-col gap-4', assistantVisible ? 'flex lg:h-[calc(100dvh-164px)] lg:min-h-[540px]' : 'hidden')} aria-label={tx('智能创作对话')}>
+        <div className="flex shrink-0 items-center justify-between gap-3">
+          <button type="button" onClick={() => setAssistantVisible(false)} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"><ArrowLeft className="size-4" aria-hidden="true" />{tx('返回开始创作')}</button>
+          <span className="text-xs text-muted-foreground">{tx('连续对话 · 保留上下文')}</span>
+        </div>
+        <HomeAssistant embedded entryRevision={entryRevision} autoStart={entryRevision > 0} />
+      </section>}
+      <div hidden={assistantVisible} className={assistantVisible ? 'hidden' : 'contents'}>
       <section className="flex flex-col items-center">
         <h1 className="text-center text-[26px] font-semibold tracking-[-0.03em] text-foreground sm:text-[32px]">
           {heroTitle}
@@ -412,6 +432,8 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
                 )
               })}
             </div>
+
+            {!team && mode === 'agent' && <button type="button" onClick={() => { setAssistantMounted(true); setAssistantVisible(true) }} className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"><History className="size-3.5" aria-hidden="true" />{tx('继续对话')}</button>}
 
             <div data-tour="creator" role="region" aria-label={tx('开始创作')} className="studio-jimeng-composer mt-5 w-full max-w-[900px]">
               {mode === 'project' ? (
@@ -503,10 +525,10 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
                       setVideoSeconds((current) => Math.max(videoDurationRule.min, Math.min(videoDurationRule.max, Number.isFinite(current) ? Math.round(current) : videoDurationRule.min)))
                     }}
                     estimatedCredits={estimatedCredits}
-                    creditNote={team ? tx('进入工作台后按实际参数核对积分') : undefined}
+                    creditNote={team ? tx('进入工作台后按实际参数核对积分') : mode === 'agent' ? tx('文字规划单独计费') : undefined}
                     compatibilityNote={compatibilityNote}
                     submitLabel={mode === 'agent' ? tx('开始创作') : mode === 'image' ? tx('生成图片') : tx('生成视频')}
-                    directHref={directEntry.href}
+                    directHref={mode === 'agent' ? undefined : directEntry.href}
                     directLabel={directEntry.label}
                     hideSkillsLink={Boolean(team)}
                     canStart={canStart}
@@ -563,6 +585,7 @@ export function HomePage({ team, project }: { team?: TeamSummary; project?: Team
       )}
 
       <SiteFooter placement="studio" />
+      </div>
     </div>
   )
 }

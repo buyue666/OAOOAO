@@ -153,6 +153,7 @@ test('home page renders unified mode bar and composer for personal and team work
     if (name === '@/lib/studio/i18n') return chineseLocale
     if (name === '@/lib/utils') return { cn: (...items) => items.filter(Boolean).join(' ') }
     if (name === 'next/link') return { __esModule: true, default: ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children) }
+    if (name === 'next/dynamic') return { __esModule: true, default: () => () => null }
     if (name === 'next/navigation') return { useRouter: () => ({ push: () => {} }) }
     if (name === '@/lib/studio/store') return {
       useStudio: () => ({
@@ -181,7 +182,9 @@ test('home page renders unified mode bar and composer for personal and team work
   const personalHtml = renderToStaticMarkup(React.createElement(homeMod.exports.HomePage))
   assert.match(personalHtml, /data-tour="creator"/)
   assert.match(personalHtml, /id="home-prompt"/)
-  assert.match(personalHtml, /创作助手/)
+  assert.match(personalHtml, /智能创作/)
+  assert.match(personalHtml, /继续对话/)
+  assert.doesNotMatch(personalHtml, /进入创作助手/)
   assert.match(personalHtml, /图片生成/)
   assert.match(personalHtml, /视频生成/)
   assert.match(personalHtml, /完整作品/)

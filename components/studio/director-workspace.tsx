@@ -128,8 +128,8 @@ function DirectorAssetDialog({ selected, onClose, onToggle }: { selected: Direct
   </Modal>
 }
 
-export function DirectorWorkspaceView({ scene, onScene, onStarter, composer, conversation, panel, runs, selectedRunId, onSelectRun, hasMessages, clearButton, children }: {
-  scene: DirectorScene; onScene: (value: DirectorScene) => void; onStarter: (scene: DirectorScene, prompt: string) => void;
+export function DirectorWorkspaceView({ embedded = false, scene, onScene, onStarter, composer, conversation, panel, runs, selectedRunId, onSelectRun, hasMessages, clearButton, children }: {
+  embedded?: boolean; scene: DirectorScene; onScene: (value: DirectorScene) => void; onStarter: (scene: DirectorScene, prompt: string) => void;
   composer: ReactNode; conversation: ReactNode; panel: ReactNode; runs: Array<{ id: string; title: string; status?: AgentRun['status'] }>;
   selectedRunId?: string; onSelectRun: (id: string) => void; hasMessages: boolean; clearButton: ReactNode; children?: ReactNode;
 }) {
@@ -143,10 +143,10 @@ export function DirectorWorkspaceView({ scene, onScene, onStarter, composer, con
     { label: '自由画布', href: '/canvas', icon: LayoutDashboard }, { label: '图片复刻', href: '/tools/remix', icon: ScanLine },
     { label: 'AI 换装', href: '/tools/tryon', icon: Shirt }, { label: '3D 导演台', href: '/projects', icon: Box },
   ]
-  return <section className={cn('agent-workspace flex min-h-0 w-full flex-1 flex-col', hasMessages ? 'gap-4' : 'gap-0')} aria-label={tx('创作助手')}>
-    {hasMessages ? <>
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3"><div><p className="text-xs text-studio-accent">{tx('创作助手')}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{tx('把想法，变成下一步。')}</h1></div>{clearButton}</header>
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(300px,.85fr)_minmax(0,1.15fr)]">
+  return <section className={cn('agent-workspace flex min-h-0 w-full flex-1 flex-col', hasMessages || embedded ? 'gap-4' : 'gap-0')} aria-label={tx('创作助手')}>
+    {hasMessages || embedded ? <>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3">{embedded ? <h2 className="text-sm font-medium">{tx('创作对话')}</h2> : <div><p className="text-xs text-studio-accent">{tx('创作助手')}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{tx('把想法，变成下一步。')}</h1></div>}{clearButton}</header>
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,.85fr)_minmax(0,1.15fr)]">
         <div className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-border bg-card/60 lg:overflow-hidden"><div className="border-b border-border px-4 py-3 text-xs font-medium">{tx('对话与需求')}</div>{conversation}<div className="shrink-0 border-t border-border p-3">{composer}</div></div>
         <div className="flex min-h-0 min-w-0 flex-col rounded-2xl border border-border bg-card lg:overflow-hidden"><div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border p-4"><h2 className="text-sm font-semibold">{tx('任务方案与结果')}</h2><label className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span className="sr-only">{tx('选择任务方案')}</span><select className="max-w-[240px] min-w-0 rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground" value={selectedRunId || ''} onChange={event => onSelectRun(event.target.value)} aria-label={tx('选择任务方案')}>{runs.map((run, index) => <option key={run.id} value={run.id}>{index + 1}. {run.title.slice(0, 45)}</option>)}</select></label></div><div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">{panel}</div></div>
       </div>

@@ -1,5 +1,12 @@
 /** Authored interface copy only; never applied to prompts, file names, or saved user content. */
 export const studioEnglish: Readonly<Record<string, string>> = {
+  "智能创作": "Smart creation",
+  "继续对话": "Continue conversation",
+  "返回开始创作": "Back to creation",
+  "连续对话 · 保留上下文": "Continuous conversation \u00b7 Shared context",
+  "智能创作对话": "Creative conversation",
+  "创作对话": "Creative conversation",
+  "文字规划单独计费": "Planning is billed separately",
   "需要订阅套餐才可使用": "A subscription is required to use this model.",
   "订阅套餐专属模型": "Subscription-only model",
   "提示词参考": "Prompt examples",

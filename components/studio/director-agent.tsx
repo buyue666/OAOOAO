@@ -11,7 +11,7 @@ import type { AgentRun } from '@/lib/studio/generation-types'
 import { assistantContextLabel, assistantSuggestions, assistantThreadKey, buildAssistantPrompt, type AssistantContext } from '@/lib/studio/director-context'
 import { parseAssistantThread, type AssistantMessage as Message, type AssistantPending as Pending } from '@/lib/studio/director-thread'
 import { cn } from '@/lib/utils'
-import { agentPlanCosts, directorRequestPrompt, remapDirectorReferences, type DirectorScene } from '@/lib/studio/director-workspace'
+import { agentPlanCosts, directorConversationHistory, directorRequestPrompt, remapDirectorReferences, type DirectorScene } from '@/lib/studio/director-workspace'
 import type { CanvasSkill } from '@/lib/studio/canvas-skills'
 import { libraryAssetMediaUrl } from '@/lib/studio/reference-assets'
 import { AGENT_FILE_ACCEPT, AGENT_FILE_LIMIT, agentFileKind, normalizeAgentText, validateAgentFiles, type AgentFileKind } from '@/lib/studio/agent-files'
@@ -20,7 +20,7 @@ import { DirectorComposer, DirectorWorkspaceView, type DirectorDraft, type Direc
 import { ControlButton, Modal, StatusBadge, type Tone } from './ui'
 
 type Reference = DirectorReference
-type Props = { projectId?: string; projectContext?: AssistantContext; context?: string; onOpenPlan?: (planId: string) => void; showHeader?: boolean; emptyStateLayout?: 'grid' | 'stacked'; compact?: boolean; standalone?: boolean; initialDraft?: DirectorDraft; onChooseProject?: (id: string | undefined, draft: DirectorDraft) => void }
+type Props = { embedded?: boolean; entryRevision?: number; autoStart?: boolean; projectId?: string; projectContext?: AssistantContext; context?: string; onOpenPlan?: (planId: string) => void; showHeader?: boolean; emptyStateLayout?: 'grid' | 'stacked'; compact?: boolean; standalone?: boolean; initialDraft?: DirectorDraft; onChooseProject?: (id: string | undefined, draft: DirectorDraft) => void }
 const statusMeta: Record<AgentRun['status'], { label: string; tone: Tone }> = {
   planning: { label: '正在规划', tone: 'accent' }, awaiting_approval: { label: '等待你确认', tone: 'warning' }, running: { label: '执行中', tone: 'accent' }, paused: { label: '已暂停', tone: 'warning' }, completed: { label: '已完成', tone: 'success' }, failed: { label: '执行失败', tone: 'warning' }, cancelled: { label: '已取消', tone: 'muted' },
 }
@@ -37,7 +37,7 @@ export function DirectorAgent(props: Props) {
   return <DirectorSession key={scope} {...props} scope={scope} verifiedContext={context} />
 }
 
-function DirectorSession({ scope, verifiedContext, showHeader = true, compact = false, emptyStateLayout = 'grid', standalone = false, initialDraft, onChooseProject }: Props & { scope: string; verifiedContext: AssistantContext }) {
+function DirectorSession({ scope, verifiedContext, showHeader = true, compact = false, emptyStateLayout = 'grid', standalone = false, embedded = false, entryRevision = 0, autoStart = false, initialDraft, onChooseProject }: Props & { scope: string; verifiedContext: AssistantContext }) {
   const { state } = useStudio()
   const generation = useGeneration()
   const connected = state.backendStatus === 'connected'
@@ -55,6 +55,8 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
   const [ready, setReady] = useState(false)
   const [storageBlocked, setStorageBlocked] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [autoEntryPending, setAutoEntryPending] = useState(false)
+  const consumedEntry = useRef<number | undefined>(undefined)
   const [pollRevision, setPollRevision] = useState(0)
   const submitLock = useRef(false)
   const refsRef = useRef<Reference[]>(initialDraft?.refs || [])
@@ -80,11 +82,9 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     }
   }, [connected])
   useEffect(() => {
-    let hasPending = false
     try {
       const saved = parseAssistantThread(window.localStorage.getItem(scope), verifiedContext.surface, verifiedContext.projectId)
       setMessages(saved.messages); setPending(saved.pending); setStorageBlocked(false)
-      hasPending = Boolean(saved.pending)
       if (saved.pending) {
         setInput(saved.pending.displayText)
         const restored: Reference[] = saved.pending.assetIds.map((id, index) => ({ id, assetId: id, kind: saved.pending!.refKinds?.[index] || 'image', title: saved.pending!.refTitles[index] || '参考文件', status: 'ready' }))
@@ -92,25 +92,34 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
         setSkills((saved.pending.skillIds || []).map((id, index) => ({ id, title: `已选技能 ${index + 1}`, prompt: '' })))
       }
     } catch (reason) { setStorageBlocked(true); setError(errorText(reason)) }
-    const intent = standalone && !hasPending ? consumeCreateIntent('agent', {}) : null
-    if (intent) {
-      if (hasPending) {
-        setError('当前有待恢复的提交，已保留原请求内容；完成或清空后可继续使用新的描述。')
-      } else {
-        if (intent.prompt.trim()) setInput(intent.prompt)
-        const restoredFiles = intent.files.map(dataUrlToFile).filter((item): item is File => Boolean(item))
-        if (restoredFiles.length) pendingIntentFilesRef.current = restoredFiles
-      }
-    }
     setReady(true)
   }, [scope, verifiedContext.surface, verifiedContext.projectId])
+  useEffect(() => {
+    // Recover the saved request first; a new home entry must never replace it.
+    if (!standalone || !ready || storageBlocked || pending || submitting || consumedEntry.current === entryRevision) return
+    consumedEntry.current = entryRevision
+    const intent = consumeCreateIntent('agent', {})
+    if (!intent) return
+    setInput(intent.prompt.trim() || '请结合上传的参考素材，帮我梳理创作思路并制定可执行的方案。')
+    const restoredFiles = intent.files.map(dataUrlToFile).filter((item): item is File => Boolean(item))
+    if (restoredFiles.length) pendingIntentFilesRef.current = restoredFiles
+    setAutoEntryPending(autoStart)
+  }, [standalone, ready, storageBlocked, pending, submitting, entryRevision, autoStart])
   useEffect(() => {
     if (!connected || !ready || submitting || pending || !pendingIntentFilesRef.current.length) return
     const filesToUpload = pendingIntentFilesRef.current
     pendingIntentFilesRef.current = []
     addFiles(filesToUpload)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, ready, submitting, pending])
+  }, [connected, ready, submitting, pending, entryRevision])
+  useEffect(() => {
+    if (!autoEntryPending || !ready || !connected || storageBlocked || !canPlan || pending || submitting || submitLock.current) return
+    if (!input.trim() || pendingIntentFilesRef.current.length || refsRef.current.some(ref => ref.status !== 'ready')) return
+    setAutoEntryPending(false)
+    void send()
+    // The user's home submission starts exactly once, after all references are ready.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEntryPending, ready, connected, storageBlocked, canPlan, pending, submitting, input, refs])
   function persist(nextMessages: Message[], request: Pending | null) {
     window.localStorage.setItem(scope, JSON.stringify({ version: 2, messages: nextMessages.slice(-40), pending: request }))
   }
@@ -168,9 +177,10 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
   }
   async function send() {
     if (submitLock.current || !ready || storageBlocked || !canPlan || (!pending && (!input.trim() || unfinishedRefs))) return
+    setAutoEntryPending(false)
     const token = identityRef.current
     const current = () => alive.current && token === identityRef.current
-    const request: Pending = pending ?? { clientRequestId: newClientRequestId('assistant'), displayText: input.trim(), prompt: directorRequestPrompt(input, verifiedContext, scene, refs.map(ref => ({ id: ref.assetId!, title: ref.title, kind: ref.kind }))), surface: verifiedContext.surface, projectId: verifiedContext.projectId, assetIds: refs.map((ref) => ref.assetId!), refTitles: refs.map((ref) => ref.title), refKinds: refs.map(ref => ref.kind || 'image'), skillIds: skills.map(skill => skill.id), publicPrompt: input.trim() }
+    const request: Pending = pending ?? { clientRequestId: newClientRequestId('assistant'), displayText: input.trim(), prompt: directorRequestPrompt(input, verifiedContext, scene, refs.map(ref => ({ id: ref.assetId!, title: ref.title, kind: ref.kind })), directorConversationHistory(messages, runs)), surface: verifiedContext.surface, projectId: verifiedContext.projectId, assetIds: refs.map((ref) => ref.assetId!), refTitles: refs.map((ref) => ref.title), refKinds: refs.map(ref => ref.kind || 'image'), skillIds: skills.map(skill => skill.id), publicPrompt: input.trim() }
     try { persist(messages, request) } catch { setError('浏览器无法保存请求恢复标识，请允许本站本地存储后重试。请求尚未发送。'); return }
     submitLock.current = true; setSubmitting(true); setPending(request); setError('')
     try {
@@ -222,13 +232,13 @@ function DirectorSession({ scope, verifiedContext, showHeader = true, compact = 
     const activeRun = activeRunId ? runs[activeRunId] : undefined
     const locked = submitting || Boolean(pending)
     const draft = { input, refs, skills, scene }
-    return <DirectorWorkspaceView scene={scene} onScene={setScene} onStarter={(nextScene, prompt) => { if (locked) return; setScene(nextScene); setInput(prompt); document.getElementById(inputId)?.focus() }} hasMessages={messages.length > 0} runs={runItems} selectedRunId={activeRunId} onSelectRun={setSelectedRunId}
+    return <DirectorWorkspaceView embedded={embedded} scene={scene} onScene={setScene} onStarter={(nextScene, prompt) => { if (locked) return; setScene(nextScene); setInput(prompt); document.getElementById(inputId)?.focus() }} hasMessages={messages.length > 0} runs={runItems} selectedRunId={activeRunId} onSelectRun={setSelectedRunId}
       clearButton={<button type="button" disabled={locked} onClick={clearConversation} className={cn('inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs text-muted-foreground hover:bg-muted disabled:opacity-40', focus)}><Trash2 className="size-3.5" aria-hidden="true" />清空对话</button>}
       composer={<DirectorComposer inputId={inputId} draft={draft} setInput={setInput} setSkills={setSkills} context={verifiedContext} disabled={locked} canSubmit={ready && !storageBlocked && canPlan && !locked && Boolean(input.trim()) && !unfinishedRefs} submitting={submitting} connected={connected} canPlan={canPlan} onSubmit={() => void send()} onUpload={() => fileRef.current?.click()} onFiles={addFiles} onRemoveReference={removeReference} onRetryUpload={reference => void upload(reference)} onPickReference={pickReference} onSelectProject={onChooseProject ? id => onChooseProject(id, draft) : undefined} error={error} compact={messages.length > 0}
         storageNotice={storageBlocked && <p className="mb-3 text-xs leading-5 text-muted-foreground">请求恢复记录无法安全读取，已暂停新提交。<Link href="/tasks" className="underline">前往生成记录核对</Link>，确认没有待处理任务后可清除本站的损坏对话记录并刷新。</p>}
         recovery={pending && !submitting && <div className="mb-3 rounded-xl border border-studio-warn/30 p-3"><p className="text-xs leading-5">有一笔提交待确认。恢复时沿用原内容、素材、技能和请求标识。</p><ControlButton size="sm" className="mt-2" disabled={!canPlan} onClick={() => void send()}><RotateCcw className="size-3.5" />恢复上次提交</ControlButton></div>} />}
       conversation={<div ref={scrollRef} className="min-h-36 flex-1 space-y-4 overflow-y-auto p-4 lg:min-h-0" aria-label="对话记录">{messages.map(message => <article key={message.id} className={cn('rounded-xl p-3', message.role === 'user' ? 'ml-4 bg-studio-accent/7' : 'mr-2 bg-muted/40')}><p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">{message.role === 'user' ? <FileText className="size-3.5" aria-hidden="true" /> : <Bot className="size-3.5 text-studio-accent" aria-hidden="true" />}{message.role === 'user' ? '你的需求' : '创作助手'}</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{message.text}</p>{message.refs?.length ? <p className="mt-2 break-words text-xs text-muted-foreground">参考：{message.refs.join('、')}</p> : null}{message.runId && <button type="button" aria-pressed={activeRunId === message.runId} onClick={() => setSelectedRunId(message.runId)} className={cn('mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs', activeRunId === message.runId ? 'bg-studio-accent/10 font-medium text-studio-accent' : 'text-muted-foreground hover:bg-muted', focus)}>{activeRunId === message.runId ? <Check className="size-3.5" /> : <ArrowRight className="size-3.5" />}查看任务方案</button>}</article>)}</div>}
-      panel={activeRun ? <AgentRunPanel run={activeRun} connected={connected} onControl={action => control(activeRun, action)} onRetryTask={taskId => retryTask(activeRun.id, taskId)} expanded /> : <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />{ready ? '正在读取服务端任务状态…' : '正在恢复对话…'}</p>}>
+      panel={activeRun ? <AgentRunPanel run={activeRun} connected={connected} onControl={action => control(activeRun, action)} onRetryTask={taskId => retryTask(activeRun.id, taskId)} expanded /> : activeRunId || submitting ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />{submitting ? '正在提交你的创作需求…' : '正在读取服务端任务状态…'}</p> : <div className="flex min-h-64 flex-col items-center justify-center gap-3 px-4 text-center"><Sparkles className="size-7 text-studio-accent" aria-hidden="true" /><h3 className="text-sm font-medium">先聊想法，再确认方案</h3><p className="max-w-sm text-xs leading-6 text-muted-foreground">描述需求或添加参考，助手会结合对话整理步骤。方案和预计积分会显示在这里，由你确认后执行。</p></div>}>
       {activeRunId && queryErrors[activeRunId] && <p role="alert" className="text-xs text-studio-warn">状态暂未确认：{queryErrors[activeRunId]} <button className="underline" type="button" onClick={() => setPollRevision(value => value + 1)}>重新检查</button></p>}
       <input ref={fileRef} type="file" accept={AGENT_FILE_ACCEPT} multiple hidden aria-label="上传参考文件" onChange={event => { addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
     </DirectorWorkspaceView>
@@ -283,12 +293,12 @@ export function AgentPlanPanel({ planId }: { planId: string | null; onNotice?: (
   const plan = state.agentPlans.find((item) => item.id === planId)
   return <div className="space-y-3 p-4"><p className="text-sm font-medium">{plan?.title || '尚无计划'}</p><p className="text-xs leading-5 text-muted-foreground">历史本地草稿不会创建或完成生成任务。请向创作助手提交内容，查看服务端返回的计划并确认执行。</p></div>
 }
-export function DirectorAgentWorkspace({ projectId }: { projectId?: string; context?: string }) {
+export function DirectorAgentWorkspace({ projectId, embedded, entryRevision, autoStart }: { projectId?: string; context?: string; embedded?: boolean; entryRevision?: number; autoStart?: boolean }) {
   const { state } = useStudio()
-  return <StandaloneDirectorWorkspace key={state.user.id} projectId={projectId} accountId={state.user.id} />
+  return <StandaloneDirectorWorkspace key={state.user.id} projectId={projectId} accountId={state.user.id} embedded={embedded} entryRevision={entryRevision} autoStart={autoStart} />
 }
 
-function StandaloneDirectorWorkspace({ projectId, accountId }: { projectId?: string; accountId: string }) {
+function StandaloneDirectorWorkspace({ projectId, accountId, embedded, entryRevision, autoStart }: { projectId?: string; accountId: string; embedded?: boolean; entryRevision?: number; autoStart?: boolean }) {
   const [selectedProject, setSelectedProject] = useState(projectId)
   const [draft, setDraft] = useState<DirectorDraft>()
   const [ready, setReady] = useState(false)
@@ -301,7 +311,7 @@ function StandaloneDirectorWorkspace({ projectId, accountId }: { projectId?: str
     setReady(true)
   }, [selectionKey, projectId])
   if (!ready) return <p role="status" className="py-10 text-center text-sm text-muted-foreground">正在恢复创作空间…</p>
-  return <DirectorAgent projectId={selectedProject} standalone showHeader={false} initialDraft={draft} onChooseProject={(id, nextDraft) => {
+  return <DirectorAgent projectId={selectedProject} standalone embedded={embedded} entryRevision={entryRevision} autoStart={autoStart} showHeader={false} initialDraft={draft} onChooseProject={(id, nextDraft) => {
     try { if (id) window.localStorage.setItem(selectionKey, id); else window.localStorage.removeItem(selectionKey) } catch { /* Existing thread persistence still blocks unsafe submissions. */ }
     setDraft(nextDraft); setSelectedProject(id)
   }} />

@@ -12,7 +12,7 @@ async function moduleUrl(path, imports = {}) {
 const context = await moduleUrl('../lib/studio/director-context.ts')
 const mentions = await moduleUrl('../lib/studio/prompt-references.ts')
 const files = await moduleUrl('../lib/studio/agent-files.ts')
-const { directorRequestPrompt, remapDirectorReferences, agentPlanCosts } = await import(await moduleUrl('../lib/studio/director-workspace.ts', { './director-context': context, './prompt-references': mentions, './agent-files': files }))
+const { directorRequestPrompt, directorConversationHistory, remapDirectorReferences, agentPlanCosts } = await import(await moduleUrl('../lib/studio/director-workspace.ts', { './director-context': context, './prompt-references': mentions, './agent-files': files }))
 const references = [{ id: 'owned-a', title: '耳机正面' }, { id: 'owned-b', title: '场景参考' }]
 
 test('Agent mentions bind to owned asset IDs and the chosen scene without claiming visual understanding', () => {
@@ -35,4 +35,26 @@ test('planning is separated from additional execution estimates, including older
   assert.deepEqual(agentPlanCosts({ pointsCost: 10, planApproval }), { planning: 10, execution: 17 })
   assert.deepEqual(agentPlanCosts({ pointsCost: 27, planningPoints: 10, planApproval: { ...planApproval, executionEstimatedPoints: 17 } }), { planning: 10, execution: 17 })
   assert.deepEqual(agentPlanCosts({ pointsCost: 0 }), { planning: 0, execution: 0 })
+})
+
+test('follow-up planning includes earlier requirements, real plans and result summaries', () => {
+  const messages=[{id:'u1',role:'user',text:'建筑使用完整外壳，加入道路和绿植'},{id:'a1',role:'agent',text:'已生成方案',runId:'r1'}]
+  const runs={r1:{id:'r1',status:'awaiting_approval',summary:'街区环境方案',prompt:'private-upstream-request-must-not-recur',tasks:[{title:'场景渲染',type:'image',status:'pending',optimizedPrompt:'保留道路与树木'}],planApproval:{steps:[{title:'搭建建筑外壳'}]},outputs:[]},unrelated:{id:'other',summary:'unrelated-account-must-not-appear'}}
+  const history=directorConversationHistory(messages,runs)
+  const prompt=directorRequestPrompt('把刚才的场景改成夜景',{surface:'chat'},'general',[],history)
+  assert.match(prompt,/把刚才的场景改成夜景/)
+  assert.match(prompt,/建筑使用完整外壳/)
+  assert.match(prompt,/街区环境方案/)
+  assert.match(prompt,/搭建建筑外壳/)
+  assert.match(prompt,/awaiting_approval/)
+  assert.doesNotMatch(prompt,/private-upstream-request-must-not-recur|unrelated-account-must-not-appear/)
+})
+
+test('conversation context stays bounded and prioritizes recent turns', () => {
+  const messages=Array.from({length:40},(_,i)=>({id:String(i),role:'user',text:`turn-${i}-`+'细节'.repeat(4000)}))
+  const context=directorConversationHistory(messages,{})
+  assert.ok(context.length<12500)
+  assert.match(context,/turn-39-/)
+  assert.doesNotMatch(context,/turn-0-/)
+  assert.equal(directorConversationHistory([],{}),'')
 })
