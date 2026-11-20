@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { usePlugins } from '@/lib/studio/plugin-context'
 import type { CreativePluginId } from '@/lib/studio/creative-plugins'
 
 export type ShowcasePreset = {
@@ -92,7 +91,6 @@ const STUDIO_TOOLS: ReadonlyArray<{
 
 export function HomeShowcase({ onApplyPreset }: { onApplyPreset: (preset: ShowcasePreset) => void }) {
   const tx = useUiText()
-  const plugins = usePlugins()
   const [slideIndex, setSlideIndex] = useState(0)
 
   useEffect(() => {
@@ -103,7 +101,7 @@ export function HomeShowcase({ onApplyPreset }: { onApplyPreset: (preset: Showca
   }, [])
 
   const activeSlide = FEATURED_SLIDES[slideIndex] ?? FEATURED_SLIDES[0]
-  const visibleTools = plugins.ready ? STUDIO_TOOLS.filter((tool) => plugins.isInstalled(tool.id)) : []
+  const visibleTools = STUDIO_TOOLS
 
   return (
     <section aria-labelledby="showcase-title" className="flex flex-col gap-3.5">

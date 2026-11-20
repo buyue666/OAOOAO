@@ -72,7 +72,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       if ('version' in patch && (confirmed.director?.version !== patch.version || confirmed.director?.autoUpdate !== patch.autoUpdate)) throw Error('服务器尚未确认功能版本，请重试。')
       setSnapshot({ owner: account, installed: normalizeInstalledPlugins(result.installedPlugins), preferences: confirmed })
       try { localStorage.setItem(`oao-plugins:${account}`, String(Date.now())) } catch {}
-      // Refresh server-loaded canvas data only after installation is committed.
+      // Refresh server-rendered version preferences after the server confirms the change.
       router.refresh()
       void refreshSession()
       return true
@@ -90,7 +90,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<PluginContextValue>(() => ({ installed, preferences, directorVersion: installedDirectorVersion(preferences), ready,
     pending: operation?.owner === owner ? operation.id : null,
     error: failure.owner === owner ? failure.message : '',
-    isInstalled: id => installed.includes(id), setInstalled, setDirectorVersion,
+    isInstalled: () => ready, setInstalled, setDirectorVersion,
   }), [installed, preferences, ready, operation, failure, owner, setInstalled, setDirectorVersion])
   return <PluginContext.Provider value={value}>{children}</PluginContext.Provider>
 }

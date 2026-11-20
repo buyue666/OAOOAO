@@ -110,21 +110,62 @@ test('delayed rollback from another account cannot replace the active account ve
   assert.deepEqual(h.refreshes,[])
 })
 
-test('uninstalled tool gate does not render its tool subtree', () => {
+test('tools open without legacy installation, while authentication and workspace boundaries still gate heavy children', () => {
   let identity = null
+  let ready = true
+  let state = { hydrated: true, backendStatus: 'connected' }
   const imports = { 'react/jsx-runtime': jsxRuntime, 'next/link': 'Link', 'lucide-react': {},
-    '@/lib/studio/plugin-context': { usePlugins: () => ({ installed: [], isInstalled: () => false, ready: true }) },
+    '@/lib/studio/plugin-context': { usePlugins: () => ({ installed: [], isInstalled: () => false, ready }) },
+    '@/lib/studio/store': { useStudio: () => ({ state }) },
     '@/lib/studio/creative-plugins': catalog, '@/lib/studio/i18n': { useUiText: () => text => text }, './plugin-icon': { PluginIcon: 'PluginIcon' },
     '@/lib/studio/workspace-context': { useWorkspace: () => ({ identity, href: target => target }) },
     '@/lib/studio/workspace-features': load('lib/studio/workspace-features.ts', { './creative-plugins': catalog, './workspace-navigation': load('lib/studio/workspace-navigation.ts') }),
   }
   const { PluginGate } = load('components/studio/plugins/plugin-gate.tsx', imports)
   const child = jsxRuntime.jsx('ExpensiveTool', {})
-  const blocked = PluginGate({ id: 'canvas', children: child })
-  assert.notEqual(blocked, child)
-  assert.equal(blocked.props['data-plugin-gate'], 'canvas')
-  imports['@/lib/studio/plugin-context'].usePlugins = () => ({ isInstalled: () => true })
   assert.equal(PluginGate({ id: 'canvas', children: child }), child)
+  assert.equal(PluginGate({ id: 'tryon', children: child }), child)
+  ready = false
+  state = { hydrated: true, backendStatus: 'unauthenticated' }
+  assert.notEqual(PluginGate({ id: 'tryon', children: child }), child)
+  state = { hydrated: false, backendStatus: 'checking' }
+  assert.notEqual(PluginGate({ id: 'canvas', children: child }), child)
+  ready = true
+  state = { hydrated: true, backendStatus: 'connected' }
   identity = { teamId:'11111111-1111-4111-8111-111111111111' }
   assert.notEqual(PluginGate({ id: 'agent', children: child }), child)
+  assert.equal(PluginGate({ id: 'canvas', children: child }), child)
+})
+
+test('the tool directory links directly to tools, groups by purpose and never requires an enable action', () => {
+  let identity = null
+  let chosenCategory = '全部', query = ''
+  const features = load('lib/studio/workspace-features.ts', { './creative-plugins': catalog, './workspace-navigation': load('lib/studio/workspace-navigation.ts') })
+  const { PluginCenter } = load('components/studio/plugins/plugin-center.tsx', {
+    react: { useState: initial => initial === '' ? [query, value => { query = value }] : [chosenCategory, value => { chosenCategory = value }] },
+    'react/jsx-runtime': jsxRuntime, 'next/image': { default: 'Image' }, 'next/link': { default: 'Link' }, 'lucide-react': {},
+    '@/lib/studio/creative-plugins': catalog, '@/lib/studio/plugin-context': { usePlugins: () => ({ ready: true, preferences: {}, installed: [], directorVersion: '0.1.0' }) },
+    '@/lib/studio/workspace-context': { useWorkspace: () => ({ identity }) }, '@/lib/studio/workspace-features': features,
+    '@/lib/studio/i18n': { useUiText: () => (text, values = []) => text.replace(/\{(\d+)\}/g, (_, index) => String(values[index])) },
+    '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') }, './director-version-control': { DirectorVersionControl: 'VersionControl' },
+  })
+  const nodes = node => node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)] : []
+  let tree = nodes(PluginCenter())
+  const links = tree.filter(node => node.props?.['aria-label']?.startsWith('使用 '))
+  assert.equal(links.length, 6)
+  assert.ok(links.every(link => link.props.prefetch === false))
+  assert.equal(links.find(link => link.props['aria-label'] === '使用 AI 换装').props.href, '/tools/tryon')
+  assert.ok(!tree.some(node => /启用|关闭/.test(String(node.props?.['aria-label'] || ''))))
+  assert.ok(tree.some(node => node.type === 'VersionControl'))
+  assert.ok(tree.filter(node => node.type === 'details').every(node => !node.props.open))
+  chosenCategory = '图像工具'
+  tree = nodes(PluginCenter())
+  assert.equal(tree.filter(node => node.props?.['data-plugin']).length, 2)
+  query = '不存在的工具'
+  assert.equal(nodes(PluginCenter()).filter(node => node.props?.['data-plugin']).length, 0)
+  query = ''; chosenCategory = '全部'
+  identity = { teamId: '11111111-1111-4111-8111-111111111111' }
+  tree = nodes(PluginCenter())
+  assert.equal(tree.filter(node => node.props?.['aria-label']?.startsWith('使用 ')).length, 2)
+  assert.ok(!tree.some(node => node.props?.href === '/tools/tryon'))
 })

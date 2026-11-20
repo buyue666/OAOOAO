@@ -1,6 +1,7 @@
 'use client'
 
 import { defaultAppearance, normalizeAppearance, paletteTokens } from './appearance'
+import { usePathname } from 'next/navigation'
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { backendUserToStudioUser, deleteCanvasProjects, isUnauthorized, listCanvasProjects, createCanvasProject, getSession } from './api'
 import { clearScopedTaskCache } from './task-cache'
@@ -12,6 +13,11 @@ import type { GenerationSettings, Project, StudioAction, StudioContextValue, Stu
 const storageKey = 'oaooao-studio-preferences-v1'
 const legacyStorageKey = 'oaooao-studio-demo'
 const fallbackAvatar = '/icon.svg'
+
+/** Summaries serve project pickers; tool catalogs and team pages do not need personal projects. */
+export function needsPersonalProjectSummaries(pathname: string | null) {
+  return Boolean(pathname && !pathname.startsWith('/teams') && /^\/(?:studio|agent|image|video|canvas|projects|assets|works|gallery|drama)(?:\/|$)/.test(pathname))
+}
 
 /**
  * 退出登录后的占位用户。
@@ -181,6 +187,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   const [brandSync] = useState(createSiteBrandSync)
   const sessionTicket = useRef(0)
   const sessionIdentityRef = useRef('')
+  const pathname = usePathname()
+  const needsProjects = needsPersonalProjectSummaries(pathname)
+  const projectsDemand = useRef(needsProjects)
+  projectsDemand.current = needsProjects
 
   const refreshSession = useCallback<StudioContextValue['refreshSession']>(async () => {
     const ticket = ++sessionTicket.current
@@ -207,11 +217,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       } })
       // The same request token guards the dependent project query as well.
       // An old account's delayed list can never populate the next account.
-      if (settings?.installedPlugins?.some(id => id === 'canvas' || id === 'agent')) {
-        void listCanvasProjects().then((result) => {
+      if (projectsDemand.current) {
+        void listCanvasProjects({ page: 1, pageSize: 100 }).then((result) => {
           if (current()) dispatch({ type: 'HYDRATE', payload: { projects: result.projects.map(projectFromCanvasSummary) } })
         }).catch(() => { /* Keep genuine cached rows for this account; never synthesize projects. */ })
-      } else dispatch({ type: 'HYDRATE', payload: { projects: [], selectedProjectId: '' } })
+      }
       return { status: 'connected' }
     } catch (error) {
       if (!current()) return { status: 'superseded' }
@@ -226,6 +236,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       return { status, error: message }
     }
   }, [brandSync])
+
+  // Entering a project-based page from the directory loads summaries on demand.
+  const previousProjectDemand = useRef(needsProjects)
+  useEffect(() => {
+    const entering = needsProjects && !previousProjectDemand.current
+    previousProjectDemand.current = needsProjects
+    if (entering && state.backendStatus === 'connected') void refreshSession()
+  }, [needsProjects, refreshSession, state.backendStatus])
 
   useEffect(() => {
     const unsubscribe = brandSync.subscribe((site) => dispatch({ type: 'SET_SITE_BRAND', site }))

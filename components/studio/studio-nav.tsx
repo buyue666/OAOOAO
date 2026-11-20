@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils'
 import { Tooltip } from './ui'
 import { workspaceHref, workspaceIdentity, workspaceSection } from '@/lib/studio/workspace-navigation'
 import { useWorkspace } from '@/lib/studio/workspace-context'
-import { usePlugins } from '@/lib/studio/plugin-context'
 import { creativePlugins, type CreativePluginId } from '@/lib/studio/creative-plugins'
 import { pluginIcons } from './plugins/plugin-icon'
 import { workspaceFeature } from '@/lib/studio/workspace-features'
@@ -192,12 +191,11 @@ export function StudioToolsNav({
 }) {
   const tx = useUiText()
   const router = useRouter()
-  const plugins = usePlugins()
   const workspace = useWorkspace()
   const identity = workspace.identity || workspaceIdentity(pathname)
   const center = workspaceHref(pathname, '/tools')
-  const installedTools = studioToolItems.flatMap(item => {
-    const feature = workspaceFeature(item.key, identity, plugins.isInstalled(item.key))
+  const quickTools = studioToolItems.filter(item => ['agent', 'canvas'].includes(item.key) || (item.key !== 'director' && isNavItemActive(pathname, item))).flatMap(item => {
+    const feature = workspaceFeature(item.key, identity)
     return feature.available && feature.href ? [{ ...item, href: feature.href }] : []
   })
   const active = isNavItemActive(pathname, studioToolsNav) || ['/studio/features', '/studio/canvas'].includes(workspaceSection(pathname))
@@ -241,7 +239,7 @@ export function StudioToolsNav({
       {!collapsed && open && (
         <div id={submenuId} className="ml-3 flex flex-col gap-1 border-l border-sidebar-border pl-3" aria-label={tx("创作工具子菜单")}>
           <Link href={center} prefetch={false} onClick={onNavigate} aria-current={pathname === center ? 'page' : undefined} className={cn('flex min-h-10 items-center gap-2 rounded-md px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', pathname === center ? 'bg-studio-accent/10 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Puzzle className="size-3.5 shrink-0" aria-hidden="true" />{tx('功能中心')}</Link>
-          {installedTools.map((item) => {
+          {quickTools.map((item) => {
             const ItemIcon = item.icon
             const itemActive = identity ? pathname === item.href && item.key !== 'director' : isNavItemActive(pathname, item)
             return (

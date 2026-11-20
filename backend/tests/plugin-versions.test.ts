@@ -17,7 +17,7 @@ test('director version pinning is durable, authenticated, isolated and defaults 
   }));
   const call = (i: number, payload?: unknown) => app.inject({ method: payload ? 'PATCH' : 'GET', url: '/api/account/plugins', headers: users[i].headers, ...(payload ? { payload } : {}) });
   assert.equal((await app.inject({ method:'PATCH', url:'/api/account/plugins', payload:{pluginId:'director',version:'0.1.0'} })).statusCode,401);
-  assert.equal((await call(0,{pluginId:'director',version:'0.1.0'})).statusCode,409);
+  assert.equal((await call(0,{pluginId:'director',version:'0.1.0'})).statusCode,200);
   const installed = await call(0,{pluginId:'director',installed:true});
   assert.deepEqual(installed.json().pluginPreferences,{director:{version:'0.1.0',autoUpdate:false}});
   await call(1,{pluginId:'director',installed:true});
@@ -41,7 +41,7 @@ test('director version pinning is durable, authenticated, isolated and defaults 
   assert.deepEqual(session.json().settings.pluginPreferences.director,{version:'0.1.0',autoUpdate:false});
   await call(0,{pluginId:'canvas',installed:false});
   assert.deepEqual((await call(0)).json().installedPlugins,['agent']);
-  assert.equal((await call(0,{pluginId:'director',version:'0.1.0'})).statusCode,409);
+  assert.equal((await call(0,{pluginId:'director',version:'0.1.0'})).statusCode,200);
   await call(0,{pluginId:'director',installed:true});
   assert.deepEqual((await call(0)).json().pluginPreferences.director,{version:'0.1.0',autoUpdate:false});
   assert.deepEqual((await call(0)).json().installedPlugins,['agent','canvas','director']);

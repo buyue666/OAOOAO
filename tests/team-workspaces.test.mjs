@@ -48,7 +48,7 @@ test('creation and feature links preserve the team and only offer supported tool
   assert.equal(routeHelpers.workspaceDestination('/tools', identity), `${root}/studio/features`)
   assert.equal(routeHelpers.workspaceDestination(`${root}/studio/image`, identity), `${root}/studio/image`)
   assert.equal(featureHelpers.workspaceFeature('canvas', identity, true).href, `${root}/canvas`)
-  assert.equal(featureHelpers.workspaceFeature('canvas', identity, false).available, false)
+  assert.equal(featureHelpers.workspaceFeature('canvas', identity, false).available, true)
   for (const id of ['agent', 'drama', 'tryon', 'remix']) assert.deepEqual(featureHelpers.workspaceFeature(id, identity, true), { supported:false, available:false, href:undefined })
 })
 const caps = { ratios: ['1:1', '16:9'], resolutions: ['1K', '2K'], qualities: ['720p', '1080p'], durations: ['4 秒', '6 秒'], maxBatchSize: 2 }

@@ -11,7 +11,7 @@ function evaluate(text, bindings = {}) {
   new Function('module', 'exports', ...Object.keys(bindings), compile(text))(module, module.exports, ...Object.values(bindings))
   return module.exports
 }
-const names = ['signedOutUser', 'emptyAccountState', 'readStudioPreferences', 'getInitialState', 'projectFromCanvasSummary', 'reducer']
+const names = ['needsPersonalProjectSummaries', 'signedOutUser', 'emptyAccountState', 'readStudioPreferences', 'getInitialState', 'projectFromCanvasSummary', 'reducer']
 const definitions = parsed.statements.filter((node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text)).map((node) => `export ${node.getText(parsed).replace(/^export\s+/, '')}`).join('\n')
 const appearanceModule = evaluate(readFileSync(new URL('../lib/studio/appearance.ts', import.meta.url), 'utf8'))
 const helpers = evaluate(definitions, { fallbackAvatar: '/icon.svg', ...appearanceModule })
@@ -38,12 +38,12 @@ test('session maps all real wallet buckets but never adds timed points on top of
   assert.equal(legacy.timedPointsExpiresAt, undefined)
 })
 
-function sessionHarness() {
+function sessionHarness(needsProjects = true) {
   let state = helpers.getInitialState()
   const sessions = [], projects = [], cleared = []
   const sessionTicket = { current: 0 }, sessionIdentityRef = { current: '' }
   const refreshSession = callback('refreshSession', {
-    sessionTicket, sessionIdentityRef, fallbackAvatar: '/icon.svg', backendUserToStudioUser,
+    sessionTicket, sessionIdentityRef, projectsDemand: { current: needsProjects }, fallbackAvatar: '/icon.svg', backendUserToStudioUser,
     brandSync: { getRevision: () => 1, merge: (settings) => settings },
     sessionIdentity: (user) => user?.id || '', clearScopedTaskCache: (id) => cleared.push(id),
     isUnauthorized: (error) => error?.status === 401,
@@ -122,14 +122,24 @@ test('a late old session cannot replace a newer account or trigger its project r
   assert.equal(harness.state.credits, 17)
 })
 
-test('accounts without project tools do not request the canvas list at login', async () => {
-  const harness = sessionHarness()
+test('opening the tool directory does not request personal projects even when tools are installed', async () => {
+  const harness = sessionHarness(false)
   const current = harness.refreshSession(), result = snapshot('minimal-account')
   result.settings.installedPlugins = []
   harness.sessions[0].resolve(result)
   await current
   assert.equal(harness.projects.length, 0)
   assert.deepEqual(harness.state.projects, [])
+})
+
+test('project summary demand follows the current page and ignores old installation choices', async () => {
+  for (const path of ['/tools', '/tools/tryon', '/admin', '/teams/example/studio', '/settings', null]) assert.equal(helpers.needsPersonalProjectSummaries(path), false, path)
+  for (const path of ['/studio', '/agent', '/image', '/video', '/canvas', '/projects', '/assets']) assert.equal(helpers.needsPersonalProjectSummaries(path), true, path)
+  const harness = sessionHarness(true), current = harness.refreshSession(), result = snapshot('legacy-disabled-account')
+  result.settings.installedPlugins = []
+  harness.sessions[0].resolve(result)
+  await current
+  assert.equal(harness.projects.length, 1)
 })
 
 test('a late project response from the previous account cannot populate the new account', async () => {

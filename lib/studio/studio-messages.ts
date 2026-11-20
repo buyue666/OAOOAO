@@ -1,5 +1,18 @@
 /** Authored interface copy only; never applied to prompts, file names, or saved user content. */
 export const studioEnglish: Readonly<Record<string, string>> = {
+  "选择工具，开始创作。": "Choose a tool and start creating.",
+  "版本与更新记录": "Versions and release notes",
+  "使用 {0}": "Use {0}",
+  "此工具暂仅支持个人空间，请切换空间后使用。": "This tool currently supports personal spaces. Switch spaces to use it.",
+  "暂时无法连接服务，请恢复连接后重试。": "Unable to connect. Reconnect and try again.",
+  "登录后使用": "Sign in to use",
+  "图片变底稿，配色与用量一目了然": "Turn images into bead patterns with clear colors and quantities.",
+  "参考构图与光影，创作新的画面": "Create new images with reference compositions and lighting.",
+  "人物、服装、姿势与背景自由组合": "Combine people, outfits, poses and backgrounds.",
+  "带上想法与素材，梳理创作计划": "Turn ideas and references into a creative plan.",
+  "从剧本到分镜，逐步完成故事": "Build your story from script to storyboard.",
+  "组织素材，连接你的创作流程": "Organize references and connect your workflow.",
+  "布置场景，预演动作与镜头": "Stage scenes and preview actions and camera moves.",
   "智能创作": "Smart creation",
   "继续对话": "Continue conversation",
   "返回开始创作": "Back to creation",

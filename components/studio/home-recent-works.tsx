@@ -7,7 +7,6 @@ import { ArrowRight, Clapperboard, PanelsTopLeft, RefreshCw } from 'lucide-react
 import { listDramaProjects, type DramaProjectSummary } from '@/lib/studio/api'
 import { subscribeAccountData } from '@/lib/studio/account-data-sync'
 import { useStudio } from '@/lib/studio/store'
-import { usePlugins } from '@/lib/studio/plugin-context'
 import { cn } from '@/lib/utils'
 import { MediaThumb } from './ui'
 
@@ -27,9 +26,6 @@ function projectCover(project: DramaProjectSummary) {
 export function RecentWorks() {
   const tx = useUiText()
   const { state } = useStudio()
-  const plugins = usePlugins()
-  const dramaInstalled = plugins.isInstalled('drama')
-  const canvasInstalled = plugins.isInstalled('canvas')
   const [dramas, setDramas] = useState<DramaProjectSummary[]>([])
   const [loadedFor, setLoadedFor] = useState('')
   const [loading, setLoading] = useState(false)
@@ -44,29 +40,27 @@ export function RecentWorks() {
     setDramas([])
     setLoadedFor('')
     setError('')
-    if (!connected || !dramaInstalled) { setLoading(false); return }
+    if (!connected) { setLoading(false); return }
     setLoading(true)
-    void listDramaProjects().then((result) => {
+    void listDramaProjects({ page: 1, pageSize: 4 }).then((result) => {
       if (!disposed) { setDramas(result.projects ?? []); setLoadedFor(state.user.id) }
     }).catch((reason) => {
       if (!disposed) setError(reason instanceof Error ? reason.message : '项目读取失败')
     }).finally(() => { if (!disposed) setLoading(false) })
     return () => { disposed = true }
-  }, [connected, state.user.id, revision, dramaInstalled])
+  }, [connected, state.user.id, revision])
 
   const allProjects: RecentProject[] = connected ? [
-    ...(dramaInstalled && loadedFor === state.user.id ? dramas : []).map((project): RecentProject => ({ id: project.id, title: project.title, cover: projectCover(project), updatedAt: project.updatedAt, kind: 'creative', href: `/projects/${encodeURIComponent(project.id)}` })),
-    ...(canvasInstalled ? state.projects : []).map((project): RecentProject => ({ id: project.id, title: project.title, cover: project.cover, updatedAt: project.updatedAt, kind: 'canvas', href: `/canvas/${encodeURIComponent(project.id)}` })),
+    ...(loadedFor === state.user.id ? dramas : []).map((project): RecentProject => ({ id: project.id, title: project.title, cover: projectCover(project), updatedAt: project.updatedAt, kind: 'creative', href: `/projects/${encodeURIComponent(project.id)}` })),
+    ...state.projects.map((project): RecentProject => ({ id: project.id, title: project.title, cover: project.cover, updatedAt: project.updatedAt, kind: 'canvas', href: `/canvas/${encodeURIComponent(project.id)}` })),
   ].sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0)) : []
 
   const projects = (filter === 'all' ? allProjects : allProjects.filter((item) => item.kind === filter)).slice(0, 4)
 
-  if (!dramaInstalled && !canvasInstalled) return null
-
   const filterTabs: Array<{ id: FilterKind; label: string }> = [
     { id: 'all', label: '全部项目' },
-    ...(dramaInstalled ? [{ id: 'creative' as const, label: '创作项目' }] : []),
-    ...(canvasInstalled ? [{ id: 'canvas' as const, label: '自由画布' }] : []),
+    { id: 'creative', label: '创作项目' },
+    { id: 'canvas', label: '自由画布' },
   ]
 
   return (

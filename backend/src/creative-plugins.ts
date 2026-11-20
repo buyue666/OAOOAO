@@ -43,10 +43,9 @@ export async function registerCreativePlugins(app: FastifyInstance, ctx: Context
       await client.query('SELECT id FROM oaooao_users WHERE id=$1 FOR UPDATE', [user.id]);
       if (versionChange) {
         const current = (await client.query('SELECT plugin_version,auto_update,enabled FROM oaooao_account_plugins WHERE user_id=$1 AND plugin_id=$2', [user.id, body.pluginId])).rows[0];
-        if (!current?.enabled) throw httpError(409, '请先启用功能，再选择版本');
-        const autoUpdate = body.autoUpdate ?? (body.version ? false : current.auto_update);
-        const version = autoUpdate ? DIRECTOR_LATEST : body.version ?? directorPreference(current.plugin_version, current.auto_update).version;
-        await client.query('UPDATE oaooao_account_plugins SET plugin_version=$3,auto_update=$4 WHERE user_id=$1 AND plugin_id=$2', [user.id, body.pluginId, version, autoUpdate]);
+        const autoUpdate = body.autoUpdate ?? (body.version ? false : (current?.auto_update ?? false));
+        const version = autoUpdate ? DIRECTOR_LATEST : body.version ?? directorPreference(current?.plugin_version ?? DIRECTOR_LATEST, current?.auto_update ?? false).version;
+        await client.query('INSERT INTO oaooao_account_plugins(user_id,plugin_id,plugin_version,auto_update,enabled) VALUES($1,$2,$3,$4,false) ON CONFLICT(user_id,plugin_id) DO UPDATE SET plugin_version=EXCLUDED.plugin_version,auto_update=EXCLUDED.auto_update', [user.id, body.pluginId, version, autoUpdate]);
       } else {
         const ids = pluginChangeIds(body.pluginId, body.installed);
         if (body.installed) {
