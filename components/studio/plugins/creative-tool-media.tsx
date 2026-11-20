@@ -58,7 +58,7 @@ export function CreativeToolMedia({ showcase, fallback, active = false, compact 
       {item.type === 'image' ? picture(item.url, active && !reduced ? styles.zoom : undefined) : <>
         {picture(item.poster || fallback)}
         {near && playing && <video ref={video} src={item.url} poster={item.poster || fallback} autoPlay muted playsInline loop preload="none" aria-label={tx('工具效果视频')} onError={() => { setFailed(old => ({ ...old, [item.url]: true })); setManualPlayback(false) }} className={cn('absolute inset-0 size-full', showcase.fit === 'contain' ? 'object-contain' : 'object-cover')} />}
-        {!compact && <button type="button" className={cn(controls, 'absolute left-3 top-3')} aria-label={tx(playing ? '暂停效果视频' : '播放效果视频')} aria-pressed={playing} onClick={() => setManualPlayback(!playing)}>{playing ? <Pause className="size-4" /> : <Play className="size-4" />}</button>}
+        {!compact && <button type="button" className={cn(controls, 'absolute left-3 top-3', styles.videoControl)} aria-label={tx(playing ? '暂停效果视频' : '播放效果视频')} aria-pressed={playing} onClick={() => setManualPlayback(!playing)}>{playing ? <Pause className="size-4" /> : <Play className="size-4" />}</button>}
       </>}
       {!compact && item.label && <p className={cn('pointer-events-none absolute top-3 max-w-[calc(100%-2rem)] rounded-md bg-black/60 px-2.5 py-1 text-xs leading-5 text-white', item.type === 'video' ? 'left-14' : 'left-3')}>{item.label}</p>}
     </>}
