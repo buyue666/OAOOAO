@@ -72,6 +72,8 @@ test('compact media fits home thumbnails while keeping controls outside navigati
   const compact = renderToStaticMarkup(React.createElement(CreativeToolMedia, { showcase: config, fallback: '/fallback.webp', compact: true }))
   const regular = renderToStaticMarkup(React.createElement(CreativeToolMedia, { showcase: config, fallback: '/fallback.webp' }))
   assert.match(compact, /h-full w-full/)
+  assert.match(compact, /min-height:24px/)
+  assert.ok(!regular.includes('min-height:24px'))
   assert.ok(!compact.includes('aspect-video') && !compact.includes('Long preview label'))
   assert.ok(compact.includes('下一张展示图') && compact.includes('暂停轮播'))
   assert.ok(!compact.includes('上一张展示图'))
