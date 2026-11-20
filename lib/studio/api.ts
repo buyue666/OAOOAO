@@ -48,6 +48,7 @@ export type SessionGenerationDefaults = {
 }
 
 export type SessionSettings = {
+  creativeTools?: import('./creative-tool-showcase').CreativeToolsSettings
   adultContent?: { enabled: boolean; policyVersion: string; acknowledgedAt: string | null }
   installedPlugins?: string[]
   pluginPreferences?: Record<string, { version: string; autoUpdate: boolean }>

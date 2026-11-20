@@ -174,8 +174,9 @@ function requestIdHeaders(clientRequestId?: string, attemptNo?: number) {
   return headers
 }
 
-function projectTaskContext(input: { projectId?: string; episodeId?: string; shotId?: string; conversationId?: string; parentTaskId?: string; surface?: string; clientRequestId?: string; attemptNo?: number; approvedCost?: number }) {
+function projectTaskContext(input: { tool?: 'image-remix'; projectId?: string; episodeId?: string; shotId?: string; conversationId?: string; parentTaskId?: string; surface?: string; clientRequestId?: string; attemptNo?: number; approvedCost?: number }) {
   return Object.fromEntries(Object.entries({
+    tool: input.tool,
     projectId: input.projectId,
     episodeId: input.episodeId,
     shotId: input.shotId,
@@ -267,6 +268,7 @@ export function createTextTask(input: TextGenerationInput) {
       config: { ...(input.model ? { model: input.model } : {}), ...(input.stream ? { stream: true } : {}) },
       messages: input.messages?.length ? input.messages : [{ role: 'user', content: input.prompt }],
       context: {
+        ...(input.tool ? { tool: input.tool } : {}),
         ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
         ...(input.attemptNo ? { attemptNo: input.attemptNo } : {}),
       },

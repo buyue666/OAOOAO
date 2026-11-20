@@ -138,7 +138,7 @@ export default function ImageRemixTool() {
       const parts: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [{ type: 'text', text: `请按 OAOOAO 图片复刻规范分析这张图片。只返回 JSON，不要 Markdown。复刻模式：${mode}。字段必须包含 subject（summary/action/appearance/wardrobe/props）、environment（location/lighting/weather）、style（medium/palette/texture/mood）、camera（angle/composition/lens）、prompt、negativePrompt、confidence。prompt 要能直接用于图片生成，negativePrompt 写需要避免的内容。` }, { type: 'image_url', image_url: { url: main.url } }]
       if (style?.url) parts.push({ type: 'text', text: '第二张图片仅作为可选风格参考，请说明它与主图的差异。' }, { type: 'image_url', image_url: { url: style.url } })
       setBusy('analyzing'); setNotice('正在分析主体、环境和镜头…')
-      const created = await generation.createText({ prompt: '', model: analysisModel, messages: [{ role: 'user', content: parts }] })
+      const created = await generation.createText({ prompt: '', model: analysisModel, tool: 'image-remix', messages: [{ role: 'user', content: parts }] })
       setAnalysisTaskId(created.id)
     } catch (error) { setBusy(''); setNotice(error instanceof Error ? error.message : '图片分析失败，请重试。') }
   }
@@ -146,7 +146,7 @@ export default function ImageRemixTool() {
     if (!mainUrl || !draft.prompt.trim()) { setNotice('请上传图片并确认提示词内容。'); return }
     if (!imageModel) { setNotice('当前没有可用的图片模型。'); return }
     setBusy('submitting'); setNotice('正在提交图片生成任务…')
-    try { await generation.createImage({ prompt: draft.prompt, model: imageModel, ratio, resolution, quality, kind: 'edit', references: [{ type: 'image', url: mainUrl }, ...(styleUrl ? [{ type: 'image', url: styleUrl }] : [])], surface: 'chat', title: '图片复刻' }); setBusy(''); setNotice('已提交图片生成任务。'); router.push('/works') } catch (error) { setBusy(''); setNotice(error instanceof Error ? error.message : '提交失败，请重试。') }
+    try { await generation.createImage({ prompt: draft.prompt, model: imageModel, ratio, resolution, quality, kind: 'edit', references: [{ type: 'image', url: mainUrl }, ...(styleUrl ? [{ type: 'image', url: styleUrl }] : [])], surface: 'chat', tool: 'image-remix', title: '图片复刻' }); setBusy(''); setNotice('已提交图片生成任务。'); router.push('/works') } catch (error) { setBusy(''); setNotice(error instanceof Error ? error.message : '提交失败，请重试。') }
   }
 
   return <div className="space-y-6" data-testid="image-remix-tool">

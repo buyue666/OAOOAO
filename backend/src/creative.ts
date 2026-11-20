@@ -1,3 +1,4 @@
+import {generationTools,assertToolEnabled} from './creative-tool-settings.js';
 import { registerAgentRoutes as registerAgents } from './agents.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -111,6 +112,7 @@ export async function createJob(ctx:Context,userId:string,kind:GenerationKind,in
     await lockStorage(client,userId);
     await verifyContext(ctx,client,userId,input);
     const settings=await getSettings(ctx,client);
+    for(const id of generationTools(input))assertToolEnabled(settings,id);
     let plan:Json|undefined;
     if(settings.entitlements?.enabled){
       const summary=await getPlanSummary(ctx,userId,client);const planId=summary.hasActivePlan?summary.planId:settings.entitlements.defaultPlanId;

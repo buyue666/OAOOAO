@@ -80,7 +80,7 @@ const rootTitles: Record<string, string> = {
   account: '账户',
   settings: '设置',
   plans: '套餐',
-  tools: '功能中心',
+  tools: '创作工具',
   teams: '团队空间',
 }
 
@@ -101,7 +101,7 @@ export function studioPageTitle(pathname: string, projectTitle?: string) {
   const scope = workspaceSection(pathname)
   if (scope === '/studio/image') return '图片生成'
   if (scope === '/studio/video') return '视频生成'
-  if (scope === '/studio/features') return '功能中心'
+  if (scope === '/studio/features') return '创作工具'
   if (scope === '/studio/canvas') return '自由画布'
   pathname = scope
   const [root, id, section] = pathname.split('/').filter(Boolean)
@@ -111,7 +111,7 @@ export function studioPageTitle(pathname: string, projectTitle?: string) {
     if (!section) return name
     return `${name} · ${sectionTitles[section] ?? section}`
   }
-  if (root === 'tools' && id) return creativePlugins.find(plugin => plugin.href === `/tools/${id}`)?.name ?? '功能中心'
+  if (root === 'tools' && id) return creativePlugins.find(plugin => plugin.href === `/tools/${id}`)?.name ?? '创作工具'
   return rootTitles[root] ?? 'OAO'
 }
 
@@ -178,91 +178,11 @@ export function StudioNavLink({
   return collapsed ? <Tooltip label={label} side="right" className="flex w-full justify-center">{link}</Tooltip> : link
 }
 
-export function StudioToolsNav({
-  pathname,
-  collapsed = false,
-  onNavigate,
-  idSuffix = 'desktop',
-}: {
-  pathname: string
-  collapsed?: boolean
-  onNavigate?: () => void
-  idSuffix?: string
-}) {
+export function StudioToolsNav({ pathname, collapsed = false, onNavigate }: { pathname: string; collapsed?: boolean; onNavigate?: () => void; idSuffix?: string }) {
   const tx = useUiText()
-  const router = useRouter()
-  const workspace = useWorkspace()
-  const identity = workspace.identity || workspaceIdentity(pathname)
-  const center = workspaceHref(pathname, '/tools')
-  const quickTools = studioToolItems.filter(item => ['agent', 'canvas'].includes(item.key) || (item.key !== 'director' && isNavItemActive(pathname, item))).flatMap(item => {
-    const feature = workspaceFeature(item.key, identity)
-    return feature.available && feature.href ? [{ ...item, href: feature.href }] : []
-  })
-  const active = isNavItemActive(pathname, studioToolsNav) || ['/studio/features', '/studio/canvas'].includes(workspaceSection(pathname))
-  const [open, setOpen] = useState(active)
-  const submenuId = `studio-tools-subnav-${idSuffix}`
-
-  useEffect(() => {
-    if (active) setOpen(true)
-  }, [active])
-
+  const href = workspaceHref(pathname, '/tools')
+  const active = isNavItemActive(pathname, studioToolsNav) || ['/studio/features', '/studio/canvas', '/studio/perler-beads'].includes(workspaceSection(pathname))
   const Icon = studioToolsNav.icon
-  const parent = (
-    <button
-      type="button"
-      aria-expanded={collapsed ? undefined : open}
-      aria-controls={collapsed ? undefined : submenuId}
-      aria-label={collapsed ? tx(studioToolsNav.label) : undefined}
-      data-active={active ? 'true' : 'false'}
-      data-tour="tools"
-      onClick={() => {
-        if (collapsed) {
-          router.push(center); onNavigate?.()
-          return
-        }
-        setOpen((value) => !value)
-      }}
-      className={cn(
-        'studio-nav-item flex h-10 items-center rounded-lg text-sm font-medium',
-        collapsed ? 'mx-auto w-10 justify-center' : 'w-full gap-3 px-3',
-        active ? 'text-studio-accent' : 'text-muted-foreground hover:text-foreground',
-      )}
-    >
-      <Icon className="size-[18px] shrink-0" aria-hidden="true" />
-      {!collapsed && <><span className="min-w-0 flex-1 truncate text-left">{tx(studioToolsNav.label)}</span><ChevronDown className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden="true" /></>}
-    </button>
-  )
-
-  return (
-    <div className="flex flex-col gap-1">
-      {collapsed ? <Tooltip label={tx(studioToolsNav.label)} side="right" className="flex w-full justify-center">{parent}</Tooltip> : parent}
-      {!collapsed && open && (
-        <div id={submenuId} className="ml-3 flex flex-col gap-1 border-l border-sidebar-border pl-3" aria-label={tx("创作工具子菜单")}>
-          <Link href={center} prefetch={false} onClick={onNavigate} aria-current={pathname === center ? 'page' : undefined} className={cn('flex min-h-10 items-center gap-2 rounded-md px-2.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', pathname === center ? 'bg-studio-accent/10 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Puzzle className="size-3.5 shrink-0" aria-hidden="true" />{tx('功能中心')}</Link>
-          {quickTools.map((item) => {
-            const ItemIcon = item.icon
-            const itemActive = identity ? pathname === item.href && item.key !== 'director' : isNavItemActive(pathname, item)
-            return (
-              <Link
-                key={item.key}
-                href={item.href}
-                prefetch={false}
-                onClick={onNavigate}
-                aria-current={itemActive ? 'page' : undefined}
-                data-active={itemActive ? 'true' : 'false'}
-                className={cn(
-                  'flex h-9 items-center gap-2 rounded-md px-2.5 text-xs font-medium transition-colors',
-                  itemActive ? 'bg-studio-accent/10 text-studio-accent' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-              >
-                <ItemIcon className="size-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">{tx(item.label)}</span>
-              </Link>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
+  const link = <Link href={href} prefetch={false} onClick={onNavigate} aria-current={pathname === href ? 'page' : undefined} aria-label={collapsed ? tx('创作工具') : undefined} data-active={active ? 'true' : 'false'} data-tour="tools" className={cn('studio-nav-item flex h-10 items-center rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', collapsed ? 'mx-auto w-10 justify-center' : 'w-full gap-3 px-3', active ? 'text-studio-accent' : 'text-muted-foreground hover:text-foreground')}><Icon className="size-[18px] shrink-0" aria-hidden="true" />{!collapsed && <span className="truncate">{tx('创作工具')}</span>}</Link>
+  return collapsed ? <Tooltip label={tx('创作工具')} side="right" className="flex w-full justify-center">{link}</Tooltip> : link
 }
-

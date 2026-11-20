@@ -1,0 +1,9 @@
+.picture { transition: transform .2s cubic-bezier(.4,.95,.6,1.1); }
+.zoom { transform: scale(1.02); }
+.fade { animation: appear .35s ease; }
+@keyframes appear { from { opacity: .25; } to { opacity: 1; } }
+.useAction { opacity: 0; transform: translateY(4px); transition: opacity .16s ease, transform .16s ease; }
+.card:hover .useAction, .card:focus-within .useAction { opacity: 1; transform: none; }
+.card { transition: border-color .16s ease; }
+@media (hover: none), (pointer: coarse) { .useAction { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .picture, .useAction, .card { transition: none; transform: none; animation: none; } }

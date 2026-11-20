@@ -39,6 +39,7 @@ export const adminNavGroups: ReadonlyArray<{ label: string; items: ReadonlyArray
     ['team-plans', '团队套餐与权益', Users, ['commerce.manage', 'billing.manage']],
   ] as const },
   { label: '创作服务', items: [
+    ['creative-tools', '创作工具展示', Layers3, ['system.manage']],
     ['generation', '生成任务', Activity, ['generation.read']],
     ['channels', '模型与渠道', Layers3, ['upstream.manage']],
     ['content', '内容与公告', Megaphone, ['content.manage']],
@@ -52,6 +53,7 @@ export const adminNavGroups: ReadonlyArray<{ label: string; items: ReadonlyArray
 const allAdminNavItems: ReadonlyArray<AdminNavItem> = adminNavGroups.flatMap((group) => group.items)
 
 export const adminSectionMeta: Record<AdminSection, { title: string; description: string }> = {
+  'creative-tools': { title: '创作工具展示', description: '配置工具开放范围、展示文案、图片与视频，以及轮播和前后对比效果。' },
   overview: { title: '运营总览', description: '今日与近 7 日调用、成功率、分布、渠道健康与收入摘要。' },
   users: { title: '用户与权限', description: '搜索用户、查看详情、调整积分套餐并分配管理员职责。' },
   generation: { title: '生成运维', description: '按用户、模型、渠道、类型和状态排查任务，处理失败与卡死请求。' },

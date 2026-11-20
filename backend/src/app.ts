@@ -7,6 +7,7 @@ import { isIP } from 'node:net';
 import { type AppConfig, type Context, createContext, httpError } from './core.js';
 import { registerAuth } from './auth.js';
 import { registerSettings } from './settings.js';
+import {registerCreativeToolAccess} from './creative-tool-access.js';
 import { registerSitePopups } from './site-popups.js';
 import { registerWatermark } from './watermark.js';
 import { registerContentPreferences } from './content-preferences.js';
@@ -83,6 +84,7 @@ export async function buildApp(options:BuildOptions={}):Promise<FastifyInstance 
   };
   app.get('/health',live);app.get('/api/health/live',live);
   app.get('/ready',ready);app.get('/api/health/ready',ready);
+  await registerCreativeToolAccess(app,ctx);
   await registerAuth(app,ctx);await registerSettings(app,ctx);await registerSitePopups(app,ctx);await registerWatermark(app,ctx);await registerContentPreferences(app,ctx);await registerCheckIn(app,ctx);
   await registerTeams(app,ctx);await registerTeamPlans(app,ctx);await registerTeamProjects(app,ctx);await registerTeamAssets(app,ctx);await registerTeamCanvas(app,ctx);
   if(!options.coreOnly){await registerCommerce(app,ctx);await registerContent(app,ctx);const {registerCreative}=await import('./creative.js');await registerCreative(app,ctx);await registerTeamGeneration(app,ctx);}

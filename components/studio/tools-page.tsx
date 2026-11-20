@@ -13,7 +13,7 @@ const AiTryOnTool = dynamic(() => import('./tools/ai-tryon-tool'), { ssr: false,
 export function ToolsPage({ tool = 'remix' }: { tool?: CreativeTool }) {
   const tx = useUiText()
   return <PluginGate id={tool}><div className="mx-auto flex w-full max-w-[1800px] flex-col gap-3 px-4 py-3 xl:px-6" data-testid="creative-tools-collapse">
-    <Link href="/tools" prefetch={false} className="inline-flex min-h-11 items-center gap-2 self-start rounded-lg px-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" aria-hidden="true" />{tx('功能中心')}</Link>
+    <Link href="/tools" prefetch={false} className="inline-flex min-h-11 items-center gap-2 self-start rounded-lg px-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" aria-hidden="true" />{tx('创作工具')}</Link>
     {tool === 'remix' ? <ImageRemixTool /> : <div data-testid="tool-ai-tryon"><AiTryOnTool /></div>}
   </div></PluginGate>
 }

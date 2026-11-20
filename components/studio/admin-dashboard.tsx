@@ -10,6 +10,8 @@ import { AdminContentPanel } from './admin-content'
 import { AdminSettingsPanel } from './admin-settings'
 import { AdminAuditPanel } from './admin-audit'
 import { AdminTeamPlansPanel } from './admin-team-plans'
+import dynamic from 'next/dynamic'
+const AdminCreativeToolsPanel = dynamic(() => import('./admin-creative-tools').then(module => module.AdminCreativeToolsPanel))
 import type { AdminSection } from '@/lib/studio/admin-types'
 
 /**
@@ -23,6 +25,7 @@ export function AdminDashboard({ section: rawSection = 'overview' }: { section?:
       {section === 'overview' && <AdminOverviewPanel />}
       {section === 'users' && <AdminUsersPanel />}
       {section === 'generation' && <AdminGenerationPanel />}
+      {section === 'creative-tools' && <AdminCreativeToolsPanel />}
       {section === 'channels' && <AdminChannelsPanel />}
       {section === 'products' && <AdminProductsPanel />}
       {section === 'team-plans' && <AdminTeamPlansPanel />}

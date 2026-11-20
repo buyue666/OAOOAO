@@ -17,6 +17,7 @@ function load(file, imports = {}) {
 const releases = JSON.parse(read('lib/studio/creative-plugin-releases.json'))
 const versionApi = load('lib/studio/creative-plugin-versions.ts', { './creative-plugin-releases.json': { default: releases } })
 const catalog = load('lib/studio/creative-plugins.ts', { './creative-plugin-releases.json': { default: releases } })
+const showcase = load('lib/studio/creative-tool-showcase.ts', { './creative-plugins': catalog, './creative-tool-defaults.json': {default:{}} })
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
 test('catalog uses independent release metadata for upgraded plugins', () => {
   for (const id of ['canvas','drama']) {
@@ -117,7 +118,7 @@ test('tools open without legacy installation, while authentication and workspace
   const imports = { 'react/jsx-runtime': jsxRuntime, 'next/link': 'Link', 'lucide-react': {},
     '@/lib/studio/plugin-context': { usePlugins: () => ({ installed: [], isInstalled: () => false, ready }) },
     '@/lib/studio/store': { useStudio: () => ({ state }) },
-    '@/lib/studio/creative-plugins': catalog, '@/lib/studio/i18n': { useUiText: () => text => text }, './plugin-icon': { PluginIcon: 'PluginIcon' },
+    '@/lib/studio/creative-plugins': catalog, '@/lib/studio/creative-tool-showcase': showcase, '@/lib/studio/use-creative-tools': { useCreativeTools: () => ({settings:{},loading:false}) }, '@/lib/studio/i18n': { useUiText: () => text => text }, './plugin-icon': { PluginIcon: 'PluginIcon' },
     '@/lib/studio/workspace-context': { useWorkspace: () => ({ identity, href: target => target }) },
     '@/lib/studio/workspace-features': load('lib/studio/workspace-features.ts', { './creative-plugins': catalog, './workspace-navigation': load('lib/studio/workspace-navigation.ts') }),
   }
@@ -142,14 +143,14 @@ test('the tool directory links directly to tools, groups by purpose and never re
   let chosenCategory = '全部', query = ''
   const features = load('lib/studio/workspace-features.ts', { './creative-plugins': catalog, './workspace-navigation': load('lib/studio/workspace-navigation.ts') })
   const { PluginCenter } = load('components/studio/plugins/plugin-center.tsx', {
-    react: { useState: initial => initial === '' ? [query, value => { query = value }] : [chosenCategory, value => { chosenCategory = value }] },
+    react: { useState: initial => typeof initial === 'boolean' ? [false, () => {}] : initial === '' ? [query, value => { query = value }] : [chosenCategory, value => { chosenCategory = value }] },
     'react/jsx-runtime': jsxRuntime, 'next/image': { default: 'Image' }, 'next/link': { default: 'Link' }, 'lucide-react': {},
-    '@/lib/studio/creative-plugins': catalog, '@/lib/studio/plugin-context': { usePlugins: () => ({ ready: true, preferences: {}, installed: [], directorVersion: '0.1.0' }) },
+    '@/lib/studio/creative-plugins': catalog, '@/lib/studio/creative-tool-showcase': showcase, '@/lib/studio/use-creative-tools': { useCreativeTools: () => ({settings:{},loading:false}) }, './creative-tool-media': { CreativeToolMedia: 'Media' }, './creative-tool-media.module.css': {default:{}}, '@/lib/studio/plugin-context': { usePlugins: () => ({ ready: true, preferences: {}, installed: [], directorVersion: '0.1.0' }) },
     '@/lib/studio/workspace-context': { useWorkspace: () => ({ identity }) }, '@/lib/studio/workspace-features': features,
     '@/lib/studio/i18n': { useUiText: () => (text, values = []) => text.replace(/\{(\d+)\}/g, (_, index) => String(values[index])) },
     '@/lib/utils': { cn: (...parts) => parts.filter(Boolean).join(' ') }, './director-version-control': { DirectorVersionControl: 'VersionControl' },
   })
-  const nodes = node => node && typeof node === 'object' ? [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)] : []
+  const nodes = node => node && typeof node === 'object' ? typeof node.type === 'function' ? nodes(node.type(node.props)) : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)] : []
   let tree = nodes(PluginCenter())
   const links = tree.filter(node => node.props?.['aria-label']?.startsWith('使用 '))
   assert.equal(links.length, 6)

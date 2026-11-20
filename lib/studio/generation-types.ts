@@ -114,6 +114,7 @@ export type SubmissionIdentity = {
 
 /** Stable destination for a generation task; persisted by the backend task store. */
 export type GenerationProjectContext = {
+  tool?: 'image-remix'
   approvedCost?: number
   projectId?: string
   episodeId?: string
@@ -166,6 +167,7 @@ export type AudioGenerationInput = {
 } & SubmissionIdentity & GenerationProjectContext
 
 export type TextGenerationInput = {
+  tool?: 'image-remix'
   stream?: boolean
   prompt: string
   model?: string

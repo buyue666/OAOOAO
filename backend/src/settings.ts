@@ -19,6 +19,8 @@ import {DEFAULT_WECHAT,wechatConfig,wechatConfigured,publicWechatConfig,validate
 import {validatePlanConcurrency,validatePlanGenerationKinds,validatePlanModels} from './entitlements.js';
 
 import { DEFAULT_WATERMARK_POLICY } from './watermark-policy.js';
+import {validateToolSettings} from './creative-tool-settings.js';
+import creativeToolDefaults from './creative-tool-defaults.json' with {type:'json'};
 export type Settings = Record<string, any>;
 const bannerTones=new Set(['promo','info','warning','violet','rose','slate']);
 const bannerEffects=new Set(['none','glow','shimmer']);
@@ -38,6 +40,7 @@ function announcementActionUrl(value:unknown):string|null {
   return target;
 }
 export const DEFAULT_SETTINGS: Settings = {
+  creativeTools:creativeToolDefaults,
   site: { title: 'OAOOAO' }, operationMode:'self_use', registrationEnabled:false, emailRegistrationEnabled:false,
   registrationRateLimit:{enabled:false,maxAttempts:5,windowSeconds:3600},
   watermarkPolicy:DEFAULT_WATERMARK_POLICY,
@@ -74,7 +77,7 @@ export function sanitizedSettings(settings: Settings,origin=''): Settings {
     systemChannels:(settings.systemChannels || []).map((channel: any) => ({...channel,apiKey:'',webhookSecret:'',hasApiKey:Boolean(channel.apiKey),hasWebhookSecret:Boolean(channel.webhookSecret)}))};
 }
 export function publicSettings(settings: Settings): Settings {
-  const allowed=['site','operationMode','registrationEnabled','emailRegistrationEnabled','freeDailyPointsEnabled','freeDailyPoints','modelPointCosts','generationPointMultipliers','generationConcurrency','generationDefaults','defaultModels'];
+  const allowed=['site','operationMode','registrationEnabled','emailRegistrationEnabled','freeDailyPointsEnabled','freeDailyPoints','modelPointCosts','generationPointMultipliers','generationConcurrency','generationDefaults','defaultModels','creativeTools'];
   const result=Object.fromEntries(allowed.map(key=>[key,settings[key]]));
   result.site={...publicSite(settings.site),wechatContact:visibleWechatContact(settings.site?.wechatContact)};
   result.checkIn=normalizeCheckInSettings(settings.checkIn);
@@ -86,7 +89,7 @@ export function publicSettings(settings: Settings): Settings {
 }
 const upstreamKeys=new Set(['systemChannels','logicalModels','defaultModels','modelPointCosts','generationPointMultipliers','generationConcurrency','generationDefaults','generationCostControl','allowUserApiConfig']);
 const commerceKeys=new Set(['entitlements','entitlementPlanRenames','entitlementPlanRemovals','freeDailyPointsEnabled','freeDailyPoints','commercePolicy','checkIn']);
-const systemKeys=new Set(['site','operationMode','registrationEnabled','emailRegistrationEnabled','registrationRateLimit','mail','dataLifecycle','wechatOfficial','watermarkPolicy','accountMenu']);
+const systemKeys=new Set(['site','operationMode','registrationEnabled','emailRegistrationEnabled','registrationRateLimit','mail','dataLifecycle','wechatOfficial','watermarkPolicy','accountMenu','creativeTools']);
 export function settingsPermission(key:string) {
   if(upstreamKeys.has(key))return 'upstream.manage';if(commerceKeys.has(key))return 'commerce.manage';if(systemKeys.has(key))return 'system.manage';
   throw httpError(400,`Unknown setting: ${key}`);
@@ -159,6 +162,7 @@ export function validateSettingsPatch(ctx:Context,current:Settings,patch:Setting
   if(flatPolicy&&sitePolicy)throw httpError(400,'Send commercePolicy in only one location');
   const {entitlementPlanRenames,entitlementPlanRemovals,...storedPatch}=patch;
   let next=merge(structuredClone(current),structuredClone(storedPatch));
+  if(patch.creativeTools!==undefined){validateToolSettings(patch.creativeTools);validateToolSettings(next.creativeTools);}
   if(entitlementPlanRenames!==undefined){
     if(!Array.isArray(entitlementPlanRenames)||entitlementPlanRenames.length>200||!patch.entitlements)throw httpError(400,'请随权益方案一起提交标识修改');
     const sources=new Set<string>(),targets=new Set<string>();

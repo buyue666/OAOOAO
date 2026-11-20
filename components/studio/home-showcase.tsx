@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CreativePluginId } from '@/lib/studio/creative-plugins'
+import { useCreativeTools } from '@/lib/studio/use-creative-tools'
+import { toolEnabled } from '@/lib/studio/creative-tool-showcase'
 
 export type ShowcasePreset = {
   id: string
@@ -101,7 +103,8 @@ export function HomeShowcase({ onApplyPreset }: { onApplyPreset: (preset: Showca
   }, [])
 
   const activeSlide = FEATURED_SLIDES[slideIndex] ?? FEATURED_SLIDES[0]
-  const visibleTools = STUDIO_TOOLS
+  const tools = useCreativeTools()
+  const visibleTools = STUDIO_TOOLS.filter(tool => toolEnabled(tool.id, tools.settings))
 
   return (
     <section aria-labelledby="showcase-title" className="flex flex-col gap-3.5">

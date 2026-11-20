@@ -1,3 +1,4 @@
+import {generationTools,assertToolEnabled} from './creative-tool-settings.js';
 import {prepareVideoPolicy,validateVideoInput} from './video-policy.js';
 import {adultContentPreference,assertAdultModelAllowed} from './content-policy.js';
 import {effectiveChannelProtocol} from './channel-protocol.js';
@@ -38,6 +39,7 @@ export async function resolveProvider(ctx:Context,kind:GenerationKind,input:Json
   };
   if(kind==='render'){await preflightStorage();return {model:'ffmpeg',channelId:'local',upstreamModel:'ffmpeg',config:{protocol:'ffmpeg'},cost:'0.0000'};}
   const settings=await getSettings(ctx,client),chosen=userId?await accountModelDefaults(ctx,userId,client):{};
+  for(const id of generationTools(input))assertToolEnabled(settings,id);
   const plan=userId?await personalGenerationPlan(ctx,settings,userId,client):undefined;
   if(plan)assertPlanGenerationAllowed(plan,kind);
   const permitted=(id:string)=>!plan?.allowedModelIds||settings.logicalModels.some((m:Json)=>plan.allowedModelIds.includes(m.id)&&(m.id===id||(m.aliases||[]).includes(id)||(m.bindings||[]).some((b:Json)=>b.requestAlias===id)));
