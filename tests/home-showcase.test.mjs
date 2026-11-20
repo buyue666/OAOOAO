@@ -64,7 +64,7 @@ test('subsequent config reads update the home preview rather than retaining a se
   assert.ok(h.captures.every(props => props.fallback.startsWith('/media/generated/')))
 })
 
-test('compact media fits home thumbnails while keeping controls outside navigation', () => {
+test('home thumbnails stay free of controls while full-size previews keep manual playback and comparison', () => {
   const { CreativeToolMedia } = load('components/studio/plugins/creative-tool-media.tsx', {
     '@/lib/studio/i18n': locale, '@/lib/utils': utils, './creative-tool-media.module.css': {},
   })
@@ -72,10 +72,15 @@ test('compact media fits home thumbnails while keeping controls outside navigati
   const compact = renderToStaticMarkup(React.createElement(CreativeToolMedia, { showcase: config, fallback: '/fallback.webp', compact: true }))
   const regular = renderToStaticMarkup(React.createElement(CreativeToolMedia, { showcase: config, fallback: '/fallback.webp' }))
   assert.match(compact, /h-full w-full/)
-  assert.match(compact, /min-height:24px/)
-  assert.ok(!regular.includes('min-height:24px'))
   assert.ok(!compact.includes('aspect-video') && !compact.includes('Long preview label'))
-  assert.ok(compact.includes('下一张展示图') && compact.includes('暂停轮播'))
-  assert.ok(!compact.includes('上一张展示图'))
+  assert.ok(!/<button\b|<input\b|展示轮播|1\/2/.test(compact))
   assert.ok(regular.includes('aspect-video') && regular.includes('上一张展示图') && regular.includes('Long preview label'))
+  for (const effect of ['compare', 'video']) {
+    const media = effect === 'video' ? [{ type: 'video', url: '/demo.mp4', poster: '/poster.webp' }] : config.media
+    const preview = { ...config, effect, media }
+    const thumbnail = renderToStaticMarkup(React.createElement(CreativeToolMedia, { showcase: preview, fallback: '/fallback.webp', compact: true }))
+    const full = renderToStaticMarkup(React.createElement(CreativeToolMedia, { showcase: preview, fallback: '/fallback.webp' }))
+    assert.ok(!/<button\b|<input\b/.test(thumbnail))
+    assert.ok(effect === 'compare' ? full.includes('拖动查看前后效果') : full.includes('播放效果视频'))
+  }
 })
