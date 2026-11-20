@@ -6,9 +6,10 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { CreativePluginId } from '@/lib/studio/creative-plugins'
+import { creativePlugin, type CreativePluginId } from '@/lib/studio/creative-plugins'
 import { useCreativeTools } from '@/lib/studio/use-creative-tools'
-import { toolEnabled } from '@/lib/studio/creative-tool-showcase'
+import { toolEnabled, toolShowcase, type ToolShowcase } from '@/lib/studio/creative-tool-showcase'
+import { CreativeToolMedia } from './plugins/creative-tool-media'
 
 export type ShowcasePreset = {
   id: string
@@ -52,44 +53,62 @@ const FEATURED_SLIDES: readonly ShowcasePreset[] = [
 
 const STUDIO_TOOLS: ReadonlyArray<{
   id: CreativePluginId
-  title: string
-  subtitle: string
   badge?: string
-  href: string
   image: string
 }> = [
   {
     id: 'drama',
-    title: '短剧工作室',
-    subtitle: '剧本、角色、分镜与镜头成片全流程',
     badge: '热门',
-    href: '/drama',
     image: '/media/generated/scene-storyboard-v2.png',
   },
   {
     id: 'canvas',
-    title: '自由画布',
-    subtitle: '无限画布串联生成节点与 3D 导演台',
     badge: '画布',
-    href: '/canvas',
     image: '/media/generated/landing-canvas-v1.png',
   },
   {
     id: 'remix',
-    title: '图片复刻',
-    subtitle: '解析参考图构图、光影与细节重绘',
-    href: '/tools/remix',
     image: '/media/generated/scene-product-v2.png',
   },
   {
     id: 'tryon',
-    title: 'AI 换装',
-    subtitle: '人物、服装与多视角商业试穿成片',
     badge: '工具',
-    href: '/tools/tryon',
     image: '/media/generated/scene-character-v2.png',
   },
 ]
+
+function HomeToolCard({ tool, showcase }: { tool: typeof STUDIO_TOOLS[number]; showcase: ToolShowcase }) {
+  const tx = useUiText()
+  const [active, setActive] = useState(false)
+
+  return (
+    <article
+      data-home-tool={tool.id}
+      onMouseEnter={() => setActive(true)}
+      onMouseLeave={() => setActive(false)}
+      onFocusCapture={() => setActive(true)}
+      onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActive(false) }}
+      className="studio-surface studio-surface-interactive group relative flex h-[108px] items-center gap-3.5 overflow-hidden rounded-2xl p-2.5 focus-within:ring-2 focus-within:ring-ring/70"
+    >
+      <div className="relative h-[86px] w-[112px] shrink-0 overflow-hidden rounded-xl bg-muted">
+        <CreativeToolMedia showcase={showcase} fallback={tool.image} active={active} compact />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 pr-1">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-foreground">{tx(showcase.title)}</span>
+          {tool.badge && <span className="shrink-0 rounded-full bg-studio-accent/12 px-2 py-0.5 text-[10px] font-semibold text-studio-accent">{tx(tool.badge)}</span>}
+        </div>
+        <p className="line-clamp-2 text-xs leading-[18px] text-muted-foreground">{tx(showcase.description)}</p>
+      </div>
+      <Link
+        href={creativePlugin(tool.id).href}
+        prefetch={false}
+        aria-label={tx('使用 {0}', [tx(showcase.title)])}
+        className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+      />
+    </article>
+  )
+}
 
 export function HomeShowcase({ onApplyPreset }: { onApplyPreset: (preset: ShowcasePreset) => void }) {
   const tx = useUiText()
@@ -104,7 +123,10 @@ export function HomeShowcase({ onApplyPreset }: { onApplyPreset: (preset: Showca
 
   const activeSlide = FEATURED_SLIDES[slideIndex] ?? FEATURED_SLIDES[0]
   const tools = useCreativeTools()
-  const visibleTools = STUDIO_TOOLS.filter(tool => toolEnabled(tool.id, tools.settings))
+  const visibleTools = STUDIO_TOOLS
+    .filter(tool => toolEnabled(tool.id, tools.settings))
+    .map(tool => ({ tool, showcase: toolShowcase(tool.id, tools.settings) }))
+    .sort((a, b) => a.showcase.order - b.showcase.order)
 
   return (
     <section aria-labelledby="showcase-title" className="flex flex-col gap-3.5">
@@ -176,35 +198,7 @@ export function HomeShowcase({ onApplyPreset }: { onApplyPreset: (preset: Showca
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:col-span-7">
-          {visibleTools.map((tool) => (
-            <Link
-              key={tool.id}
-              href={tool.href}
-              prefetch={false}
-              className="studio-surface studio-surface-interactive group flex h-[108px] items-center gap-3.5 overflow-hidden rounded-2xl p-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
-            >
-              <div className="relative h-[86px] w-[112px] shrink-0 overflow-hidden rounded-xl bg-muted">
-                <Image
-                  src={tool.image}
-                  alt=""
-                  fill
-                  sizes="120px"
-                  className="object-cover transition-transform duration-300 ease-out group-hover:scale-105"
-                />
-              </div>
-              <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 pr-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-sm font-semibold text-foreground">{tx(tool.title)}</span>
-                  {tool.badge && (
-                    <span className="shrink-0 rounded-full bg-studio-accent/12 px-2 py-0.5 text-[10px] font-semibold text-studio-accent">
-                      {tx(tool.badge)}
-                    </span>
-                  )}
-                </div>
-                <p className="line-clamp-2 text-xs leading-[18px] text-muted-foreground">{tx(tool.subtitle)}</p>
-              </div>
-            </Link>
-          ))}
+          {visibleTools.map(({ tool, showcase }) => <HomeToolCard key={tool.id} tool={tool} showcase={showcase} />)}
         </div>
       </div>
     </section>
